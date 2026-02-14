@@ -515,6 +515,7 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
                         tooltipEl.style.color = 'white';
                         tooltipEl.style.borderRadius = '3px';
                         tooltipEl.style.padding = '10px';
+                        tooltipEl.style.fontSize = '12px';
                         tooltipEl.style.pointerEvents = 'none';
                         document.body.appendChild(tooltipEl);
                     }
@@ -561,9 +562,9 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
                             tooltipEl.style.top = position.top + window.pageYOffset + context.tooltip.caretY + 'px';
                             
                             // Hide after 3 seconds
-                            setTimeout(function() {
-                                tooltipEl.style.opacity = 0;
-                            }, 3000);
+//                            setTimeout(function() {
+//                                tooltipEl.style.opacity = 0;
+//                            }, 3000);
                         });
                 }
             }
