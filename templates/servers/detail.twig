@@ -531,7 +531,7 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
                         .then(response => response.json())
                         .then(data => {
                             var lines = [];
-                            lines.push('{{ metricName|replace({'_': ' ', 'load': 'загрузка', 'used': 'использование'})|title }}: ' + data{{ metricName }}[dataIndex]);
+                            lines.push('Время: ' + time);
 {% if metricName == 'cpu_load' %}
                             // Показываем только top_cpu
                             if (data.top_cpu && data.top_cpu.length > 0) {
