@@ -408,6 +408,7 @@ function fetchProcesses(serverId, time) {
                     data.top_cpu.forEach(function(proc) {
                         lines.push('  ' + proc.name + ': ' + proc.value + '%');
                     });
+{% endif %}
                 }
                 
                 // Добавляем топ-процессы RAM
@@ -417,6 +418,7 @@ function fetchProcesses(serverId, time) {
                     data.top_ram.forEach(function(proc) {
                         lines.push('  ' + proc.name + ': ' + proc.value + '%');
                     });
+{% endif %}
                 }
                 
                 resolve(lines);
@@ -424,7 +426,9 @@ function fetchProcesses(serverId, time) {
             .catch(function() {
                 resolve([]);
             });
+{% endif %}
     });
+{% endif %}
 }
 
 
@@ -440,6 +444,7 @@ function requestServices() {
         .catch(error => {
             alert('Ошибка получения списка сервисов: ' + error);
         });
+{% endif %}
 }
 
 // Обработчик кнопки "Выбрать все"
@@ -448,7 +453,9 @@ document.getElementById('selectAllServices').addEventListener('change', function
     checkboxes.forEach(checkbox => {
         checkbox.checked = this.checked;
     });
+{% endif %}
 });
+{% endif %}
 
 // Активация нужной вкладки при загрузке
 document.addEventListener('DOMContentLoaded', function() {
@@ -461,9 +468,11 @@ document.addEventListener('DOMContentLoaded', function() {
         tabButton.click();
     }
 });
+{% endif %}
 
 // Графики метрик
 {% for metricName, metricData in metrics %}
+{% if metricName != 'top_cpu_proc' and metricName != 'top_ram_proc' %}
 const ctx{{ metricName|replace({'-': '_', '.': '_'}) }} = document.getElementById('chart-{{ metricName }}').getContext('2d');
 
 // Подготовка данных для графика
@@ -473,6 +482,7 @@ var data{{ metricName }} = [];
 {% for metric in metricData|slice(0, 20)|reverse %}
 labels{{ metricName }}.push('{{ metric.created_at|date('H:i') }}');
 data{{ metricName }}.push({{ metric.value|raw }});
+{% endif %}
 {% endfor %}
 
 new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
@@ -544,6 +554,7 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
                                 data.top_cpu.forEach(function(proc) {
                                     lines.push('  ' + proc.name + ': ' + proc.value + '%');
                                 });
+{% endif %}
                             }
 {% elseif metricName == 'ram_used' %}
                             // Показываем только top_ram
@@ -553,6 +564,7 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
                                 data.top_ram.forEach(function(proc) {
                                     lines.push('  ' + proc.name + ': ' + proc.value + '%');
                                 });
+{% endif %}
                             }
 {% endif %}
                             
@@ -568,11 +580,13 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
 //                                tooltipEl.style.opacity = 0;
 //                            }, 3000);
                         });
+{% endif %}
                 }
             }
         }
     }
 });
+{% endif %}
 {% endfor %}
 </script>
 {% endblock %}
