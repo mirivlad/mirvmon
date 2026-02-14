@@ -1,0 +1,74 @@
+{% extends "layout.twig" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="fas fa-edit"></i> Редактировать сервер "{{ server.name }}"</h3>
+            </div>
+            <div class="card-body">
+                <form method="post" action="/servers/{{ server.id }}">
+                    
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Название сервера *</label>
+                        <input type="text" class="form-control" id="name" name="name" value="{{ server.name }}" required>
+                        <small class="form-text text-muted">Укажите понятное название сервера</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="address" class="form-label">Адрес сервера</label>
+                        <input type="text" class="form-control" id="address" name="address" value="{{ server.address|default('') }}" placeholder="IP или домен">
+                        <small class="form-text text-muted">IP-адрес или доменное имя сервера (не обязательно)</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="group_id" class="form-label">Группа</label>
+                        <select class="form-select" id="group_id" name="group_id">
+                            <option value="">Не выбрана</option>
+                            {% for group in groups %}
+                            <option value="{{ group.id }}" {% if server.group_id == group.id %}selected{% endif %}>{{ group.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="form-text text-muted">Выберите группу для объединения серверов</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Описание</label>
+                        <textarea class="form-control" id="description" name="description" rows="3">{{ server.description|default('') }}</textarea>
+                        <small class="form-text text-muted">Дополнительная информация о сервере</small>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="/servers" class="btn btn-secondary me-md-2">
+                            <i class="fas fa-arrow-left"></i> Назад
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Сохранить изменения
+                        </button>
+                    </div>
+                </form>
+                
+                <hr>
+                
+                <div class="mt-4">
+                    <h5>Управление агентом мониторинга:</h5>
+                    <div class="row">
+                        <div class="col-md-6 mb-2">
+                            <a href="/agent/install.sh?server_id={{ server.id }}" class="btn btn-outline-primary w-100">
+                                <i class="fas fa-download"></i> Скачать install.sh
+                            </a>
+                        </div>
+                        <div class="col-md-6 mb-2">
+                            <a href="/servers/{{ server.id }}/regenerate-token" class="btn btn-outline-warning w-100" onclick="return confirm('Вы уверены, что хотите сгенерировать новый токен? Это сделает недействительным старый скрипт установки.');">
+                                <i class="fas fa-sync-alt"></i> Сбросить токен
+                            </a>
+                        </div>
+                    </div>
+                    <p class="mt-2">Если вы потеряли доступ к агенту или хотите создать новый токен безопасности, используйте кнопку "Сбросить токен".</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

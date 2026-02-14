@@ -1,0 +1,125 @@
+{% extends "layout.twig" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="fas fa-tachometer-alt"></i> Дашборд мониторинга</h2>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-server text-info fa-2x mb-2"></i>
+                <h3>{{ stats.total_servers }}</h3>
+                <p class="text-muted mb-0">Всего серверов</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-chart-line text-success fa-2x mb-2"></i>
+                <h3>{{ stats.servers_with_metrics }}</h3>
+                <p class="text-muted mb-0">С метриками</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-exclamation-triangle text-danger fa-2x mb-2"></i>
+                <h3>{{ stats.alerts_count }}</h3>
+                <p class="text-muted mb-0">Активных алертов</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Servers List -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4 class="mb-0"><i class="fas fa-server"></i> Серверы</h4>
+                <div>
+                    <a href="/servers/create" class="btn btn-sm btn-outline-primary me-2">
+                        <i class="fas fa-plus"></i> <span class="d-none d-sm-inline">Добавить сервер</span>
+                    </a>
+                    <a href="/servers" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-list"></i> <span class="d-none d-sm-inline">Все серверы</span>
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if servers|length > 0 %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Название</th>
+                                <th>Адрес</th>
+                                <th>Группа</th>
+                                <th>Статус</th>
+                                <th>Последние метрики</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for server in servers %}
+                            <tr>
+                                <td><strong>{{ server.name }}</strong></td>
+                                <td>{{ server.address|default('-') }}</td>
+                                <td>
+                                    {% if server.group_name %}
+                                        <span class="badge" style="background-color: {{ server.group_color|default('#6c757d') }}">
+                                            <i class="fas {{ server.group_icon|default('fa-box') }} me-1"></i>{{ server.group_name }}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Без группы</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if server.last_metrics_at %}
+                                        <span class="badge bg-success">Активен</span>
+                                    {% else %}
+                                        <span class="badge bg-warning">Нет метрик</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if server.last_metrics_at %}
+                                        {{ server.last_metrics_at|date('d.m.Y H:i:s') }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="/servers/{{ server.id }}" class="btn btn-sm btn-outline-info" title="Просмотр">
+                                        <i class="fas fa-eye"></i> <span class="d-none d-sm-inline">Просмотр</span>
+                                    </a>
+                                    <a href="/servers/{{ server.id }}/edit" class="btn btn-sm btn-outline-primary" title="Редактировать">
+                                        <i class="fas fa-edit"></i> <span class="d-none d-sm-inline">Редактировать</span>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-server fa-3x text-muted mb-3"></i>
+                    <p class="lead">Серверы пока не добавлены</p>
+                    <a href="/servers/create" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> <span class="d-none d-sm-inline">Добавить первый сервер</span>
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

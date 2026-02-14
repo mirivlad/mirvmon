@@ -1,0 +1,202 @@
+<?php
+// public/index.php - updated dashboard route
+
+use App\Controllers\AgentController;
+use App\Controllers\AdminController;
+use App\Controllers\AlertController;
+use App\Controllers\Api\MetricsController;
+use App\Controllers\GroupController;
+use App\Controllers\ServerController;
+use App\Controllers\ServerDetailController;
+use App\Controllers\DashboardController;
+use App\Middlewares\AuthMiddleware;
+use App\Middlewares\SessionMiddleware;
+use App\Models\User;
+use App\Models\Server as ServerModel;
+use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Slim\Csrf\Guard;
+use Slim\Factory\AppFactory;
+use Slim\Views\Twig;
+use Slim\Views\TwigMiddleware;
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+// Start session
+session_start();
+
+// Create Slim app
+$app = AppFactory::create();
+
+// Create CSRF Guard
+$csrf = new Guard($app->getResponseFactory());
+$csrf->setPersistentTokenMode(true);
+
+// Create Twig view
+$twig = Twig::create(__DIR__ . '/../templates', ['cache' => false]);
+
+// Add CSRF middleware FIRST
+$app->add($csrf);
+
+// Add Twig middleware
+$twigMiddleware = TwigMiddleware::create($app, $twig);
+$app->add($twigMiddleware);
+$sessionMiddleware = new AppMiddlewaresSessionMiddleware($twig);
+$app->add($sessionMiddleware);
+// Add session data to Twig$sessionMiddleware = new SessionMiddleware($twig);$app->add($sessionMiddleware);
+
+// Add a route to get CSRF tokens via AJAX
+$app->get('/csrf-token', function (Request $request, Response $response, $args) use ($csrf) {
+    $data = [
+        'name_key' => $csrf->getTokenNameKey(),
+        'value_key' => $csrf->getTokenValueKey(),
+        'name' => $csrf->getTokenName(),
+        'value' => $csrf->getTokenValue()
+    ];
+
+    $response->getBody()->write(json_encode($data));
+    return $response->withHeader('Content-Type', 'application/json');
+});
+
+// Define /test route
+$app->get('/test', function (Request $request, Response $response, $args) use ($twig) {
+    $templateData = [
+        'title' => 'Тест системы',
+        'message' => 'Система мониторинга запущена'
+    ];
+
+    return $twig->render($response, 'test.twig', $templateData);
+});
+
+// Login routes (without auth middleware, but with CSRF)
+$app->get('/login', function (Request $request, Response $response, $args) use ($twig, $csrf) {
+    $templateData = [
+        'title' => 'Вход в систему',
+        'csrf' => [
+            'name_key' => $csrf->getTokenNameKey(),
+            'value_key' => $csrf->getTokenValueKey(),
+            'name' => $csrf->getTokenName(),
+            'value' => $csrf->getTokenValue()
+        ]
+    ];
+
+    return $twig->render($response, 'login.twig', $templateData);
+});
+
+$app->post('/login', function (Request $request, Response $response, $args) use ($csrf) {
+    $params = $request->getParsedBody();
+
+    // Validate CSRF token
+    $nameKey = $csrf->getTokenNameKey();
+    $valueKey = $csrf->getTokenValueKey();
+
+    if (!isset($params[$nameKey]) || !isset($params[$valueKey]) || !$csrf->validateToken($params[$nameKey], $params[$valueKey])) {
+        error_log('CSRF validation failed for /login');
+        return $response->withHeader('Location', '/login')->withStatus(302);
+    }
+
+    $username = $params['username'] ?? '';
+    $password = $params['password'] ?? '';
+
+    $userModel = new User();
+    $user = $userModel->authenticate($username, $password);
+
+    if ($user) {
+        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['username'] = $user['username'];
+        $_SESSION['role'] = $user['role'];
+
+        return $response->withHeader('Location', '/')->withStatus(302);
+    } else {
+        return $response->withHeader('Location', '/login')->withStatus(302);
+    }
+});
+
+// Logout route (without auth middleware)
+$app->get('/logout', function (Request $request, Response $response, $args) {
+    session_destroy();
+    return $response->withHeader('Location', '/login')->withStatus(302);
+});
+
+// Dashboard route (protected with auth middleware)
+$app->get('/', function (Request $request, Response $response, $args) use ($twig) {
+    $serverModel = new ServerModel();
+
+    // Get statistics
+    $stats = $serverModel->getStats();
+
+    // Get servers with latest metrics
+    $servers = $serverModel->getAll();
+
+    $templateData = [
+        'title' => 'Дашборд мониторинга',
+        'stats' => $stats,
+        'servers' => $servers
+    ];
+
+    return $twig->render($response, 'dashboard.twig', $templateData);
+})->add(AuthMiddleware::class);
+
+// Routes for groups (protected with auth middleware)
+$groupController = new GroupController($twig);
+
+$app->get('/groups', [$groupController, 'index'])->add(AuthMiddleware::class);
+$app->get('/groups/create', [$groupController, 'create'])->add(AuthMiddleware::class);
+$app->post('/groups', [$groupController, 'store'])->add(AuthMiddleware::class);
+$app->get('/groups/{id}/edit', [$groupController, 'edit'])->add(AuthMiddleware::class);
+$app->post('/groups/{id}', [$groupController, 'update'])->add(AuthMiddleware::class);
+$app->delete('/groups/{id}', [$groupController, 'delete'])->add(AuthMiddleware::class);
+
+// Routes for servers (protected with auth middleware)
+$serverController = new ServerController($twig);
+
+$app->get('/servers', [$serverController, 'index'])->add(AuthMiddleware::class);
+$app->get('/servers/create', [$serverController, 'create'])->add(AuthMiddleware::class);
+$app->post('/servers', [$serverController, 'store'])->add(AuthMiddleware::class);
+$app->get('/servers/{id}/edit', [$serverController, 'edit'])->add(AuthMiddleware::class);
+$app->post('/servers/{id}', [$serverController, 'update'])->add(AuthMiddleware::class);
+$app->delete('/servers/{id}', [$serverController, 'delete'])->add(AuthMiddleware::class);
+$app->get('/servers/{id}/regenerate-token', [$serverController, 'regenerateToken'])->add(AuthMiddleware::class);
+
+// Server detail route (protected with auth middleware)
+$serverDetailController = new ServerDetailController($twig);
+
+$app->get('/servers/{id}', [$serverDetailController, 'show'])->add(AuthMiddleware::class);
+
+// Alerts routes (protected with auth middleware)
+$alertController = new AlertController($twig);
+
+$app->get('/alerts', [$alertController, 'index'])->add(AuthMiddleware::class);
+$app->get('/alerts/{id}/resolve', [$alertController, 'markAsResolved'])->add(AuthMiddleware::class);
+
+// Admin routes (protected with auth middleware)
+$adminController = new AdminController($twig);
+
+$app->get('/admin/users', [$adminController, 'usersList'])->add(AuthMiddleware::class);
+$app->get('/admin/notifications', [$adminController, 'notificationSettings'])->add(AuthMiddleware::class);
+
+// API route for agents (public, no auth middleware)
+$metricsController = new MetricsController();
+
+$app->post('/api/v1/metrics', [$metricsController, 'collectMetrics']);
+
+// API status endpoint (public, no auth middleware)
+$app->get('/api/status', function (Request $request, Response $response, $args) {
+    $data = [
+        'status' => 'ok',
+        'timestamp' => date('Y-m-d H:i:s'),
+        'version' => '1.0.0'
+    ];
+
+    $response->getBody()->write(json_encode($data));
+    return $response
+        ->withHeader('Content-Type', 'application/json');
+});
+
+// Agent installation script route (public, no auth middleware)
+$agentController = new AgentController();
+
+$app->get('/agent/install.sh', [$agentController, 'generateInstallScript']);
+
+// Run app
+$app->run();

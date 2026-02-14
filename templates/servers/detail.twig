@@ -1,0 +1,456 @@
+{% extends "layout.twig" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3>
+                    <i class="fas fa-server"></i>
+                    {{ server.name }}
+                    {% if server.group_name %}
+                        <span class="badge ms-2" {% if server.group_color %}style="background-color: {{ server.group_color }}"{% endif %}>
+                            <i class="fas {{ server.group_icon|default('fa-box') }} me-1"></i>{{ server.group_name }}
+                        </span>
+                    {% endif %}
+                </h3>
+                <div>
+                    <a href="/servers/{{ server.id }}/edit" class="btn btn-outline-primary me-2">
+                        <i class="fas fa-edit"></i> <span class="d-none d-sm-inline">Редактировать</span>
+                    </a>
+                    <a href="/servers" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> <span class="d-none d-sm-inline">Назад к списку</span>
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Информация о сервере -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h5>Информация о сервере</h5>
+                        <table class="table table-borderless">
+                            <tr>
+                                <td><strong>Название:</strong></td>
+                                <td>{{ server.name }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Адрес:</strong></td>
+                                <td>{{ server.address|default('-') }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Группа:</strong></td>
+                                <td>
+                                    {% if server.group_name %}
+                                        <i class="fas {{ server.group_icon|default('fa-box') }}" {% if server.group_color %}style="color: {{ server.group_color }}"{% endif %}></i> {{ server.group_name }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Описание:</strong></td>
+                                <td>{{ server.description|default('-') }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Последние метрики:</strong></td>
+                                <td>
+                                    {% if server.last_metrics_at %}
+                                        {{ server.last_metrics_at|date('d.m.Y H:i:s') }}
+                                    {% else %}
+                                        Нет данных
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Вкладки -->
+                <ul class="nav nav-tabs" id="serverTabs" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link active" id="metrics-tab" data-bs-toggle="tab" data-bs-target="#metrics" type="button" role="tab">
+                            <i class="fas fa-chart-line"></i> Метрики
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="services-tab" data-bs-toggle="tab" data-bs-target="#services" type="button" role="tab">
+                            <i class="fas fa-cogs"></i> Сервисы
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="thresholds-tab" data-bs-toggle="tab" data-bs-target="#thresholds" type="button" role="tab">
+                            <i class="fas fa-bell"></i> Пороги
+                        </button>
+                    </li>
+                </ul>
+
+                <!-- Содержимое вкладок -->
+                <div class="tab-content mt-3">
+                    <!-- Вкладка "Метрики" -->
+                    <div class="tab-pane fade show active" id="metrics" role="tabpanel">
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <div class="btn-group d-flex" role="group">
+                                    <a href="?tab=metrics&period=24h" class="btn btn-outline-primary w-100 {% if request.query.period == '24h' or request.query.period is empty %}active{% endif %}">
+                                        24 часа
+                                    </a>
+                                    <a href="?tab=metrics&period=7d" class="btn btn-outline-primary w-100 {% if request.query.period == '7d' %}active{% endif %}">
+                                        7 дней
+                                    </a>
+                                    <a href="?tab=metrics&period=30d" class="btn btn-outline-primary w-100 {% if request.query.period == '30d' %}active{% endif %}">
+                                        30 дней
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            {% for metricName, metricData in metrics %}
+                            <div class="col-12 mb-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">
+                                            {{ metricName|replace({'_': ' ', 'load': 'загрузка', 'used': 'использование'})|title }}
+                                            {% if metricData[0].unit %}<small class="text-muted">({{ metricData[0].unit }})</small>{% endif %}
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        {% if metricData %}
+                                            <h3 class="text-center text-end">{{ metricData[0].value }}{{ metricData[0].unit|default('') }}</h3>
+                                            <p class="text-muted text-center mb-2">
+                                                {{ metricData[0].created_at|date('d.m.Y H:i:s') }}
+                                            </p>
+
+                                            <!-- График для метрики -->
+                                            <div>
+                                                <canvas id="chart-{{ metricName }}" width="100%" height="200"></canvas>
+                                            </div>
+                                        {% else %}
+                                            <p class="text-center text-muted">Нет данных за этот период</p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+
+                            {% if metrics|length == 0 %}
+                            <div class="col-12">
+                                <div class="alert alert-info text-center">
+                                    <i class="fas fa-info-circle"></i> Нет данных о метриках за выбранный период
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Вкладка "Сервисы" -->
+                    <div class="tab-pane fade" id="services" role="tabpanel">
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h4>
+                                            <i class="fas fa-cogs"></i> Сервисы сервера
+                                            {% if allServices is defined %}
+                                            <small class="text-muted">(найдено: {{ allServices|length }})</small>
+                                            {% endif %}
+                                        </h4>
+                                    </div>
+                                    <div>
+                                        <a href="?tab=services" class="btn btn-outline-primary">
+                                            <i class="fas fa-sync-alt"></i> <span class="d-none d-sm-inline">Обновить список</span>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <form method="post" action="/servers/{{ server.id }}/services">
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="selectAllServices">
+                                                <label class="form-check-label" for="selectAllServices">
+                                                    Выбрать все
+                                                </label>
+                                            </div>
+
+                                            <hr>
+
+                                            <div class="row" id="servicesList">
+                                                {% if allServices is defined and allServices|length > 0 %}
+                                                    {# Сортируем сервисы: сначала running, потом stopped, потом unknown, затем по имени #}
+                                                    {% set runningServices = allServices|filter(s => s.status == 'running')|sort((a, b) => a.service_name|lower > b.service_name|lower) %}
+                                                    {% set stoppedServices = allServices|filter(s => s.status == 'stopped')|sort((a, b) => a.service_name|lower > b.service_name|lower) %}
+                                                    {% set unknownServices = allServices|filter(s => s.status != 'running' and s.status != 'stopped')|sort((a, b) => a.service_name|lower > b.service_name|lower) %}
+                                                    
+                                                    {# Выводим все сервисы по порядку #}
+                                                    {% for service in runningServices %}
+                                                    <div class="col-md-4 col-lg-3 mb-2">
+                                                        <div class="card border-success">
+                                                            <div class="card-body p-2">
+                                                                <div class="d-flex justify-content-between align-items-start">
+                                                                    <div class="form-check mb-0">
+                                                                        <input class="form-check-input service-checkbox"
+                                                                               type="checkbox"
+                                                                               id="service_{{ service.service_name }}"
+                                                                               name="services[]"
+                                                                               value="{{ service.service_name }}"
+                                                                               {% if service.service_name in monitorServices %}
+                                                                               checked
+                                                                               {% endif %}>
+                                                                        <label class="form-check-label" for="service_{{ service.service_name }}">
+                                                                            <i class="fas fa-check-circle text-success me-1"></i>
+                                                                            {{ service.service_name }}
+                                                                        </label>
+                                                                    </div>
+                                                                    <div class="text-end">
+                                                                        <span class="badge bg-success mb-1">running</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="small text-muted mt-1">
+                                                                    <small>Load: {{ service.load_state|default('-') }} | Active: {{ service.active_state|default('-') }}</small>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {% endfor %}
+                                                    
+                                                    {% for service in stoppedServices %}
+                                                    <div class="col-md-4 col-lg-3 mb-2">
+                                                        <div class="card border-danger">
+                                                            <div class="card-body p-2">
+                                                                <div class="d-flex justify-content-between align-items-start">
+                                                                    <div class="form-check mb-0">
+                                                                        <input class="form-check-input service-checkbox"
+                                                                               type="checkbox"
+                                                                               id="service_{{ service.service_name }}"
+                                                                               name="services[]"
+                                                                               value="{{ service.service_name }}"
+                                                                               {% if service.service_name in monitorServices %}
+                                                                               checked
+                                                                               {% endif %}>
+                                                                        <label class="form-check-label" for="service_{{ service.service_name }}">
+                                                                            <i class="fas fa-times-circle text-danger me-1"></i>
+                                                                            {{ service.service_name }}
+                                                                        </label>
+                                                                    </div>
+                                                                    <div class="text-end">
+                                                                        <span class="badge bg-danger mb-1">stopped</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="small text-muted mt-1">
+                                                                    <small>Load: {{ service.load_state|default('-') }} | Active: {{ service.active_state|default('-') }}</small>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {% endfor %}
+                                                    
+                                                    {% for service in unknownServices %}
+                                                    <div class="col-md-4 col-lg-3 mb-2">
+                                                        <div class="card border-warning">
+                                                            <div class="card-body p-2">
+                                                                <div class="d-flex justify-content-between align-items-start">
+                                                                    <div class="form-check mb-0">
+                                                                        <input class="form-check-input service-checkbox"
+                                                                               type="checkbox"
+                                                                               id="service_{{ service.service_name }}"
+                                                                               name="services[]"
+                                                                               value="{{ service.service_name }}"
+                                                                               {% if service.service_name in monitorServices %}
+                                                                               checked
+                                                                               {% endif %}>
+                                                                        <label class="form-check-label" for="service_{{ service.service_name }}">
+                                                                            <i class="fas fa-question-circle text-warning me-1"></i>
+                                                                            {{ service.service_name }}
+                                                                        </label>
+                                                                    </div>
+                                                                    <div class="text-end">
+                                                                        <span class="badge bg-warning mb-1">unknown</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="small text-muted mt-1">
+                                                                    <small>Load: {{ service.load_state|default('-') }} | Active: {{ service.active_state|default('-') }}</small>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <div class="col-12">
+                                                        <div class="alert alert-warning text-center">
+                                                            <i class="fas fa-exclamation-triangle"></i> Агент не отправил список сервисов или не установлен
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-12 text-center mt-3">
+                                                        <button type="button" class="btn btn-outline-primary" onclick="requestServices()">
+                                                            <i class="fas fa-download"></i> Запросить список сервисов
+                                                        </button>
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-3">
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-save"></i> Сохранить конфигурацию
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Вкладка "Пороги" -->
+                    <div class="tab-pane fade" id="thresholds" role="tabpanel">
+                        <h4>Настройка порогов</h4>
+                        <div class="row">
+                            <div class="col-md-8">
+                                <form method="post" action="/servers/{{ server.id }}/thresholds">
+                                    {% for metricType in allMetricTypes %}
+                                    <div class="card mb-3">
+                                        <div class="card-header">
+                                            <h6 class="mb-0">
+                                                {{ metricType.name|replace({'_': ' ', 'load': 'загрузка', 'used': 'использование'})|title }}
+                                                {% if metricType.unit %}<small class="text-muted">({{ metricType.unit }})</small>{% endif %}
+                                            </h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <label class="form-label">Порог предупреждения</label>
+                                                    <input type="number" class="form-control"
+                                                           name="{{ metricType.name }}_warning"
+                                                           step="0.01"
+                                                           {% if existingThresholds[metricType.name].warning is defined %}
+                                                           value="{{ existingThresholds[metricType.name].warning }}"
+                                                           {% endif %}
+                                                           placeholder="80.00">
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label">Порог критический</label>
+                                                    <input type="number" class="form-control"
+                                                           name="{{ metricType.name }}_critical"
+                                                           step="0.01"
+                                                           {% if existingThresholds[metricType.name].critical is defined %}
+                                                           value="{{ existingThresholds[metricType.name].critical }}"
+                                                           {% endif %}
+                                                           placeholder="90.00">
+                                                </div>
+                                            </div>
+                                            <div class="row mt-3">
+                                                <div class="col-md-12">
+                                                    <label class="form-label">
+                                                        <i class="fas fa-clock"></i> Длительность превышения (минуты)
+                                                    </label>
+                                                    <input type="number" class="form-control"
+                                                           name="{{ metricType.name }}_duration"
+                                                           min="0"
+                                                           step="1"
+                                                           {% if existingThresholds[metricType.name].duration is defined %}
+                                                           value="{{ existingThresholds[metricType.name].duration }}"
+                                                           {% endif %}
+                                                           placeholder="0 - отправлять алерт сразу">
+                                                    <small class="text-muted">
+                                                        0 = алерт сразу при превышении, >0 = алерт только если превышено дольше указанного времени
+                                                    </small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+
+                                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-save"></i> Сохранить пороги
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Функция для получения списка сервисов
+function requestServices() {
+    fetch('/api/v1/agent/{{ server.id }}/services')
+        .then(response => response.json())
+        .then(data => {
+            if (data.services) {
+                location.reload();
+            }
+        })
+        .catch(error => {
+            alert('Ошибка получения списка сервисов: ' + error);
+        });
+}
+
+// Обработчик кнопки "Выбрать все"
+document.getElementById('selectAllServices').addEventListener('change', function() {
+    const checkboxes = document.querySelectorAll('.service-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = this.checked;
+    });
+});
+
+// Активация нужной вкладки при загрузке
+document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const activeTab = urlParams.get('tab') || 'metrics';
+
+    // Находим кнопку нужной вкладки и кликаем
+    const tabButton = document.getElementById(activeTab + '-tab');
+    if (tabButton) {
+        tabButton.click();
+    }
+});
+
+// Графики метрик
+{% for metricName, metricData in metrics %}
+const ctx{{ metricName|replace({'-': '_', '.': '_'}) }} = document.getElementById('chart-{{ metricName }}').getContext('2d');
+
+// Подготовка данных для графика
+var labels{{ metricName }} = [];
+var data{{ metricName }} = [];
+
+{% for metric in metricData|slice(0, 20)|reverse %}
+labels{{ metricName }}.push('{{ metric.created_at|date('H:i') }}');
+data{{ metricName }}.push({{ metric.value }});
+{% endfor %}
+
+new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
+    type: 'line',
+    data: {
+        labels: labels{{ metricName }},
+        datasets: [{
+            label: '{{ metricName|replace({'_': ' ', 'load': 'загрузка', 'used': 'использование'})|title }}',
+            data: data{{ metricName }},
+            borderColor: 'rgb(75, 192, 192)',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            tension: 0.1
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: {
+                beginAtZero: false
+            }
+        }
+    }
+});
+{% endfor %}
+</script>
+{% endblock %}

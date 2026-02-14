@@ -1,0 +1,74 @@
+{% extends "layout.twig" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2><i class="fas fa-layer-group"></i> Группы серверов</h2>
+            <a href="/groups/create" class="btn btn-primary">
+                <i class="fas fa-plus"></i> <span class="d-none d-sm-inline">Создать группу</span>
+            </a>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                {% if groups|length > 0 %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Название</th>
+                                <th>Описание</th>
+                                <th>Цвет</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for group in groups %}
+                            <tr>
+                                <td>
+                                    <i class="fas {{ group.icon|default('fa-box') }}" {% if group.color %}style="color: {{ group.color }}"{% endif %}></i> {{ group.name }}
+                                </td>
+                                <td>{{ group.description|default('') }}</td>
+                                <td>
+                                    {% if group.color %}
+                                    <span class="badge" style="background-color: {{ group.color }}">{{ group.color }}</span>
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="/groups/{{ group.id }}" class="btn btn-sm btn-outline-info me-1">
+                                        <i class="fas fa-eye"></i> <span class="d-none d-sm-inline">Просмотр</span>
+                                    </a>
+                                    <a href="/groups/{{ group.id }}/edit" class="btn btn-sm btn-outline-primary me-1">
+                                        <i class="fas fa-edit"></i> <span class="d-none d-sm-inline">Редактировать</span>
+                                    </a>
+                                    <form action="/groups/{{ group.id }}" method="post" style="display: inline-block;" onsubmit="return confirm('Вы уверены, что хотите удалить эту группу?');">
+                                        <input type="hidden" name="{{ csrf.name_key }}" value="{{ csrf.name }}">
+                                        <input type="hidden" name="{{ csrf.value_key }}" value="{{ csrf.value }}">
+                                        <input type="hidden" name="_METHOD" value="DELETE">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                            <i class="fas fa-trash"></i> <span class="d-none d-sm-inline">Удалить</span>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-layer-group fa-3x text-muted mb-3"></i>
+                    <p class="lead">Группы серверов пока не созданы</p>
+                    <a href="/groups/create" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Создать первую группу
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

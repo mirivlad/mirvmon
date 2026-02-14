@@ -1,0 +1,79 @@
+{% extends "layout.twig" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="fas fa-bell"></i> Настройки уведомлений</h3>
+            </div>
+            <div class="card-body">
+                <form method="post" action="/admin/notifications">
+                        <h5><i class="fas fa-envelope"></i> Email уведомления</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="smtp_host" class="form-label">SMTP сервер</label>
+                                <input type="text" class="form-control" id="smtp_host" name="smtp_host" placeholder="smtp.gmail.com">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="smtp_port" class="form-label">Порт</label>
+                                <input type="number" class="form-control" id="smtp_port" name="smtp_port" placeholder="587">
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-md-6">
+                                <label for="smtp_username" class="form-label">Имя пользователя</label>
+                                <input type="text" class="form-control" id="smtp_username" name="smtp_username" placeholder="user@example.com">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="smtp_password" class="form-label">Пароль</label>
+                                <input type="password" class="form-control" id="smtp_password" name="smtp_password" placeholder="••••••••">
+                            </div>
+                        </div>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" id="smtp_secure" name="smtp_secure">
+                            <label class="form-check-label" for="smtp_secure">
+                                Использовать безопасное соединение (SSL/TLS)
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h5><i class="fab fa-telegram"></i> Telegram уведомления</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="telegram_bot_token" class="form-label">Bot Token</label>
+                                <input type="text" class="form-control" id="telegram_bot_token" name="telegram_bot_token" placeholder="123456789:ABCdefGHIjklMNOpqrSTUvwxYZ">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="telegram_chat_id" class="form-label">Chat ID</label>
+                                <input type="text" class="form-control" id="telegram_chat_id" name="telegram_chat_id" placeholder="-1001234567890">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h5><i class="fas fa-mobile-alt"></i> SMS уведомления</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="sms_api_key" class="form-label">API ключ</label>
+                                <input type="text" class="form-control" id="sms_api_key" name="sms_api_key" placeholder="API ключ сервиса">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="sms_sender" class="form-label">Отправитель</label>
+                                <input type="text" class="form-control" id="sms_sender" name="sms_sender" placeholder="MyCompany">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Сохранить настройки
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

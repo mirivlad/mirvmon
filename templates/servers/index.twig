@@ -1,0 +1,82 @@
+{% extends "layout.twig" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2><i class="fas fa-server"></i> Серверы</h2>
+            <a href="/servers/create" class="btn btn-primary">
+                <i class="fas fa-plus"></i> <span class="d-none d-sm-inline">Добавить сервер</span>
+            </a>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                {% if servers|length > 0 %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Название</th>
+                                <th>Адрес</th>
+                                <th>Группа</th>
+                                <th>Описание</th>
+                                <th>Последние метрики</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for server in servers %}
+                            <tr>
+                                <td>{{ server.name }}</td>
+                                <td>{{ server.address|default('-') }}</td>
+                                <td>
+                                    {% if server.group_name %}
+                                        <i class="fas {{ server.group_icon|default('fa-box') }}" {% if server.group_color %}style="color: {{ server.group_color }}"{% endif %}></i> {{ server.group_name }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>{{ server.description|default('-')|slice(0, 30) ~ (attribute(server, 'description')|length > 30 ? '...' : '') }}</td>
+                                <td>
+                                    {% if server.last_metrics_at %}
+                                        {{ server.last_metrics_at|date('d.m.Y H:i:s') }}
+                                    {% else %}
+                                        Нет данных
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="/servers/{{ server.id }}" class="btn btn-sm btn-info" title="Просмотр">
+                                        <i class="fas fa-eye"></i> <span class="d-none d-sm-inline">Просмотр</span>
+                                    </a>
+                                    <a href="/servers/{{ server.id }}/edit" class="btn btn-sm btn-outline-primary" title="Редактировать">
+                                        <i class="fas fa-edit"></i> <span class="d-none d-sm-inline">Редактировать</span>
+                                    </a>
+                                    <form action="/servers/{{ server.id }}" method="post" style="display: inline-block;" onsubmit="return confirm('Вы уверены, что хотите удалить этот сервер?');">
+                                        <input type="hidden" name="{{ csrf.name_key }}" value="{{ csrf.name }}">
+                                        <input type="hidden" name="{{ csrf.value_key }}" value="{{ csrf.value }}">
+                                        <input type="hidden" name="_METHOD" value="DELETE">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Удалить">
+                                            <i class="fas fa-trash"></i> <span class="d-none d-sm-inline">Удалить</span>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-server fa-3x text-muted mb-3"></i>
+                    <p class="lead">Серверы пока не добавлены</p>
+                    <a href="/servers/create" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Добавить первый сервер
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
