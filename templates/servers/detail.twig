@@ -384,6 +384,42 @@
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+
+// Функция для получения топ-процессов для указанного времени
+function fetchProcesses(serverId, time) {
+    return new Promise(function(resolve) {
+        fetch('/api/v1/agent/' + serverId + '/processes?time=' + encodeURIComponent(time))
+            .then(response => response.json())
+            .then(data => {
+                var lines = [];
+                
+                // Добавляем топ-процессы CPU
+                if (data.top_cpu && data.top_cpu.length > 0) {
+                    lines.push('');
+                    lines.push('🏆 Топ CPU:');
+                    data.top_cpu.forEach(function(proc) {
+                        lines.push('  ' + proc.name + ': ' + proc.value + '%');
+                    });
+                }
+                
+                // Добавляем топ-процессы RAM
+                if (data.top_ram && data.top_ram.length > 0) {
+                    lines.push('');
+                    lines.push('💾 Топ RAM:');
+                    data.top_ram.forEach(function(proc) {
+                        lines.push('  ' + proc.name + ': ' + proc.value + '%');
+                    });
+                }
+                
+                resolve(lines);
+            })
+            .catch(function() {
+                resolve([]);
+            });
+    });
+}
+
+
 // Функция для получения списка сервисов
 function requestServices() {
     fetch('/api/v1/agent/{{ server.id }}/services')
