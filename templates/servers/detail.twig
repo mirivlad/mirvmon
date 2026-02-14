@@ -497,7 +497,7 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
         },
         plugins: {
             tooltip: {
-                enabled: true,
+                enabled: false,
                 mode: 'index',
                 intersect: false,
 {% set metricType = metricName %}
@@ -532,6 +532,7 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
                         .then(data => {
                             var lines = [];
                             lines.push('Время: ' + time);
+                            lines.push('Значение: ' + data{{ metricName }}[dataIndex]);
 {% if metricName == 'cpu_load' %}
                             // Показываем только top_cpu
                             if (data.top_cpu && data.top_cpu.length > 0) {
