@@ -191,6 +191,7 @@ $adminGroup = $app->group('/admin', function ($group) use ($adminController) {
 // API route for agents (public, no auth middleware, no csrf)
 $app->post('/api/v1/metrics', [$metricsController, 'collectMetrics']);
 $app->get("/api/v1/agent/{id}/services", [$metricsController, 'getServices'])->add(AuthMiddleware::class);
+$app->get("/api/v1/agent/{id}/processes", [$metricsController, "getProcesses"])->add(AuthMiddleware::class);
 
 // Agent configuration routes (protected with auth middleware and csrf)
 $agentGroup = $app->group('/agent', function ($group) use ($agentController) {

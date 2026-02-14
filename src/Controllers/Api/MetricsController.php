@@ -155,6 +155,66 @@ class MetricsController extends Model
         return $response->withHeader('Content-Type', 'application/json');
     }
 
+    public function getProcesses(Request $request, Response $response, $args)
+    {
+        $serverId = $args['id'];
+        $timeParam = $request->getQueryParams()['time'] ?? null;
+
+        if (!$timeParam) {
+            return $response->withStatus(400);
+        }
+
+        // Форматируем время для запроса
+        $time = date('Y-m-d H:i:s', strtotime($timeParam));
+
+        // Получаем топ-процессы CPU для указанного времени
+        $stmt = $this->pdo->prepare("
+            SELECT value
+            FROM server_metrics sm
+            JOIN metric_names mn ON sm.metric_name_id = mn.id
+            WHERE sm.server_id = :server_id
+            AND mn.name = 'top_cpu_proc'
+            AND sm.created_at BETWEEN DATE_SUB(:time, INTERVAL 5 SECOND) AND DATE_ADD(:time, INTERVAL 5 SECOND)
+            ORDER BY ABS(TIMESTAMPDIFF(SECOND, sm.created_at, :time))
+            LIMIT 1
+        ");
+        $stmt->execute([':server_id' => $serverId, ':time' => $time]);
+        $topCpuResult = $stmt->fetch();
+
+        // Получаем топ-процессы RAM для указанного времени
+        $stmt = $this->pdo->prepare("
+            SELECT value
+            FROM server_metrics sm
+            JOIN metric_names mn ON sm.metric_name_id = mn.id
+            WHERE sm.server_id = :server_id
+            AND mn.name = 'top_ram_proc'
+            AND sm.created_at BETWEEN DATE_SUB(:time, INTERVAL 5 SECOND) AND DATE_ADD(:time, INTERVAL 5 SECOND)
+            ORDER BY ABS(TIMESTAMPDIFF(SECOND, sm.created_at, :time))
+            LIMIT 1
+        ");
+        $stmt->execute([':server_id' => $serverId, ':time' => $time]);
+        $topRamResult = $stmt->fetch();
+
+        $topCpu = [];
+        $topRam = [];
+
+        if ($topCpuResult && !empty($topCpuResult['value'])) {
+            $topCpu = json_decode($topCpuResult['value'], true);
+        }
+
+        if ($topRamResult && !empty($topRamResult['value'])) {
+            $topRam = json_decode($topRamResult['value'], true);
+        }
+
+        $response->getBody()->write(json_encode([
+            'top_cpu' => $topCpu,
+            'top_ram' => $topRam,
+            'time' => $time
+        ]));
+
+        return $response->withHeader('Content-Type', 'application/json');
+    }
+
     private function checkThresholds($serverId, $metricId, $value, $metricName)
     {
         // Получаем пороговые значения для этой метрики на этом сервере
