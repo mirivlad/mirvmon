@@ -161,11 +161,23 @@ class MetricsController extends Model
         $timeParam = $request->getQueryParams()['time'] ?? null;
 
         if (!$timeParam) {
-            return $response->withStatus(400);
+            return $response->withStatus(400)->getBody()->write(json_encode(['error' => 'Time parameter required']));
         }
 
-        // Форматируем время для запроса
-        $time = date('Y-m-d H:i:s', strtotime($timeParam));
+        // Пытаемся распознать различные форматы времени
+        $timestamp = strtotime($timeParam);
+        
+        // Если время только в формате HH:MM, добавляем сегодняшнюю дату
+        if ($timestamp === false && preg_match('/^\d{1,2}:\d{2}$/', $timeParam)) {
+            $today = date('Y-m-d');
+            $timestamp = strtotime($today . ' ' . $timeParam);
+        }
+        
+        if ($timestamp === false) {
+            return $response->withStatus(400)->getBody()->write(json_encode(['error' => 'Invalid time format']));
+        }
+
+        $time = date('Y-m-d H:i:s', $timestamp);
 
         // Получаем топ-процессы CPU для указанного времени
         $stmt = $this->pdo->prepare("
@@ -174,11 +186,16 @@ class MetricsController extends Model
             JOIN metric_names mn ON sm.metric_name_id = mn.id
             WHERE sm.server_id = :server_id
             AND mn.name = 'top_cpu_proc'
-            AND sm.created_at BETWEEN DATE_SUB(:time, INTERVAL 5 SECOND) AND DATE_ADD(:time, INTERVAL 5 SECOND)
-            ORDER BY ABS(TIMESTAMPDIFF(SECOND, sm.created_at, :time))
+            AND sm.created_at BETWEEN DATE_SUB(:time1, INTERVAL 5 SECOND) AND DATE_ADD(:time2, INTERVAL 5 SECOND)
+            ORDER BY ABS(TIMESTAMPDIFF(SECOND, sm.created_at, :time3))
             LIMIT 1
         ");
-        $stmt->execute([':server_id' => $serverId, ':time' => $time]);
+        $stmt->execute([
+            ':server_id' => $serverId, 
+            ':time1' => $time,
+            ':time2' => $time,
+            ':time3' => $time
+        ]);
         $topCpuResult = $stmt->fetch();
 
         // Получаем топ-процессы RAM для указанного времени
@@ -188,11 +205,16 @@ class MetricsController extends Model
             JOIN metric_names mn ON sm.metric_name_id = mn.id
             WHERE sm.server_id = :server_id
             AND mn.name = 'top_ram_proc'
-            AND sm.created_at BETWEEN DATE_SUB(:time, INTERVAL 5 SECOND) AND DATE_ADD(:time, INTERVAL 5 SECOND)
-            ORDER BY ABS(TIMESTAMPDIFF(SECOND, sm.created_at, :time))
+            AND sm.created_at BETWEEN DATE_SUB(:time1, INTERVAL 5 SECOND) AND DATE_ADD(:time2, INTERVAL 5 SECOND)
+            ORDER BY ABS(TIMESTAMPDIFF(SECOND, sm.created_at, :time3))
             LIMIT 1
         ");
-        $stmt->execute([':server_id' => $serverId, ':time' => $time]);
+        $stmt->execute([
+            ':server_id' => $serverId, 
+            ':time1' => $time,
+            ':time2' => $time,
+            ':time3' => $time
+        ]);
         $topRamResult = $stmt->fetch();
 
         $topCpu = [];
