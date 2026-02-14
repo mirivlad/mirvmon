@@ -500,13 +500,15 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
                 enabled: true,
                 mode: 'index',
                 intersect: false,
+{% set metricType = metricName %}
+
                 external: function(context) {
                     // Tooltip element
-                    var tooltipEl = document.getElementById('chartjs-tooltip-' + {{ server.id }});
+                    var tooltipEl = document.getElementById('chartjs-tooltip-' + {{ server.id }} + '-' + '{{ metricName }}');
                     
                     if (!tooltipEl) {
                         tooltipEl = document.createElement('div');
-                        tooltipEl.id = 'chartjs-tooltip-' + {{ server.id }};
+                        tooltipEl.id = 'chartjs-tooltip-' + {{ server.id }} + '-' + '{{ metricName }}';
                         tooltipEl.style.opacity = 0;
                         tooltipEl.style.position = 'absolute';
                         tooltipEl.style.background = 'rgba(0,0,0,0.7)';
@@ -519,10 +521,10 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
                     
                     var dataIndex = context.tooltip && context.tooltip.dataPoints && context.tooltip.dataPoints[0] ? context.tooltip.dataPoints[0].dataIndex : null;
                     if (dataIndex === null) {
-                            tooltipEl.style.opacity = 0;
-                            return;
-                        }
-                        var time = labels{{ metricName }}[dataIndex];
+                        tooltipEl.style.opacity = 0;
+                        return;
+                    }
+                    var time = labels{{ metricName }}[dataIndex];
                     
                     // Fetch processes
                     fetch('/api/v1/agent/' + {{ server.id }} + '/processes?time=' + encodeURIComponent(time))
@@ -530,7 +532,8 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
                         .then(data => {
                             var lines = [];
                             lines.push('{{ metricName|replace({'_': ' ', 'load': 'загрузка', 'used': 'использование'})|title }}: ' + data{{ metricName }}[dataIndex]);
-                            
+{% if metricName == 'cpu_load' %}
+                            // Показываем только top_cpu
                             if (data.top_cpu && data.top_cpu.length > 0) {
                                 lines.push('');
                                 lines.push('TOP CPU:');
@@ -538,7 +541,8 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
                                     lines.push('  ' + proc.name + ': ' + proc.value + '%');
                                 });
                             }
-                            
+{% elseif metricName == 'ram_used' %}
+                            // Показываем только top_ram
                             if (data.top_ram && data.top_ram.length > 0) {
                                 lines.push('');
                                 lines.push('TOP RAM:');
@@ -546,6 +550,7 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
                                     lines.push('  ' + proc.name + ': ' + proc.value + '%');
                                 });
                             }
+{% endif %}
                             
                             // Show tooltip
                             var position = context.chart.canvas.getBoundingClientRect();
