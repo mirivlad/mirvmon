@@ -472,7 +472,7 @@ var data{{ metricName }} = [];
 
 {% for metric in metricData|slice(0, 20)|reverse %}
 labels{{ metricName }}.push('{{ metric.created_at|date('H:i') }}');
-data{{ metricName }}.push({{ metric.value }});
+data{{ metricName }}.push({{ metric.value|raw }});
 {% endfor %}
 
 new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {

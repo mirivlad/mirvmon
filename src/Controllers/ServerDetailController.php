@@ -86,7 +86,7 @@ class ServerDetailController extends Model
         }
 
         // Получаем все типы метрик
-        $stmt = $this->pdo->query("SELECT id, name, unit FROM metric_names ORDER BY name");
+        $stmt = $this->pdo->query("SELECT id, name, unit FROM metric_names WHERE name NOT LIKE '%_proc' ORDER BY name");
         $allMetricTypes = $stmt->fetchAll();
 
         // Получаем список сервисов
@@ -132,7 +132,7 @@ class ServerDetailController extends Model
         $params = $request->getParsedBody();
 
         // Получаем все типы метрик
-        $stmt = $this->pdo->query("SELECT id, name FROM metric_names ORDER BY name");
+        $stmt = $this->pdo->query("SELECT id, name FROM metric_names WHERE name NOT LIKE '%_proc' ORDER BY name");
         $metricTypes = $stmt->fetchAll();
 
         // Удаляем старые пороги для этого сервера

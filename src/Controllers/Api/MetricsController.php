@@ -186,7 +186,7 @@ class MetricsController extends Model
             JOIN metric_names mn ON sm.metric_name_id = mn.id
             WHERE sm.server_id = :server_id
             AND mn.name = 'top_cpu_proc'
-            AND sm.created_at BETWEEN DATE_SUB(:time1, INTERVAL 5 SECOND) AND DATE_ADD(:time2, INTERVAL 5 SECOND)
+            AND sm.created_at BETWEEN DATE_SUB(:time1, INTERVAL 30 SECOND) AND DATE_ADD(:time2, INTERVAL 30 SECOND)
             ORDER BY ABS(TIMESTAMPDIFF(SECOND, sm.created_at, :time3))
             LIMIT 1
         ");
@@ -205,7 +205,7 @@ class MetricsController extends Model
             JOIN metric_names mn ON sm.metric_name_id = mn.id
             WHERE sm.server_id = :server_id
             AND mn.name = 'top_ram_proc'
-            AND sm.created_at BETWEEN DATE_SUB(:time1, INTERVAL 5 SECOND) AND DATE_ADD(:time2, INTERVAL 5 SECOND)
+            AND sm.created_at BETWEEN DATE_SUB(:time1, INTERVAL 30 SECOND) AND DATE_ADD(:time2, INTERVAL 30 SECOND)
             ORDER BY ABS(TIMESTAMPDIFF(SECOND, sm.created_at, :time3))
             LIMIT 1
         ");
