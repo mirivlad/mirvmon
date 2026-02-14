@@ -90,14 +90,16 @@
                     <div class="tab-pane fade show active" id="metrics" role="tabpanel">
                         <div class="row mb-3">
                             <div class="col-md-12">
+                                <!-- Отладка: period = {{ request.query.period }} -->
+                                <!-- Отладка: period = {{ period }}, request = {{ request.period }} -->
                                 <div class="btn-group d-flex" role="group">
-                                    <a href="?tab=metrics&period=24h" class="btn btn-outline-primary w-100 {% if request.query.period == '24h' or request.query.period is empty %}active{% endif %}">
+                                    <a href="?tab=metrics&period=24h" class="btn btn-outline-primary w-100 {% if period == '24h' or period is empty %}active{% endif %}">
                                         24 часа
                                     </a>
-                                    <a href="?tab=metrics&period=7d" class="btn btn-outline-primary w-100 {% if request.query.period == '7d' %}active{% endif %}">
+                                    <a href="?tab=metrics&period=7d" class="btn btn-outline-primary w-100 {% if period == '7d' %}active{% endif %}">
                                         7 дней
                                     </a>
-                                    <a href="?tab=metrics&period=30d" class="btn btn-outline-primary w-100 {% if request.query.period == '30d' %}active{% endif %}">
+                                    <a href="?tab=metrics&period=30d" class="btn btn-outline-primary w-100 {% if period == '30d' %}active{% endif %}">
                                         30 дней
                                     </a>
                                 </div>

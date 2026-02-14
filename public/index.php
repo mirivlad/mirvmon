@@ -35,16 +35,16 @@ $csrf->setPersistentTokenMode(true);
 // Create Twig view
 $twig = Twig::create(__DIR__ . '/../templates', ['cache' => false]);
 
-// Add CSRF middleware FIRST
-$app->add($csrf);
-
 // Add Twig middleware
 $twigMiddleware = TwigMiddleware::create($app, $twig);
 $app->add($twigMiddleware);
 
-// Add session middleware (MUST be after TwigMiddleware)
+// Add session middleware
 $sessionMiddleware = new SessionMiddleware($twig);
 $app->add($sessionMiddleware);
+
+// Add CSRF middleware (will be applied selectively)
+$csrfMiddleware = $csrf;
 
 // Add a route to get CSRF tokens via AJAX
 $app->get('/csrf-token', function (Request $request, Response $response, $args) use ($csrf) {
@@ -120,23 +120,25 @@ $app->get('/logout', function (Request $request, Response $response, $args) {
 });
 
 // Dashboard route (protected with auth middleware)
-$app->get('/', function (Request $request, Response $response, $args) use ($twig) {
-    $serverModel = new ServerModel();
+$dashboardGroup = $app->group('', function ($group) use ($twig) {
+    $group->get('/', function (Request $request, Response $response, $args) use ($twig) {
+        $serverModel = new ServerModel();
 
-    // Get statistics
-    $stats = $serverModel->getStats();
+        // Get statistics
+        $stats = $serverModel->getStats();
 
-    // Get servers with latest metrics
-    $servers = $serverModel->getAll();
+        // Get servers with latest metrics
+        $servers = $serverModel->getAll();
 
-    $templateData = [
-        'title' => 'Дашборд мониторинга',
-        'stats' => $stats,
-        'servers' => $servers
-    ];
+        $templateData = [
+            'title' => 'Дашборд мониторинга',
+            'stats' => $stats,
+            'servers' => $servers
+        ];
 
-    return $twig->render($response, 'dashboard.twig', $templateData);
-})->add(AuthMiddleware::class);
+        return $twig->render($response, 'dashboard.twig', $templateData);
+    });
+})->add($csrfMiddleware)->add(AuthMiddleware::class);
 
 // Create controllers BEFORE routes
 $groupController = new GroupController($twig);
@@ -147,47 +149,57 @@ $adminController = new AdminController($twig);
 $metricsController = new MetricsController();
 $agentController = new AgentController();
 
-// Routes for groups (protected with auth middleware)
-$app->get('/groups', [$groupController, 'index'])->add(AuthMiddleware::class);
-$app->get('/groups/create', [$groupController, 'create'])->add(AuthMiddleware::class);
-$app->post('/groups', [$groupController, 'store'])->add(AuthMiddleware::class);
-$app->get('/groups/{id}/edit', [$groupController, 'edit'])->add(AuthMiddleware::class);
-$app->post('/groups/{id}', [$groupController, 'update'])->add(AuthMiddleware::class);
-$app->delete('/groups/{id}', [$groupController, 'delete'])->add(AuthMiddleware::class);
-$app->get('/groups/{id}', [$groupController, 'show'])->add(AuthMiddleware::class);
+// Routes for groups (protected with auth middleware and csrf)
+$groupsGroup = $app->group('/groups', function ($group) use ($groupController) {
+    $group->get('', [$groupController, 'index']);
+    $group->get('/create', [$groupController, 'create']);
+    $group->post('', [$groupController, 'store']);
+    $group->get('/{id}/edit', [$groupController, 'edit']);
+    $group->post('/{id}', [$groupController, 'update']);
+    $group->delete('/{id}', [$groupController, 'delete']);
+    $group->get('/{id}', [$groupController, 'show']);
+})->add($csrfMiddleware)->add(AuthMiddleware::class);
 
-// Routes for servers (protected with auth middleware)
-$app->get('/servers', [$serverController, 'index'])->add(AuthMiddleware::class);
-$app->get('/servers/create', [$serverController, 'create'])->add(AuthMiddleware::class);
-$app->post('/servers', [$serverController, 'store'])->add(AuthMiddleware::class);
-$app->get('/servers/{id}/edit', [$serverController, 'edit'])->add(AuthMiddleware::class);
-$app->post('/servers/{id}', [$serverController, 'update'])->add(AuthMiddleware::class);
-$app->delete('/servers/{id}', [$serverController, 'delete'])->add(AuthMiddleware::class);
-$app->get('/servers/{id}/regenerate-token', [$serverController, 'regenerateToken'])->add(AuthMiddleware::class);
-$app->post('/servers/{id}/thresholds', [$serverDetailController, 'saveThresholds'])->add(AuthMiddleware::class);
-$app->post('/servers/{id}/services', [$serverDetailController, 'saveServices'])->add(AuthMiddleware::class);
+// Routes for servers (protected with auth middleware and csrf)
+$serversGroup = $app->group('/servers', function ($group) use ($serverController, $serverDetailController) {
+    $group->get('', [$serverController, 'index']);
+    $group->get('/create', [$serverController, 'create']);
+    $group->post('', [$serverController, 'store']);
+    $group->get('/{id}/edit', [$serverController, 'edit']);
+    $group->post('/{id}', [$serverController, 'update']);
+    $group->delete('/{id}', [$serverController, 'delete']);
+    $group->get('/{id}/regenerate-token', [$serverController, 'regenerateToken']);
+    $group->post('/{id}/thresholds', [$serverDetailController, 'saveThresholds']);
+    $group->post('/{id}/services', [$serverDetailController, 'saveServices']);
+})->add($csrfMiddleware)->add(AuthMiddleware::class);
 
-// Server detail route (protected with auth middleware)
+// Server detail route (protected with auth middleware and csrf)
 $app->get('/servers/{id}', [$serverDetailController, 'show'])->add(AuthMiddleware::class);
 
-// Alerts routes (protected with auth middleware)
-$app->get('/alerts', [$alertController, 'index'])->add(AuthMiddleware::class);
-$app->get('/alerts/{id}/resolve', [$alertController, 'markAsResolved'])->add(AuthMiddleware::class);
+// Alerts routes (protected with auth middleware and csrf)
+$alertsGroup = $app->group('/alerts', function ($group) use ($alertController) {
+    $group->get('', [$alertController, 'index']);
+    $group->get('/{id}/resolve', [$alertController, 'markAsResolved']);
+})->add($csrfMiddleware)->add(AuthMiddleware::class);
 
-// Admin routes (protected with auth middleware)
-$app->get('/admin/users', [$adminController, 'usersList'])->add(AuthMiddleware::class);
-$app->get('/admin/notifications', [$adminController, 'notificationSettings'])->add(AuthMiddleware::class);
+// Admin routes (protected with auth middleware and csrf)
+$adminGroup = $app->group('/admin', function ($group) use ($adminController) {
+    $group->get('/users', [$adminController, 'usersList']);
+    $group->get('/notifications', [$adminController, 'notificationSettings']);
+})->add($csrfMiddleware)->add(AuthMiddleware::class);
 
-// API route for agents (public, no auth middleware)
+// API route for agents (public, no auth middleware, no csrf)
 $app->post('/api/v1/metrics', [$metricsController, 'collectMetrics']);
 $app->get("/api/v1/agent/{id}/services", [$metricsController, 'getServices'])->add(AuthMiddleware::class);
 
-// Agent configuration routes (protected with auth middleware)
-$app->get("/agent/{id}/config", [$agentController, 'getConfig'])->add(AuthMiddleware::class);
-$app->post("/agent/{id}/config", [$agentController, 'updateConfig'])->add(AuthMiddleware::class);
-$app->get("/agent/{id}/status", [$agentController, 'getStatus'])->add(AuthMiddleware::class);
+// Agent configuration routes (protected with auth middleware and csrf)
+$agentGroup = $app->group('/agent', function ($group) use ($agentController) {
+    $group->get("/{id}/config", [$agentController, 'getConfig']);
+    $group->post("/{id}/config", [$agentController, 'updateConfig']);
+    $group->get("/{id}/status", [$agentController, 'getStatus']);
+})->add($csrfMiddleware)->add(AuthMiddleware::class);
 
-// API status endpoint (public, no auth middleware)
+// API status endpoint (public, no auth middleware, no csrf)
 $app->get('/api/status', function (Request $request, Response $response, $args) {
     $data = [
         'status' => 'ok',
@@ -200,7 +212,7 @@ $app->get('/api/status', function (Request $request, Response $response, $args) 
         ->withHeader('Content-Type', 'application/json');
 });
 
-// Agent installation script route (public, no auth middleware)
+// Agent installation script route (public, no auth middleware, no csrf)
 $app->get('/agent/install.sh', [$agentController, 'generateInstallScript']);
 
 // Run app
