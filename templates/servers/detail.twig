@@ -500,12 +500,61 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
                 enabled: true,
                 mode: 'index',
                 intersect: false,
-                callbacks: {
-                    afterBody: function(context) {
-                        var dataIndex = context[0].dataIndex;
-                        var time = labels{{ metricName }}[dataIndex];
-                        return fetchProcesses({{ server.id }}, time);
+                external: function(context) {
+                    // Tooltip element
+                    var tooltipEl = document.getElementById('chartjs-tooltip-' + {{ server.id }});
+                    
+                    if (!tooltipEl) {
+                        tooltipEl = document.createElement('div');
+                        tooltipEl.id = 'chartjs-tooltip-' + {{ server.id }};
+                        tooltipEl.style.opacity = 0;
+                        tooltipEl.style.position = 'absolute';
+                        tooltipEl.style.background = 'rgba(0,0,0,0.7)';
+                        tooltipEl.style.color = 'white';
+                        tooltipEl.style.borderRadius = '3px';
+                        tooltipEl.style.padding = '10px';
+                        tooltipEl.style.pointerEvents = 'none';
+                        document.body.appendChild(tooltipEl);
                     }
+                    
+                    var dataIndex = context[0].dataIndex;
+                    var time = labels{{ metricName }}[dataIndex];
+                    
+                    // Fetch processes
+                    fetch('/api/v1/agent/' + {{ server.id }} + '/processes?time=' + encodeURIComponent(time))
+                        .then(response => response.json())
+                        .then(data => {
+                            var lines = [];
+                            lines.push('{{ metricName|replace({'_': ' ', 'load': 'загрузка', 'used': 'использование'})|title }}: ' + data{{ metricName }}[dataIndex]);
+                            
+                            if (data.top_cpu && data.top_cpu.length > 0) {
+                                lines.push('');
+                                lines.push('TOP CPU:');
+                                data.top_cpu.forEach(function(proc) {
+                                    lines.push('  ' + proc.name + ': ' + proc.value + '%');
+                                });
+                            }
+                            
+                            if (data.top_ram && data.top_ram.length > 0) {
+                                lines.push('');
+                                lines.push('TOP RAM:');
+                                data.top_ram.forEach(function(proc) {
+                                    lines.push('  ' + proc.name + ': ' + proc.value + '%');
+                                });
+                            }
+                            
+                            // Show tooltip
+                            var position = context.chart.canvas.getBoundingClientRect();
+                            tooltipEl.innerHTML = lines.join('<br>');
+                            tooltipEl.style.opacity = 1;
+                            tooltipEl.style.left = position.left + window.pageXOffset + context.tooltip.caretX + 10 + 'px';
+                            tooltipEl.style.top = position.top + window.pageYOffset + context.tooltip.caretY + 'px';
+                            
+                            // Hide after 3 seconds
+                            setTimeout(function() {
+                                tooltipEl.style.opacity = 0;
+                            }, 3000);
+                        });
                 }
             }
         }
