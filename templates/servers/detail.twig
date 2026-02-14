@@ -519,17 +519,20 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
                         tooltipEl.style.pointerEvents = 'none';
                         document.body.appendChild(tooltipEl);
                     
-                    // Hide tooltip on mouseleave
-                    context.chart.canvas.addEventListener('mouseleave', function() {
-                        tooltipEl.style.opacity = 0;
-                    });
                     }
                     
                     var dataIndex = context.tooltip && context.tooltip.dataPoints && context.tooltip.dataPoints[0] ? context.tooltip.dataPoints[0].dataIndex : null;
                     if (dataIndex === null) {
                         tooltipEl.style.opacity = 0;
+                        window.lastTooltipIndex = null;
                         return;
                     }
+                    // Проверяем что курсор всё ещё над той же точкой
+                    if (window.lastTooltipIndex && window.lastTooltipIndex !== dataIndex) {
+                        tooltipEl.style.opacity = 0;
+                        return;
+                    }
+                    window.lastTooltipIndex = dataIndex;
                     var time = labels{{ metricName }}[dataIndex];
                     
                     // Fetch processes
