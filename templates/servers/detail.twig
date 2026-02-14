@@ -517,8 +517,12 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
                         document.body.appendChild(tooltipEl);
                     }
                     
-                    var dataIndex = context[0].dataIndex;
-                    var time = labels{{ metricName }}[dataIndex];
+                    var dataIndex = context.tooltip && context.tooltip.dataPoints && context.tooltip.dataPoints[0] ? context.tooltip.dataPoints[0].dataIndex : null;
+                    if (dataIndex === null) {
+                            tooltipEl.style.opacity = 0;
+                            return;
+                        }
+                        var time = labels{{ metricName }}[dataIndex];
                     
                     // Fetch processes
                     fetch('/api/v1/agent/' + {{ server.id }} + '/processes?time=' + encodeURIComponent(time))
