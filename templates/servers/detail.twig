@@ -384,45 +384,6 @@
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-// Функция для получения топ-процессов для указанного времени
-function fetchProcesses(serverId, time) {
-    return new Promise(function(resolve) {
-        // Добавляем сегодняшнюю дату к времени если его нет
-        var fullTime = time;
-        if (time && time.indexOf('-') === -1) {
-            var now = new Date();
-            var year = now.getFullYear();
-            var month = String(now.getMonth() + 1).padStart(2, '0');
-            var day = String(now.getDate()).padStart(2, '0');
-            fullTime = year + '-' + month + '-' + day + ' ' + time;
-        }
-        
-        fetch('/api/v1/agent/' + serverId + '/processes?time=' + encodeURIComponent(fullTime))
-            .then(response => response.json())
-            .then(data => {
-                var lines = [];
-                if (data.top_cpu && data.top_cpu.length > 0) {
-                    lines.push('');
-                    lines.push('🏆 Топ CPU:');
-                    data.top_cpu.forEach(function(proc) {
-                        lines.push('  ' + proc.name + ': ' + proc.value + '%');
-                    });
-                }
-                if (data.top_ram && data.top_ram.length > 0) {
-                    lines.push('');
-                    lines.push('💾 Топ RAM:');
-                    data.top_ram.forEach(function(proc) {
-                        lines.push('  ' + proc.name + ': ' + proc.value + '%');
-                    });
-                }
-                resolve(lines);
-            })
-            .catch(function() {
-                resolve([]);
-            });
-    });
-}
-
 
 // Функция для получения топ-процессов для указанного времени
 function fetchProcesses(serverId, time) {
