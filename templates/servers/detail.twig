@@ -108,7 +108,6 @@
 
                         <div class="row">
                             {% for metricName, metricData in metrics %}
-{% if metricName != 'top_cpu_proc' and metricName != 'top_ram_proc' %}
                             <div class="col-12 mb-4">
                                 <div class="card">
                                     <div class="card-header">
@@ -134,8 +133,7 @@
                                     </div>
                                 </div>
                             </div>
-                            {% endif %}
-
+                            {% endfor %}
 
                             {% if metrics|length == 0 %}
                             <div class="col-12">
@@ -220,8 +218,7 @@
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    {% endif %}
-
+                                                    {% endfor %}
                                                     
                                                     {% for service in stoppedServices %}
                                                     <div class="col-md-4 col-lg-3 mb-2">
@@ -252,8 +249,7 @@
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    {% endif %}
-
+                                                    {% endfor %}
                                                     
                                                     {% for service in unknownServices %}
                                                     <div class="col-md-4 col-lg-3 mb-2">
@@ -284,8 +280,7 @@
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    {% endif %}
-
+                                                    {% endfor %}
                                                 {% else %}
                                                     <div class="col-12">
                                                         <div class="alert alert-warning text-center">
@@ -369,8 +364,7 @@
                                             </div>
                                         </div>
                                     </div>
-                                    {% endif %}
-
+                                    {% endfor %}
 
                                     <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                                         <button type="submit" class="btn btn-primary">
@@ -470,8 +464,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Графики метрик
 {% for metricName, metricData in metrics %}
-{% if metricName != 'top_cpu_proc' and metricName != 'top_ram_proc' %}
-{% if metricName != 'top_cpu_proc' and metricName != 'top_ram_proc' %}
 const ctx{{ metricName|replace({'-': '_', '.': '_'}) }} = document.getElementById('chart-{{ metricName }}').getContext('2d');
 
 // Подготовка данных для графика
@@ -481,8 +473,7 @@ var data{{ metricName }} = [];
 {% for metric in metricData|slice(0, 20)|reverse %}
 labels{{ metricName }}.push('{{ metric.created_at|date('H:i') }}');
 data{{ metricName }}.push({{ metric.value|raw }});
-{% endif %}
-
+{% endfor %}
 
 new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
     type: 'line',
@@ -506,7 +497,7 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
         },
         plugins: {
             tooltip: {
-                enabled: false,
+                enabled: true,
                 mode: 'index',
                 intersect: false,
 {% set metricType = metricName %}
@@ -524,18 +515,15 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
                         tooltipEl.style.color = 'white';
                         tooltipEl.style.borderRadius = '3px';
                         tooltipEl.style.padding = '10px';
-                        tooltipEl.style.fontSize = '12px';
                         tooltipEl.style.pointerEvents = 'none';
                         document.body.appendChild(tooltipEl);
                     }
                     
-                    // Прячем если курсор ушел с графика
-                    if (!context.tooltip._active || context.tooltip._active.length === 0) {
+                    var dataIndex = context.tooltip && context.tooltip.dataPoints && context.tooltip.dataPoints[0] ? context.tooltip.dataPoints[0].dataIndex : null;
+                    if (dataIndex === null) {
                         tooltipEl.style.opacity = 0;
                         return;
                     }
-                    
-                    var dataIndex = context.tooltip._active[0].index;
                     var time = labels{{ metricName }}[dataIndex];
                     
                     // Fetch processes
@@ -543,8 +531,7 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
                         .then(response => response.json())
                         .then(data => {
                             var lines = [];
-                            lines.push('Время: ' + time);
-                            lines.push('Значение: ' + data{{ metricName }}[dataIndex]);
+                            lines.push('{{ metricName|replace({'_': ' ', 'load': 'загрузка', 'used': 'использование'})|title }}: ' + data{{ metricName }}[dataIndex]);
 {% if metricName == 'cpu_load' %}
                             // Показываем только top_cpu
                             if (data.top_cpu && data.top_cpu.length > 0) {
@@ -563,6 +550,7 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
                                     lines.push('  ' + proc.name + ': ' + proc.value + '%');
                                 });
                             }
+{% endif %}
                             
                             // Show tooltip
                             var position = context.chart.canvas.getBoundingClientRect();
@@ -572,16 +560,15 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
                             tooltipEl.style.top = position.top + window.pageYOffset + context.tooltip.caretY + 'px';
                             
                             // Hide after 3 seconds
-//                            setTimeout(function() {
-//                                tooltipEl.style.opacity = 0;
-//                            }, 3000);
+                            setTimeout(function() {
+                                tooltipEl.style.opacity = 0;
+                            }, 3000);
                         });
                 }
             }
         }
     }
 });
-{% endif %}
-
+{% endfor %}
 </script>
 {% endblock %}
