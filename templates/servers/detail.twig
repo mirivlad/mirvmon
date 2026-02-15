@@ -108,7 +108,7 @@
 
                         <div class="row">
                             {% for metricName, metricData in metrics %}
-                                {% if metricName!="top_cpu_proc" && metricName!="top_ram_proc" %}
+                                {% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" %}
                                 <div class="col-12 mb-4">
                                     <div class="card">
                                         <div class="card-header">
@@ -466,7 +466,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Графики метрик
 {% for metricName, metricData in metrics %}
-{% if metricName!="top_cpu_proc" && metricName!="top_ram_proc" %}
+{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" %}
 const ctx{{ metricName|replace({'-': '_', '.': '_'}) }} = document.getElementById('chart-{{ metricName }}').getContext('2d');
 
 // Подготовка данных для графика
