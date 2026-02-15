@@ -36,29 +36,47 @@ class ServerDetailController extends Model
             return $response->withHeader('Location', '/servers')->withStatus(302);
         }
 
-        // Получаем период для выборки метрик
+        // Получаем период и зум
         $period = $request->getQueryParams()['period'] ?? '24h';
+        $zoom = $request->getQueryParams()['zoom'] ?? null;
 
-        // Определяем интервал времени в зависимости от периода
-        $interval = match($period) {
-            '7d' => 'INTERVAL 7 DAY',
-            '30d' => 'INTERVAL 30 DAY',
-            default => 'INTERVAL 24 HOUR'
-        };
-
-        // Получаем последние метрики для этого сервера
-        $stmt = $this->pdo->prepare("
-            SELECT sm.value, mn.name, mn.unit, sm.created_at
-            FROM server_metrics sm
-            JOIN metric_names mn ON sm.metric_name_id = mn.id
-            WHERE sm.server_id = :id
-            AND sm.created_at >= DATE_SUB(NOW(), {$interval})
-            ORDER BY sm.created_at DESC
-        ");
+        // Конфигурация агрегации
+        $aggConfig = $this->getAggregationConfig($period, $zoom);
+        
+        $interval = $aggConfig['interval'];
+        $groupBy = $aggConfig['groupBy'];
+        
+        // Запрос с агрегацией если нужно
+        if ($groupBy) {
+            $sql = "
+                SELECT 
+                    AVG(sm.value) as value,
+                    mn.name,
+                    mn.unit,
+                    DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:%i:00') as time_bucket
+                FROM server_metrics sm
+                JOIN metric_names mn ON sm.metric_name_id = mn.id
+                WHERE sm.server_id = :id
+                AND sm.created_at >= DATE_SUB(NOW(), {$interval})
+                {$groupBy}
+                ORDER BY time_bucket DESC
+            ";
+        } else {
+            $sql = "
+                SELECT sm.value, mn.name, mn.unit, sm.created_at
+                FROM server_metrics sm
+                JOIN metric_names mn ON sm.metric_name_id = mn.id
+                WHERE sm.server_id = :id
+                AND sm.created_at >= DATE_SUB(NOW(), {$interval})
+                ORDER BY sm.created_at DESC
+            ";
+        }
+        
+        $stmt = $this->pdo->prepare($sql);
         $stmt->execute([':id' => $id]);
         $metrics = $stmt->fetchAll();
 
-        // Группируем метрики по типу (CPU, RAM, Disk)
+        // Группируем метрики
         $groupedMetrics = [];
         foreach ($metrics as $metric) {
             $metricName = $metric['name'];
@@ -68,7 +86,7 @@ class ServerDetailController extends Model
             $groupedMetrics[$metricName][] = $metric;
         }
 
-        // Получаем текущие пороговые значения для сервера
+        // Пороги
         $stmt = $this->pdo->prepare("
             SELECT mt.warning_threshold, mt.critical_threshold, mt.duration, mn.name
             FROM metric_thresholds mt
@@ -85,24 +103,20 @@ class ServerDetailController extends Model
             ];
         }
 
-        // Получаем все типы метрик
+        // Типы метрик
         $stmt = $this->pdo->query("SELECT id, name, unit FROM metric_names WHERE name NOT LIKE '%\_proc' ORDER BY name");
         $allMetricTypes = $stmt->fetchAll();
 
-        // Получаем список сервисов
+        // Сервисы
         $stmt = $this->pdo->prepare("
             SELECT service_name, status, load_state, active_state, sub_state
-            FROM service_status
-            WHERE server_id = :server_id
-            ORDER BY service_name
+            FROM service_status WHERE server_id = :server_id ORDER BY service_name
         ");
         $stmt->execute([':server_id' => $id]);
         $allServices = $stmt->fetchAll();
 
-        // Получаем список сервисов для мониторинга из конфигурации агента
-        $stmt = $this->pdo->prepare("
-            SELECT monitor_services FROM agent_configs WHERE server_id = :server_id
-        ");
+        // Мониторинг сервисов
+        $stmt = $this->pdo->prepare("SELECT monitor_services FROM agent_configs WHERE server_id = :server_id");
         $stmt->execute([':server_id' => $id]);
         $agentConfig = $stmt->fetch();
 
@@ -120,10 +134,32 @@ class ServerDetailController extends Model
             'allServices' => $allServices,
             'monitorServices' => $monitorServices,
             'period' => $period,
+            'zoom' => $zoom,
+            'aggregation' => $aggConfig,
             'request' => $request->getQueryParams()
         ];
 
         return $this->twig->render($response, 'servers/detail.twig', $templateData);
+    }
+    
+    private function getAggregationConfig(string $period, ?string $zoom): array
+    {
+        if ($zoom) {
+            return match($zoom) {
+                '1h' => ['interval' => 'INTERVAL 1 HOUR', 'groupBy' => null],
+                '6h' => ['interval' => 'INTERVAL 6 HOUR', 'groupBy' => null],
+                '24h' => ['interval' => 'INTERVAL 24 HOUR', 'groupBy' => null],
+                '7d' => ['interval' => 'INTERVAL 7 DAY', 'groupBy' => "GROUP BY mn.id, time_bucket"],
+                '30d' => ['interval' => 'INTERVAL 30 DAY', 'groupBy' => "GROUP BY mn.id, time_bucket"],
+                default => ['interval' => 'INTERVAL 24 HOUR', 'groupBy' => null]
+            };
+        }
+        
+        return match($period) {
+            '7d' => ['interval' => 'INTERVAL 7 DAY', 'groupBy' => "GROUP BY mn.id, time_bucket"],
+            '30d' => ['interval' => 'INTERVAL 30 DAY', 'groupBy' => "GROUP BY mn.id, time_bucket"],
+            default => ['interval' => 'INTERVAL 24 HOUR', 'groupBy' => null]
+        };
     }
 
     public function saveThresholds(Request $request, Response $response, $args)
@@ -131,15 +167,12 @@ class ServerDetailController extends Model
         $id = $args['id'];
         $params = $request->getParsedBody();
 
-        // Получаем все типы метрик
         $stmt = $this->pdo->query("SELECT id, name FROM metric_names WHERE name NOT LIKE '%\_proc' ORDER BY name");
         $metricTypes = $stmt->fetchAll();
 
-        // Удаляем старые пороги для этого сервера
         $stmt = $this->pdo->prepare("DELETE FROM metric_thresholds WHERE server_id = :server_id");
         $stmt->execute([':server_id' => $id]);
 
-        // Добавляем новые пороги
         $insertStmt = $this->pdo->prepare("
             INSERT INTO metric_thresholds (server_id, metric_name_id, warning_threshold, critical_threshold, duration)
             VALUES (:server_id, :metric_name_id, :warning_threshold, :critical_threshold, :duration)
@@ -161,7 +194,6 @@ class ServerDetailController extends Model
             }
         }
 
-        // Возвращаемся на страницу сервера
         return $response->withHeader('Location', "/servers/{$id}")->withStatus(302);
     }
 
@@ -169,29 +201,20 @@ class ServerDetailController extends Model
     {
         $id = $args['id'];
         $params = $request->getParsedBody();
-
-        // Получаем список сервисов для мониторинга
         $services = $params['services'] ?? [];
 
         if (is_string($services)) {
             $services = json_decode($services, true) ?? [];
         }
 
-        // Обновляем конфигурацию агента
         $stmt = $this->pdo->prepare("
             INSERT INTO agent_configs (server_id, interval_seconds, monitor_services, enabled)
             VALUES (:server_id, 60, :services, TRUE)
-            ON DUPLICATE KEY UPDATE
-                monitor_services = VALUES(monitor_services),
-                updated_at = CURRENT_TIMESTAMP
+            ON DUPLICATE KEY UPDATE monitor_services = VALUES(monitor_services), updated_at = CURRENT_TIMESTAMP
         ");
 
-        $stmt->execute([
-            ':server_id' => $id,
-            ':services' => json_encode($services)
-        ]);
+        $stmt->execute([':server_id' => $id, ':services' => json_encode($services)]);
 
-        // Возвращаемся на страницу сервера
         return $response->withHeader('Location', "/servers/{$id}?tab=services")->withStatus(302);
     }
 }

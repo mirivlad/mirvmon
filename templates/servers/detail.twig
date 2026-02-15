@@ -105,6 +105,31 @@
                                 </div>
                             </div>
                         </div>
+                        <div class="row mt-2">
+                            <div class="col-md-12">
+                                <small class="text-muted">Масштаб:</small>
+                                <div class="btn-group ms-2" role="group">
+                                    <a href="?tab=metrics&period={{ period }}&zoom=auto" class="btn btn-sm {% if not zoom or zoom == 'auto' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                                        авто
+                                    </a>
+                                    <a href="?tab=metrics&period={{ period }}&zoom=1h" class="btn btn-sm {% if zoom == '1h' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                                        1ч
+                                    </a>
+                                    <a href="?tab=metrics&period={{ period }}&zoom=6h" class="btn btn-sm {% if zoom == '6h' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                                        6ч
+                                    </a>
+                                    <a href="?tab=metrics&period={{ period }}&zoom=24h" class="btn btn-sm {% if zoom == '24h' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                                        24ч
+                                    </a>
+                                    <a href="?tab=metrics&period={{ period }}&zoom=7d" class="btn btn-sm {% if zoom == '7d' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                                        7д
+                                    </a>
+                                    <a href="?tab=metrics&period={{ period }}&zoom=30d" class="btn btn-sm {% if zoom == '30d' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                                        30д
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
 
                         <div class="row">
                             {% for metricName, metricData in metrics %}
@@ -473,8 +498,10 @@ const ctx{{ metricName|replace({'-': '_', '.': '_'}) }} = document.getElementByI
 var labels{{ metricName }} = [];
 var data{{ metricName }} = [];
 
-{% for metric in metricData|slice(0, 1000)|reverse %}
-labels{{ metricName }}.push('{{ metric.created_at|date('H:i') }}');
+{% for metric in metricData|slice(0, 50000)|reverse %}
+{% set time_val = metric.time_bucket|default(metric.created_at) %}
+{% set time_format = metric.time_bucket ? 'd.m H:i' : 'H:i' %}
+labels{{ metricName }}.push('{{ time_val|date(time_format) }}');
 data{{ metricName }}.push({{ metric.value|raw }});
 {% endfor %}
 
