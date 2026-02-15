@@ -518,6 +518,11 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
                         tooltipEl.style.fontSize = '12px';
                         tooltipEl.style.pointerEvents = 'none';
                         document.body.appendChild(tooltipEl);
+                    
+                    // Hide tooltip on mouseleave
+                    context.chart.canvas.addEventListener('mouseleave', function() {
+                        tooltipEl.style.opacity = 0;
+                    });
                     }
                     
                     var dataIndex = context.tooltip && context.tooltip.dataPoints && context.tooltip.dataPoints[0] ? context.tooltip.dataPoints[0].dataIndex : null;
