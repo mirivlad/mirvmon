@@ -48,12 +48,20 @@ class ServerDetailController extends Model
         
         // Запрос с агрегацией если нужно
         if ($groupBy) {
+            // Используем агрегацию на основе aggregate_minutes
+            $bucketFormat = match(true) {
+                // Экранируем % для DATE_FORMAT
+                $aggConfig['aggregate_minutes'] >= 60 => '%Y-%m-%d %H:00',  // 1 hour+
+                $aggConfig['aggregate_minutes'] >= 15 => '%Y-%m-%d %H:%i', // 15-59 min
+                default => '%Y-%m-%d %H:%i:00'                              // 1-14 min
+            };
+            
             $sql = "
                 SELECT 
                     AVG(sm.value) as value,
                     mn.name,
                     mn.unit,
-                    DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:%i:00') as time_bucket
+                    DATE_FORMAT(sm.created_at, '{$bucketFormat}') as time_bucket
                 FROM server_metrics sm
                 JOIN metric_names mn ON sm.metric_name_id = mn.id
                 WHERE sm.server_id = :id
@@ -144,21 +152,27 @@ class ServerDetailController extends Model
     
     private function getAggregationConfig(string $period, ?string $zoom): array
     {
+        // Target: ~200-400 points on chart regardless of period
+        
         if ($zoom) {
             return match($zoom) {
-                '1h' => ['interval' => 'INTERVAL 1 HOUR', 'groupBy' => null],
-                '6h' => ['interval' => 'INTERVAL 6 HOUR', 'groupBy' => null],
-                '24h' => ['interval' => 'INTERVAL 24 HOUR', 'groupBy' => null],
-                '7d' => ['interval' => 'INTERVAL 7 DAY', 'groupBy' => "GROUP BY mn.id, time_bucket"],
-                '30d' => ['interval' => 'INTERVAL 30 DAY', 'groupBy' => "GROUP BY mn.id, time_bucket"],
-                default => ['interval' => 'INTERVAL 24 HOUR', 'groupBy' => null]
+                // Short periods - show all points
+                '1h' => ['interval' => 'INTERVAL 1 HOUR', 'groupBy' => null, 'aggregate_minutes' => 0],
+                '6h' => ['interval' => 'INTERVAL 6 HOUR', 'groupBy' => null, 'aggregate_minutes' => 0],
+                // Medium period - light aggregation
+                '24h' => ['interval' => 'INTERVAL 24 HOUR', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:%i')", 'aggregate_minutes' => 1],
+                // Long periods - strong aggregation
+                '7d' => ['interval' => 'INTERVAL 7 DAY', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:%i')", 'aggregate_minutes' => 15],
+                '30d' => ['interval' => 'INTERVAL 30 DAY', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:00')", 'aggregate_minutes' => 60],
+                default => ['interval' => 'INTERVAL 24 HOUR', 'groupBy' => null, 'aggregate_minutes' => 0]
             };
         }
         
+        // Default: base period aggregation
         return match($period) {
-            '7d' => ['interval' => 'INTERVAL 7 DAY', 'groupBy' => "GROUP BY mn.id, time_bucket"],
-            '30d' => ['interval' => 'INTERVAL 30 DAY', 'groupBy' => "GROUP BY mn.id, time_bucket"],
-            default => ['interval' => 'INTERVAL 24 HOUR', 'groupBy' => null]
+            '7d' => ['interval' => 'INTERVAL 7 DAY', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:%i')", 'aggregate_minutes' => 15],
+            '30d' => ['interval' => 'INTERVAL 30 DAY', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:00')", 'aggregate_minutes' => 60],
+            default => ['interval' => 'INTERVAL 24 HOUR', 'groupBy' => null, 'aggregate_minutes' => 0]
         };
     }
 
