@@ -473,7 +473,7 @@ const ctx{{ metricName|replace({'-': '_', '.': '_'}) }} = document.getElementByI
 var labels{{ metricName }} = [];
 var data{{ metricName }} = [];
 
-{% for metric in metricData|slice(0, 20)|reverse %}
+{% for metric in metricData|slice(0, 1000)|reverse %}
 labels{{ metricName }}.push('{{ metric.created_at|date('H:i') }}');
 data{{ metricName }}.push({{ metric.value|raw }});
 {% endfor %}
