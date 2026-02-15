@@ -518,18 +518,15 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
                         tooltipEl.style.fontSize = '12px';
                         tooltipEl.style.pointerEvents = 'none';
                         document.body.appendChild(tooltipEl);
-                    
-                    // Hide tooltip on mouseleave
-                    context.chart.canvas.addEventListener('mouseleave', function() {
-                        tooltipEl.style.opacity = 0;
-                    });
                     }
                     
-                    var dataIndex = context.tooltip && context.tooltip.dataPoints && context.tooltip.dataPoints[0] ? context.tooltip.dataPoints[0].dataIndex : null;
-                    if (dataIndex === null) {
+                    // Прячем если курсор ушел с графика
+                    if (!context.tooltip._active || context.tooltip._active.length === 0) {
                         tooltipEl.style.opacity = 0;
                         return;
                     }
+                    
+                    var dataIndex = context.tooltip._active[0].index;
                     var time = labels{{ metricName }}[dataIndex];
                     
                     // Fetch processes
@@ -537,7 +534,8 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
                         .then(response => response.json())
                         .then(data => {
                             var lines = [];
-                            lines.push('{{ metricName|replace({'_': ' ', 'load': 'загрузка', 'used': 'использование'})|title }}: ' + data{{ metricName }}[dataIndex]);
+                            lines.push('Время: ' + time);
+                            lines.push('Значение: ' + data{{ metricName }}[dataIndex]);
 {% if metricName == 'cpu_load' %}
                             // Показываем только top_cpu
                             if (data.top_cpu && data.top_cpu.length > 0) {
