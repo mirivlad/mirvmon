@@ -237,6 +237,49 @@ class MetricsController extends Model
         return $response->withHeader('Content-Type', 'application/json');
     }
 
+    public function getMetrics(Request $request, Response $response, $args)
+    {
+        $serverId = $args['id'];
+        $from = $request->getQueryParams()['from'] ?? date('Y-m-d H:i:s', strtotime('-24 hours'));
+        $to = $request->getQueryParams()['to'] ?? date('Y-m-d H:i:s');
+        
+        $stmt = $this->pdo->prepare("
+            SELECT sm.value, mn.name, mn.unit, sm.created_at
+            FROM server_metrics sm
+            JOIN metric_names mn ON sm.metric_name_id = mn.id
+            WHERE sm.server_id = :id
+            AND sm.created_at BETWEEN :from AND :to
+            AND mn.name NOT LIKE '%_proc'
+            ORDER BY sm.created_at ASC
+        ");
+        $stmt->execute([':id' => $serverId, ':from' => $from, ':to' => $to]);
+        $metrics = $stmt->fetchAll();
+        
+        $grouped = [];
+        foreach ($metrics as $m) {
+            $name = $m['name'];
+            if (!isset($grouped[$name])) {
+                $grouped[$name] = [];
+            }
+            $grouped[$name][] = [
+                'value' => (float)$m['value'],
+                'time' => $m['created_at'],
+                'unit' => $m['unit']
+            ];
+        }
+        
+        $data = [
+            'server_id' => (int)$serverId,
+            'from' => $from,
+            'to' => $to,
+            'points_count' => count($metrics),
+            'metrics' => $grouped
+        ];
+        
+        $response->getBody()->write(json_encode($data));
+        return $response->withHeader('Content-Type', 'application/json');
+    }
+
     private function checkThresholds($serverId, $metricId, $value, $metricName)
     {
         // Получаем пороговые значения для этой метрики на этом сервере
