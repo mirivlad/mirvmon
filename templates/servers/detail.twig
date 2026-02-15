@@ -107,7 +107,8 @@
                         </div>
 
                         <div class="row">
-                            {% for metricName, metricData in metrics %}{% if metricName != 'top_cpu_proc' and metricName != 'top_ram_proc' %}
+                            {% for metricName, metricData in metrics %}
+{% if metricName != 'top_cpu_proc' and metricName != 'top_ram_proc' %}
                             <div class="col-12 mb-4">
                                 <div class="card">
                                     <div class="card-header">
@@ -134,7 +135,7 @@
                                 </div>
                             </div>
                             {% endif %}
-{% endfor %}
+
 
                             {% if metrics|length == 0 %}
                             <div class="col-12">
@@ -219,7 +220,8 @@
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    {% endfor %}
+                                                    {% endif %}
+
                                                     
                                                     {% for service in stoppedServices %}
                                                     <div class="col-md-4 col-lg-3 mb-2">
@@ -250,7 +252,8 @@
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    {% endfor %}
+                                                    {% endif %}
+
                                                     
                                                     {% for service in unknownServices %}
                                                     <div class="col-md-4 col-lg-3 mb-2">
@@ -281,7 +284,8 @@
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    {% endfor %}
+                                                    {% endif %}
+
                                                 {% else %}
                                                     <div class="col-12">
                                                         <div class="alert alert-warning text-center">
@@ -365,7 +369,8 @@
                                             </div>
                                         </div>
                                     </div>
-                                    {% endfor %}
+                                    {% endif %}
+
 
                                     <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                                         <button type="submit" class="btn btn-primary">
@@ -465,6 +470,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Графики метрик
 {% for metricName, metricData in metrics %}
+{% if metricName != 'top_cpu_proc' and metricName != 'top_ram_proc' %}
+{% if metricName != 'top_cpu_proc' and metricName != 'top_ram_proc' %}
 const ctx{{ metricName|replace({'-': '_', '.': '_'}) }} = document.getElementById('chart-{{ metricName }}').getContext('2d');
 
 // Подготовка данных для графика
@@ -474,7 +481,8 @@ var data{{ metricName }} = [];
 {% for metric in metricData|slice(0, 20)|reverse %}
 labels{{ metricName }}.push('{{ metric.created_at|date('H:i') }}');
 data{{ metricName }}.push({{ metric.value|raw }});
-{% endfor %}
+{% endif %}
+
 
 new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
     type: 'line',
@@ -555,7 +563,6 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
                                     lines.push('  ' + proc.name + ': ' + proc.value + '%');
                                 });
                             }
-{% endif %}
                             
                             // Show tooltip
                             var position = context.chart.canvas.getBoundingClientRect();
@@ -574,6 +581,7 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
         }
     }
 });
-{% endfor %}
+{% endif %}
+
 </script>
 {% endblock %}
