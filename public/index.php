@@ -48,6 +48,7 @@ $csrfMiddleware = $csrf;
 
 // Add a route to get CSRF tokens via AJAX
 $app->get('/csrf-token', function (Request $request, Response $response, $args) use ($csrf) {
+    $csrf->generateToken();
     $data = [
         'name_key' => $csrf->getTokenNameKey(),
         'value_key' => $csrf->getTokenValueKey(),
