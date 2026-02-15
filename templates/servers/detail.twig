@@ -93,13 +93,13 @@
                                 <!-- Отладка: period = {{ request.query.period }} -->
                                 <!-- Отладка: period = {{ period }}, request = {{ request.period }} -->
                                 <div class="btn-group d-flex" role="group">
-                                    <a href="?tab=metrics&period=24h" class="btn btn-outline-primary w-100 {% if period == '24h' or period is empty %}active{% endif %}">
+                                    <a href="?tab=metrics&amp;period=24h" class="btn btn-outline-primary w-100 {% if period == '24h' or period is empty %}active{% endif %}">
                                         24 часа
                                     </a>
-                                    <a href="?tab=metrics&period=7d" class="btn btn-outline-primary w-100 {% if period == '7d' %}active{% endif %}">
+                                    <a href="?tab=metrics&amp;period=7d" class="btn btn-outline-primary w-100 {% if period == '7d' %}active{% endif %}">
                                         7 дней
                                     </a>
-                                    <a href="?tab=metrics&period=30d" class="btn btn-outline-primary w-100 {% if period == '30d' %}active{% endif %}">
+                                    <a href="?tab=metrics&amp;period=30d" class="btn btn-outline-primary w-100 {% if period == '30d' %}active{% endif %}">
                                         30 дней
                                     </a>
                                 </div>
@@ -109,22 +109,22 @@
                             <div class="col-md-12">
                                 <small class="text-muted">Масштаб:</small>
                                 <div class="btn-group ms-2" role="group">
-                                    <a href="?tab=metrics&period={{ period }}&zoom=auto" class="btn btn-sm {% if not zoom or zoom == 'auto' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                                    <a href="?tab=metrics&amp;period={{ period }}&amp;zoom=auto" class="btn btn-sm {% if not zoom or zoom == 'auto' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
                                         авто
                                     </a>
-                                    <a href="?tab=metrics&period={{ period }}&zoom=1h" class="btn btn-sm {% if zoom == '1h' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                                    <a href="?tab=metrics&amp;period={{ period }}&amp;zoom=1h" class="btn btn-sm {% if zoom == '1h' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
                                         1ч
                                     </a>
-                                    <a href="?tab=metrics&period={{ period }}&zoom=6h" class="btn btn-sm {% if zoom == '6h' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                                    <a href="?tab=metrics&amp;period={{ period }}&amp;zoom=6h" class="btn btn-sm {% if zoom == '6h' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
                                         6ч
                                     </a>
-                                    <a href="?tab=metrics&period={{ period }}&zoom=24h" class="btn btn-sm {% if zoom == '24h' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                                    <a href="?tab=metrics&amp;period={{ period }}&amp;zoom=24h" class="btn btn-sm {% if zoom == '24h' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
                                         24ч
                                     </a>
-                                    <a href="?tab=metrics&period={{ period }}&zoom=7d" class="btn btn-sm {% if zoom == '7d' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                                    <a href="?tab=metrics&amp;period={{ period }}&amp;zoom=7d" class="btn btn-sm {% if zoom == '7d' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
                                         7д
                                     </a>
-                                    <a href="?tab=metrics&period={{ period }}&zoom=30d" class="btn btn-sm {% if zoom == '30d' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                                    <a href="?tab=metrics&amp;period={{ period }}&amp;zoom=30d" class="btn btn-sm {% if zoom == '30d' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
                                         30д
                                     </a>
                                 </div>
