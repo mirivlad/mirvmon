@@ -589,6 +589,7 @@ const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metr
                             // Show tooltip
                             var position = context.chart.canvas.getBoundingClientRect();
                             tooltipEl.innerHTML = lines.join('<br>');
+                            tooltipEl.style.visibility = 'visible';
                             tooltipEl.style.opacity = 1;
                             tooltipEl.style.left = position.left + window.pageXOffset + context.tooltip.caretX + 10 + 'px';
                             tooltipEl.style.top = position.top + window.pageYOffset + context.tooltip.caretY + 'px';
@@ -605,21 +606,26 @@ const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metr
 });
 
 // Скрывать tooltip при уходе курсора с canvas в любую сторону
-var chartCanvas{{ metricName|replace({'-': '_', '.': '_'}) }} = chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas;
-
-chartCanvas{{ metricName|replace({'-': '_', '.': '_'}) }}.addEventListener('mouseout', function() {
-    var tooltipEl = document.getElementById('chartjs-tooltip-{{ server.id }}-{{ metricName }}');
-    if (tooltipEl) {
-        tooltipEl.style.opacity = 0;
-    }
-});
-
-chartCanvas{{ metricName|replace({'-': '_', '.': '_'}) }}.addEventListener('mouseleave', function() {
-    var tooltipEl = document.getElementById('chartjs-tooltip-{{ server.id }}-{{ metricName }}');
-    if (tooltipEl) {
-        tooltipEl.style.opacity = 0;
-    }
-});
+(function() {
+    var canvas = document.getElementById('chart-{{ metricName }}');
+    if (!canvas) return;
+    
+    canvas.addEventListener('mouseout', function() {
+        var tooltipEl = document.getElementById('chartjs-tooltip-{{ server.id }}-{{ metricName }}');
+        if (tooltipEl) {
+            tooltipEl.style.visibility = 'hidden';
+            tooltipEl.style.opacity = '0';
+        }
+    });
+    
+    canvas.addEventListener('mouseleave', function() {
+        var tooltipEl = document.getElementById('chartjs-tooltip-{{ server.id }}-{{ metricName }}');
+        if (tooltipEl) {
+            tooltipEl.style.visibility = 'hidden';
+            tooltipEl.style.opacity = '0';
+        }
+    });
+})();
 
 {% endif %}
 {% endfor %}
