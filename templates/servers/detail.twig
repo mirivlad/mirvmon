@@ -505,7 +505,7 @@ labels{{ metricName }}.push('{{ time_val|date(time_format) }}');
 data{{ metricName }}.push({{ metric.value|raw }});
 {% endfor %}
 
-new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
+const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
     type: 'line',
     data: {
         labels: labels{{ metricName }},
@@ -603,6 +603,24 @@ new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
         }
     }
 });
+
+// Скрывать tooltip при уходе курсора с canvas в любую сторону
+var chartCanvas{{ metricName|replace({'-': '_', '.': '_'}) }} = chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas;
+
+chartCanvas{{ metricName|replace({'-': '_', '.': '_'}) }}.addEventListener('mouseout', function() {
+    var tooltipEl = document.getElementById('chartjs-tooltip-{{ server.id }}-{{ metricName }}');
+    if (tooltipEl) {
+        tooltipEl.style.opacity = 0;
+    }
+});
+
+chartCanvas{{ metricName|replace({'-': '_', '.': '_'}) }}.addEventListener('mouseleave', function() {
+    var tooltipEl = document.getElementById('chartjs-tooltip-{{ server.id }}-{{ metricName }}');
+    if (tooltipEl) {
+        tooltipEl.style.opacity = 0;
+    }
+});
+
 {% endif %}
 {% endfor %}
 </script>
