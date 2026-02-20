@@ -606,11 +606,9 @@ const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metr
 });
 
 // Скрывать tooltip при уходе курсора с canvas в любую сторону
-(function() {
-    var canvas = document.getElementById('chart-{{ metricName }}');
-    if (!canvas) return;
-    
-    canvas.addEventListener('mouseout', function() {
+var canvas{{ metricName|replace({'-': '_', '.': '_'}) }} = document.getElementById('chart-{{ metricName }}');
+if (canvas{{ metricName|replace({'-': '_', '.': '_'}) }}) {
+    canvas{{ metricName|replace({'-': '_', '.': '_'}) }}.addEventListener('mouseout', function() {
         var tooltipEl = document.getElementById('chartjs-tooltip-{{ server.id }}-{{ metricName }}');
         if (tooltipEl) {
             tooltipEl.style.visibility = 'hidden';
@@ -618,14 +616,14 @@ const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metr
         }
     });
     
-    canvas.addEventListener('mouseleave', function() {
+    canvas{{ metricName|replace({'-': '_', '.': '_'}) }}.addEventListener('mouseleave', function() {
         var tooltipEl = document.getElementById('chartjs-tooltip-{{ server.id }}-{{ metricName }}');
         if (tooltipEl) {
             tooltipEl.style.visibility = 'hidden';
             tooltipEl.style.opacity = '0';
         }
     });
-})();
+}
 
 {% endif %}
 {% endfor %}
