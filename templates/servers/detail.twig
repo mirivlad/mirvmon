@@ -551,7 +551,7 @@ const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metr
                     }
                     
                     // Прячем если курсор ушел с графика
-                    if (!context.tooltip._active || context.tooltip._active.length === 0) {
+                    if (!context.tooltip._active || context.tooltip._active.length === 0 || canvas{{ metricName|replace({'-': '_', '.': '_'}) }}._tooltipHidden) {
                         tooltipEl.style.opacity = 0;
                         return;
                     }
@@ -608,20 +608,26 @@ const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metr
 // Скрывать tooltip при уходе курсора с canvas в любую сторону
 var canvas{{ metricName|replace({'-': '_', '.': '_'}) }} = document.getElementById('chart-{{ metricName }}');
 if (canvas{{ metricName|replace({'-': '_', '.': '_'}) }}) {
+    canvas{{ metricName|replace({'-': '_', '.': '_'}) }}._tooltipHidden = false;
+    
     canvas{{ metricName|replace({'-': '_', '.': '_'}) }}.addEventListener('mouseout', function() {
+        canvas{{ metricName|replace({'-': '_', '.': '_'}) }}._tooltipHidden = true;
         var tooltipEl = document.getElementById('chartjs-tooltip-{{ server.id }}-{{ metricName }}');
         if (tooltipEl) {
-            tooltipEl.style.visibility = 'hidden';
             tooltipEl.style.opacity = '0';
         }
     });
     
     canvas{{ metricName|replace({'-': '_', '.': '_'}) }}.addEventListener('mouseleave', function() {
+        canvas{{ metricName|replace({'-': '_', '.': '_'}) }}._tooltipHidden = true;
         var tooltipEl = document.getElementById('chartjs-tooltip-{{ server.id }}-{{ metricName }}');
         if (tooltipEl) {
-            tooltipEl.style.visibility = 'hidden';
             tooltipEl.style.opacity = '0';
         }
+    });
+    
+    canvas{{ metricName|replace({'-': '_', '.': '_'}) }}.addEventListener('mousemove', function() {
+        canvas{{ metricName|replace({'-': '_', '.': '_'}) }}._tooltipHidden = false;
     });
 }
 
