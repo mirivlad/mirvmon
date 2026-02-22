@@ -48,13 +48,8 @@ class ServerDetailController extends Model
         
         // Запрос с агрегацией если нужно
         if ($groupBy) {
-            // Используем агрегацию на основе aggregate_minutes
-            $bucketFormat = match(true) {
-                // Экранируем % для DATE_FORMAT
-                $aggConfig['aggregate_minutes'] >= 60 => '%Y-%m-%d %H:00',  // 1 hour+
-                $aggConfig['aggregate_minutes'] >= 15 => '%Y-%m-%d %H:%i', // 15-59 min
-                default => '%Y-%m-%d %H:%i:00'                              // 1-14 min
-            };
+            // Используем format из конфига
+            $bucketFormat = $aggConfig['format'] ?? '%Y-%m-%d %H:%i';
             
             $sql = "
                 SELECT 
@@ -152,27 +147,34 @@ class ServerDetailController extends Model
     
     private function getAggregationConfig(string $period, ?string $zoom): array
     {
-        // Target: ~200-400 points on chart regardless of period
+        // Target: ~360 points on chart for any period/zoom
+        // Formula: aggregate_minutes = period_minutes / 360
         
         if ($zoom) {
             return match($zoom) {
-                // Short periods - show all points
-                '1h' => ['interval' => 'INTERVAL 1 HOUR', 'groupBy' => null, 'aggregate_minutes' => 0],
-                '6h' => ['interval' => 'INTERVAL 6 HOUR', 'groupBy' => null, 'aggregate_minutes' => 0],
-                // Medium period - light aggregation
-                '24h' => ['interval' => 'INTERVAL 24 HOUR', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:%i')", 'aggregate_minutes' => 1],
-                // Long periods - strong aggregation
-                '7d' => ['interval' => 'INTERVAL 7 DAY', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:%i')", 'aggregate_minutes' => 15],
-                '30d' => ['interval' => 'INTERVAL 30 DAY', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:00')", 'aggregate_minutes' => 60],
-                default => ['interval' => 'INTERVAL 24 HOUR', 'groupBy' => null, 'aggregate_minutes' => 0]
+                // 1h = 60 min / 360 = 0.17 → no aggregation (~360 points)
+                '1h' => ['interval' => 'INTERVAL 1 HOUR', 'groupBy' => null, 'aggregate_minutes' => 0, 'format' => '%Y-%m-%d %H:%i:%s'],
+                // 6h = 360 min / 360 = 1 min aggregation (~360 points)
+                '6h' => ['interval' => 'INTERVAL 6 HOUR', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:%i')", 'aggregate_minutes' => 1, 'format' => '%Y-%m-%d %H:%i'],
+                // 24h = 1440 min / 360 = 4 min aggregation (~360 points)
+                '24h' => ['interval' => 'INTERVAL 24 HOUR', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:%i')", 'aggregate_minutes' => 4, 'format' => '%Y-%m-%d %H:%i'],
+                // 7d = 10080 min / 360 = 28 min aggregation (~360 points)
+                '7d' => ['interval' => 'INTERVAL 7 DAY', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:%i')", 'aggregate_minutes' => 28, 'format' => '%Y-%m-%d %H:%i'],
+                // 30d = 43200 min / 360 = 120 min (2 hours) aggregation (~360 points)
+                '30d' => ['interval' => 'INTERVAL 30 DAY', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:00')", 'aggregate_minutes' => 120, 'format' => '%Y-%m-%d %H:00'],
+                default => ['interval' => 'INTERVAL 24 HOUR', 'groupBy' => null, 'aggregate_minutes' => 0, 'format' => '%Y-%m-%d %H:%i:%s']
             };
         }
         
-        // Default: base period aggregation
+        // Default: base period aggregation (~360 points)
         return match($period) {
-            '7d' => ['interval' => 'INTERVAL 7 DAY', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:%i')", 'aggregate_minutes' => 15],
-            '30d' => ['interval' => 'INTERVAL 30 DAY', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:00')", 'aggregate_minutes' => 60],
-            default => ['interval' => 'INTERVAL 24 HOUR', 'groupBy' => null, 'aggregate_minutes' => 0]
+            // 24h = 1440 min / 360 = 4 min
+            '24h' => ['interval' => 'INTERVAL 24 HOUR', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:%i')", 'aggregate_minutes' => 4, 'format' => '%Y-%m-%d %H:%i'],
+            // 7d = 10080 min / 360 = 28 min
+            '7d' => ['interval' => 'INTERVAL 7 DAY', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:%i')", 'aggregate_minutes' => 28, 'format' => '%Y-%m-%d %H:%i'],
+            // 30d = 43200 min / 360 = 120 min
+            '30d' => ['interval' => 'INTERVAL 30 DAY', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:00')", 'aggregate_minutes' => 120, 'format' => '%Y-%m-%d %H:00'],
+            default => ['interval' => 'INTERVAL 24 HOUR', 'groupBy' => null, 'aggregate_minutes' => 0, 'format' => '%Y-%m-%d %H:%i:%s']
         };
     }
 

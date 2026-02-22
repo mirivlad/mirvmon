@@ -498,9 +498,9 @@ const ctx{{ metricName|replace({'-': '_', '.': '_'}) }} = document.getElementByI
 var labels{{ metricName }} = [];
 var data{{ metricName }} = [];
 
-{% for metric in metricData|slice(0, 50000)|reverse %}
+{% for metric in metricData|slice(0, 400)|reverse %}
 {% set time_val = metric.time_bucket|default(metric.created_at) %}
-{% set time_format = metric.time_bucket ? 'd.m H:i' : 'H:i' %}
+{% set time_format = metric.time_bucket and aggregation.aggregate_minutes >= 60 ? 'd.m H:i' : 'H:i' %}
 labels{{ metricName }}.push('{{ time_val|date(time_format) }}');
 data{{ metricName }}.push({{ metric.value|raw }});
 {% endfor %}
