@@ -90,44 +90,50 @@
                     <div class="tab-pane fade show active" id="metrics" role="tabpanel">
                         <div class="row mb-3">
                             <div class="col-md-12">
-                                <!-- Отладка: period = {{ request.query.period }} -->
-                                <!-- Отладка: period = {{ period }}, request = {{ request.period }} -->
-                                <div class="btn-group d-flex" role="group">
-                                    <a href="?tab=metrics&amp;period=24h" class="btn btn-outline-primary w-100 {% if period == '24h' or period is empty %}active{% endif %}">
-                                        24 часа
-                                    </a>
-                                    <a href="?tab=metrics&amp;period=7d" class="btn btn-outline-primary w-100 {% if period == '7d' %}active{% endif %}">
-                                        7 дней
-                                    </a>
-                                    <a href="?tab=metrics&amp;period=30d" class="btn btn-outline-primary w-100 {% if period == '30d' %}active{% endif %}">
-                                        30 дней
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="row mt-2">
-                            <div class="col-md-12">
-                                <small class="text-muted">Масштаб:</small>
-                                <div class="btn-group ms-2" role="group">
-                                    <a href="?tab=metrics&amp;period={{ period }}&amp;zoom=auto" class="btn btn-sm {% if not zoom or zoom == 'auto' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-                                        авто
-                                    </a>
-                                    <a href="?tab=metrics&amp;period={{ period }}&amp;zoom=1h" class="btn btn-sm {% if zoom == '1h' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-                                        1ч
-                                    </a>
-                                    <a href="?tab=metrics&amp;period={{ period }}&amp;zoom=6h" class="btn btn-sm {% if zoom == '6h' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-                                        6ч
-                                    </a>
-                                    <a href="?tab=metrics&amp;period={{ period }}&amp;zoom=24h" class="btn btn-sm {% if zoom == '24h' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-                                        24ч
-                                    </a>
-                                    <a href="?tab=metrics&amp;period={{ period }}&amp;zoom=7d" class="btn btn-sm {% if zoom == '7d' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-                                        7д
-                                    </a>
-                                    <a href="?tab=metrics&amp;period={{ period }}&amp;zoom=30d" class="btn btn-sm {% if zoom == '30d' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-                                        30д
-                                    </a>
-                                </div>
+                                <form method="get" class="row g-2 align-items-end" id="periodForm">
+                                    <input type="hidden" name="tab" value="metrics">
+                                    
+                                    <!-- Пресеты -->
+                                    <div class="col-md-3">
+                                        <label class="form-label mb-1">
+                                            <i class="fas fa-clock"></i> Быстрый выбор
+                                        </label>
+                                        <select class="form-select" id="presetSelect" onchange="applyPreset()">
+                                            <option value="">-- Выбрать --</option>
+                                            <option value="30">Последние 30 минут</option>
+                                            <option value="60">Последние 1 час</option>
+                                            <option value="120">Последние 2 часа</option>
+                                            <option value="360">Последние 6 часов</option>
+                                            <option value="720">Последние 12 часов</option>
+                                            <option value="1440">Последние 24 часа</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <!-- Дата начала -->
+                                    <div class="col-md-3">
+                                        <label class="form-label mb-1">
+                                            <i class="fas fa-calendar"></i> С
+                                        </label>
+                                        <input type="datetime-local" class="form-control" name="start" id="startDate" 
+                                               value="{{ startDate }}" required>
+                                    </div>
+                                    
+                                    <!-- Дата окончания -->
+                                    <div class="col-md-3">
+                                        <label class="form-label mb-1">
+                                            <i class="fas fa-calendar"></i> По
+                                        </label>
+                                        <input type="datetime-local" class="form-control" name="end" id="endDate" 
+                                               value="{{ endDate }}" required>
+                                    </div>
+                                    
+                                    <!-- Кнопки -->
+                                    <div class="col-md-3">
+                                        <button type="submit" class="btn btn-primary w-100">
+                                            <i class="fas fa-search"></i> Применить
+                                        </button>
+                                    </div>
+                                </form>
                             </div>
                         </div>
 
@@ -634,4 +640,37 @@ if (canvas{{ metricName|replace({'-': '_', '.': '_'}) }}) {
 {% endif %}
 {% endfor %}
 </script>
+<script>
+// Применение пресета
+function applyPreset() {
+    var select = document.getElementById("presetSelect");
+    var minutes = parseInt(select.value);
+    if (!minutes) return;
+    
+    var now = new Date();
+    var startDate = new Date(now.getTime() - (minutes * 60 * 1000));
+    
+    // Форматируем для datetime-local (YYYY-MM-DDTHH:MM)
+    function formatDateTimeLocal(date) {
+        var year = date.getFullYear();
+        var month = String(date.getMonth() + 1).padStart(2, "0");
+        var day = String(date.getDate()).padStart(2, "0");
+        var hours = String(date.getHours()).padStart(2, "0");
+        var mins = String(date.getMinutes()).padStart(2, "0");
+        return year + "-" + month + "-" + day + "T" + hours + ":" + mins;
+    }
+    
+    document.getElementById("startDate").value = formatDateTimeLocal(startDate);
+    document.getElementById("endDate").value = formatDateTimeLocal(now);
+}
+
+// Автоотправка формы при изменении дат (опционально)
+// document.getElementById("startDate").addEventListener("change", function() {
+//     document.getElementById("periodForm").submit();
+// });
+// document.getElementById("endDate").addEventListener("change", function() {
+//     document.getElementById("periodForm").submit();
+// });
+</script>
+
 {% endblock %}

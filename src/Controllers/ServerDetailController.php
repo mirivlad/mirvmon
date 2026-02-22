@@ -36,21 +36,43 @@ class ServerDetailController extends Model
             return $response->withHeader('Location', '/servers')->withStatus(302);
         }
 
-        // Получаем период и зум
-        $period = $request->getQueryParams()['period'] ?? '24h';
-        $zoom = $request->getQueryParams()['zoom'] ?? null;
-
-        // Конфигурация агрегации
-        $aggConfig = $this->getAggregationConfig($period, $zoom);
+        // Получаем даты начала и окончания
+        $queryParams = $request->getQueryParams();
+        $startDate = $queryParams['start'] ?? null;
+        $endDate = $queryParams['end'] ?? null;
         
-        $interval = $aggConfig['interval'];
+        // Если даты не указаны, используем последние 24 часа по умолчанию
+        if (!$startDate || !$endDate) {
+            $endDate = new DateTime();
+            $startDate = clone $endDate;
+            $startDate->modify('-24 hours');
+        } else {
+            $startDate = new DateTime($startDate);
+            $endDate = new DateTime($endDate);
+        }
+        
+        // Валидация: end > start
+        if ($endDate <= $startDate) {
+            $endDate = clone $startDate;
+            $endDate->modify('+24 hours');
+        }
+        
+        // Вычисляем длительность периода для агрегации
+        $interval = $startDate->diff($endDate);
+        $totalMinutes = ($interval->days * 24 * 60) + ($interval->h * 60) + $interval->i;
+        
+        // Конфигурация агрегации на основе дат
+        $aggConfig = $this->getAggregationConfigFromDates($startDate, $endDate, $totalMinutes);
+        
         $groupBy = $aggConfig['groupBy'];
+        $bucketFormat = $aggConfig['format'];
+        
+        // Форматируем даты для SQL
+        $startStr = $startDate->format('Y-m-d H:i:s');
+        $endStr = $endDate->format('Y-m-d H:i:s');
         
         // Запрос с агрегацией если нужно
         if ($groupBy) {
-            // Используем format из конфига
-            $bucketFormat = $aggConfig['format'] ?? '%Y-%m-%d %H:%i';
-            
             $sql = "
                 SELECT 
                     AVG(sm.value) as value,
@@ -60,23 +82,27 @@ class ServerDetailController extends Model
                 FROM server_metrics sm
                 JOIN metric_names mn ON sm.metric_name_id = mn.id
                 WHERE sm.server_id = :id
-                AND sm.created_at >= DATE_SUB(NOW(), {$interval})
+                AND sm.created_at >= :start_date
+                AND sm.created_at <= :end_date
                 {$groupBy}
-                ORDER BY time_bucket DESC
+                ORDER BY time_bucket ASC
             ";
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute([':id' => $id, ':start_date' => $startStr, ':end_date' => $endStr]);
         } else {
             $sql = "
                 SELECT sm.value, mn.name, mn.unit, sm.created_at
                 FROM server_metrics sm
                 JOIN metric_names mn ON sm.metric_name_id = mn.id
                 WHERE sm.server_id = :id
-                AND sm.created_at >= DATE_SUB(NOW(), {$interval})
-                ORDER BY sm.created_at DESC
+                AND sm.created_at >= :start_date
+                AND sm.created_at <= :end_date
+                ORDER BY sm.created_at ASC
             ";
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute([':id' => $id, ':start_date' => $startStr, ':end_date' => $endStr]);
         }
         
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute([':id' => $id]);
         $metrics = $stmt->fetchAll();
 
         // Группируем метрики
@@ -88,6 +114,25 @@ class ServerDetailController extends Model
             }
             $groupedMetrics[$metricName][] = $metric;
         }
+
+        // Сортируем метрики в фиксированном порядке: cpu_load → ram_used → disk_used → остальные
+        $priorityOrder = ['cpu_load', 'ram_used', 'disk_used'];
+        $sortedMetrics = [];
+        
+        // Сначала добавляем приоритетные метрики в нужном порядке
+        foreach ($priorityOrder as $metricName) {
+            if (isset($groupedMetrics[$metricName])) {
+                $sortedMetrics[$metricName] = $groupedMetrics[$metricName];
+                unset($groupedMetrics[$metricName]);
+            }
+        }
+        
+        // Затем добавляем остальные метрики (например, top_cpu_proc, top_ram_proc)
+        foreach ($groupedMetrics as $metricName => $metricData) {
+            $sortedMetrics[$metricName] = $metricData;
+        }
+        
+        $groupedMetrics = $sortedMetrics;
 
         // Пороги
         $stmt = $this->pdo->prepare("
@@ -136,46 +181,53 @@ class ServerDetailController extends Model
             'existingThresholds' => $existingThresholds,
             'allServices' => $allServices,
             'monitorServices' => $monitorServices,
-            'period' => $period,
-            'zoom' => $zoom,
+            'startDate' => $startDate->format('Y-m-d\T H:i'),
+            'endDate' => $endDate->format('Y-m-d\T H:i'),
             'aggregation' => $aggConfig,
-            'request' => $request->getQueryParams()
+            'totalMinutes' => $totalMinutes
         ];
 
         return $this->twig->render($response, 'servers/detail.twig', $templateData);
     }
     
-    private function getAggregationConfig(string $period, ?string $zoom): array
+    private function getAggregationConfigFromDates(DateTime $startDate, DateTime $endDate, int $totalMinutes): array
     {
-        // Target: ~360 points on chart for any period/zoom
-        // Formula: aggregate_minutes = period_minutes / 360
+        // Target: ~400 points on chart for optimal performance
+        // Formula: aggregate_minutes = total_minutes / 400
         
-        if ($zoom) {
-            return match($zoom) {
-                // 1h = 60 min / 360 = 0.17 → no aggregation (~360 points)
-                '1h' => ['interval' => 'INTERVAL 1 HOUR', 'groupBy' => null, 'aggregate_minutes' => 0, 'format' => '%Y-%m-%d %H:%i:%s'],
-                // 6h = 360 min / 360 = 1 min aggregation (~360 points)
-                '6h' => ['interval' => 'INTERVAL 6 HOUR', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:%i')", 'aggregate_minutes' => 1, 'format' => '%Y-%m-%d %H:%i'],
-                // 24h = 1440 min / 360 = 4 min aggregation (~360 points)
-                '24h' => ['interval' => 'INTERVAL 24 HOUR', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:%i')", 'aggregate_minutes' => 4, 'format' => '%Y-%m-%d %H:%i'],
-                // 7d = 10080 min / 360 = 28 min aggregation (~360 points)
-                '7d' => ['interval' => 'INTERVAL 7 DAY', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:%i')", 'aggregate_minutes' => 28, 'format' => '%Y-%m-%d %H:%i'],
-                // 30d = 43200 min / 360 = 120 min (2 hours) aggregation (~360 points)
-                '30d' => ['interval' => 'INTERVAL 30 DAY', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:00')", 'aggregate_minutes' => 120, 'format' => '%Y-%m-%d %H:00'],
-                default => ['interval' => 'INTERVAL 24 HOUR', 'groupBy' => null, 'aggregate_minutes' => 0, 'format' => '%Y-%m-%d %H:%i:%s']
-            };
+        $targetPoints = 400;
+        $aggregateMinutes = ceil($totalMinutes / $targetPoints);
+        
+        // Определяем формат группировки на основе длительности агрегации
+        if ($aggregateMinutes <= 1) {
+            // Менее 1 минуты — без агрегации
+            return [
+                'groupBy' => null,
+                'format' => '%Y-%m-%d %H:%i:%s',
+                'aggregate_minutes' => 0
+            ];
+        } elseif ($aggregateMinutes < 60) {
+            // Минуты — группировка по минутам
+            return [
+                'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:%i')",
+                'format' => '%Y-%m-%d %H:%i',
+                'aggregate_minutes' => $aggregateMinutes
+            ];
+        } elseif ($aggregateMinutes < 1440) {
+            // Часы — группировка по часам
+            return [
+                'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:00')",
+                'format' => '%Y-%m-%d %H:00',
+                'aggregate_minutes' => $aggregateMinutes
+            ];
+        } else {
+            // Дни — группировка по дням
+            return [
+                'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d')",
+                'format' => '%Y-%m-%d',
+                'aggregate_minutes' => $aggregateMinutes
+            ];
         }
-        
-        // Default: base period aggregation (~360 points)
-        return match($period) {
-            // 24h = 1440 min / 360 = 4 min
-            '24h' => ['interval' => 'INTERVAL 24 HOUR', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:%i')", 'aggregate_minutes' => 4, 'format' => '%Y-%m-%d %H:%i'],
-            // 7d = 10080 min / 360 = 28 min
-            '7d' => ['interval' => 'INTERVAL 7 DAY', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:%i')", 'aggregate_minutes' => 28, 'format' => '%Y-%m-%d %H:%i'],
-            // 30d = 43200 min / 360 = 120 min
-            '30d' => ['interval' => 'INTERVAL 30 DAY', 'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:00')", 'aggregate_minutes' => 120, 'format' => '%Y-%m-%d %H:00'],
-            default => ['interval' => 'INTERVAL 24 HOUR', 'groupBy' => null, 'aggregate_minutes' => 0, 'format' => '%Y-%m-%d %H:%i:%s']
-        };
     }
 
     public function saveThresholds(Request $request, Response $response, $args)
