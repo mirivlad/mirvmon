@@ -23,8 +23,9 @@ class DashboardController
         // Получаем статистику
         $stats = $this->serverModel->getStats();
 
-        // Получаем список серверов с последними метриками
-        $servers = $this->serverModel->getAll();
+        // Получаем список серверов со статусами для цветных карточек
+        $servers = $this->serverModel->getServersWithStatus();
+		
 
         $templateData = [
             'title' => 'Дашборд мониторинга',
@@ -32,6 +33,7 @@ class DashboardController
             'servers' => $servers
         ];
 
+        file_put_contents("/tmp/dashboard_debug.log", json_encode($servers) . "\n", FILE_APPEND);
         return $this->twig->render($response, 'dashboard.twig', $templateData);
     }
 }

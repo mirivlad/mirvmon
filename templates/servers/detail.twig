@@ -90,50 +90,44 @@
                     <div class="tab-pane fade show active" id="metrics" role="tabpanel">
                         <div class="row mb-3">
                             <div class="col-md-12">
-                                <form method="get" class="row g-2 align-items-end" id="periodForm">
-                                    <input type="hidden" name="tab" value="metrics">
-                                    
-                                    <!-- Пресеты -->
-                                    <div class="col-md-3">
-                                        <label class="form-label mb-1">
-                                            <i class="fas fa-clock"></i> Быстрый выбор
-                                        </label>
-                                        <select class="form-select" id="presetSelect" onchange="applyPreset()">
-                                            <option value="">-- Выбрать --</option>
-                                            <option value="30">Последние 30 минут</option>
-                                            <option value="60">Последние 1 час</option>
-                                            <option value="120">Последние 2 часа</option>
-                                            <option value="360">Последние 6 часов</option>
-                                            <option value="720">Последние 12 часов</option>
-                                            <option value="1440">Последние 24 часа</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <!-- Дата начала -->
-                                    <div class="col-md-3">
-                                        <label class="form-label mb-1">
-                                            <i class="fas fa-calendar"></i> С
-                                        </label>
-                                        <input type="datetime-local" class="form-control" name="start" id="startDate" 
-                                               value="{{ startDate }}" required>
-                                    </div>
-                                    
-                                    <!-- Дата окончания -->
-                                    <div class="col-md-3">
-                                        <label class="form-label mb-1">
-                                            <i class="fas fa-calendar"></i> По
-                                        </label>
-                                        <input type="datetime-local" class="form-control" name="end" id="endDate" 
-                                               value="{{ endDate }}" required>
-                                    </div>
-                                    
-                                    <!-- Кнопки -->
-                                    <div class="col-md-3">
-                                        <button type="submit" class="btn btn-primary w-100">
-                                            <i class="fas fa-search"></i> Применить
-                                        </button>
-                                    </div>
-                                </form>
+                                <!-- Отладка: period = {{ request.query.period }} -->
+                                <!-- Отладка: period = {{ period }}, request = {{ request.period }} -->
+                                <div class="btn-group d-flex" role="group">
+                                    <a href="?tab=metrics&amp;period=24h" class="btn btn-outline-primary w-100 {% if period == '24h' or period is empty %}active{% endif %}">
+                                        24 часа
+                                    </a>
+                                    <a href="?tab=metrics&amp;period=7d" class="btn btn-outline-primary w-100 {% if period == '7d' %}active{% endif %}">
+                                        7 дней
+                                    </a>
+                                    <a href="?tab=metrics&amp;period=30d" class="btn btn-outline-primary w-100 {% if period == '30d' %}active{% endif %}">
+                                        30 дней
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-md-12">
+                                <small class="text-muted">Масштаб:</small>
+                                <div class="btn-group ms-2" role="group">
+                                    <a href="?tab=metrics&amp;period={{ period }}&amp;zoom=auto" class="btn btn-sm {% if not zoom or zoom == 'auto' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                                        авто
+                                    </a>
+                                    <a href="?tab=metrics&amp;period={{ period }}&amp;zoom=1h" class="btn btn-sm {% if zoom == '1h' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                                        1ч
+                                    </a>
+                                    <a href="?tab=metrics&amp;period={{ period }}&amp;zoom=6h" class="btn btn-sm {% if zoom == '6h' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                                        6ч
+                                    </a>
+                                    <a href="?tab=metrics&amp;period={{ period }}&amp;zoom=24h" class="btn btn-sm {% if zoom == '24h' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                                        24ч
+                                    </a>
+                                    <a href="?tab=metrics&amp;period={{ period }}&amp;zoom=7d" class="btn btn-sm {% if zoom == '7d' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                                        7д
+                                    </a>
+                                    <a href="?tab=metrics&amp;period={{ period }}&amp;zoom=30d" class="btn btn-sm {% if zoom == '30d' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                                        30д
+                                    </a>
+                                </div>
                             </div>
                         </div>
 
@@ -416,6 +410,7 @@
 
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="/chartjs-plugin-crosshair.min.js"></script>
 <script>
 
 // Функция для получения топ-процессов для указанного времени
@@ -504,9 +499,9 @@ const ctx{{ metricName|replace({'-': '_', '.': '_'}) }} = document.getElementByI
 var labels{{ metricName }} = [];
 var data{{ metricName }} = [];
 
-{% for metric in metricData|slice(0, 400)|reverse %}
+{% for metric in metricData|slice(0, 50000)|reverse %}
 {% set time_val = metric.time_bucket|default(metric.created_at) %}
-{% set time_format = metric.time_bucket and aggregation.aggregate_minutes >= 60 ? 'd.m H:i' : 'H:i' %}
+{% set time_format = metric.time_bucket ? 'd.m H:i' : 'H:i' %}
 labels{{ metricName }}.push('{{ time_val|date(time_format) }}');
 data{{ metricName }}.push({{ metric.value|raw }});
 {% endfor %}
@@ -524,6 +519,19 @@ const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metr
         }]
     },
     options: {
+                crosshair: {
+                    line: {
+                        color: "rgba(100, 150, 255, 0.4)",
+                        width: 1,
+                        dashPattern: []
+                    },
+                    sync: {
+                        enabled: false
+                    },
+                    zoom: {
+                        enabled: false
+                    }
+                },
         responsive: true,
         maintainAspectRatio: false,
         scales: {
@@ -557,11 +565,21 @@ const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metr
                     }
                     
                     // Прячем если курсор ушел с графика
-                    if (!context.tooltip._active || context.tooltip._active.length === 0 || canvas{{ metricName|replace({'-': '_', '.': '_'}) }}._tooltipHidden) {
+                    if (!context.tooltip._active || context.tooltip._active.length === 0) {
                         tooltipEl.style.opacity = 0;
                         return;
                     }
                     
+                    // Проверка: курсор внутри chartArea (все 4 границы)
+                    var chartArea = context.chart.chartArea;
+                    if (chartArea && context.tooltip.caretX !== undefined && context.tooltip.caretY !== undefined) {
+                        if (context.tooltip.caretX < chartArea.left || context.tooltip.caretX > chartArea.right ||
+                            context.tooltip.caretY < chartArea.top || context.tooltip.caretY > chartArea.bottom) {
+                            tooltipEl.style.opacity = 0;
+                            return;
+                        }
+                    }
+
                     var dataIndex = context.tooltip._active[0].index;
                     var time = labels{{ metricName }}[dataIndex];
                     
@@ -595,7 +613,6 @@ const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metr
                             // Show tooltip
                             var position = context.chart.canvas.getBoundingClientRect();
                             tooltipEl.innerHTML = lines.join('<br>');
-                            tooltipEl.style.visibility = 'visible';
                             tooltipEl.style.opacity = 1;
                             tooltipEl.style.left = position.left + window.pageXOffset + context.tooltip.caretX + 10 + 'px';
                             tooltipEl.style.top = position.top + window.pageYOffset + context.tooltip.caretY + 'px';
@@ -612,65 +629,40 @@ const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metr
 });
 
 // Скрывать tooltip при уходе курсора с canvas в любую сторону
-var canvas{{ metricName|replace({'-': '_', '.': '_'}) }} = document.getElementById('chart-{{ metricName }}');
-if (canvas{{ metricName|replace({'-': '_', '.': '_'}) }}) {
-    canvas{{ metricName|replace({'-': '_', '.': '_'}) }}._tooltipHidden = false;
-    
-    canvas{{ metricName|replace({'-': '_', '.': '_'}) }}.addEventListener('mouseout', function() {
-        canvas{{ metricName|replace({'-': '_', '.': '_'}) }}._tooltipHidden = true;
-        var tooltipEl = document.getElementById('chartjs-tooltip-{{ server.id }}-{{ metricName }}');
-        if (tooltipEl) {
-            tooltipEl.style.opacity = '0';
-        }
-    });
-    
-    canvas{{ metricName|replace({'-': '_', '.': '_'}) }}.addEventListener('mouseleave', function() {
-        canvas{{ metricName|replace({'-': '_', '.': '_'}) }}._tooltipHidden = true;
-        var tooltipEl = document.getElementById('chartjs-tooltip-{{ server.id }}-{{ metricName }}');
-        if (tooltipEl) {
-            tooltipEl.style.opacity = '0';
-        }
-    });
-    
-    canvas{{ metricName|replace({'-': '_', '.': '_'}) }}.addEventListener('mousemove', function() {
-        canvas{{ metricName|replace({'-': '_', '.': '_'}) }}._tooltipHidden = false;
-    });
-}
+chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas.addEventListener('mouseleave', function() {
+    var tooltipEl = document.getElementById('chartjs-tooltip-{{ server.id }}-{{ metricName }}');
+    if (tooltipEl) {
+        tooltipEl.style.opacity = 0;
+    }
+    chart{{ metricName|replace({'-': '_', '.': '_'}) }}.tooltip._active = [];
+    chart{{ metricName|replace({'-': '_', '.': '_'}) }}.draw();
+});
 
 {% endif %}
 {% endfor %}
-</script>
-<script>
-// Применение пресета
-function applyPreset() {
-    var select = document.getElementById("presetSelect");
-    var minutes = parseInt(select.value);
-    if (!minutes) return;
-    
-    var now = new Date();
-    var startDate = new Date(now.getTime() - (minutes * 60 * 1000));
-    
-    // Форматируем для datetime-local (YYYY-MM-DDTHH:MM)
-    function formatDateTimeLocal(date) {
-        var year = date.getFullYear();
-        var month = String(date.getMonth() + 1).padStart(2, "0");
-        var day = String(date.getDate()).padStart(2, "0");
-        var hours = String(date.getHours()).padStart(2, "0");
-        var mins = String(date.getMinutes()).padStart(2, "0");
-        return year + "-" + month + "-" + day + "T" + hours + ":" + mins;
-    }
-    
-    document.getElementById("startDate").value = formatDateTimeLocal(startDate);
-    document.getElementById("endDate").value = formatDateTimeLocal(now);
-}
 
-// Автоотправка формы при изменении дат (опционально)
-// document.getElementById("startDate").addEventListener("change", function() {
-//     document.getElementById("periodForm").submit();
-// });
-// document.getElementById("endDate").addEventListener("change", function() {
-//     document.getElementById("periodForm").submit();
-// });
-</script>
+// Глобальный обработчик mousemove для скрытия тултипов при уходе курсора за пределы canvas
+// (нужен т.к. crosshair плагин создаёт overlay canvas и перехватывает mouseleave)
+document.addEventListener('mousemove', function(e) {
+{% for metricName, metricData in metrics %}
+{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" %}
+    (function() {
+        var canvas = chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas;
+        var rect = canvas.getBoundingClientRect();
+        var isOverCanvas = (e.clientX >= rect.left && e.clientX <= rect.right &&
+                           e.clientY >= rect.top && e.clientY <= rect.bottom);
+        if (!isOverCanvas) {
+            var tooltipEl = document.getElementById('chartjs-tooltip-{{ server.id }}-{{ metricName }}');
+            if (tooltipEl && tooltipEl.style.opacity !== '0') {
+                tooltipEl.style.opacity = 0;
+                chart{{ metricName|replace({'-': '_', '.': '_'}) }}.tooltip._active = [];
+                chart{{ metricName|replace({'-': '_', '.': '_'}) }}.draw();
+            }
+        }
+    })();
+{% endif %}
+{% endfor %}
+});
 
+</script>
 {% endblock %}

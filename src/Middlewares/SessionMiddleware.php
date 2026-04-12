@@ -23,8 +23,13 @@ class SessionMiddleware
         $sessionData = [
             'user_id' => $_SESSION['user_id'] ?? null,
             'username' => $_SESSION['username'] ?? null,
-            'role' => $_SESSION['role'] ?? null
+            'role' => $_SESSION['role'] ?? null,
+            'flash_message' => $_SESSION['flash_message'] ?? null,
+            'flash_type' => $_SESSION['flash_type'] ?? null
         ];
+
+        // Очищаем flash после чтения
+        unset($_SESSION['flash_message'], $_SESSION['flash_type']);
 
         // Получаем environment и добавляем session в глобальный контекст
         $environment = $this->twig->getEnvironment();

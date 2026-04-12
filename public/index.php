@@ -129,7 +129,7 @@ $dashboardGroup = $app->group('', function ($group) use ($twig) {
         $stats = $serverModel->getStats();
 
         // Get servers with latest metrics
-        $servers = $serverModel->getAll();
+        $servers = $serverModel->getServersWithStatus();
 
         $templateData = [
             'title' => 'Дашборд мониторинга',
@@ -161,6 +161,11 @@ $groupsGroup = $app->group('/groups', function ($group) use ($groupController) {
     $group->get('/{id}', [$groupController, 'show']);
 })->add($csrfMiddleware)->add(AuthMiddleware::class);
 
+// Redirect old /server/{id} to /servers/{id}
+$app->get("/server/{id}", function ($request, $response, $args) {
+    return $response->withHeader("Location", "/servers/" . $args["id"])->withStatus(301);
+})->add(AuthMiddleware::class);
+
 // Routes for servers (protected with auth middleware and csrf)
 $serversGroup = $app->group('/servers', function ($group) use ($serverController, $serverDetailController) {
     $group->get('', [$serverController, 'index']);
@@ -186,7 +191,11 @@ $alertsGroup = $app->group('/alerts', function ($group) use ($alertController) {
 // Admin routes (protected with auth middleware and csrf)
 $adminGroup = $app->group('/admin', function ($group) use ($adminController) {
     $group->get('/users', [$adminController, 'usersList']);
+    $group->post("/users/save", [$adminController, "saveUser"]);
+    $group->get("/users/{id}/delete", [$adminController, "deleteUser"]);
     $group->get('/notifications', [$adminController, 'notificationSettings']);
+    $group->post("/notifications/save", [$adminController, "saveNotificationSettings"]);
+    $group->get("/notifications/test", [$adminController, "testNotification"]);
 })->add($csrfMiddleware)->add(AuthMiddleware::class);
 
 // API route for agents (public, no auth middleware, no csrf)

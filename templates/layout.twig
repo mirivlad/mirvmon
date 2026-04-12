@@ -71,6 +71,13 @@
         {% endif %}
 
         <main class="container mt-4">
+{% if session.flash_message is defined and session.flash_message %}
+<div class="alert alert-{{ session.flash_type == "error" ? "danger" : "success" }} alert-dismissible fade show mb-3" role="alert">
+    {{ session.flash_message|nl2br }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
             {% block content %}{% endblock %}
         </main>
 
