@@ -97,7 +97,7 @@ class Server
                 WHERE sm.server_id = :server_id
                 AND mn.name NOT LIKE '%_proc'
                 ORDER BY sm.created_at DESC
-                LIMIT 10
+                LIMIT 30
             ");
             $stmt2->execute([':server_id' => $server['id']]);
             $metrics = $stmt2->fetchAll();
