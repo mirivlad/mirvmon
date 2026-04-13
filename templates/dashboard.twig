@@ -107,7 +107,7 @@
                     <div class="col-6 mb-2">
                         <div class="d-flex justify-content-between">
                             <small class="text-muted"><i class="fas fa-microchip"></i> CPU</small>
-                            <strong>{{ server.latest_metrics['cpu_load'].value }}{{ server.latest_metrics['cpu_load'].unit }}</strong>
+                            <strong><span id='cpu-val-{{ server.id }}'>{{ server.latest_metrics['cpu_load'].value }}{{ server.latest_metrics['cpu_load'].unit }}</span></strong>
                         </div>
                         {% set cpu_t = server.thresholds['cpu_load']|default(null) %}
                         {% if cpu_t and server.latest_metrics['cpu_load'].value >= cpu_t.critical %}
@@ -123,7 +123,7 @@
                         {% endif %}
                         <div class="progress" style="height: 6px;">
                             <div class="progress-bar {{ cpu_color }}"
-                                 role="progressbar"
+                                 role="progressbar" id="cpu-bar-{{ server.id }}"
                                  style="width: {{ server.latest_metrics['cpu_load'].value }}%"></div>
                         </div>
                     </div>
@@ -133,7 +133,7 @@
                     <div class="col-6 mb-2">
                         <div class="d-flex justify-content-between">
                             <small class="text-muted"><i class="fas fa-memory"></i> RAM</small>
-                            <strong>{{ server.latest_metrics['ram_used'].value }}{{ server.latest_metrics['ram_used'].unit }}</strong>
+                            <strong><span id='ram-val-{{ server.id }}'>{{ server.latest_metrics['ram_used'].value }}{{ server.latest_metrics['ram_used'].unit }}</span></strong>
                         </div>
                         {% set ram_t = server.thresholds['ram_used']|default(null) %}
                         {% if ram_t and server.latest_metrics['ram_used'].value >= ram_t.critical %}
@@ -149,7 +149,7 @@
                         {% endif %}
                         <div class="progress" style="height: 6px;">
                             <div class="progress-bar {{ ram_color }}"
-                                 role="progressbar"
+                                 role="progressbar" id="ram-bar-{{ server.id }}"
                                  style="width: {{ server.latest_metrics['ram_used'].value }}%"></div>
                         </div>
                     </div>
@@ -160,7 +160,7 @@
                     <div class="col-6 mb-2">
                         <div class="d-flex justify-content-between">
                             <small class="text-muted"><i class="fas fa-hdd"></i> Диск (/)</small>
-                            <strong>{{ diskMetric.value }}{{ diskMetric.unit|default('%') }}</strong>
+                            <strong><span id='disk-val-{{ server.id }}'>{{ diskMetric.value }}{{ diskMetric.unit|default('%') }}</span></strong>
                         </div>
                         {% set disk_t = server.thresholds['disk_used_root'] is defined ? server.thresholds['disk_used_root'] : null %}
                         {% if disk_t and diskMetric.value >= disk_t.critical %}
@@ -176,7 +176,7 @@
                         {% endif %}
                         <div class="progress" style="height: 6px;">
                             <div class="progress-bar {{ disk_color }}"
-                                 role="progressbar"
+                                 role="progressbar" id="disk-bar-{{ server.id }}"
                                  style="width: {{ diskMetric.value }}%"></div>
                         </div>
                     </div>
@@ -196,7 +196,7 @@
                 <div class="text-muted small mt-2">
                     <i class="fas fa-clock"></i>
                     {% if server.last_metrics_at %}
-                        Обновлено: {{ server.last_metrics_at|date('d.m.Y H:i:s') }}
+                        Обновлено: <span id="updated-at-{{ server.id }}">{{ server.last_metrics_at|date('d.m.Y H:i:s') }}</span>
                     {% else %}
                         Метрики не получены
                     {% endif %}

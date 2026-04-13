@@ -141,6 +141,9 @@ $dashboardGroup = $app->group('', function ($group) use ($twig) {
         return $twig->render($response, 'dashboard.twig', $templateData);
     });
 })->add($csrfMiddleware)->add(AuthMiddleware::class);
+n// API для дашборда
+ = new DashboardController();
+->get('/api/dashboard/stats', [, 'getDashboardData']);
 
 // Create controllers BEFORE routes
 $groupController = new GroupController($twig);

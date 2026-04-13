@@ -42,4 +42,43 @@ class DashboardController
 
         return $this->twig->render($response, 'dashboard.twig', $templateData);
     }
+
+    public function getDashboardData(Request $request, Response $response, $args)
+    {
+        $servers = $this->serverModel->getServersWithStatus();
+
+        $result = [];
+        foreach ($servers as $server) {
+            $serverData = [
+                'id' => $server['id'],
+                'status' => $server['status'],
+                'updated_at' => $server['last_metrics_at'] ? date('d.m.Y H:i:s', strtotime($server['last_metrics_at'])) : 'Нет данных',
+                'metrics' => []
+            ];
+
+            if (isset($server['latest_metrics']['cpu_load'])) {
+                $serverData['metrics']['cpu_load'] = [
+                    'value' => $server['latest_metrics']['cpu_load']['value'],
+                    'unit' => $server['latest_metrics']['cpu_load']['unit'] ?? '%'
+                ];
+            }
+            if (isset($server['latest_metrics']['ram_used'])) {
+                $serverData['metrics']['ram_used'] = [
+                    'value' => $server['latest_metrics']['ram_used']['value'],
+                    'unit' => $server['latest_metrics']['ram_used']['unit'] ?? '%'
+                ];
+            }
+            $diskMetric = $server['latest_metrics']['disk_used_root'] ?? $server['latest_metrics']['disk_used'] ?? null;
+            if ($diskMetric) {
+                $serverData['metrics']['disk'] = [
+                    'value' => $diskMetric['value'],
+                    'unit' => $diskMetric['unit'] ?? '%'
+                ];
+            }
+            $result[] = $serverData;
+        }
+
+        $response->getBody()->write(json_encode($result));
+        return $response->withHeader('Content-Type', 'application/json');
+    }
 }
