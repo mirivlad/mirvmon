@@ -30,7 +30,7 @@ class AdminController extends Model
         }
         
         $stmt = $this->pdo->prepare("
-            SELECT u.id, u.username, u.email, u.role, u.created_at,
+            SELECT DISTINCT u.id, u.username, u.email, u.role, u.created_at,
                    uns.telegram_chat_id, uns.email_for_alerts
             FROM users u
             LEFT JOIN user_notification_settings uns ON u.id = uns.user_id
