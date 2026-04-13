@@ -155,20 +155,21 @@
                     </div>
                     {% endif %}
 
-                    {% if server.latest_metrics['disk_used_root'] or server.latest_metrics['disk_used'] is defined %}
+                    {% set diskMetric = server.latest_metrics['disk_used_root'] is defined ? server.latest_metrics['disk_used_root'] : server.latest_metrics['disk_used'] %}
+                    {% if diskMetric is defined %}
                     <div class="col-6 mb-2">
                         <div class="d-flex justify-content-between">
                             <small class="text-muted"><i class="fas fa-hdd"></i> Диск (/)</small>
-                            <strong>{{ server.latest_metrics['disk_used_root'] or server.latest_metrics['disk_used'].value }}{{ server.latest_metrics['disk_used_root'] or server.latest_metrics['disk_used'].unit }}</strong>
+                            <strong>{{ diskMetric.value }}{{ diskMetric.unit|default('%') }}</strong>
                         </div>
-                        {% set disk_t = server.thresholds['disk_used_root'] or server.latest_metrics['disk_used']|default(null) %}
-                        {% if disk_t and server.latest_metrics['disk_used_root'] or server.latest_metrics['disk_used'].value >= disk_t.critical %}
+                        {% set disk_t = server.thresholds['disk_used_root'] is defined ? server.thresholds['disk_used_root'] : null %}
+                        {% if disk_t and diskMetric.value >= disk_t.critical %}
                             {% set disk_color = 'bg-danger' %}
-                        {% elseif disk_t and server.latest_metrics['disk_used_root'] or server.latest_metrics['disk_used'].value >= disk_t.warning %}
+                        {% elseif disk_t and diskMetric.value >= disk_t.warning %}
                             {% set disk_color = 'bg-warning' %}
-                        {% elseif server.latest_metrics['disk_used_root'] or server.latest_metrics['disk_used'].value > 80 %}
+                        {% elseif diskMetric.value > 80 %}
                             {% set disk_color = 'bg-danger' %}
-                        {% elseif server.latest_metrics['disk_used_root'] or server.latest_metrics['disk_used'].value > 60 %}
+                        {% elseif diskMetric.value > 60 %}
                             {% set disk_color = 'bg-warning' %}
                         {% else %}
                             {% set disk_color = 'bg-success' %}
@@ -176,7 +177,7 @@
                         <div class="progress" style="height: 6px;">
                             <div class="progress-bar {{ disk_color }}"
                                  role="progressbar"
-                                 style="width: {{ server.latest_metrics['disk_used_root'] or server.latest_metrics['disk_used'].value }}%"></div>
+                                 style="width: {{ diskMetric.value }}%"></div>
                         </div>
                     </div>
                     {% endif %}
