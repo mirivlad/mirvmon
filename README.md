@@ -100,44 +100,27 @@ server {
 
 ## 🤖 Установка Python-агента
 
-### На мониторимом сервере:
+### Через скрипт установки (рекомендуется):
 
-1. Создайте сервер через веб-интерфейс и получите **токен**.
-2. Создайте файл `/opt/server-monitor-agent/config.json`:
+1. **Получите ссылку на скрипт:**
+   В веб-интерфейсе перейдите на страницу редактирования сервера и нажмите кнопку **«Скачать install.sh»**.
+   Или сгенерируйте ссылку вручную:
+   ```bash
+   https://mon.mirv.top/agent/install.sh?token=ВАШ_ТОКЕН
+   ```
 
-```json
-{
-    "token": "ваш_токен_с_веб-страницы",
-    "api_url": "https://mon.mirv.top/api/v1/metrics",
-    "interval_seconds": 60
-}
-```
+2. **Запустите установку на сервере:**
+   ```bash
+   curl -o install.sh "https://mon.mirv.top/agent/install.sh?token=ВАШ_ТОКЕН"
+   chmod +x install.sh
+   sudo bash install.sh
+   ```
+   *Скрипт сам установит Python, зависимости, создаст конфиг и настроит systemd-сервис.*
 
-3. Установите зависимости:
-```bash
-pip install psutil requests
-```
-
-4. Скопируйте `agent.py` в `/opt/server-monitor-agent/` и настройте systemd-сервис:
-
-```ini
-[Unit]
-Description=Server Monitor Agent
-After=network.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/opt/server-monitor-agent
-ExecStart=/usr/bin/python3 /opt/server-monitor-agent/agent.py
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-5. Запустите: `systemctl enable --now server-monitor-agent`
+3. **Проверьте статус:**
+   ```bash
+   systemctl status server-monitor-agent
+   ```
 
 ### Что собирает агент:
 - **CPU** (`cpu_load`) — загрузка процессора (%)
