@@ -163,6 +163,8 @@ function openEditModal(id, username, email, role, telegramChatId, emailForAlerts
     document.getElementById('username').value = username;
     document.getElementById('email').value = email === '' ? '' : email;
     document.getElementById('password').required = false;
+    document.getElementById('password').value = '';
+    document.getElementById('password').autocomplete = 'new-password';
     document.getElementById('password_hint').style.display = 'inline';
     document.getElementById('role').value = role;
     document.getElementById('telegram_chat_id').value = telegramChatId === '' ? '' : telegramChatId;
