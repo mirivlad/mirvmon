@@ -195,7 +195,7 @@ class ServerController extends Model
         $stmt = $this->pdo->prepare("
             INSERT INTO agent_tokens (server_id, token_hash, encrypted_token) 
             VALUES (:server_id, :token_hash, :encrypted_token)
-            ON DUPLICATE KEY UPDATE token_hash = :token_hash, encrypted_token = :encrypted_token
+            ON DUPLICATE KEY UPDATE token_hash = VALUES(token_hash), encrypted_token = VALUES(encrypted_token)
         ");
         
         $result = $stmt->execute([
