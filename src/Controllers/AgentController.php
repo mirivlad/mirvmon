@@ -50,7 +50,7 @@ echo 'Установка агента мониторинга...'
 if ! command -v python3 &> /dev/null; then
     echo 'Установка Python3...'
     apt-get update
-    apt-get install -y python3 python3-pip
+    apt-get install -y python3 python3-pip lm-sensors smartmontools
 fi
 
 # Устанавливаем psutil
