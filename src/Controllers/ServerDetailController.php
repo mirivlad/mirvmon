@@ -201,7 +201,7 @@ class ServerDetailController extends Model
         }
 
         // Типы метрик
-        $stmt = $this->pdo->query("SELECT id, name, unit FROM metric_names WHERE name NOT LIKE '%\_proc' ORDER BY name");
+        $stmt = $this->pdo->query("SELECT id, name, unit FROM metric_names WHERE name NOT LIKE '%\_proc' AND name NOT LIKE 'disk_total_gb_%' AND name != 'disk_used' AND name != 'ram_total_gb' AND name NOT IN ('net_in', 'net_out') AND name NOT LIKE 'network_%' ORDER BY name");
         $allMetricTypes = $stmt->fetchAll();
 
         // Сервисы
@@ -286,7 +286,7 @@ class ServerDetailController extends Model
         $id = $args['id'];
         $params = $request->getParsedBody();
 
-        $stmt = $this->pdo->query("SELECT id, name FROM metric_names WHERE name NOT LIKE '%\_proc' ORDER BY name");
+        $stmt = $this->pdo->query("SELECT id, name FROM metric_names WHERE name NOT LIKE '%\_proc' AND name NOT LIKE 'disk_total_gb_%' AND name != 'disk_used' AND name != 'ram_total_gb' AND name NOT IN ('net_in', 'net_out') AND name NOT LIKE 'network_%' ORDER BY name");
         $metricTypes = $stmt->fetchAll();
 
         $stmt = $this->pdo->prepare("DELETE FROM metric_thresholds WHERE server_id = :server_id");

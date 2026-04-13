@@ -160,8 +160,6 @@
                             </div>
                             {% endif %}
                         </div>
-                    </div>
-
                         <!-- Графики сетевых интерфейсов -->
                         {% set net_interfaces = [] %}
                         {% for metricName in metrics|keys %}
@@ -173,8 +171,8 @@
 
                         {% for iface in net_interfaces %}
                         {% if metrics['net_in_' ~ iface] is defined and metrics['net_out_' ~ iface] is defined %}
-                        <div class="row mb-4">
-                            <div class="col-12">
+                        <div class="row">
+                            <div class="col-12 mb-4">
                                 <div class="card">
                                     <div class="card-header">
                                         <h6 class="mb-0"><i class="fas fa-network-wired"></i> Сеть: {{ iface }}</h6>
@@ -187,6 +185,8 @@
                         </div>
                         {% endif %}
                         {% endfor %}
+
+                        
 
                         <!-- Диски: Doughnut графики -->
                         <div class="row mb-3">
@@ -221,6 +221,9 @@
                                 {% endif %}
                             {% endfor %}
                         </div>
+                    </div>
+
+                        
 
                     <!-- Вкладка "Сервисы" -->
                     <div class="tab-pane fade" id="services" role="tabpanel">
