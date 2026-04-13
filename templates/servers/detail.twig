@@ -123,7 +123,7 @@
 
                         <div class="row">
                             {% for metricName, metricData in metrics %}
-                                {% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and metricName!="disk_used" and not (metricName starts with "disk_used_") and not (metricName starts with "disk_total_gb_") and metricName!="ram_total_gb" and not (metricName starts with "net_in_") and not (metricName starts with "net_out_") %}
+                                {% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and metricName!="disk_used" and not (metricName starts with "disk_used_") and not (metricName starts with "disk_total_gb_") and metricName!="ram_total_gb" and not (metricName starts with "net_in_") and not (metricName starts with "net_out_") and metricName!="network_rx" and metricName!="network_tx" %}
                                 <div class="col-12 mb-4">
                                     <div class="card">
                                         <div class="card-header">
@@ -160,35 +160,6 @@
                             </div>
                             {% endif %}
                         </div>
-                        <!-- Графики сетевых интерфейсов -->
-                        {% set net_interfaces = [] %}
-                        {% for metricName in metrics|keys %}
-                            {% if metricName starts with 'net_in_' %}
-                                {% set iface = metricName|replace({'net_in_': ''}) %}
-                                {% set net_interfaces = net_interfaces|merge([iface]) %}
-                            {% endif %}
-                        {% endfor %}
-
-                        {% for iface in net_interfaces %}
-                        {% if metrics['net_in_' ~ iface] is defined and metrics['net_out_' ~ iface] is defined %}
-                        <div class="row">
-                            <div class="col-12 mb-4">
-                                <div class="card">
-                                    <div class="card-header">
-                                        <h6 class="mb-0"><i class="fas fa-network-wired"></i> Сеть: {{ iface }}</h6>
-                                    </div>
-                                    <div class="card-body">
-                                        <canvas id="chart-net-{{ iface }}" width="100%" height="200"></canvas>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        {% endif %}
-                        {% endfor %}
-
-                        
-
-                        
                         <!-- Температуры -->
                         {% set has_temps = false %}
                         {% for m in metrics %}{% if m starts with 'temp_' %}{% set has_temps = true %}{% endif %}{% endfor %}
@@ -581,7 +552,7 @@ var diskTotalGB = {
 
 // Графики метрик
 {% for metricName, metricData in metrics %}
-{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and metricName!="disk_used" and not (metricName starts with "disk_used_") and not (metricName starts with "disk_total_gb_") and metricName!="ram_total_gb" and not (metricName starts with "net_in_") and not (metricName starts with "net_out_") %}
+{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and metricName!="disk_used" and not (metricName starts with "disk_used_") and not (metricName starts with "disk_total_gb_") and metricName!="ram_total_gb" and not (metricName starts with "net_in_") and not (metricName starts with "net_out_") and metricName!="network_rx" and metricName!="network_tx" %}
 const ctx{{ metricName|replace({'-': '_', '.': '_'}) }} = document.getElementById('chart-{{ metricName }}').getContext('2d');
 
 // Подготовка данных для графика
@@ -755,7 +726,7 @@ chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas.addEventListener('mou
 // Глобальный обработчик для скрытия тултипов при уходе курсора за пределы canvas
 document.addEventListener('mousemove', function(e) {
 {% for metricName, metricData in metrics %}
-{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and metricName!="disk_used" and not (metricName starts with "disk_used_") and not (metricName starts with "disk_total_gb_") and metricName!="ram_total_gb" and not (metricName starts with "net_in_") and not (metricName starts with "net_out_") %}
+{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and metricName!="disk_used" and not (metricName starts with "disk_used_") and not (metricName starts with "disk_total_gb_") and metricName!="ram_total_gb" and not (metricName starts with "net_in_") and not (metricName starts with "net_out_") and metricName!="network_rx" and metricName!="network_tx" %}
     (function() {
         var canvas = chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas;
         var rect = canvas.getBoundingClientRect();
@@ -775,83 +746,6 @@ document.addEventListener('mousemove', function(e) {
 });
 
 
-
-
-// Графики сетевых интерфейсов (две линии: In зелёная, Out красная)
-{% set net_interfaces = [] %}
-{% for metricName in metrics|keys %}
-    {% if metricName starts with 'net_in_' %}
-        {% set net_interfaces = net_interfaces|merge([metricName|replace({'net_in_': ''})]) %}
-    {% endif %}
-{% endfor %}
-
-{% for iface in net_interfaces %}
-{% if metrics['net_in_' ~ iface] is defined and metrics['net_out_' ~ iface] is defined %}
-(function() {
-    var ctx = document.getElementById('chart-net-{{ iface }}');
-    if (!ctx) return;
-
-    var labels = [];
-    var inData = [];
-    var outData = [];
-
-{% for m in metrics['net_in_' ~ iface]|slice(0, 500)|reverse %}
-    labels.push('{{ m.created_at|date("d.m H:i") }}');
-    inData.push({{ m.value }});
-{% endfor %}
-
-{% set outMetrics = metrics['net_out_' ~ iface]|slice(0, 500)|reverse %}
-{% for m in outMetrics %}
-    outData.push({{ m.value }});
-{% endfor %}
-
-    new Chart(ctx.getContext('2d'), {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: 'Входящий (In)',
-                    data: inData,
-                    borderColor: 'rgba(25, 135, 84, 1)',
-                    backgroundColor: 'rgba(25, 135, 84, 0.1)',
-                    fill: true,
-                    tension: 0.1,
-                    pointRadius: 0,
-                    borderWidth: 1.5
-                },
-                {
-                    label: 'Исходящий (Out)',
-                    data: outData,
-                    borderColor: 'rgba(220, 53, 69, 1)',
-                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                    fill: true,
-                    tension: 0.1,
-                    pointRadius: 0,
-                    borderWidth: 1.5
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
-            plugins: {
-                legend: { display: true, position: 'top' },
-                tooltip: { enabled: true, mode: 'index', intersect: false },
-                zoom: {
-                    zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' },
-                    pan: { enabled: true, mode: 'x' }
-                }
-            },
-            scales: {
-                y: { beginAtZero: true, ticks: { callback: function(v) { return v + '%'; } } }
-            }
-        }
-    });
-})();
-{% endif %}
-{% endfor %}
 
 
 // График температур
@@ -948,7 +842,7 @@ document.addEventListener('mousemove', function(e) {
 // Сбросить зум на всех графиках
 function resetAllZoom() {
 {% for metricName, metricData in metrics %}
-{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and metricName!="disk_used" and not (metricName starts with "disk_used_") and not (metricName starts with "disk_total_gb_") and metricName!="ram_total_gb" and not (metricName starts with "net_in_") and not (metricName starts with "net_out_") %}
+{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and metricName!="disk_used" and not (metricName starts with "disk_used_") and not (metricName starts with "disk_total_gb_") and metricName!="ram_total_gb" and not (metricName starts with "net_in_") and not (metricName starts with "net_out_") and metricName!="network_rx" and metricName!="network_tx" %}
     if (typeof chart{{ metricName|replace({'-': '_', '.': '_'}) }} !== 'undefined') {
         chart{{ metricName|replace({'-': '_', '.': '_'}) }}.resetZoom();
     }

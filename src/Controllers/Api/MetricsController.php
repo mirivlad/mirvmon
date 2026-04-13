@@ -67,6 +67,30 @@ class MetricsController extends Model
                 $stmt->execute([':name' => $metricName]);
                 $metricInfo = $stmt->fetch();
 
+                if (!$metricInfo) {
+                    // Авто-создание метрики если нет в справочнике
+                    $unit = '%';
+                    $desc = $metricName;
+                    
+                    if (strpos($metricName, 'disk_total_gb_') === 0 || $metricName === 'ram_total_gb') {
+                        $unit = 'GB';
+                    } elseif (strpos($metricName, 'temp_') === 0) {
+                        $unit = '°C';
+                        $desc = str_replace(['temp_', '_'], ['Температура ', ' '], $metricName);
+                    } elseif (strpos($metricName, 'net_') === 0) {
+                        $unit = '%';
+                        $desc = str_replace(['net_in_', 'net_out_', '_'], ['Входящий ', 'Исходящий ', ' '], $metricName);
+                    }
+
+                    $stmt = $this->pdo->prepare("INSERT INTO metric_names (name, description, unit) VALUES (:name, :desc, :unit)");
+                    $stmt->execute([':name' => $metricName, ':desc' => $desc, ':unit' => $unit]);
+                    
+                    // Получаем только что созданный ID
+                    $stmt = $this->pdo->prepare("SELECT id FROM metric_names WHERE name = :name");
+                    $stmt->execute([':name' => $metricName]);
+                    $metricInfo = $stmt->fetch();
+                }
+
                 if ($metricInfo) {
                     $metricId = $metricInfo['id'];
 
