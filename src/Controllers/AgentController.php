@@ -543,10 +543,10 @@ systemctl status server-monitor-agent
 
         $script = implode("\n", $lines) . "\n";
 
+        $response->getBody()->write($script);
         return $response
             ->withHeader('Content-Type', 'text/plain; charset=UTF-8')
-            ->withHeader('Content-Disposition', 'attachment; filename="install.ps1"')
-            ->withBody(\Nyholm\Psr7\Utils::streamFor($script));
+            ->withHeader('Content-Disposition', 'attachment; filename="install.ps1"');
     }
 
 }
