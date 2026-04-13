@@ -28,14 +28,26 @@ class NotificationService
      */
     public function sendAlertNotification($serverName, $metricName, $value, $severity, $threshold)
     {
-        $severityText = $severity === 'critical' ? 'КРИТИЧЕСКИЙ' : 'ПРЕДУПРЕЖДЕНИЕ';
-        $subject = "🚨 {$severityText}: Превышение порога {$metricName}";
-        $message = "Сервер: {$serverName}\n";
-        $message .= "Метрика: {$metricName}\n";
-        $message .= "Значение: {$value}\n";
-        $message .= "Порог: {$threshold}\n";
-        $message .= "Время: " . date('d.m.Y H:i:s') . "\n";
-        $message .= "Серьёзность: {$severityText}";
+        if ($severity === 'resolved') {
+            $severityText = 'ВОССТАНОВЛЕНИЕ';
+            $emoji = '✅';
+            $subject = "{$emoji} {$severityText}: {$metricName} в норме";
+            $message = "Сервер: {$serverName}\n";
+            $message .= "Метрика: {$metricName}\n";
+            $message .= "Текущее значение: {$value}\n";
+            $message .= "Статус: Порог более не превышен\n";
+            $message .= "Время: " . date('d.m.Y H:i:s');
+        } else {
+            $severityText = $severity === 'critical' ? 'КРИТИЧЕСКИЙ' : 'ПРЕДУПРЕЖДЕНИЕ';
+            $emoji = '🚨';
+            $subject = "{$emoji} {$severityText}: Превышение порога {$metricName}";
+            $message = "Сервер: {$serverName}\n";
+            $message .= "Метрика: {$metricName}\n";
+            $message .= "Значение: {$value}\n";
+            $message .= "Порог: {$threshold}\n";
+            $message .= "Время: " . date('d.m.Y H:i:s') . "\n";
+            $message .= "Серьёзность: {$severityText}";
+        }
 
         // Отправка Email
         if (!empty($this->settings['email_enabled']) && !empty($this->settings['smtp_host'])) {

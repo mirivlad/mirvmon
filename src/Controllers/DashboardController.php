@@ -25,7 +25,14 @@ class DashboardController
 
         // Получаем список серверов со статусами для цветных карточек
         $servers = $this->serverModel->getServersWithStatus();
-		
+
+        // Загружаем пороги для каждого сервера
+        foreach ($servers as &$server) {
+            $t = $this->serverModel->getThresholds($server['id']);
+            $server['thresholds'] = $t;
+            file_put_contents('/tmp/thresholds_debug.log', "Server {$server['id']}: " . json_encode($t) . "\n", FILE_APPEND);
+        }
+        unset($server);
 
         $templateData = [
             'title' => 'Дашборд мониторинга',
@@ -33,7 +40,6 @@ class DashboardController
             'servers' => $servers
         ];
 
-        file_put_contents("/tmp/dashboard_debug.log", json_encode($servers) . "\n", FILE_APPEND);
         return $this->twig->render($response, 'dashboard.twig', $templateData);
     }
 }

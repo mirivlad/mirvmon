@@ -124,6 +124,44 @@ class Server
             $server['active_alerts'] = (int)$activeAlerts;
         }
 
+        // Загружаем пороги для каждого сервера
+        foreach ($servers as &$server) {
+            $stmt = $this->db->prepare("SELECT mn.name, mt.warning_threshold, mt.critical_threshold FROM metric_thresholds mt JOIN metric_names mn ON mt.metric_name_id = mn.id WHERE mt.server_id = :server_id");
+            $stmt->execute([':server_id' => $server['id']]);
+            $thresholds = $stmt->fetchAll();
+            $server['thresholds'] = [];
+            foreach ($thresholds as $t) {
+                $server['thresholds'][$t['name']] = [
+                    'warning' => (float)$t['warning_threshold'],
+                    'critical' => (float)$t['critical_threshold']
+                ];
+            }
+        }
+        unset($server);
+
         return $servers;
+    }
+
+    public function getThresholds($serverId)
+    {
+        error_log("getThresholds called for server $serverId");
+        $stmt = $this->db->prepare("
+            SELECT mn.name, mt.warning_threshold, mt.critical_threshold
+            FROM metric_thresholds mt
+            JOIN metric_names mn ON mt.metric_name_id = mn.id
+            WHERE mt.server_id = :server_id
+        ");
+        $stmt->execute([':server_id' => $serverId]);
+        $thresholds = $stmt->fetchAll();
+        error_log("getThresholds result for server $serverId: " . json_encode($thresholds));
+        $result = [];
+        foreach ($thresholds as $t) {
+            $result[$t['name']] = [
+                'warning' => (float)$t['warning_threshold'],
+                'critical' => (float)$t['critical_threshold']
+            ];
+        }
+        error_log("getThresholds returning for server $serverId: " . json_encode($result));
+        return $result;
     }
 }

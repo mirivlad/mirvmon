@@ -176,25 +176,106 @@ class MetricsController extends Model
             }
 
             if ($severity) {
-                // Создаем алерт
+                // Проверяем есть ли уже неразрешённый алерт для этой метрики
                 $stmt = $this->pdo->prepare("
-                    INSERT INTO alerts (server_id, metric_name, value, severity)
-                    VALUES (:server_id, :metric_name, :value, :severity)
+                    SELECT id, severity FROM alerts
+                    WHERE server_id = :server_id AND metric_name = :metric_name AND resolved = FALSE
+                    ORDER BY created_at DESC LIMIT 1
                 ");
                 $stmt->execute([
                     ':server_id' => $serverId,
-                    ':metric_name' => $metricName,
-                    ':value' => $value,
-                    ':severity' => $severity
+                    ':metric_name' => $metricName
                 ]);
+                $existingAlert = $stmt->fetch();
 
-                // Отправляем уведомление
+                if ($existingAlert) {
+                    // Алерт уже есть — обновляем значение но НЕ отправляем уведомление
+                    $stmt = $this->pdo->prepare("
+                        UPDATE alerts SET value = :value WHERE id = :id
+                    ");
+                    $stmt->execute([
+                        ':value' => $value,
+                        ':id' => $existingAlert['id']
+                    ]);
+
+                    // Если серьёзность повысилась (warning -> critical) — отправляем
+                    if ($severity === 'critical' && $existingAlert['severity'] === 'warning') {
+                        $stmt = $this->pdo->prepare("
+                            UPDATE alerts SET severity = :severity WHERE id = :id
+                        ");
+                        $stmt->execute([
+                            ':severity' => $severity,
+                            ':id' => $existingAlert['id']
+                        ]);
+                        $this->notificationService->sendAlertNotification(
+                            $serverName,
+                            $metricName,
+                            $value,
+                            $severity,
+                            $threshold
+                        );
+                    }
+                } else {
+                    // Нового алерта нет — создаём и отправляем уведомление
+                    $stmt = $this->pdo->prepare("
+                        INSERT INTO alerts (server_id, metric_name, value, severity)
+                        VALUES (:server_id, :metric_name, :value, :severity)
+                    ");
+                    $stmt->execute([
+                        ':server_id' => $serverId,
+                        ':metric_name' => $metricName,
+                        ':value' => $value,
+                        ':severity' => $severity
+                    ]);
+
+                    $this->notificationService->sendAlertNotification(
+                        $serverName,
+                        $metricName,
+                        $value,
+                        $severity,
+                        $threshold
+                    );
+                }
+            }
+        }
+
+        // Всегда проверяем resolved — даже если пороги не настроены или удалены
+        // Если есть неразрешённый алерт а значение сейчас в норме — разрешаем
+        $stmt = $this->pdo->prepare("
+            SELECT id FROM alerts
+            WHERE server_id = :server_id AND metric_name = :metric_name AND resolved = FALSE
+            ORDER BY created_at DESC LIMIT 1
+        ");
+        $stmt->execute([
+            ':server_id' => $serverId,
+            ':metric_name' => $metricName
+        ]);
+        $existingAlert = $stmt->fetch();
+
+        if ($existingAlert) {
+            // Проверяем действительно ли значение в норме
+            // (если пороги есть — проверяем по ним, если нет — считаем что в норме)
+            $isNormal = true;
+            if ($thresholds) {
+                $w = $thresholds['warning_threshold'];
+                $c = $thresholds['critical_threshold'];
+                if (($c && $value >= $c) || ($w && $value >= $w)) {
+                    $isNormal = false;
+                }
+            }
+
+            if ($isNormal) {
+                $stmt = $this->pdo->prepare("
+                    UPDATE alerts SET resolved = TRUE, resolved_at = NOW() WHERE id = :id
+                ");
+                $stmt->execute([':id' => $existingAlert['id']]);
+
                 $this->notificationService->sendAlertNotification(
                     $serverName,
                     $metricName,
                     $value,
-                    $severity,
-                    $threshold
+                    'resolved',
+                    'Порог более не превышен'
                 );
             }
         }

@@ -27,7 +27,7 @@
                             <tr class="{% if alert.severity == 'critical' %}table-danger{% else %}table-warning{% endif %}">
                                 <td>{{ alert.server_name }}</td>
                                 <td>{{ alert.metric_name|replace({'_': ' ', 'load': 'загрузка', 'used': 'использование'})|title }}</td>
-                                <td>{{ alert.value }}{% if alert.metric_name ends_with '_load' or alert.metric_name ends_with '_used' %}%{% endif %}</td>
+                                <td>{{ alert.value }}{% if alert.metric_name matches '/_load$/' or alert.metric_name matches '/_used$/' %}%{% endif %}</td>
                                 <td>
                                     {% if alert.severity == 'critical' %}
                                         <span class="badge bg-danger"><i class="fas fa-exclamation-triangle"></i> Критично</span>

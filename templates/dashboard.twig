@@ -54,8 +54,11 @@
 </div>
 
 <!-- Карточки серверов -->
+<!-- DEBUG: {{ servers|json_encode }} -->
+{% for s in servers %}<!-- DBG: id={{ s.id }} t={{ s.thresholds|json_encode }} -->{% endfor %}
 <div class="row">
     {% for server in servers %}
+<!-- DEBUG: server_id={{ server.id }} thresholds={{ server.thresholds|json_encode }} ram_metric={{ server.latest_metrics["ram_used"].value }} -->
 
     <div class="col-xl-4 col-lg-6 col-md-6 mb-4">
         <div class="card h-100 server-card" data-server-id="{{ server.id }}" data-status="{{ server.status }}">
@@ -98,6 +101,7 @@
                 <div class="mb-2"><span class="badge bg-info">Статус: {{ server.status }}</span></div>
 
                 <!-- Метрики -->
+{% for s in servers %}<!-- DBG: id={{ s.id }} t={{ s.thresholds|json_encode }} -->{% endfor %}
                 <div class="row">
                     {% if server.latest_metrics['cpu_load'] is defined %}
                     <div class="col-6 mb-2">
@@ -105,8 +109,20 @@
                             <small class="text-muted"><i class="fas fa-microchip"></i> CPU</small>
                             <strong>{{ server.latest_metrics['cpu_load'].value }}{{ server.latest_metrics['cpu_load'].unit }}</strong>
                         </div>
+                        {% set cpu_t = server.thresholds['cpu_load']|default(null) %}
+                        {% if cpu_t and server.latest_metrics['cpu_load'].value >= cpu_t.critical %}
+                            {% set cpu_color = 'bg-danger' %}
+                        {% elseif cpu_t and server.latest_metrics['cpu_load'].value >= cpu_t.warning %}
+                            {% set cpu_color = 'bg-warning' %}
+                        {% elseif server.latest_metrics['cpu_load'].value > 80 %}
+                            {% set cpu_color = 'bg-danger' %}
+                        {% elseif server.latest_metrics['cpu_load'].value > 60 %}
+                            {% set cpu_color = 'bg-warning' %}
+                        {% else %}
+                            {% set cpu_color = 'bg-success' %}
+                        {% endif %}
                         <div class="progress" style="height: 6px;">
-                            <div class="progress-bar {% if server.latest_metrics['cpu_load'].value > 80 %}bg-danger{% elseif server.latest_metrics['cpu_load'].value > 60 %}bg-warning{% else %}bg-success{% endif %}"
+                            <div class="progress-bar {{ cpu_color }}"
                                  role="progressbar"
                                  style="width: {{ server.latest_metrics['cpu_load'].value }}%"></div>
                         </div>
@@ -119,8 +135,20 @@
                             <small class="text-muted"><i class="fas fa-memory"></i> RAM</small>
                             <strong>{{ server.latest_metrics['ram_used'].value }}{{ server.latest_metrics['ram_used'].unit }}</strong>
                         </div>
+                        {% set ram_t = server.thresholds['ram_used']|default(null) %}
+                        {% if ram_t and server.latest_metrics['ram_used'].value >= ram_t.critical %}
+                            {% set ram_color = 'bg-danger' %}
+                        {% elseif ram_t and server.latest_metrics['ram_used'].value >= ram_t.warning %}
+                            {% set ram_color = 'bg-warning' %}
+                        {% elseif server.latest_metrics['ram_used'].value > 80 %}
+                            {% set ram_color = 'bg-danger' %}
+                        {% elseif server.latest_metrics['ram_used'].value > 60 %}
+                            {% set ram_color = 'bg-warning' %}
+                        {% else %}
+                            {% set ram_color = 'bg-success' %}
+                        {% endif %}
                         <div class="progress" style="height: 6px;">
-                            <div class="progress-bar {% if server.latest_metrics['ram_used'].value > 80 %}bg-danger{% elseif server.latest_metrics['ram_used'].value > 60 %}bg-warning{% else %}bg-success{% endif %}"
+                            <div class="progress-bar {{ ram_color }}"
                                  role="progressbar"
                                  style="width: {{ server.latest_metrics['ram_used'].value }}%"></div>
                         </div>
@@ -133,8 +161,20 @@
                             <small class="text-muted"><i class="fas fa-hdd"></i> Диск</small>
                             <strong>{{ server.latest_metrics['disk_used'].value }}{{ server.latest_metrics['disk_used'].unit }}</strong>
                         </div>
+                        {% set disk_t = server.thresholds['disk_used']|default(null) %}
+                        {% if disk_t and server.latest_metrics['disk_used'].value >= disk_t.critical %}
+                            {% set disk_color = 'bg-danger' %}
+                        {% elseif disk_t and server.latest_metrics['disk_used'].value >= disk_t.warning %}
+                            {% set disk_color = 'bg-warning' %}
+                        {% elseif server.latest_metrics['disk_used'].value > 80 %}
+                            {% set disk_color = 'bg-danger' %}
+                        {% elseif server.latest_metrics['disk_used'].value > 60 %}
+                            {% set disk_color = 'bg-warning' %}
+                        {% else %}
+                            {% set disk_color = 'bg-success' %}
+                        {% endif %}
                         <div class="progress" style="height: 6px;">
-                            <div class="progress-bar {% if server.latest_metrics['disk_used'].value > 80 %}bg-danger{% elseif server.latest_metrics['disk_used'].value > 60 %}bg-warning{% else %}bg-success{% endif %}"
+                            <div class="progress-bar {{ disk_color }}"
                                  role="progressbar"
                                  style="width: {{ server.latest_metrics['disk_used'].value }}%"></div>
                         </div>

@@ -37,19 +37,67 @@ class ServerDetailController extends Model
             return $response->withHeader('Location', '/servers')->withStatus(302);
         }
 
-        // Получаем даты начала и окончания
+        // Получаем параметры
         $queryParams = $request->getQueryParams();
         $startDate = $queryParams['start'] ?? null;
         $endDate = $queryParams['end'] ?? null;
+        $period = $queryParams['period'] ?? '24h';
+        $zoom = $queryParams['zoom'] ?? null;
         
-        // Если даты не указаны, используем последние 24 часа по умолчанию
+        // Если даты не указаны, вычисляем по period
         if (!$startDate || !$endDate) {
             $endDate = new DateTime();
             $startDate = clone $endDate;
-            $startDate->modify('-24 hours');
+            
+            switch ($period) {
+                case '1h':
+                    $startDate->modify('-1 hour');
+                    break;
+                case '6h':
+                    $startDate->modify('-6 hours');
+                    break;
+                case '7d':
+                    $startDate->modify('-7 days');
+                    break;
+                case '30d':
+                    $startDate->modify('-30 days');
+                    break;
+                case '24h':
+                default:
+                    $startDate->modify('-24 hours');
+                    break;
+            }
         } else {
             $startDate = new DateTime($startDate);
             $endDate = new DateTime($endDate);
+        }
+        
+        // Применяем zoom — ограничиваем end по zoom-периоду
+        if ($zoom && $zoom !== 'auto') {
+            $zoomEnd = new DateTime();
+            $zoomStart = clone $zoomEnd;
+            switch ($zoom) {
+                case '1h':
+                    $zoomStart->modify('-1 hour');
+                    break;
+                case '6h':
+                    $zoomStart->modify('-6 hours');
+                    break;
+                case '24h':
+                    $zoomStart->modify('-24 hours');
+                    break;
+                case '7d':
+                    $zoomStart->modify('-7 days');
+                    break;
+                case '30d':
+                    $zoomStart->modify('-30 days');
+                    break;
+            }
+            // Zoom не может выйти за рамки выбранного периода
+            if ($zoomStart < $startDate) $zoomStart = clone $startDate;
+            if ($zoomEnd > $endDate) $zoomEnd = clone $endDate;
+            $startDate = $zoomStart;
+            $endDate = $zoomEnd;
         }
         
         // Валидация: end > start
@@ -185,7 +233,9 @@ class ServerDetailController extends Model
             'startDate' => $startDate->format('Y-m-d\T H:i'),
             'endDate' => $endDate->format('Y-m-d\T H:i'),
             'aggregation' => $aggConfig,
-            'totalMinutes' => $totalMinutes
+            'totalMinutes' => $totalMinutes,
+            'period' => $period,
+            'zoom' => $zoom
         ];
 
         return $this->twig->render($response, 'servers/detail.twig', $templateData);
