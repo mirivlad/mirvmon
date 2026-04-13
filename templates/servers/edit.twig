@@ -54,12 +54,17 @@
                 <div class="mt-4">
                     <h5>Управление агентом мониторинга:</h5>
                     <div class="row">
-                        <div class="col-md-6 mb-2">
+                        <div class="col-md-4 mb-2">
                             <a href="/agent/install.sh?server_id={{ server.id }}" class="btn btn-outline-primary w-100">
-                                <i class="fas fa-download"></i> Скачать install.sh
+                                <i class="fab fa-linux"></i> Агент для Linux
                             </a>
                         </div>
-                        <div class="col-md-6 mb-2">
+                        <div class="col-md-4 mb-2">
+                            <a href="/agent/install.ps1?server_id={{ server.id }}" class="btn btn-outline-info w-100">
+                                <i class="fab fa-windows"></i> Агент для Windows
+                            </a>
+                        </div>
+                        <div class="col-md-4 mb-2">
                             <a href="/servers/{{ server.id }}/regenerate-token" class="btn btn-outline-warning w-100" onclick="return confirm('Вы уверены, что хотите сгенерировать новый токен? Это сделает недействительным старый скрипт установки.');">
                                 <i class="fas fa-sync-alt"></i> Сбросить токен
                             </a>

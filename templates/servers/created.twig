@@ -22,20 +22,45 @@
                             </button>
                         </div>
                     </div>
-                    <p class="mb-0 mt-3">Скачайте скрипт установки агента мониторинга:</p>
-                    <a href="/agent/install.sh?token={{ token }}" class="btn btn-primary mt-2">
-                        <i class="fas fa-download"></i> Скачать install.sh
-                    </a>
+                    <p class="mb-0 mt-3">Скачайте скрипт установки агента:</p>
+                    <div class="d-flex gap-2 mt-2">
+                        <a href="/agent/install.sh?token={{ token }}" class="btn btn-primary">
+                            <i class="fab fa-linux"></i> Агент для Linux
+                        </a>
+                        <a href="/agent/install.ps1?token={{ token }}" class="btn btn-info">
+                            <i class="fab fa-windows"></i> Агент для Windows
+                        </a>
+                    </div>
                 </div>
                 
                 <div class="mt-4">
-                    <h5>Инструкция по установке агента:</h5>
-                    <ol>
-                        <li>Скачайте скрипт установки с помощью кнопки выше</li>
-                        <li>Загрузите его на сервер, который вы хотите мониторить</li>
-                        <li>Выполните команду: <code>chmod +x install.sh && ./install.sh</code></li>
-                        <li>Агент начнет отправлять метрики на сервер мониторинга</li>
-                    </ol>
+                    <h5>Инструкция по установке:</h5>
+                    
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <i class="fab fa-linux"></i> Linux
+                        </div>
+                        <div class="card-body">
+                            <ol class="mb-0">
+                                <li>Скачайте скрипт <code>install.sh</code></li>
+                                <li>Загрузите на сервер</li>
+                                <li>Выполните: <code>chmod +x install.sh && ./install.sh</code></li>
+                            </ol>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fab fa-windows"></i> Windows Server 2012+
+                        </div>
+                        <div class="card-body">
+                            <ol class="mb-0">
+                                <li>Скачайте скрипт <code>install.ps1</code></li>
+                                <li>Запустите PowerShell <strong>от имени Администратора</strong></li>
+                                <li>Выполните: <code>Set-ExecutionPolicy Bypass -Scope Process -Force; .\install.ps1</code></li>
+                            </ol>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">

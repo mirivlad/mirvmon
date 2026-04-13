@@ -229,8 +229,9 @@ $app->get('/api/status', function (Request $request, Response $response, $args) 
         ->withHeader('Content-Type', 'application/json');
 });
 
-// Agent installation script route (public, no auth middleware, no csrf)
+// Agent installation script routes (public, no auth middleware, no csrf)
 $app->get('/agent/install.sh', [$agentController, 'generateInstallScript']);
+$app->get('/agent/install.ps1', [$agentController, 'generateWindowsInstallScript']);
 
 // Run app
 $app->run();

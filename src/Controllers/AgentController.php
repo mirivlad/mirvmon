@@ -421,4 +421,132 @@ systemctl status server-monitor-agent
         $response->getBody()->write(json_encode($data));
         return $response->withHeader('Content-Type', 'application/json');
     }
+
+    public function generateWindowsInstallScript(Request $request, Response $response, $args)
+    {
+        $queryParams = $request->getQueryParams();
+        $token = $queryParams['token'] ?? null;
+        $server_id = $queryParams['server_id'] ?? null;
+
+        if (!empty($server_id) && empty($token)) {
+            $stmt = $this->pdo->prepare("SELECT encrypted_token FROM agent_tokens WHERE server_id = :server_id LIMIT 1");
+            $stmt->execute([':server_id' => $server_id]);
+            $result = $stmt->fetch();
+
+            if ($result && !empty($result['encrypted_token'])) {
+                $token = EncryptionHelper::decrypt($result['encrypted_token']);
+            }
+        }
+
+        if (empty($token)) {
+            $response->getBody()->write('Token is required');
+            return $response->withStatus(400);
+        }
+
+        $apiUrl = 'https://mon.mirv.top/api/v1/metrics';
+        $agentPyUrl = 'https://mon.mirv.top/agent/agent.py';
+
+        // PowerShell скрипт установки
+        $lines = [];
+        $lines[] = '# Скрипт установки агента мониторинга для Windows Server 2012+';
+        $lines[] = '# Запустите от имени Администратора (PowerShell)';
+        $lines[] = '';
+        $lines[] = '$ErrorActionPreference = "Stop"';
+        $lines[] = '$Token = "' . addslashes($token) . '"';
+        $lines[] = '$ApiUrl = "' . addslashes($apiUrl) . '"';
+        $lines[] = '$InstallDir = "C:\\Program Files\\MonAgent"';
+        $lines[] = '';
+        $lines[] = 'Write-Host "=== Установка агента мониторинга ===" -ForegroundColor Cyan';
+        $lines[] = '';
+        $lines[] = '# Проверяем права администратора';
+        $lines[] = '$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)';
+        $lines[] = 'if (-not $isAdmin) {';
+        $lines[] = '    Write-Host "ОШИБКА: Запустите PowerShell от имени Администратора!" -ForegroundColor Red';
+        $lines[] = '    exit 1';
+        $lines[] = '}';
+        $lines[] = '';
+        $lines[] = '# Включаем TLS 1.2';
+        $lines[] = '[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12';
+        $lines[] = '';
+        $lines[] = '# Проверяем Python';
+        $lines[] = 'Write-Host "Проверка Python..." -ForegroundColor Yellow';
+        $lines[] = '$pythonCmd = Get-Command python -ErrorAction SilentlyContinue';
+        $lines[] = 'if (-not $pythonCmd) {';
+        $lines[] = '    Write-Host "Установка Python 3.12..." -ForegroundColor Yellow';
+        $lines[] = '    $installer = "$env:TEMP\\python-installer.exe"';
+        $lines[] = '    $pythonUrl = "https://www.python.org/ftp/python/3.12.4/python-3.12.4-amd64.exe"';
+        $lines[] = '    Write-Host "Скачивание установщика Python..." -ForegroundColor Yellow';
+        $lines[] = '    Invoke-WebRequest -Uri $pythonUrl -OutFile $installer -UseBasicParsing';
+        $lines[] = '    Write-Host "Установка Python (тихая установка)..." -ForegroundColor Yellow';
+        $lines[] = '    Start-Process -FilePath $installer -ArgumentList "/quiet", "InstallAllUsers=1", "PrependPath=1", "Include_pip=1" -Wait -NoNewWindow';
+        $lines[] = '    Remove-Item $installer -Force -ErrorAction SilentlyContinue';
+        $lines[] = '    $pythonCmd = Get-Command python -ErrorAction SilentlyContinue';
+        $lines[] = '    if (-not $pythonCmd) {';
+        $lines[] = '        Write-Host "ОШИБКА: Python не установлен. Установите вручную с https://python.org" -ForegroundColor Red';
+        $lines[] = '        exit 1';
+        $lines[] = '    }';
+        $lines[] = '    Write-Host "Python успешно установлен!" -ForegroundColor Green';
+        $lines[] = '}';
+        $lines[] = '';
+        $lines[] = '# Устанавливаем psutil';
+        $lines[] = 'Write-Host "Установка psutil..." -ForegroundColor Yellow';
+        $lines[] = 'python -m pip install psutil --quiet';
+        $lines[] = 'if ($LASTEXITCODE -ne 0) {';
+        $lines[] = '    Write-Host "ОШИБКА: Не удалось установить psutil" -ForegroundColor Red';
+        $lines[] = '    exit 1';
+        $lines[] = '}';
+        $lines[] = '';
+        $lines[] = '# Создаём директорию';
+        $lines[] = 'Write-Host "Создание директории $InstallDir..." -ForegroundColor Yellow';
+        $lines[] = 'if (-not (Test-Path $InstallDir)) {';
+        $lines[] = '    New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null';
+        $lines[] = '}';
+        $lines[] = 'Set-Location $InstallDir';
+        $lines[] = '';
+        $lines[] = '# Создаём конфигурационный файл';
+        $lines[] = 'Write-Host "Создание конфигурации..." -ForegroundColor Yellow';
+        $lines[] = '$config = @{';
+        $lines[] = '    token = $Token';
+        $lines[] = '    api_url = $ApiUrl';
+        $lines[] = '    interval_seconds = 60';
+        $lines[] = '} | ConvertTo-Json';
+        $lines[] = '$config | Out-File -FilePath "$InstallDir\\config.json" -Encoding UTF8 -Force';
+        $lines[] = '';
+        $lines[] = '# Скачиваем agent.py';
+        $lines[] = 'Write-Host "Скачивание agent.py..." -ForegroundColor Yellow';
+        $lines[] = 'Invoke-WebRequest -Uri "' . addslashes($agentPyUrl) . '" -OutFile "$InstallDir\\agent.py" -UseBasicParsing';
+        $lines[] = '';
+        $lines[] = '# Создаём Scheduled Task для автозапуска';
+        $lines[] = 'Write-Host "Регистрация службы..." -ForegroundColor Yellow';
+        $lines[] = '$serviceTaskName = "MonAgent"';
+        $lines[] = 'Unregister-ScheduledTask -TaskName $serviceTaskName -Confirm:$false -ErrorAction SilentlyContinue';
+        $lines[] = '$trigger = New-ScheduledTaskTrigger -AtStartup';
+        $lines[] = '$action = New-ScheduledTaskAction -Execute "python" -Argument "$InstallDir\\agent.py" -WorkingDirectory $InstallDir';
+        $lines[] = '$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)';
+        $lines[] = '$principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest';
+        $lines[] = 'Register-ScheduledTask -TaskName $serviceTaskName -Trigger $trigger -Action $action -Settings $settings -Principal $principal -Force | Out-Null';
+        $lines[] = '';
+        $lines[] = '# Запускаем задачу';
+        $lines[] = 'Start-ScheduledTask -TaskName $serviceTaskName';
+        $lines[] = '';
+        $lines[] = 'Write-Host ""';
+        $lines[] = 'Write-Host "=== Агент мониторинга установлен! ===" -ForegroundColor Green';
+        $lines[] = 'Write-Host "Директория: $InstallDir" -ForegroundColor White';
+        $lines[] = 'Write-Host "Служба: MonAgent (Scheduled Task)" -ForegroundColor White';
+        $lines[] = 'Write-Host "Лог: $InstallDir\\agent.log" -ForegroundColor White';
+        $lines[] = 'Write-Host ""';
+        $lines[] = 'Write-Host "Для управления:" -ForegroundColor Cyan';
+        $lines[] = 'Write-Host "  Проверить статус: Get-ScheduledTask -TaskName MonAgent" -ForegroundColor Gray';
+        $lines[] = 'Write-Host "  Остановить: Disable-ScheduledTask -TaskName MonAgent" -ForegroundColor Gray';
+        $lines[] = 'Write-Host "  Запустить: Start-ScheduledTask -TaskName MonAgent" -ForegroundColor Gray';
+        $lines[] = 'Write-Host "  Удалить: Unregister-ScheduledTask -TaskName MonAgent -Confirm:$false" -ForegroundColor Gray';
+
+        $script = implode("\n", $lines) . "\n";
+
+        return $response
+            ->withHeader('Content-Type', 'text/plain; charset=UTF-8')
+            ->withHeader('Content-Disposition', 'attachment; filename="install.ps1"')
+            ->withBody(\Nyholm\Psr7\Utils::streamFor($script));
+    }
+
 }
