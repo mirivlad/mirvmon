@@ -297,23 +297,56 @@ class ServerDetailController extends Model
             VALUES (:server_id, :metric_name_id, :warning_threshold, :critical_threshold, :duration)
         ");
 
+        $saved = [];
+        $partial = [];
+
         foreach ($metricTypes as $metricType) {
             $warning = $params[$metricType['name'] . '_warning'] ?? '';
             $critical = $params[$metricType['name'] . '_critical'] ?? '';
             $duration = (int)($params[$metricType['name'] . '_duration'] ?? 0);
 
-            if ($warning !== '' && $critical !== '') {
+            // Сохраняем если хотя бы один порог заполнен
+            if ($warning !== '' || $critical !== '') {
+                // Если не указано - ставим NULL
+                $warningVal = $warning !== '' ? (float)$warning : null;
+                $criticalVal = $critical !== '' ? (float)$critical : null;
+
                 $insertStmt->execute([
                     ':server_id' => $id,
                     ':metric_name_id' => $metricType['id'],
-                    ':warning_threshold' => (float)$warning,
-                    ':critical_threshold' => (float)$critical,
+                    ':warning_threshold' => $warningVal,
+                    ':critical_threshold' => $criticalVal,
                     ':duration' => $duration
                 ]);
+
+                $name = $metricType['name'];
+                if ($warningVal !== null && $criticalVal !== null) {
+                    $saved[] = $name;
+                } else {
+                    $missing = [];
+                    if ($warningVal === null) $missing[] = 'warning';
+                    if ($criticalVal === null) $missing[] = 'critical';
+                    $partial[] = $name . ' (нет: ' . implode(', ', $missing) . ')';
+                }
             }
         }
 
-        return $response->withHeader('Location', "/servers/{$id}")->withStatus(302);
+        // Формируем flash сообщение
+        $messages = [];
+        if (count($saved) > 0) {
+            $messages[] = 'Сохранено: ' . implode(', ', $saved);
+        }
+        if (count($partial) > 0) {
+            $messages[] = 'Сохранено частично (используются значения по умолчанию): ' . implode(', ', $partial);
+        }
+        if (count($messages) === 0) {
+            $messages[] = 'Все пороги удалены';
+        }
+
+        $_SESSION['flash_message'] = implode('. ', $messages);
+        $_SESSION['flash_type'] = count($partial) > 0 ? 'warning' : 'success';
+
+        return $response->withHeader('Location', "/servers/{$id}?tab=thresholds")->withStatus(302);
     }
 
     public function saveServices(Request $request, Response $response, $args)
