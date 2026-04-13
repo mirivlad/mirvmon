@@ -120,34 +120,10 @@
                         </div>
 
 
-                        <!-- Диски: Doughnut графики -->
-                        <div class="row mb-3">
-                            {% for metricName, metricData in metrics %}
-                                {% if metricName starts with 'disk_used_' and metricName != 'disk_used' %}
-                                <div class="col-md-4 mb-3">
-                                    <div class="card h-100">
-                                        <div class="card-body text-center">
-                                            <h6 class="card-title">
-                                                {% if metricName == 'disk_used_root' %}/ (корень)
-                                                {% elseif metricName == 'disk_used_home' %}/home
-                                                {% elseif metricName == 'disk_used_boot' %}/boot
-                                                {% elseif metricName == 'disk_used_mnt_data' %}/mnt/data
-                                                {% else %}{{ metricName|replace({'disk_used_': '', '_': ' '})|title }}
-                                                {% endif %}
-                                            </h6>
-                                            <h3>{{ metricData[0].value }}{{ metricData[0].unit|default('%') }}</h3>
-                                            <p class="text-muted small">{{ metricData[0].created_at|date('d.m.Y H:i') }}</p>
-                                            <div style="max-width: 150px; margin: 0 auto;"><canvas id="chart-{{ metricName }}"></canvas></div>
-                                        </div>
-                                    </div>
-                                </div>
-                                {% endif %}
-                            {% endfor %}
-                        </div>
 
                         <div class="row">
                             {% for metricName, metricData in metrics %}
-                                {% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and not (metricName starts with "disk_used_") and metricName != "disk_used" %}
+                                {% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and metricName!="disk_used" and not (metricName starts with "disk_used_") and not (metricName starts with "disk_total_gb_") and metricName!="ram_total_gb" and not (metricName starts with "net_in_") and not (metricName starts with "net_out_") %}
                                 <div class="col-12 mb-4">
                                     <div class="card">
                                         <div class="card-header">
@@ -185,6 +161,66 @@
                             {% endif %}
                         </div>
                     </div>
+
+                        <!-- Графики сетевых интерфейсов -->
+                        {% set net_interfaces = [] %}
+                        {% for metricName in metrics|keys %}
+                            {% if metricName starts with 'net_in_' %}
+                                {% set iface = metricName|replace({'net_in_': ''}) %}
+                                {% set net_interfaces = net_interfaces|merge([iface]) %}
+                            {% endif %}
+                        {% endfor %}
+
+                        {% for iface in net_interfaces %}
+                        {% if metrics['net_in_' ~ iface] is defined and metrics['net_out_' ~ iface] is defined %}
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0"><i class="fas fa-network-wired"></i> Сеть: {{ iface }}</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="chart-net-{{ iface }}" width="100%" height="200"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+
+                        <!-- Диски: Doughnut графики -->
+                        <div class="row mb-3">
+                            {% for metricName, metricData in metrics %}
+                                {% if metricName starts with 'disk_used_' and metricName != 'disk_used' %}
+                                <div class="col-md-4 mb-3">
+                                    <div class="card h-100">
+                                        <div class="card-body text-center">
+                                            <h6 class="card-title mb-2">
+                                                {% if metricName == 'disk_used_root' %}/ (корень)
+                                                {% elseif metricName == 'disk_used_home' %}/home
+                                                {% elseif metricName == 'disk_used_boot' %}/boot
+                                                {% elseif metricName == 'disk_used_mnt_data' %}/mnt/data
+                                                {% else %}{{ metricName|replace({'disk_used_': '', '_': ' '})|title }}
+                                                {% endif %}
+                                            </h6>
+                                            {% set pct = metricData[0].value|round(1) %}
+                                            {% set iface = metricName|replace({'disk_used_': ''}) %}
+                                            {% set totalGB = metrics['disk_total_gb_' ~ iface][0].value|default(0) %}
+                                            {% set usedGB = (pct / 100 * totalGB)|round(1) %}
+                                            {% set freeGB = (totalGB - usedGB)|round(1) %}
+                                            <div class="mb-1">
+                                                <span class="badge bg-success">Свободно: {{ freeGB }} ГБ</span>
+                                                <span class="badge bg-danger ms-1">Занято: {{ usedGB }} ГБ</span>
+                                            </div>
+                                            <p class="text-muted small mb-1">{{ pct }}% из {{ totalGB }} ГБ</p>
+                                            <p class="text-muted small">{{ metricData[0].created_at|date('d.m.Y H:i') }}</p>
+                                            <div style="max-width: 150px; margin: 0 auto;"><canvas id="chart-{{ metricName }}"></canvas></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
 
                     <!-- Вкладка "Сервисы" -->
                     <div class="tab-pane fade" id="services" role="tabpanel">
@@ -505,9 +541,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+// Параметры системы
+var ramTotalGB = {{ metrics['ram_total_gb'] is defined ? metrics['ram_total_gb'][0].value : 0 }};
+var diskTotalGB = {
+{% for m, _data in metrics %}
+{% if m starts with 'disk_total_gb_' %}
+    '{{ m|replace({'disk_total_gb_': ''}) }}': {{ metrics[m][0].value|default(0) }},
+{% endif %}
+{% endfor %}
+};
+
 // Графики метрик
 {% for metricName, metricData in metrics %}
-{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and not (metricName starts with "disk_used_") and metricName != "disk_used" %}
+{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and metricName!="disk_used" and not (metricName starts with "disk_used_") and not (metricName starts with "disk_total_gb_") and metricName!="ram_total_gb" and not (metricName starts with "net_in_") and not (metricName starts with "net_out_") %}
 const ctx{{ metricName|replace({'-': '_', '.': '_'}) }} = document.getElementById('chart-{{ metricName }}').getContext('2d');
 
 // Подготовка данных для графика
@@ -528,8 +574,9 @@ const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metr
         datasets: [{
             label: '{{ metricName|replace({'_': ' ', 'load': 'загрузка', 'used': 'использование'})|title }}',
             data: data{{ metricName }},
-            borderColor: 'rgb(75, 192, 192)',
-            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+{% if metricName == 'cpu_load' %}{% set lineColor = 'rgba(54, 162, 235, 1)' %}{% set fillColor = 'rgba(54, 162, 235, 0.15)' %}{% elseif metricName == 'ram_used' %}{% set lineColor = 'rgba(153, 102, 255, 1)' %}{% set fillColor = 'rgba(153, 102, 255, 0.15)' %}{% elseif metricName starts with 'disk_used_' %}{% set lineColor = 'rgba(255, 159, 64, 1)' %}{% set fillColor = 'rgba(255, 159, 64, 0.15)' %}{% else %}{% set lineColor = 'rgba(75, 192, 192, 1)' %}{% set fillColor = 'rgba(75, 192, 192, 0.15)' %}{% endif %}
+            borderColor: '{{ lineColor }}',
+            backgroundColor: '{{ fillColor }}',
             tension: 0.1
         }]
     },
@@ -591,25 +638,40 @@ const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metr
                         .then(data => {
                             var lines = [];
                             lines.push('Время: ' + time);
+{% if metricName == 'ram_used' %}
+                            var ramPct = data{{ metricName }}[dataIndex];
+                            var ramUsed = (ramPct / 100 * ramTotalGB).toFixed(1);
+                            var ramFree = (ramTotalGB - ramUsed).toFixed(1);
+                            lines.push('Всего: ' + ramTotalGB.toFixed(1) + ' ГБ');
+                            lines.push('Занято: ' + ramUsed + ' ГБ');
+                            lines.push('Свободно: ' + ramFree + ' ГБ');
+                            lines.push('');
+                            if (data.top_ram && data.top_ram.length > 0) {
+                                lines.push('TOP RAM:');
+                                data.top_ram.forEach(function(proc) {
+                                    lines.push('  ' + ((proc.cmdline || '').trim() || proc.name) + ': ' + proc.value + '%');
+                                });
+                            }
+{% elseif metricName starts with 'disk_used_' %}
+                            var diskPct = data{{ metricName }}[dataIndex];
+                            var iface = '{{ metricName }}'.replace('disk_used_', '');
+                            var diskTotal = diskTotalGB[iface] || 0;
+                            var diskUsed = (diskPct / 100 * diskTotal).toFixed(1);
+                            var diskFree = (diskTotal - diskUsed).toFixed(1);
+                            lines.push('Всего: ' + diskTotal.toFixed(1) + ' ГБ');
+                            lines.push('Занято: ' + diskUsed + ' ГБ');
+                            lines.push('Свободно: ' + diskFree + ' ГБ');
+{% else %}
                             lines.push('Значение: ' + data{{ metricName }}[dataIndex]);
 {% if metricName == 'cpu_load' %}
-                            // Показываем только top_cpu
                             if (data.top_cpu && data.top_cpu.length > 0) {
                                 lines.push('');
                                 lines.push('TOP CPU:');
                                 data.top_cpu.forEach(function(proc) {
-                                    lines.push('  ' + (proc.cmdline || proc.name) + ': ' + proc.value + '%');
+                                    lines.push('  ' + ((proc.cmdline || '').trim() || proc.name) + ': ' + proc.value + '%');
                                 });
                             }
-{% elseif metricName == 'ram_used' %}
-                            // Показываем только top_ram
-                            if (data.top_ram && data.top_ram.length > 0) {
-                                lines.push('');
-                                lines.push('TOP RAM:');
-                                data.top_ram.forEach(function(proc) {
-                                    lines.push('  ' + (proc.cmdline || proc.name) + ': ' + proc.value + '%');
-                                });
-                            }
+{% endif %}
 {% endif %}
                             
                             // Show tooltip
@@ -665,7 +727,7 @@ chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas.addEventListener('mou
 // Глобальный обработчик для скрытия тултипов при уходе курсора за пределы canvas
 document.addEventListener('mousemove', function(e) {
 {% for metricName, metricData in metrics %}
-{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and not (metricName starts with "disk_used_") and metricName != "disk_used" %}
+{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and metricName!="disk_used" and not (metricName starts with "disk_used_") and not (metricName starts with "disk_total_gb_") and metricName!="ram_total_gb" and not (metricName starts with "net_in_") and not (metricName starts with "net_out_") %}
     (function() {
         var canvas = chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas;
         var rect = canvas.getBoundingClientRect();
@@ -685,6 +747,83 @@ document.addEventListener('mousemove', function(e) {
 });
 
 
+
+
+// Графики сетевых интерфейсов (две линии: In зелёная, Out красная)
+{% set net_interfaces = [] %}
+{% for metricName in metrics|keys %}
+    {% if metricName starts with 'net_in_' %}
+        {% set net_interfaces = net_interfaces|merge([metricName|replace({'net_in_': ''})]) %}
+    {% endif %}
+{% endfor %}
+
+{% for iface in net_interfaces %}
+{% if metrics['net_in_' ~ iface] is defined and metrics['net_out_' ~ iface] is defined %}
+(function() {
+    var ctx = document.getElementById('chart-net-{{ iface }}');
+    if (!ctx) return;
+
+    var labels = [];
+    var inData = [];
+    var outData = [];
+
+{% for m in metrics['net_in_' ~ iface]|slice(0, 500)|reverse %}
+    labels.push('{{ m.created_at|date("d.m H:i") }}');
+    inData.push({{ m.value }});
+{% endfor %}
+
+{% set outMetrics = metrics['net_out_' ~ iface]|slice(0, 500)|reverse %}
+{% for m in outMetrics %}
+    outData.push({{ m.value }});
+{% endfor %}
+
+    new Chart(ctx.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Входящий (In)',
+                    data: inData,
+                    borderColor: 'rgba(25, 135, 84, 1)',
+                    backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                    fill: true,
+                    tension: 0.1,
+                    pointRadius: 0,
+                    borderWidth: 1.5
+                },
+                {
+                    label: 'Исходящий (Out)',
+                    data: outData,
+                    borderColor: 'rgba(220, 53, 69, 1)',
+                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                    fill: true,
+                    tension: 0.1,
+                    pointRadius: 0,
+                    borderWidth: 1.5
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: true, position: 'top' },
+                tooltip: { enabled: true, mode: 'index', intersect: false },
+                zoom: {
+                    zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' },
+                    pan: { enabled: true, mode: 'x' }
+                }
+            },
+            scales: {
+                y: { beginAtZero: true, ticks: { callback: function(v) { return v + '%'; } } }
+            }
+        }
+    });
+})();
+{% endif %}
+{% endfor %}
 
 // Doughnut графики для разделов дисков
 {% for metricName, metricData in metrics %}
@@ -731,7 +870,7 @@ document.addEventListener('mousemove', function(e) {
 // Сбросить зум на всех графиках
 function resetAllZoom() {
 {% for metricName, metricData in metrics %}
-{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and not (metricName starts with "disk_used_") and metricName != "disk_used" %}
+{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and metricName!="disk_used" and not (metricName starts with "disk_used_") and not (metricName starts with "disk_total_gb_") and metricName!="ram_total_gb" and not (metricName starts with "net_in_") and not (metricName starts with "net_out_") %}
     if (typeof chart{{ metricName|replace({'-': '_', '.': '_'}) }} !== 'undefined') {
         chart{{ metricName|replace({'-': '_', '.': '_'}) }}.resetZoom();
     }
