@@ -549,4 +549,120 @@ systemctl status server-monitor-agent
             ->withHeader('Content-Disposition', 'attachment; filename="install.ps1"');
     }
 
+
+
+    public function generateWindowsBatScript(Request $request, Response $response, $args)
+    {
+        $queryParams = $request->getQueryParams();
+        $token = $queryParams['token'] ?? null;
+        $server_id = $queryParams['server_id'] ?? null;
+
+        if (!empty($server_id) && empty($token)) {
+            $stmt = $this->pdo->prepare("SELECT encrypted_token FROM agent_tokens WHERE server_id = :server_id LIMIT 1");
+            $stmt->execute([':server_id' => $server_id]);
+            $result = $stmt->fetch();
+            if ($result && !empty($result['encrypted_token'])) {
+                $token = EncryptionHelper::decrypt($result['encrypted_token']);
+            }
+        }
+
+        if (empty($token)) {
+            $response->getBody()->write('Token is required');
+            return $response->withStatus(400);
+        }
+
+        $apiUrl = 'https://mon.mirv.top/api/v1/metrics';
+        $agentPyUrl = 'https://mon.mirv.top/agent/agent.py';
+
+        // PowerShell скрипт (будет вставлен в BAT)
+        $psLines = [];
+        $psLines[] = '$ErrorActionPreference = "Stop"';
+        $psLines[] = '$Token = "' . addslashes($token) . '"';
+        $psLines[] = '$ApiUrl = "' . addslashes($apiUrl) . '"';
+        $psLines[] = '$InstallDir = "C:\\Program Files\\MonAgent"';
+        $psLines[] = 'Write-Host "=== Установка агента мониторинга ===" -ForegroundColor Cyan';
+        $psLines[] = '$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)';
+        $psLines[] = 'if (-not $isAdmin) { Write-Host "ОШИБКА: Запустите от имени Администратора!" -ForegroundColor Red; exit 1 }';
+        $psLines[] = '[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12';
+        $psLines[] = 'Write-Host "Проверка Python..." -ForegroundColor Yellow';
+        $psLines[] = '$pythonCmd = Get-Command python -ErrorAction SilentlyContinue';
+        $psLines[] = 'if (-not $pythonCmd) {';
+        $psLines[] = '    Write-Host "Установка Python 3.12..." -ForegroundColor Yellow';
+        $psLines[] = '    $inst = "$env:TEMP\\python-inst.exe"';
+        $psLines[] = '    Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.12.4/python-3.12.4-amd64.exe" -OutFile $inst -UseBasicParsing';
+        $psLines[] = '    Start-Process -FilePath $inst -ArgumentList "/quiet","InstallAllUsers=1","PrependPath=1","Include_pip=1" -Wait -NoNewWindow';
+        $psLines[] = '    Remove-Item $inst -Force -ErrorAction SilentlyContinue';
+        $psLines[] = '    $pythonCmd = Get-Command python -ErrorAction SilentlyContinue';
+        $psLines[] = '    if (-not $pythonCmd) { Write-Host "ОШИБКА: Python не установлен" -ForegroundColor Red; exit 1 }';
+        $psLines[] = '    Write-Host "Python установлен!" -ForegroundColor Green';
+        $psLines[] = '}';
+        $psLines[] = 'Write-Host "Установка psutil..." -ForegroundColor Yellow';
+        $psLines[] = 'python -m pip install psutil --quiet';
+        $psLines[] = 'Write-Host "Создание $InstallDir..." -ForegroundColor Yellow';
+        $psLines[] = 'if (-not (Test-Path $InstallDir)) { New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null }';
+        $psLines[] = 'Set-Location $InstallDir';
+        $psLines[] = '$cfg = @{ token = $Token; api_url = $ApiUrl; interval_seconds = 60 } | ConvertTo-Json';
+        $psLines[] = '$cfg | Out-File -FilePath "$InstallDir\\config.json" -Encoding UTF8 -Force';
+        $psLines[] = 'Write-Host "Скачивание agent.py..." -ForegroundColor Yellow';
+        $psLines[] = 'Invoke-WebRequest -Uri "' . addslashes($agentPyUrl) . '" -OutFile "$InstallDir\\agent.py" -UseBasicParsing';
+        $psLines[] = 'Write-Host "Регистрация службы..." -ForegroundColor Yellow';
+        $psLines[] = 'Unregister-ScheduledTask -TaskName "MonAgent" -Confirm:$false -ErrorAction SilentlyContinue';
+        $psLines[] = '$t = New-ScheduledTaskTrigger -AtStartup';
+        $psLines[] = '$a = New-ScheduledTaskAction -Execute "python" -Argument "$InstallDir\\agent.py" -WorkingDirectory $InstallDir';
+        $psLines[] = '$s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)';
+        $psLines[] = '$p = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest';
+        $psLines[] = 'Register-ScheduledTask -TaskName "MonAgent" -Trigger $t -Action $a -Settings $s -Principal $p -Force | Out-Null';
+        $psLines[] = 'Start-ScheduledTask -TaskName "MonAgent"';
+        $psLines[] = 'Write-Host ""';
+        $psLines[] = 'Write-Host "=== Агент установлен! ===" -ForegroundColor Green';
+        $psLines[] = 'Write-Host "Директория: $InstallDir" -ForegroundColor White';
+        $psLines[] = 'Write-Host "Служба: MonAgent (Scheduled Task)" -ForegroundColor White';
+        $psLines[] = 'Write-Host ""';
+        $psLines[] = 'Write-Host "Управление:" -ForegroundColor Cyan';
+        $psLines[] = 'Write-Host "  Статус: Get-ScheduledTask -TaskName MonAgent" -ForegroundColor Gray';
+        $psLines[] = 'Write-Host "  Стоп: Disable-ScheduledTask -TaskName MonAgent" -ForegroundColor Gray';
+        $psLines[] = 'Write-Host "  Старт: Start-ScheduledTask -TaskName MonAgent" -ForegroundColor Gray';
+
+        $psContent = implode("`n", $psLines);
+
+        // BAT обёртка
+        $bat = <<<BAT
+@echo off
+chcp 65001 >nul 2>&1
+echo.
+echo ===============================
+echo  Установка агента мониторинга
+echo ===============================
+echo.
+
+:: Проверяем права администратора
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo ОШИБКА: Запустите этот файл от имени Администратора!
+    echo (Правый клик -> Запуск от имени администратора)
+    pause
+    exit /b 1
+)
+
+:: Создаём временный PS1 файл
+set "TEMP_PS1=%TEMP%\\monagent_setup_%RANDOM%.ps1"
+
+echo Скрипт установки... > "%TEMP_PS1%"
+echo %psContent% >> "%TEMP_PS1%"
+
+:: Запускаем PowerShell с обходом политики
+powershell.exe -ExecutionPolicy Bypass -File "%TEMP_PS1%"
+
+:: Удаляем временный файл
+del "%TEMP_PS1%" 2>nul
+
+echo.
+pause
+BAT;
+
+        $response->getBody()->write($bat);
+        return $response
+            ->withHeader('Content-Type', 'application/bat')
+            ->withHeader('Content-Disposition', 'attachment; filename="install.bat"');
+    }
 }
