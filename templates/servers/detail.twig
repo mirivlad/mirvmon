@@ -134,7 +134,7 @@
                                         </div>
                                         <div class="card-body">
                                             {% if metricData %}
-                                                <h3 class="text-center text-end">{{ metricData[0].value }}{{ metricData[0].unit|default('') }}</h3>
+                                                <h3 class="text-center text-end">{{ metricData[0].value|round(2) }}{{ metricData[0].unit|default('') }}</h3>
                                                 <p class="text-muted text-center mb-2">
                                                     {{ metricData[0].created_at|date('d.m.Y H:i:s') }}
                                                 </p>
@@ -390,63 +390,69 @@
                     <!-- Вкладка "Пороги" -->
                     <div class="tab-pane fade" id="thresholds" role="tabpanel">
                         <h4>Настройка порогов</h4>
+                        <p class="text-muted mb-3">
+                            <i class="fas fa-info-circle"></i> 0 = алерт сразу при превышении, >0 = алерт только если превышено дольше указанного времени. Оставьте поле пустым для отключения порога.
+                        </p>
                         <div class="row">
-                            <div class="col-md-8">
+                            <div class="col-12">
                                 <form method="post" action="/servers/{{ server.id }}/thresholds">
                                     {% for metricType in allMetricTypes %}
-                                    <div class="card mb-3">
-                                        <div class="card-header">
-                                            <h6 class="mb-0">
-                                                {{ metricType.name|replace({'_': ' ', 'load': 'загрузка', 'used': 'использование'})|title }}
-                                                {% if metricType.unit %}<small class="text-muted">({{ metricType.unit }})</small>{% endif %}
-                                            </h6>
-                                        </div>
-                                        <div class="card-body">
-                                            <div class="row">
-                                                <div class="col-md-6">
-                                                    <label class="form-label">Порог предупреждения</label>
-                                                    <input type="number" class="form-control"
-                                                           name="{{ metricType.name }}_warning"
-                                                           step="0.01"
-                                                           {% if existingThresholds[metricType.name].warning is defined %}
-                                                           value="{{ existingThresholds[metricType.name].warning }}"
-                                                           {% endif %}
-                                                           placeholder="80.00">
+                                    <div class="card mb-2">
+                                        <div class="card-body py-2">
+                                            <div class="row align-items-center">
+                                                <div class="col-md-3 mb-2 mb-md-0">
+                                                    <strong>{{ metricType.name|replace({'_': ' ', 'load': 'загрузка', 'used': 'использование'})|title }}</strong>
+                                                    {% if metricType.unit %}<small class="text-muted">({{ metricType.unit }})</small>{% endif %}
                                                 </div>
-                                                <div class="col-md-6">
-                                                    <label class="form-label">Порог критический</label>
-                                                    <input type="number" class="form-control"
-                                                           name="{{ metricType.name }}_critical"
-                                                           step="0.01"
-                                                           {% if existingThresholds[metricType.name].critical is defined %}
-                                                           value="{{ existingThresholds[metricType.name].critical }}"
-                                                           {% endif %}
-                                                           placeholder="90.00">
+                                                <div class="col-md-3 mb-2 mb-md-0">
+                                                    <div class="input-group input-group-sm" title="Порог предупреждения">
+                                                        <span class="input-group-text" title="Порог предупреждения"><i class="fas fa-exclamation-triangle text-warning"></i></span>
+                                                        <input type="number" class="form-control" style="max-width: 90px;"
+                                                               name="{{ metricType.name }}_warning"
+                                                               step="0.01"
+                                                               placeholder="80"
+                                                               title="Порог предупреждения"
+                                                               {% if existingThresholds[metricType.name].warning is defined %}
+                                                               value="{{ existingThresholds[metricType.name].warning }}"
+                                                               {% endif %}>
+                                                        <span class="input-group-text">%</span>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div class="row mt-3">
-                                                <div class="col-md-12">
-                                                    <label class="form-label">
-                                                        <i class="fas fa-clock"></i> Длительность превышения (минуты)
-                                                    </label>
-                                                    <input type="number" class="form-control"
-                                                           name="{{ metricType.name }}_duration"
-                                                           min="0"
-                                                           step="1"
-                                                           {% if existingThresholds[metricType.name].duration is defined %}
-                                                           value="{{ existingThresholds[metricType.name].duration }}"
-                                                           {% endif %}
-                                                           placeholder="0 - отправлять алерт сразу">
-                                                    <small class="text-muted">
-                                                        0 = алерт сразу при превышении, >0 = алерт только если превышено дольше указанного времени
-                                                    </small>
+                                                <div class="col-md-3 mb-2 mb-md-0">
+                                                    <div class="input-group input-group-sm" title="Порог критический">
+                                                        <span class="input-group-text" title="Порог критический"><i class="fas fa-exclamation-circle text-danger"></i></span>
+                                                        <input type="number" class="form-control" style="max-width: 90px;"
+                                                               name="{{ metricType.name }}_critical"
+                                                               step="0.01"
+                                                               placeholder="90"
+                                                               title="Порог критический"
+                                                               {% if existingThresholds[metricType.name].critical is defined %}
+                                                               value="{{ existingThresholds[metricType.name].critical }}"
+                                                               {% endif %}>
+                                                        <span class="input-group-text">%</span>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="input-group input-group-sm" title="Длительность превышения (минуты)">
+                                                        <span class="input-group-text" title="Длительность превышения"><i class="fas fa-clock"></i></span>
+                                                        <input type="number" class="form-control" style="max-width: 90px;"
+                                                               name="{{ metricType.name }}_duration"
+                                                               min="0"
+                                                               step="1"
+                                                               placeholder="0"
+                                                               title="Длительность превышения (минуты)"
+                                                               {% if existingThresholds[metricType.name].duration is defined %}
+                                                               value="{{ existingThresholds[metricType.name].duration }}"
+                                                               {% endif %}>
+                                                        <span class="input-group-text">мин</span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                     {% endfor %}
 
-                                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-3">
                                         <button type="submit" class="btn btn-primary">
                                             <i class="fas fa-save"></i> Сохранить пороги
                                         </button>
