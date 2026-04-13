@@ -155,8 +155,8 @@
                     </div>
                     {% endif %}
 
-                    {% set diskMetric = server.latest_metrics['disk_used_root'] is defined ? server.latest_metrics['disk_used_root'] : server.latest_metrics['disk_used'] %}
-                    {% if diskMetric is defined %}
+                    {% set diskMetric = server.latest_metrics['disk_used_root'] is defined and server.latest_metrics['disk_used_root'] ? server.latest_metrics['disk_used_root'] : (server.latest_metrics['disk_used'] is defined and server.latest_metrics['disk_used'] ? server.latest_metrics['disk_used'] : null) %}
+                    {% if diskMetric and diskMetric.value %}
                     <div class="col-6 mb-2">
                         <div class="d-flex justify-content-between">
                             <small class="text-muted"><i class="fas fa-hdd"></i> Диск (/)</small>
