@@ -100,6 +100,12 @@ class MetricsController extends Model
                     continue;
                 }
 
+                // Сначала читаем старый статус (ДО обновления)
+                $stmtOld = $this->pdo->prepare("SELECT status FROM service_status WHERE server_id = :server_id AND service_name = :service_name");
+                $stmtOld->execute([':server_id' => $serverId, ':service_name' => $serviceName]);
+                $oldStatusRow = $stmtOld->fetch();
+                $oldStatus = $oldStatusRow ? $oldStatusRow['status'] : null;
+
                 // Обновляем статус сервиса (INSERT OR UPDATE)
                 $stmt = $this->pdo->prepare("
                     INSERT INTO service_status (server_id, service_name, status, load_state, active_state, sub_state, updated_at)
@@ -121,9 +127,19 @@ class MetricsController extends Model
                     ':sub_state' => $subState
                 ]);
 
-                // Если сервис остановлен - создаем алерт
-                if ($serviceStatus === 'stopped') {
-                    $this->createServiceAlert($serverId, $serviceName, $serviceStatus, $serverName);
+                // Если статус изменился И сервис в мониторинге - шлем алерт
+                if ($oldStatus !== null && $oldStatus !== $serviceStatus) {
+                    $stmtMon = $this->pdo->prepare("SELECT monitor_services FROM agent_configs WHERE server_id = :server_id");
+                    $stmtMon->execute([':server_id' => $serverId]);
+                    $monConfig = $stmtMon->fetch();
+                    $monitoredServices = [];
+                    if ($monConfig && !empty($monConfig['monitor_services'])) {
+                        $monitoredServices = json_decode($monConfig['monitor_services'], true) ?? [];
+                    }
+                    if (in_array($serviceName, $monitoredServices)) {
+                        $this->notificationService->sendServiceNotification($serverName, $serviceName, $serviceStatus);
+                        $this->createServiceAlert($serverId, $serviceName, $serviceStatus, $serverName);
+                    }
                 }
             }
 
@@ -228,7 +244,7 @@ class MetricsController extends Model
                         ':severity' => $severity
                     ]);
 
-                    $this->notificationService->sendAlertNotification(
+                    $this->notificationService->sendThresholdNotification(
                         $serverName,
                         $metricName,
                         $value,
@@ -270,12 +286,10 @@ class MetricsController extends Model
                 ");
                 $stmt->execute([':id' => $existingAlert['id']]);
 
-                $this->notificationService->sendAlertNotification(
+                $this->notificationService->sendRecoveryNotification(
                     $serverName,
                     $metricName,
-                    $value,
-                    'resolved',
-                    'Порог более не превышен'
+                    $value
                 );
             }
         }

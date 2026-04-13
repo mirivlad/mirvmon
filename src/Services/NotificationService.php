@@ -24,31 +24,77 @@ class NotificationService
     }
 
     /**
-     * Отправить уведомление о алерте
+     * Отправить уведомление о превышении порога
      */
-    public function sendAlertNotification($serverName, $metricName, $value, $severity, $threshold)
+    public function sendThresholdNotification($serverName, $metricName, $value, $severity, $threshold)
     {
-        if ($severity === 'resolved') {
-            $severityText = 'ВОССТАНОВЛЕНИЕ';
-            $emoji = '✅';
-            $subject = "{$emoji} {$severityText}: {$metricName} в норме";
-            $message = "Сервер: {$serverName}\n";
-            $message .= "Метрика: {$metricName}\n";
-            $message .= "Текущее значение: {$value}\n";
-            $message .= "Статус: Порог более не превышен\n";
-            $message .= "Время: " . date('d.m.Y H:i:s');
+        if ($severity === 'warning') {
+            $severityText = 'ПРЕДУПРЕЖДЕНИЕ';
+            $emoji = '⚠️';
         } else {
-            $severityText = $severity === 'critical' ? 'КРИТИЧЕСКИЙ' : 'ПРЕДУПРЕЖДЕНИЕ';
+            $severityText = 'КРИТИЧЕСКИЙ';
             $emoji = '🚨';
-            $subject = "{$emoji} {$severityText}: Превышение порога {$metricName}";
-            $message = "Сервер: {$serverName}\n";
-            $message .= "Метрика: {$metricName}\n";
-            $message .= "Значение: {$value}\n";
-            $message .= "Порог: {$threshold}\n";
-            $message .= "Время: " . date('d.m.Y H:i:s') . "\n";
-            $message .= "Серьёзность: {$severityText}";
+        }
+        
+        $subject = "{$emoji} {$severityText}: {$metricName}";
+        $message = "🖥 Сервер: {$serverName}\n";
+        $message .= "📊 Метрика: {$metricName}\n";
+        $message .= "📈 Значение: {$value}\n";
+        $message .= "📏 Порог: {$threshold}\n";
+        $message .= "🕒 Время: " . date('d.m.Y H:i:s') . "\n";
+        $message .= "🏷 Серьёзность: {$severityText}";
+
+        $this->sendNotification($subject, $message);
+    }
+
+    /**
+     * Отправить уведомление о восстановлении (порог в норме)
+     */
+    public function sendRecoveryNotification($serverName, $metricName, $value)
+    {
+        $subject = "✅ Восстановление: {$metricName} в норме";
+        $message = "🖥 Сервер: {$serverName}\n";
+        $message .= "📊 Метрика: {$metricName}\n";
+        $message .= "📈 Текущее значение: {$value}\n";
+        $message .= "🟢 Статус: Порог более не превышен\n";
+        $message .= "🕒 Время: " . date('d.m.Y H:i:s');
+
+        $this->sendNotification($subject, $message);
+    }
+
+    /**
+     * Отправить уведомление о сервисе (остановка/запуск)
+     */
+    public function sendServiceNotification($serverName, $serviceName, $action)
+    {
+        // $action: 'stopped' или 'running'
+        if ($action === 'running') {
+            $emoji = '✅';
+            $actionText = 'Запуск сервиса';
+            $descText = "Сервис {$serviceName} запущен";
+            $severityText = 'ВОССТАНОВЛЕНИЕ';
+        } else {
+            $emoji = '🛑';
+            $actionText = 'Остановка сервиса';
+            $descText = "Сервис {$serviceName} остановлен";
+            $severityText = 'ОСТАНОВЛЕН';
         }
 
+        $subject = "{$emoji} {$actionText}: {$serviceName}";
+        $message = "🖥 Сервер: {$serverName}\n";
+        $message .= "⚙️ Сервис: {$serviceName}\n";
+        $message .= "📝 Действие: {$descText}\n";
+        $message .= "🏷 Статус: {$severityText}\n";
+        $message .= "🕒 Время: " . date('d.m.Y H:i:s');
+
+        $this->sendNotification($subject, $message);
+    }
+
+    /**
+     * Внутренний метод отправки (Email + Telegram)
+     */
+    private function sendNotification($subject, $message)
+    {
         // Отправка Email
         if (!empty($this->settings['email_enabled']) && !empty($this->settings['smtp_host'])) {
             $this->sendEmail($subject, $message);
@@ -57,6 +103,19 @@ class NotificationService
         // Отправка Telegram
         if (!empty($this->settings['telegram_enabled']) && !empty($this->settings['telegram_bot_token'])) {
             $this->sendTelegram($subject, $message);
+        }
+    }
+
+    /**
+     * Отправить уведомление о алерте (для обратной совместимости)
+     * @deprecated Используйте sendThresholdNotification или sendServiceNotification
+     */
+    public function sendAlertNotification($serverName, $metricName, $value, $severity, $threshold)
+    {
+        if ($severity === 'resolved') {
+            $this->sendRecoveryNotification($serverName, $metricName, $value);
+        } else {
+            $this->sendThresholdNotification($serverName, $metricName, $value, $severity, $threshold);
         }
     }
 

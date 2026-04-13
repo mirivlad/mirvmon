@@ -300,14 +300,14 @@ class ServerDetailController extends Model
         foreach ($metricTypes as $metricType) {
             $warning = $params[$metricType['name'] . '_warning'] ?? '';
             $critical = $params[$metricType['name'] . '_critical'] ?? '';
-            $duration = $params[$metricType['name'] . '_duration'] ?? 0;
+            $duration = (int)($params[$metricType['name'] . '_duration'] ?? 0);
 
             if ($warning !== '' && $critical !== '') {
                 $insertStmt->execute([
                     ':server_id' => $id,
                     ':metric_name_id' => $metricType['id'],
-                    ':warning_threshold' => $warning,
-                    ':critical_threshold' => $critical,
+                    ':warning_threshold' => (float)$warning,
+                    ':critical_threshold' => (float)$critical,
                     ':duration' => $duration
                 ]);
             }
