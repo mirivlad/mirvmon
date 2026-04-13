@@ -119,9 +119,35 @@
                             </div>
                         </div>
 
+
+                        <!-- Диски: Doughnut графики -->
+                        <div class="row mb-3">
+                            {% for metricName, metricData in metrics %}
+                                {% if metricName starts with 'disk_used_' and metricName != 'disk_used' %}
+                                <div class="col-md-4 mb-3">
+                                    <div class="card h-100">
+                                        <div class="card-body text-center">
+                                            <h6 class="card-title">
+                                                {% if metricName == 'disk_used_root' %}/ (корень)
+                                                {% elseif metricName == 'disk_used_home' %}/home
+                                                {% elseif metricName == 'disk_used_boot' %}/boot
+                                                {% elseif metricName == 'disk_used_mnt_data' %}/mnt/data
+                                                {% else %}{{ metricName|replace({'disk_used_': '', '_': ' '})|title }}
+                                                {% endif %}
+                                            </h6>
+                                            <h3>{{ metricData[0].value }}{{ metricData[0].unit|default('%') }}</h3>
+                                            <p class="text-muted small">{{ metricData[0].created_at|date('d.m.Y H:i') }}</p>
+                                            <div style="max-width: 150px; margin: 0 auto;"><canvas id="chart-{{ metricName }}"></canvas></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+
                         <div class="row">
                             {% for metricName, metricData in metrics %}
-                                {% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" %}
+                                {% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and not (metricName starts with "disk_used_") and metricName != "disk_used" %}
                                 <div class="col-12 mb-4">
                                     <div class="card">
                                         <div class="card-header">
@@ -398,7 +424,6 @@
 
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="/chartjs-plugin-crosshair.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
 <script src="/chartjs-plugin-zoom.min.js"></script>
 <script>
@@ -482,7 +507,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Графики метрик
 {% for metricName, metricData in metrics %}
-{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" %}
+{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and not (metricName starts with "disk_used_") and metricName != "disk_used" %}
 const ctx{{ metricName|replace({'-': '_', '.': '_'}) }} = document.getElementById('chart-{{ metricName }}').getContext('2d');
 
 // Подготовка данных для графика
@@ -509,19 +534,6 @@ const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metr
         }]
     },
     options: {
-                crosshair: {
-                    line: {
-                        color: "rgba(100, 150, 255, 0.4)",
-                        width: 1,
-                        dashPattern: []
-                    },
-                    sync: {
-                        enabled: false
-                    },
-                    zoom: {
-                        enabled: false
-                    }
-                },
         responsive: true,
         maintainAspectRatio: false,
         scales: {
@@ -650,10 +662,10 @@ chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas.addEventListener('mou
 {% endfor %}
 
 // Глобальный обработчик mousemove для скрытия тултипов при уходе курсора за пределы canvas
-// (нужен т.к. crosshair плагин создаёт overlay canvas и перехватывает mouseleave)
+// Глобальный обработчик для скрытия тултипов при уходе курсора за пределы canvas
 document.addEventListener('mousemove', function(e) {
 {% for metricName, metricData in metrics %}
-{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" %}
+{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and not (metricName starts with "disk_used_") and metricName != "disk_used" %}
     (function() {
         var canvas = chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas;
         var rect = canvas.getBoundingClientRect();
@@ -673,10 +685,53 @@ document.addEventListener('mousemove', function(e) {
 });
 
 
+
+// Doughnut графики для разделов дисков
+{% for metricName, metricData in metrics %}
+{% if metricName starts with 'disk_used_' and metricName != 'disk_used' %}
+{% if metricData %}
+(function() {
+    var ctx = document.getElementById('chart-{{ metricName }}');
+    if (ctx) {
+        var value = {{ metricData[0].value }};
+        var color = value > 80 ? 'rgba(220, 53, 69, 0.8)' : value > 60 ? 'rgba(255, 193, 7, 0.8)' : 'rgba(25, 135, 84, 0.8)';
+        var colorBorder = value > 80 ? 'rgba(220, 53, 69, 1)' : value > 60 ? 'rgba(255, 193, 7, 1)' : 'rgba(25, 135, 84, 1)';
+        new Chart(ctx.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Использовано', 'Свободно'],
+                datasets: [{
+                    data: [value, 100 - value],
+                    backgroundColor: [color, 'rgba(200, 200, 200, 0.3)'],
+                    borderColor: [colorBorder, 'rgba(200, 200, 200, 0.5)'],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                cutout: '65%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.label + ': ' + context.parsed.toFixed(1) + '%';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+})();
+{% endif %}
+{% endif %}
+{% endfor %}
+
 // Сбросить зум на всех графиках
 function resetAllZoom() {
 {% for metricName, metricData in metrics %}
-{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" %}
+{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and not (metricName starts with "disk_used_") and metricName != "disk_used" %}
     if (typeof chart{{ metricName|replace({'-': '_', '.': '_'}) }} !== 'undefined') {
         chart{{ metricName|replace({'-': '_', '.': '_'}) }}.resetZoom();
     }

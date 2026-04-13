@@ -1,5 +1,6 @@
 <?php
 // public/index.php
+date_default_timezone_set("Asia/Irkutsk");
 
 use App\Controllers\AgentController;
 use App\Controllers\AdminController;
