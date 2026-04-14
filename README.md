@@ -1,11 +1,15 @@
 # 🖥️ mirvmon — Система мониторинга серверов
 
-> Лёгкая и функциональная система мониторинга для домашних и небольших серверных инфраструктур.
+> Лёгкая и функциональная система мониторинга для домашних и небольших серверных
+ инфраструктур.
 
 [![PHP](https://img.shields.io/badge/PHP-8.3+-777BB4.svg)](https://php.net)
-[![Slim](https://img.shields.io/badge/Slim-4.x-3399FF.svg)](https://www.slimframework.com)
-[![MariaDB](https://img.shields.io/badge/MariaDB-10.11-003545.svg)](https://mariadb.org)
-[![Chart.js](https://img.shields.io/badge/Chart.js-4.x-FF6384.svg)](https://www.chartjs.org)
+[![Slim](https://img.shields.io/badge/Slim-4.x-3399FF.svg)](https://www.slimfram
+ework.com)
+[![MariaDB](https://img.shields.io/badge/MariaDB-10.11-003545.svg)](https://mari
+adb.org)
+[![Chart.js](https://img.shields.io/badge/Chart.js-4.x-FF6384.svg)](https://www.
+chartjs.org)
 
 ---
 
@@ -18,6 +22,112 @@
 - 🌐 **Множество серверов:** Поддержка неограниченного числа серверов через Python-агент
 - 🎨 **Цветная индикация:** Прогресс-бары меняют цвет (🟢 → 🟡 → 🔴) при приближении к порогам
 - 🔐 **Авторизация:** Сессионная аутентификация с CSRF-защитой
+
+---
+
+## 🚀 Установка
+
+### Вариант A: Docker (рекомендуется)
+
+Самый быстрый способ — всё поднимается автоматически:
+
+```bash
+# 1. Клонируем
+git clone https://git.mirv.top/mirivlad/mirvmon.git
+cd mirvmon
+
+# 2. Запускаем скрипт (сам поставит Docker, сгенерит пароли, поднимет)
+cd docker && bash deploy.sh
+
+# 3. Открываем браузер
+# http://localhost:8080
+# Логин: admin
+# Пароль: mirvmon2026 (смените сразу!)
+```
+
+**Ручной Docker (без скрипта):**
+
+```bash
+git clone https://git.mirv.top/mirivlad/mirvmon.git
+cd mirvmon
+
+cp .env.example .env        # меняем пароли
+docker compose -f docker/docker-compose.yml up -d --build
+```
+
+**При обновлении:**
+
+```bash
+git pull
+docker compose -f docker/docker-compose.yml up -d --build
+```
+
+> 📦 Код внутри Docker-образа (immutable). Данные БД в volume `db_data` — не теряются.
+
+---
+
+### Вариант B: Ручная установка
+
+#### 1. Зависимости
+
+```bash
+apt install php8.3 php8.3-fpm php8.3-mysql php8.3-mbstring php8.3-curl nginx mariadb-server
+composer install
+```
+
+#### 2. База данных
+
+```bash
+mysql -u root -p <<EOF
+CREATE DATABASE monitoring_system CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'mon_user'@'localhost' IDENTIFIED BY 'mon_password_123';
+GRANT ALL PRIVILEGES ON monitoring_system.* TO 'mon_user'@'localhost';
+FLUSH PRIVILEGES;
+EOF
+
+# Загружаем схему
+mysql -u mon_user -pmon_password_123 monitoring_system < docker/migrations/001_create_base_schema.sql
+mysql -u mon_user -pmon_password_123 monitoring_system < docker/migrations/002_add_encrypted_token.sql
+mysql -u mon_user -pmon_password_123 monitoring_system < docker/migrations/003_add_agent_configs.sql
+mysql -u mon_user -pmon_password_123 monitoring_system < docker/migrations/004_add_global_notification_settings.sql
+mysql -u mon_user -pmon_password_123 monitoring_system < docker/migrations/005_add_service_tables.sql
+mysql -u mon_user -pmon_password_123 monitoring_system < docker/migrations/006_server_metrics_value_to_text.sql
+mysql -u mon_user -pmon_password_123 monitoring_system < docker/migrations/007_seed_admin_user.sql
+```
+
+#### 3. Настройка .env
+
+```bash
+cp .env.example .env
+# Отредактируйте DB_HOST, DB_PASSWORD и другие параметры
+nano .env
+```
+
+#### 4. Nginx
+
+```nginx
+server {
+    listen 80;
+    server_name mon.mirv.top;
+    root /var/www/mon/public;
+    index index.php;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+    }
+}
+```
+
+#### 5. Вход в систему
+
+`http://your-server/login`
+- Логин: `admin`
+- Пароль: `mirvmon2026` (смените сразу!)
 
 ---
 
@@ -38,235 +148,3 @@
 │   disk, ps)         │                                │  system          │
 └─────────────────────┘                                └──────────────────┘
 ```
-
----
-
-## 🚀 Быстрый старт
-
-### 1. Клонирование
-
-```bash
-git clone https://git.mirv.top/mirivlad/mirvmon.git
-cd mirvmon
-```
-
-### 2. Установка зависимостей
-
-```bash
-composer install
-```
-
-### 3. База данных
-
-```bash
-mysql -u root -p monitoring_system < monitoring_system_dump.sql
-```
-
-### 4. Настройка БД
-
-Отредактируйте `config/DatabaseConfig.php`:
-```php
-private $host = 'localhost';
-private $db_name = 'monitoring_system';
-private $username = 'mon_user';
-private $password = 'mon_password_123';
-```
-
-### 5. Веб-сервер (Nginx)
-
-```nginx
-server {
-    listen 80;
-    server_name mon.mirv.top;
-    root /var/www/mon/public;
-    index index.php;
-
-    location / {
-        try_files $uri $uri/ /index.php?$query_string;
-    }
-
-    location ~ \.php$ {
-        include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
-    }
-}
-```
-
-### 6. Вход в систему
-
-Перейдите на `http://mon.mirv.top/login`. Пароль по умолчанию для тестовых данных: `admin123`.
-
----
-
-## 🤖 Установка Python-агента
-
-### Через скрипт установки (рекомендуется):
-
-1. **Получите ссылку на скрипт:**
-   В веб-интерфейсе перейдите на страницу редактирования сервера и нажмите кнопку **«Скачать install.sh»**.
-   Или сгенерируйте ссылку вручную:
-   ```bash
-   https://mon.mirv.top/agent/install.sh?token=ВАШ_ТОКЕН
-   ```
-
-2. **Запустите установку на сервере:**
-   ```bash
-   curl -o install.sh "https://mon.mirv.top/agent/install.sh?token=ВАШ_ТОКЕН"
-   chmod +x install.sh
-   sudo bash install.sh
-   ```
-   *Скрипт сам установит Python, зависимости, создаст конфиг и настроит systemd-сервис.*
-
-3. **Проверьте статус:**
-   ```bash
-   systemctl status server-monitor-agent
-   ```
-
-### Что собирает агент:
-- **CPU** (`cpu_load`) — загрузка процессора (%)
-- **RAM** (`ram_used`) — использование памяти (%) + топ-5 процессов
-- **Диск** (`disk_used_root`, `disk_used_home`, ...) — по каждому реальному разделу (%) + общий объём (GB)
-- **Сеть** (`net_in_enp4s0`, `net_out_enp4s0`) — % использования пропускной способности интерфейса
-- **Сервисы** — статус всех systemd-юнитов (running/stopped)
-
----
-
-## 📁 Структура проекта
-
-```
-/var/www/mon/
-├── config/
-│   └── DatabaseConfig.php          # Настройки подключения к БД
-├── public/
-│   ├── index.php                   # Точка входа (Slim Framework)
-│   ├── chartjs-plugin-zoom.min.js  # Плагин зума для графиков
-│   └── hammer.min.js               # Зависимость zoom (CDN)
-├── src/
-│   ├── Controllers/
-│   │   ├── DashboardController.php     # Дашборд с карточками серверов
-│   │   ├── ServerDetailController.php  # Детали сервера + графики + пороги
-│   │   ├── ServerController.php        # CRUD серверов
-│   │   ├── GroupController.php         # CRUD групп
-│   │   ├── AlertController.php         # Управление алертами
-│   │   ├── AdminController.php         # Админ-панель
-│   │   └── Api/
-│   │       └── MetricsController.php   # REST API для приёма метрик
-│   ├── Models/
-│   │   ├── Server.php              # Модель сервера
-│   │   ├── Group.php               # Модель группы
-│   │   └── Alert.php               # Модель алерта
-│   ├── Middlewares/
-│   │   ├── AuthMiddleware.php      # Проверка авторизации
-│   │   ├── CsrfMiddleware.php      # CSRF-защита
-│   │   ├── SessionMiddleware.php   # Работа с сессиями
-│   │   └── FlashMiddleware.php     # Flash-сообщения
-│   └── Services/
-│       └── NotificationService.php # Отправка уведомлений (Telegram/Email)
-├── templates/
-│   ├── layout.twig                 # Базовый layout (Bootstrap 5)
-│   ├── dashboard.twig              # Дашборд с карточками
-│   ├── servers/detail.twig         # Детали сервера: графики, пороги, сервисы
-│   └── ...
-├── composer.json
-├── monitoring_system_dump.sql      # Дамп структуры + примеры данных
-└── schema.sql                      # Чистая схема БД
-```
-
----
-
-## 📊 Метрики и графики
-
-### На странице сервера доступны:
-
-| Метрика | Тип графика | Описание |
-|---------|-------------|----------|
-| **CPU Загрузка** | Line (синий) | Загрузка процессора во времени |
-| **RAM Использование** | Line (фиолетовый) | Использование памяти + топ процессов в тултипе |
-| **Сеть: enp4s0** | Line (2 линии: 🟢 In / 🔴 Out) | % использования пропускной способности |
-| **Диски** | Doughnut (карточки по 3 в ряд) | Текущее заполнение каждого раздела с GB |
-
-### Управление графиками:
-- 🖱️ **Колёсико мыши** — зум
-- ✋ **Перетаскивание** — панорамирование
-- 🔍 **Кнопка «Сброс»** — возврат к исходному масштабу
-- ⏱️ **Период:** 1ч / 6ч / 24ч / 7д / 30д
-
----
-
-## 🔔 Алерты и уведомления
-
-### Пороги метрик
-Для каждой метрики настраиваются:
-- ⚠️ **Предупреждение** (warning threshold)
-- 🚨 **Критический** (critical threshold)
-- ⏱️ **Длительность** (минуты до срабатывания)
-
-### Алерты сервисов
-- 🛑 **Остановка** — красное уведомление, создаётся алерт
-- ✅ **Запуск** — зелёное уведомление, алерт закрывается
-- Отслеживаются только сервисы, отмеченные галочкой во вкладке «Сервисы»
-
-### Каналы уведомлений
-- **Telegram** — через Bot API (с поддержкой прокси)
-- **Email** — через SMTP или функцию `mail()`
-
----
-
-## 🗄️ База данных
-
-### Основные таблицы:
-| Таблица | Описание |
-|---------|----------|
-| `servers` | Мониторимые серверы |
-| `server_metrics` | Временные ряды метрик |
-| `metric_names` | Справочник метрик |
-| `metric_thresholds` | Пороги алертов для серверов |
-| `alerts` | Активные и закрытые алерты |
-| `service_status` | Текущие статусы сервисов |
-| `service_alerts` | Алерты на остановку сервисов |
-| `agent_configs` | Настройки агентов (интервал, список сервисов) |
-| `agent_tokens` | Токены авторизации агентов |
-| `server_groups` | Группы серверов |
-| `users` | Пользователи системы |
-| `global_notification_settings` | Глобальные настройки уведомлений |
-
----
-
-## ⚙️ Конфигурация
-
-### PHP-FPM
-- PHP 8.3+
-- Расширения: `pdo`, `pdo_mysql`, `json`, `curl`, `mbstring`
-
-### Nginx
-- PHP-FPM через Unix socket
-- `try_files` для Slim routing
-
-### Python Agent
-- Python 3.8+
-- `psutil >= 5.0`
-- `requests >= 2.25`
-- `systemd` (для сбора статусов сервисов)
-
----
-
-## 🔒 Безопасность
-
-- ✅ Все пароли хешируются через `password_hash()` (bcrypt)
-- ✅ Токены агентов хранятся как SHA-256 хеши
-- ✅ Подготовленные выражения (PDO) для всех SQL-запросов
-- ✅ CSRF-токены для всех форм
-- ✅ Сессионная аутентификация для веб-интерфейса
-- ✅ Валидация и санитизация входных данных
-
----
-
-## 📝 Лицензия
-
-MIT
-
----
-
-## 👤 Автор
-
-Владимир (mirivlad) — [git.mirv.top](https://git.mirv.top/mirivlad/mirvmon)

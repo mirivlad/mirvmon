@@ -1,10 +1,8 @@
 -- 007: Создаём админа по умолчанию (если нет ни одного пользователя)
+-- Пароль: mirvmon2026 (обязательно смените при первом входе!)
 
--- Пароль: admin (нужно сменить при первом входе!)
--- Хеш генерируется через password_hash('admin', PASSWORD_DEFAULT)
--- Это хеш от 'admin' — смените сразу после входа!
 INSERT INTO users (username, password_hash, email, role)
-SELECT 'admin', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin@localhost', 'admin'
+SELECT 'admin', '$2b$12$13ox46bUsmmrG2o0eEktEuUG90HI8hgC9cqnbOecx9J.NXXn5rTRW', 'admin@localhost', 'admin'
 WHERE NOT EXISTS (SELECT 1 FROM users LIMIT 1);
 
 -- Создаём настройки уведомлений для админа
