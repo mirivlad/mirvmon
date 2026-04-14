@@ -11,20 +11,14 @@ class DatabaseConfig
     private static $instance = null;
     private $connection;
 
-    private $host;
-    private $db_name;
-    private $username;
-    private $password;
+    private $host = 'localhost';
+    private $db_name = 'monitoring_system';
+    private $username = "mon_user";
+    private $password = 'mon_password_123';
     private $charset = 'utf8mb4';
 
     private function __construct() 
     {
-        // Читаем из переменных окружения с фоллбэками для совместимости
-        $this->host = getenv('DB_HOST') ?: 'localhost';
-        $this->db_name = getenv('DB_NAME') ?: 'monitoring_system';
-        $this->username = getenv('DB_USERNAME') ?: 'mon_user';
-        $this->password = getenv('DB_PASSWORD') ?: 'mon_password_123';
-
         $dsn = "mysql:host={$this->host};dbname={$this->db_name};charset={$this->charset}";
         $options = [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,

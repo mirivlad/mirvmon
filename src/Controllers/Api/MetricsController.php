@@ -191,7 +191,7 @@ class MetricsController extends Model
     {
         // Получаем пороговые значения для этой метрики на этом сервере
         $stmt = $this->pdo->prepare("
-            SELECT warning_threshold, critical_threshold
+            SELECT warning_threshold, critical_threshold, duration
             FROM metric_thresholds
             WHERE server_id = :server_id AND metric_name_id = :metric_name_id
         ");
@@ -204,6 +204,7 @@ class MetricsController extends Model
         if ($thresholds) {
             $warningThreshold = $thresholds['warning_threshold'];
             $criticalThreshold = $thresholds['critical_threshold'];
+            $duration = (int)($thresholds['duration'] ?? 0);
 
             $severity = null;
             $threshold = null;
@@ -256,25 +257,61 @@ class MetricsController extends Model
                         );
                     }
                 } else {
-                    // Нового алерта нет — создаём и отправляем уведомление
-                    $stmt = $this->pdo->prepare("
-                        INSERT INTO alerts (server_id, metric_name, value, severity)
-                        VALUES (:server_id, :metric_name, :value, :severity)
-                    ");
-                    $stmt->execute([
-                        ':server_id' => $serverId,
-                        ':metric_name' => $metricName,
-                        ':value' => $value,
-                        ':severity' => $severity
-                    ]);
+                    // Алерта нет — проверяем duration
+                    // Если duration = 0 — алертим сразу
+                    // Если duration > 0 — проверяем что все метрики за последние N минут >= порога
+                    $shouldAlert = true;
+                    
+                    if ($duration > 0) {
+                        // Считаем сколько метрик за последние duration минут были >= порога
+                        $thresholdToCheck = ($severity === 'critical') ? $criticalThreshold : $warningThreshold;
+                        
+                        $stmt = $this->pdo->prepare("
+                            SELECT COUNT(*) as total_count,
+                                   SUM(CASE WHEN CAST(value AS DECIMAL(10,2)) >= :threshold THEN 1 ELSE 0 END) as above_count
+                            FROM server_metrics
+                            WHERE server_id = :server_id 
+                              AND metric_name_id = :metric_name_id
+                              AND created_at >= DATE_SUB(NOW(), INTERVAL :duration MINUTE)
+                        ");
+                        $stmt->execute([
+                            ':server_id' => $serverId,
+                            ':metric_name_id' => $metricId,
+                            ':threshold' => $thresholdToCheck,
+                            ':duration' => $duration
+                        ]);
+                        $durationCheck = $stmt->fetch();
+                        
+                        $totalCount = (int)$durationCheck['total_count'];
+                        $aboveCount = (int)$durationCheck['above_count'];
+                        
+                        // Если метрик за период нет или не все выше порога — не алертим
+                        if ($totalCount === 0 || $aboveCount < $totalCount) {
+                            $shouldAlert = false;
+                        }
+                    }
+                    
+                    if ($shouldAlert) {
+                        // Создаём алерт и отправляем уведомление
+                        $stmt = $this->pdo->prepare("
+                            INSERT INTO alerts (server_id, metric_name, value, severity)
+                            VALUES (:server_id, :metric_name, :value, :severity)
+                        ");
+                        $stmt->execute([
+                            ':server_id' => $serverId,
+                            ':metric_name' => $metricName,
+                            ':value' => $value,
+                            ':severity' => $severity
+                        ]);
 
-                    $this->notificationService->sendThresholdNotification(
-                        $serverName,
-                        $metricName,
-                        $value,
-                        $severity,
-                        $threshold
-                    );
+                        $this->notificationService->sendThresholdNotification(
+                            $serverName,
+                            $metricName,
+                            $value,
+                            $severity,
+                            $threshold
+                        );
+                    }
                 }
             }
         }

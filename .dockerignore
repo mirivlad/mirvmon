@@ -1,0 +1,20 @@
+# Docker build ignore
+.git
+.gitignore
+node_modules
+vendor
+*.md
+*.log
+*.sql
+!composer.lock
+tests
+.env
+monitoring_system_dump.sql
+*fixes*
+*.svg
+*.pyc
+__pycache__
+
+# Backups
+*.bak.*
+*.broken
