@@ -47,6 +47,15 @@ $app->add($sessionMiddleware);
 // Add CSRF middleware (will be applied selectively)
 $csrfMiddleware = $csrf;
 
+// Agent controller for public downloads
+$agentController = new AgentController();
+
+// PUBLIC: Download agent script (before any groups with auth)
+$app->get('/get-agent', [$agentController, 'downloadAgent']);
+$app->get('/agent/install.sh', [$agentController, 'generateInstallScript']);
+$app->get('/agent/install.ps1', [$agentController, 'generateWindowsInstallScript']);
+$app->get('/agent/install.bat', [$agentController, 'generateWindowsBatScript']);
+
 // Add a route to get CSRF tokens via AJAX
 $app->get('/csrf-token', function (Request $request, Response $response, $args) use ($csrf) {
     $csrf->generateToken();
@@ -151,7 +160,6 @@ $adminController = new AdminController($twig);
 $metricsController = new MetricsController();
 $agentController = new AgentController();
 
-
 // API для дашборда
 $dashboardApiController = new DashboardController($twig);
 $app->get('/api/dashboard/stats', [$dashboardApiController, 'getDashboardData'])->add(AuthMiddleware::class);
@@ -228,12 +236,6 @@ $app->get('/api/status', function (Request $request, Response $response, $args) 
     return $response
         ->withHeader('Content-Type', 'application/json');
 });
-
-// Agent installation script routes (public, no auth middleware, no csrf)
-$app->get('/agent/install.sh', [$agentController, 'generateInstallScript']);
-$app->get('/agent/install.ps1', [$agentController, 'generateWindowsInstallScript']);
-$app->get('/agent/install.bat', [$agentController, 'generateWindowsBatScript']);
-$app->get('/agent/agent.py', [$agentController, 'downloadAgent']);
 
 // Run app
 $app->run();

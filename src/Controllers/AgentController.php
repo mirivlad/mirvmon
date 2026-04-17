@@ -33,7 +33,7 @@ class AgentController extends Model
         }
 
         $apiUrl = 'https://mon.mirv.top/api/v1/metrics';
-        $agentDownloadUrl = 'https://mon.mirv.top/agent/agent.py?token=' . $token;
+        $agentDownloadUrl = 'https://mon.mirv.top/get-agent?token=' . $token;
         $installDir = '/opt/server-monitor-agent';
 
         $script = <<<BASH
@@ -165,15 +165,15 @@ BASH;
 
         $agentPath = dirname(__DIR__, 2) . '/agent.py';
         if (!file_exists($agentPath)) {
-            $response->getBody()->write('Agent not found');
+            $response->getBody()->write('Agent not found: ' . $agentPath);
             return $response->withStatus(404);
         }
 
         $content = file_get_contents($agentPath);
-
+        
+        $response = $response->withStatus(200);
+        $response->getBody()->write($content);
         return $response
-            ->getBody()
-            ->write($content)
             ->withHeader('Content-Type', 'text/plain; charset=UTF-8')
             ->withHeader('Content-Disposition', 'attachment; filename="agent.py"');
     }
