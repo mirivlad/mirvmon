@@ -12,6 +12,7 @@ use App\Controllers\ServerDetailController;
 use App\Controllers\DashboardController;
 use App\Middlewares\AuthMiddleware;
 use App\Middlewares\SessionMiddleware;
+use App\Middlewares\CsrfHeaderMiddleware;
 use App\Models\User;
 use App\Models\Server as ServerModel;
 use Psr\Http\Message\ResponseInterface as Response;
@@ -195,7 +196,7 @@ $groupsGroup = $app->group('/groups', function ($group) use ($groupController) {
     $group->post('/{id}', [$groupController, 'update']);
     $group->delete('/{id}', [$groupController, 'delete']);
     $group->get('/{id}', [$groupController, 'show']);
-})->add($csrfMiddleware)->add(AuthMiddleware::class);
+})->add($csrfMiddleware)->add(new CsrfHeaderMiddleware())->add(AuthMiddleware::class);
 
 // Redirect old /server/{id} to /servers/{id}
 $app->get("/server/{id}", function ($request, $response, $args) {
@@ -213,7 +214,7 @@ $serversGroup = $app->group('/servers', function ($group) use ($serverController
     $group->get('/{id}/regenerate-token', [$serverController, 'regenerateToken']);
     $group->post('/{id}/thresholds', [$serverDetailController, 'saveThresholds']);
     $group->post('/{id}/services', [$serverDetailController, 'saveServices']);
-})->add($csrfMiddleware)->add(AuthMiddleware::class);
+})->add($csrfMiddleware)->add(new CsrfHeaderMiddleware())->add(AuthMiddleware::class);
 
 // Server detail route (protected with auth middleware and csrf)
 $app->get('/servers/{id}', [$serverDetailController, 'show'])->add(AuthMiddleware::class);
