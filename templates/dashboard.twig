@@ -82,8 +82,8 @@
 {% set groupSlug = groupName|lower|replace({' ': '-'}) %}
 <div class="card mb-3 border-0 shadow-sm">
     <div class="card-header text-white py-2 accordion-header" 
-         data-bs-toggle="collapse" 
-         data-bs-target="#group-{{ loop.index }}" 
+         data-group="{{ groupSlug }}"
+         data-target="#group-{{ loop.index }}"
          style="cursor: pointer; background-color: {{ group.color|default('#6c757d') }};">
         <div class="d-flex justify-content-between align-items-center">
             <h5 class="mb-0">
@@ -94,7 +94,7 @@
             <i class="fas accordion-icon"></i>
         </div>
     </div>
-    <div id="group-{{ loop.index }}" class="collapse" data-group-slug="{{ groupSlug }}">
+    <div id="group-{{ loop.index }}" class="collapse" data-group="{{ groupSlug }}">
         <div class="card-body p-2">
             <div class="row g-2">
                 {% for server in group.servers %}
@@ -201,66 +201,59 @@
 <script>
 (function() {
     const COOKIE_NAME = 'dashboard_accordion';
+    let accordionState = {};
 
-    function getAccordionState() {
-        const cookies = document.cookie.split(';');
-        for (let c of cookies) {
-            c = c.trim();
-            if (c.startsWith(COOKIE_NAME + '=')) {
-                try {
-                    return JSON.parse(decodeURIComponent(c.substring(COOKIE_NAME.length + 1)));
-                } catch(e) {
-                    console.log('Cookie parse error:', e);
-                }
-            }
-        }
-        return {};
+    function getCookie(name) {
+        const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+        return match ? JSON.parse(decodeURIComponent(match[2])) : {};
     }
 
-    function saveAccordionState(state) {
+    function saveCookie(state) {
         document.cookie = COOKIE_NAME + '=' + encodeURIComponent(JSON.stringify(state)) + 
                           '; path=/; max-age=' + (30 * 24 * 60 * 60);
     }
 
-    function updateIcon(header, isOpen) {
-        const icon = header ? header.querySelector('.accordion-icon') : null;
-        if (icon) {
-            icon.className = isOpen ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
-        }
-    }
-
     document.addEventListener('DOMContentLoaded', function() {
-        const state = getAccordionState();
-        console.log('Initial state from cookies:', state);
+        accordionState = getCookie(COOKIE_NAME);
 
-        // Инициализация иконок из cookies
-        document.querySelectorAll('.accordion-header').forEach(header => {
-            const groupId = header.dataset.groupSlug;
-            const target = header.dataset.bsTarget;
-            const isOpen = state[groupId] === 'open';
-            console.log('Group:', groupId, 'isOpen:', isOpen);
+        // Инициализация: устанавливаем начальное состояние из cookies
+        document.querySelectorAll('.accordion-header').forEach(function(header) {
+            const groupId = header.dataset.group;
+            const targetId = header.dataset.target;
+            const target = document.querySelector(targetId);
             
-            updateIcon(header, isOpen);
+            if (target) {
+                if (accordionState[groupId] === 'collapsed') {
+                    target.classList.remove('show');
+                    header.querySelector('.accordion-icon').className = 'fas fa-chevron-down';
+                } else {
+                    // По умолчанию открыто
+                    target.classList.add('show');
+                    header.querySelector('.accordion-icon').className = 'fas fa-chevron-up';
+                }
+            }
         });
 
-        // Слушаем события Bootstrap collapse
-        document.querySelectorAll('.collapse').forEach(el => {
-            el.addEventListener('hidden.bs.collapse', function() {
-                const groupId = this.dataset.groupSlug;
-                state[groupId] = 'closed';
-                saveAccordionState(state);
-                console.log('Hidden:', groupId, 'state:', state);
-                const header = document.querySelector('.accordion-header[data-bs-target="#' + this.id + '"]');
-                updateIcon(header, false);
-            });
+        // Клик на заголовке accordion
+        document.querySelectorAll('.accordion-header').forEach(function(header) {
+            header.addEventListener('click', function(e) {
+                const groupId = this.dataset.group;
+                const targetId = this.dataset.target;
+                const target = document.querySelector(targetId);
+                const icon = this.querySelector('.accordion-icon');
 
-            el.addEventListener('shown.bs.collapse', function() {
-                const groupId = this.dataset.groupSlug;
-                state[groupId] = 'open';
-                saveAccordionState(state);
-                console.log('Shown:', groupId, 'state:', state);
-                const header = document.querySelector('.accordion-header[data-bs-target="#' + this.id + '"]');
-                updateIcon(header, true);
+                if (target.classList.contains('show')) {
+                    // Сворачиваем
+                    target.classList.remove('show');
+                    icon.className = 'fas fa-chevron-down';
+                    accordionState[groupId] = 'collapsed';
+                } else {
+                    // Разворачиваем
+                    target.classList.add('show');
+                    icon.className = 'fas fa-chevron-up';
+                    accordionState[groupId] = 'expanded';
+                }
+                saveCookie(accordionState);
             });
         });
 
