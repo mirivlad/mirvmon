@@ -31,24 +31,39 @@ def get_network_metrics(interval=60):
         counters = psutil.net_io_counters(pernic=True)
         stats = psutil.net_if_stats()
         now = __import__('time').time()
+        
+        # Инициализируем интерфейсы которые ещё не видели
         for name, counter in counters.items():
             if name not in stats:
                 continue
             if not _is_real_interface(name, stats[name]):
                 continue
+            if name not in _prev_net_io:
+                _prev_net_io[name] = {'rx': counter.bytes_recv, 'tx': counter.bytes_sent, 'time': now}
+        
+        # Рассчитываем метрики
+        for name, counter in counters.items():
+            if name not in stats:
+                continue
+            if not _is_real_interface(name, stats[name]):
+                continue
+            
             speed_mbps = stats[name].speed if stats[name].speed > 0 else 1000
             speed_bps = speed_mbps * 1000000 / 8
-            if name in _prev_net_io:
-                prev = _prev_net_io[name]
-                elapsed = now - prev['time']
-                if elapsed > 0:
-                    rx_delta = counter.bytes_recv - prev['rx']
-                    tx_delta = counter.bytes_sent - prev['tx']
+            
+            prev = _prev_net_io[name]
+            elapsed = now - prev['time']
+            
+            if elapsed >= 1:  # Минимум 1 секунда
+                rx_delta = counter.bytes_recv - prev['rx']
+                tx_delta = counter.bytes_sent - prev['tx']
+                if rx_delta >= 0 and tx_delta >= 0:
                     rx_pct = min((rx_delta / elapsed) / speed_bps * 100, 100.0)
                     tx_pct = min((tx_delta / elapsed) / speed_bps * 100, 100.0)
                     iface_key = name.replace('-', '_')
                     metrics[f'net_in_{iface_key}'] = round(rx_pct, 2)
                     metrics[f'net_out_{iface_key}'] = round(tx_pct, 2)
+            
             _prev_net_io[name] = {'rx': counter.bytes_recv, 'tx': counter.bytes_sent, 'time': now}
     except Exception as e:
         print(f'Ошибка сбора сетевых метрик: {e}')
