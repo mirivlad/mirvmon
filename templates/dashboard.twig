@@ -209,7 +209,9 @@
             if (c.startsWith(COOKIE_NAME + '=')) {
                 try {
                     return JSON.parse(decodeURIComponent(c.substring(COOKIE_NAME.length + 1)));
-                } catch(e) {}
+                } catch(e) {
+                    console.log('Cookie parse error:', e);
+                }
             }
         }
         return {};
@@ -221,7 +223,7 @@
     }
 
     function updateIcon(header, isOpen) {
-        const icon = header.querySelector('.accordion-icon');
+        const icon = header ? header.querySelector('.accordion-icon') : null;
         if (icon) {
             icon.className = isOpen ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
         }
@@ -229,11 +231,15 @@
 
     document.addEventListener('DOMContentLoaded', function() {
         const state = getAccordionState();
+        console.log('Initial state from cookies:', state);
 
         // Инициализация иконок из cookies
         document.querySelectorAll('.accordion-header').forEach(header => {
-            const groupId = header.dataset.group;
+            const groupId = header.dataset.groupSlug;
+            const target = header.dataset.bsTarget;
             const isOpen = state[groupId] === 'open';
+            console.log('Group:', groupId, 'isOpen:', isOpen);
+            
             updateIcon(header, isOpen);
         });
 
@@ -243,16 +249,18 @@
                 const groupId = this.dataset.groupSlug;
                 state[groupId] = 'closed';
                 saveAccordionState(state);
+                console.log('Hidden:', groupId, 'state:', state);
                 const header = document.querySelector('.accordion-header[data-bs-target="#' + this.id + '"]');
-                if (header) updateIcon(header, false);
+                updateIcon(header, false);
             });
 
             el.addEventListener('shown.bs.collapse', function() {
                 const groupId = this.dataset.groupSlug;
                 state[groupId] = 'open';
                 saveAccordionState(state);
+                console.log('Shown:', groupId, 'state:', state);
                 const header = document.querySelector('.accordion-header[data-bs-target="#' + this.id + '"]');
-                if (header) updateIcon(header, true);
+                updateIcon(header, true);
             });
         });
 
