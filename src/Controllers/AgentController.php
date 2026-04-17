@@ -34,6 +34,7 @@ class AgentController extends Model
 
         $apiUrl = 'https://mon.mirv.top/api/v1/metrics';
         $agentDownloadUrl = 'https://mon.mirv.top/agent/agent.py?token=' . $token;
+        $installDir = '/opt/server-monitor-agent';
 
         $script = <<<BASH
 #!/bin/bash
@@ -48,7 +49,7 @@ set -e
 TOKEN='{$token}'
 API_URL='{$apiUrl}'
 AGENT_URL='{$agentDownloadUrl}'
-INSTALL_DIR='/opt/server-monitor-agent'
+INSTALL_DIR='{$installDir}'
 
 echo '=============================================='
 echo ' Установка агента мониторинга серверов'
@@ -71,35 +72,35 @@ apt-get install -y -qq lm-sensors smartmontools 2>/dev/null || true
 
 # Создаем директорию для агента
 echo '[3/6] Создание директории агента...'
-mkdir -p "$INSTALL_DIR"
+mkdir -p '{$installDir}'
 
 # Скачиваем агента
 echo '[4/6] Скачивание агента...'
-if ! curl -fsSL "$AGENT_URL" -o "$INSTALL_DIR/agent.py" 2>/dev/null; then
+if ! curl -fsSL '{$agentDownloadUrl}' -o '{$installDir}/agent.py' 2>/dev/null; then
     echo 'ERROR: Не удалось скачать агента. Проверьте токен и подключение к серверу.'
     exit 1
 fi
 
-if ! grep -q 'psutil' "$INSTALL_DIR/agent.py"; then
+if ! grep -q 'psutil' '{$installDir}/agent.py'; then
     echo 'ERROR: Скачанный файл не является агентом мониторинга.'
     exit 1
 fi
 
-chmod +x "$INSTALL_DIR/agent.py"
+chmod +x '{$installDir}/agent.py'
 
 # Создаем конфигурационный файл
 echo '[5/6] Создание конфигурации...'
-cat > "$INSTALL_DIR/config.json" << CONFIG_EOF
+cat > '{$installDir}/config.json' <<'CONFIG_EOF'
 {
-    "token": "$TOKEN",
-    "api_url": "$API_URL",
+    "token": "{$token}",
+    "api_url": "{$apiUrl}",
     "interval_seconds": 60
 }
 CONFIG_EOF
 
 # Создаем systemd сервис
 echo '[6/6] Регистрация системной службы...'
-cat > /etc/systemd/system/server-monitor-agent.service << SERVICE_EOF
+cat > /etc/systemd/system/server-monitor-agent.service <<'SERVICE_EOF'
 [Unit]
 Description=Server Monitor Agent
 After=network.target
@@ -107,8 +108,8 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=$INSTALL_DIR
-ExecStart=/usr/bin/python3 $INSTALL_DIR/agent.py
+WorkingDirectory={$installDir}
+ExecStart=/usr/bin/python3 {$installDir}/agent.py
 Restart=always
 RestartSec=10
 
@@ -127,7 +128,7 @@ echo '=============================================='
 echo ' Агент мониторинга успешно установлен!'
 echo '=============================================='
 echo ''
-echo 'Директория: $INSTALL_DIR'
+echo "Директория: {$installDir}"
 echo 'Логи:       journalctl -u server-monitor-agent -f'
 echo 'Статус:     systemctl status server-monitor-agent'
 echo ''
