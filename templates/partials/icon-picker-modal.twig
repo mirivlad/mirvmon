@@ -417,21 +417,23 @@
             }
         }
         
+        // Используем Bootstrap API для закрытия
         var modalEl = document.getElementById('iconPickerModal');
-        if (modalEl) {
-            modalEl.classList.remove('show');
-            modalEl.style.display = 'none';
-            modalEl.setAttribute('aria-hidden', 'true');
-            modalEl.removeAttribute('aria-modal');
+        if (modalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            var modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) {
+                modal.hide();
+            }
         }
         
-        var backdrop = document.querySelector('.modal-backdrop');
-        if (backdrop) {
-            backdrop.remove();
-        }
-        document.body.classList.remove('modal-open');
-        document.body.style.paddingRight = '';
-        document.body.style.overflow = '';
+        // Принудительно удаляем backdrop через небольшую задержку
+        setTimeout(function() {
+            var backdrops = document.querySelectorAll('.modal-backdrop');
+            backdrops.forEach(function(bp) { bp.remove(); });
+            document.body.classList.remove('modal-open');
+            document.body.style.paddingRight = '';
+            document.body.style.overflow = '';
+        }, 100);
     }
 
     document.addEventListener('DOMContentLoaded', function() {
