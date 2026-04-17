@@ -403,7 +403,6 @@
         if (currentTargetInput) {
             currentTargetInput.value = iconName;
             
-            // Обновляем preview - ищем span с иконкой рядом с input
             var preview = currentTargetInput.nextElementSibling;
             if (preview && preview.querySelector) {
                 var iconEl = preview.querySelector('i');
@@ -411,7 +410,6 @@
                     iconEl.className = 'fas ' + iconName;
                 }
             } else {
-                // Fallback: ищем по id
                 var previewFallback = document.getElementById('iconPreview');
                 if (previewFallback) {
                     previewFallback.className = 'fas ' + iconName;
@@ -419,10 +417,21 @@
             }
         }
         
-        var modal = bootstrap.Modal.getInstance(document.getElementById('iconPickerModal'));
-        if (modal) {
-            modal.hide();
+        var modalEl = document.getElementById('iconPickerModal');
+        if (modalEl) {
+            modalEl.classList.remove('show');
+            modalEl.style.display = 'none';
+            modalEl.setAttribute('aria-hidden', 'true');
+            modalEl.removeAttribute('aria-modal');
         }
+        
+        var backdrop = document.querySelector('.modal-backdrop');
+        if (backdrop) {
+            backdrop.remove();
+        }
+        document.body.classList.remove('modal-open');
+        document.body.style.paddingRight = '';
+        document.body.style.overflow = '';
     }
 
     document.addEventListener('DOMContentLoaded', function() {
@@ -455,11 +464,16 @@
 
         // Открытие модала - запоминаем какой input открыл
         document.getElementById('iconPickerModal').addEventListener('show.bs.modal', function(e) {
-            // Находим активный input через кнопку
             var activeBtn = document.querySelector('[data-bs-target="#iconPickerModal"][data-icon-input]');
             if (activeBtn) {
                 currentTargetInput = document.getElementById(activeBtn.dataset.iconInput);
             }
+        });
+
+        // Удаляем backdrop при закрытии модала
+        document.getElementById('iconPickerModal').addEventListener('hidden.bs.modal', function(e) {
+            var backdrop = document.querySelector('.modal-backdrop');
+            if (backdrop) backdrop.remove();
         });
     });
 })();
