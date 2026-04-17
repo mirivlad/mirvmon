@@ -2,7 +2,7 @@
 
 ## Требования
 
-- PHP 8.1 или выше
+- PHP 8.3 или выше
 - Composer
 - MySQL 8+ или MariaDB 10.5+
 - Apache или Nginx
@@ -72,7 +72,7 @@ server {
 
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
+        fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;
         fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
     }
 }
@@ -136,9 +136,23 @@ chmod +x install.sh
     "metrics": {
         "cpu_load": 45.2,
         "ram_used": 89.1,
-        "disk_used": 65.5
-    }
+        "ram_total_gb": 16.0,
+        "disk_used_root": 65.5,
+        "net_in_ens3": 12.3,
+        "net_out_ens3": 5.6
+    },
+    "services": [
+        {"name": "nginx", "status": "running"}
+    ]
 }
+```
+
+### Скачивание агента
+
+```
+GET /get-agent?token=<server_token>
+GET /agent/install.sh?token=<server_token>
+GET /agent/install.bat?token=<server_token>
 ```
 
 ## Безопасность

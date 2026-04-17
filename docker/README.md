@@ -13,7 +13,8 @@ nano .env
 docker compose up -d --build
 
 # 4. Открываем http://localhost:8080
-# Логин: admin, Пароль: admin (сменить сразу!)
+# Логин: admin
+# Пароль: mirvmon2026 (сменить сразу!)
 ```
 
 ## Обновление

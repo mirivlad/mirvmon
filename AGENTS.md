@@ -5,7 +5,7 @@
 **Название:** Система мониторинга серверов
 **URL:** https://mon.mirv.top
 **Расположение:** /var/www/mon
-**Технологии:** PHP 8.1+, Slim Framework 4, Twig, MySQL/MariaDB
+**Технологии:** PHP 8.3+, Slim Framework 4, Twig, MySQL/MariaDB
 
 ## Структура проекта
 
@@ -46,14 +46,18 @@
 
 ## API endpoints
 
-- `GET /api/servers` - список мониторинговых серверов
-- `GET /api/servers/{id}` - детали сервера
-- `POST /api/servers` - создание нового сервера
-- `PUT /api/servers/{id}` - обновление сервера
-- `DELETE /api/servers/{id}` - удаление сервера
-- `GET /api/metrics/{server_id}` - метрики сервера
-- `POST /api/agent/metrics` - получение метрик от агента
+### Публичные (без авторизации)
+- `POST /api/v1/metrics` - получение метрик от агента
+- `GET /get-agent?token=` - скачать Python-агента
+- `GET /agent/install.sh?token=` - скачать установочный скрипт (Linux)
+- `GET /agent/install.bat?token=` - скачать установочный скрипт (Windows)
+
+### Защищённые (требуется авторизация)
 - `GET /csrf-token` - получение CSRF токена для форм
+- `GET /` - дашборд
+- `GET /servers` - список серверов
+- `GET /servers/{id}` - детали сервера
+- `GET /alerts` - список алертов
 
 ## Агентские задачи
 
