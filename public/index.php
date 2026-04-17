@@ -194,9 +194,9 @@ $groupsGroup = $app->group('/groups', function ($group) use ($groupController) {
     $group->post('', [$groupController, 'store']);
     $group->get('/{id}/edit', [$groupController, 'edit']);
     $group->post('/{id}', [$groupController, 'update']);
-    $group->delete('/{id}', [$groupController, 'delete']);
+    $group->get('/{id}/delete', [$groupController, 'delete']);
     $group->get('/{id}', [$groupController, 'show']);
-})->add($csrfMiddleware)->add(new CsrfHeaderMiddleware())->add(AuthMiddleware::class);
+})->add(AuthMiddleware::class);
 
 // Redirect old /server/{id} to /servers/{id}
 $app->get("/server/{id}", function ($request, $response, $args) {
@@ -210,11 +210,11 @@ $serversGroup = $app->group('/servers', function ($group) use ($serverController
     $group->post('', [$serverController, 'store']);
     $group->get('/{id}/edit', [$serverController, 'edit']);
     $group->post('/{id}', [$serverController, 'update']);
-    $group->delete('/{id}', [$serverController, 'delete']);
+    $group->get('/{id}/delete', [$serverController, 'delete']);
     $group->get('/{id}/regenerate-token', [$serverController, 'regenerateToken']);
     $group->post('/{id}/thresholds', [$serverDetailController, 'saveThresholds']);
     $group->post('/{id}/services', [$serverDetailController, 'saveServices']);
-})->add($csrfMiddleware)->add(new CsrfHeaderMiddleware())->add(AuthMiddleware::class);
+})->add(AuthMiddleware::class);
 
 // Server detail route (protected with auth middleware and csrf)
 $app->get('/servers/{id}', [$serverDetailController, 'show'])->add(AuthMiddleware::class);

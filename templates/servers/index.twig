@@ -1,32 +1,6 @@
 {% extends "layout.twig" %}
 
 {% block content %}
-<script>
-function deleteServer(id) {
-    if (!confirm('Вы уверены, что хотите удалить этот сервер?')) return;
-    
-    var csrfValue = document.querySelector('input[name="{{ csrf.value_key }}"]');
-    
-    fetch('/servers/' + id, {
-        method: 'DELETE',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': csrfValue ? csrfValue.value : '',
-        }
-    })
-    .then(response => {
-        if (response.ok) {
-            location.reload();
-        } else {
-            alert('Ошибка при удалении сервера');
-        }
-    })
-    .catch(err => {
-        alert('Ошибка: ' + err);
-    });
-}
-</script>
-
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -78,9 +52,9 @@ function deleteServer(id) {
                                     <a href="/servers/{{ server.id }}/edit" class="btn btn-sm btn-outline-primary" title="Редактировать">
                                         <i class="fas fa-edit"></i> <span class="d-none d-sm-inline">Редактировать</span>
                                     </a>
-                                    <button type="button" class="btn btn-sm btn-outline-danger" title="Удалить" onclick="deleteServer({{ server.id }})">
+                                    <a href="/servers/{{ server.id }}/delete" class="btn btn-sm btn-outline-danger" title="Удалить" onclick="return confirm('Вы уверены, что хотите удалить этот сервер?');">
                                         <i class="fas fa-trash"></i> <span class="d-none d-sm-inline">Удалить</span>
-                                    </button>
+                                    </a>
                                 </td>
                             </tr>
                             {% endfor %}

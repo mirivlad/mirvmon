@@ -1,33 +1,6 @@
 {% extends "layout.twig" %}
 
 {% block content %}
-<script>
-function deleteGroup(id) {
-    if (!confirm('Вы уверены, что хотите удалить эту группу?')) return;
-    
-    var csrfName = document.querySelector('input[name="{{ csrf.name_key }}"]');
-    var csrfValue = document.querySelector('input[name="{{ csrf.value_key }}"]');
-    
-    fetch('/groups/' + id, {
-        method: 'DELETE',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': csrfValue ? csrfValue.value : '',
-        }
-    })
-    .then(response => {
-        if (response.ok) {
-            location.reload();
-        } else {
-            alert('Ошибка при удалении группы');
-        }
-    })
-    .catch(err => {
-        alert('Ошибка: ' + err);
-    });
-}
-</script>
-
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -71,9 +44,9 @@ function deleteGroup(id) {
                                     <a href="/groups/{{ group.id }}/edit" class="btn btn-sm btn-outline-primary me-1">
                                         <i class="fas fa-edit"></i> <span class="d-none d-sm-inline">Редактировать</span>
                                     </a>
-                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteGroup({{ group.id }})">
+                                    <a href="/groups/{{ group.id }}/delete" class="btn btn-sm btn-outline-danger" onclick="return confirm('Вы уверены, что хотите удалить эту группу?');">
                                         <i class="fas fa-trash"></i> <span class="d-none d-sm-inline">Удалить</span>
-                                    </button>
+                                    </a>
                                 </td>
                             </tr>
                             {% endfor %}
