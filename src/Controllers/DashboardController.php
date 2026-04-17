@@ -20,24 +20,36 @@ class DashboardController
 
     public function index(Request $request, Response $response, $args)
     {
-        // Получаем статистику
         $stats = $this->serverModel->getStats();
-
-        // Получаем список серверов со статусами для цветных карточек
         $servers = $this->serverModel->getServersWithStatus();
 
-        // Загружаем пороги для каждого сервера
-        foreach ($servers as &$server) {
-            $t = $this->serverModel->getThresholds($server['id']);
-            $server['thresholds'] = $t;
-            file_put_contents('/tmp/thresholds_debug.log', "Server {$server['id']}: " . json_encode($t) . "\n", FILE_APPEND);
+        $groups = [];
+        $noGroupServers = [];
+
+        foreach ($servers as $server) {
+            if (empty($server['group_name'])) {
+                $noGroupServers[] = $server;
+            } else {
+                $groups[$server['group_name']]['name'] = $server['group_name'];
+                $groups[$server['group_name']]['color'] = $server['group_color'] ?? '#6c757d';
+                $groups[$server['group_name']]['icon'] = $server['group_icon'] ?? 'fa-server';
+                $groups[$server['group_name']]['servers'][] = $server;
+            }
         }
-        unset($server);
+
+        if (!empty($noGroupServers)) {
+            $groups['Без группы'] = [
+                'name' => 'Без группы',
+                'color' => '#6c757d',
+                'icon' => 'fa-server',
+                'servers' => $noGroupServers
+            ];
+        }
 
         $templateData = [
             'title' => 'Дашборд мониторинга',
             'stats' => $stats,
-            'servers' => $servers
+            'groups' => $groups
         ];
 
         return $this->twig->render($response, 'dashboard.twig', $templateData);

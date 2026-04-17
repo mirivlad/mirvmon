@@ -166,6 +166,10 @@ def get_metrics():
     }
     result.update(disk_metrics)
 
+    # Аптайм сервера (в секундах)
+    import time
+    result['uptime'] = int(time.time() - psutil.boot_time())
+
     # Метрики использования сети
     net_metrics = get_network_metrics()
     result.update(net_metrics)

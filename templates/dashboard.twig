@@ -1,275 +1,235 @@
 {% extends "layout.twig" %}
 
 {% block content %}
-<div class="row mb-4">
-
+<div class="row mb-3">
     <div class="col-12 d-flex justify-content-between align-items-center">
-        <h2><i class="fas fa-tachometer-alt"></i> Дашборд мониторинга</h2>
-        <div>
-            <a href="/servers/create" class="btn btn-primary">
-                <i class="fas fa-plus"></i> Добавить сервер
-            </a>
+        <h2 class="mb-0"><i class="fas fa-tachometer-alt"></i> Дашборд</h2>
+        <a href="/servers/create" class="btn btn-primary btn-sm">
+            <i class="fas fa-plus"></i> Добавить
+        </a>
+    </div>
+</div>
+
+<!-- Компактная статистика -->
+<div class="row mb-3">
+    <div class="col-6 col-md-3 mb-2">
+        <div class="card border-0 shadow-sm bg-primary text-white">
+            <div class="card-body py-2 px-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <small>Серверов</small>
+                        <h4 class="mb-0">{{ stats.total_servers }}</h4>
+                    </div>
+                    <i class="fas fa-server fa-2x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3 mb-2">
+        <div class="card border-0 shadow-sm bg-success text-white">
+            <div class="card-body py-2 px-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <small>Онлайн</small>
+                        <h4 class="mb-0">{{ stats.servers_with_metrics }}</h4>
+                    </div>
+                    <i class="fas fa-check-circle fa-2x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3 mb-2">
+        <div class="card border-0 shadow-sm bg-warning text-dark">
+            <div class="card-body py-2 px-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <small>Предупреждения</small>
+                        <h4 class="mb-0">{{ stats.warnings }}</h4>
+                    </div>
+                    <i class="fas fa-exclamation-triangle fa-2x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3 mb-2">
+        <div class="card border-0 shadow-sm bg-danger text-white">
+            <div class="card-body py-2 px-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <small>Критические</small>
+                        <h4 class="mb-0">{{ stats.criticals }}</h4>
+                    </div>
+                    <i class="fas fa-radiation fa-2x opacity-50"></i>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Статистика -->
-<div class="row mb-4">
-    <div class="col-md-3 col-sm-6 mb-3">
-        <div class="card text-white bg-primary">
-            <div class="card-body text-center">
-                <i class="fas fa-server fa-2x mb-2"></i>
-                <h3>{{ stats.total_servers }}</h3>
-                <p class="mb-0">Всего серверов</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 col-sm-6 mb-3">
-        <div class="card text-white bg-success">
-            <div class="card-body text-center">
-                <i class="fas fa-check-circle fa-2x mb-2"></i>
-                <h3>{{ stats.servers_with_metrics }}</h3>
-                <p class="mb-0">С метриками</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 col-sm-6 mb-3">
-        <div class="card text-white bg-warning">
-            <div class="card-body text-center">
-                <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
-                <h3>{{ stats.warnings }}</h3>
-                <p class="mb-0">Предупреждения</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 col-sm-6 mb-3">
-        <div class="card text-white bg-danger">
-            <div class="card-body text-center">
-                <i class="fas fa-radiation fa-2x mb-2"></i>
-                <h3>{{ stats.criticals }}</h3>
-                <p class="mb-0">Критические</p>
-            </div>
-        </div>
+<!-- Серверы по группам -->
+{% if groups is empty %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="fas fa-server fa-4x text-muted mb-3"></i>
+        <h4>Серверы пока не добавлены</h4>
+        <a href="/servers/create" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Добавить сервер
+        </a>
     </div>
 </div>
-
-<!-- Карточки серверов -->
-<!-- DEBUG: {{ servers|json_encode }} -->
-{% for s in servers %}<!-- DBG: id={{ s.id }} t={{ s.thresholds|json_encode }} -->{% endfor %}
-<div class="row">
-    {% for server in servers %}
-<!-- DEBUG: server_id={{ server.id }} thresholds={{ server.thresholds|json_encode }} ram_metric={{ server.latest_metrics["ram_used"].value }} -->
-
-    <div class="col-xl-4 col-lg-6 col-md-6 mb-4">
-        <div class="card h-100 server-card" data-server-id="{{ server.id }}" data-status="{{ server.status }}">
-            <div class="card-header d-flex justify-content-between align-items-center
-                {% if server.status == 'online' %}bg-success text-white
-                {% elseif server.status == 'warning' %}bg-warning text-dark
-                {% else %}bg-danger text-white{% endif %}">
-                <h5 class="mb-0">
-                    <i class="fas fa-server"></i> {{ server.name }}
-                </h5>
-                <div>
-                    {% if server.status == 'online' %}
-                        <span class="badge bg-light text-dark">
-                            <i class="fas fa-check-circle"></i> Онлайн
-                        </span>
-                    {% elseif server.status == 'warning' %}
-                        <span class="badge bg-dark">
-                            <i class="fas fa-exclamation-triangle"></i> Внимание
-                        </span>
-                    {% else %}
-                        <span class="badge bg-light text-dark">
-                            <i class="fas fa-times-circle"></i> Оффлайн
-                        </span>
-                    {% endif %}
-                </div>
-            </div>
-            <div class="card-body">
-                {% if server.group_name %}
-                <div class="mb-2">
-                    <span class="badge" style="background-color: {{ server.group_color|default('#6c757d') }}">
-                        <i class="fas {{ server.group_icon|default('fa-box') }}"></i> {{ server.group_name }}
-                    </span>
-                </div>
-                {% endif %}
-
-                {% if server.description %}
-                <p class="text-muted small mb-3">{{ server.description }}</p>
-                {% endif %}
-
-                <div class="mb-2"><span class="badge bg-info">Статус: {{ server.status }}</span></div>
-
-                <!-- Метрики -->
-{% for s in servers %}<!-- DBG: id={{ s.id }} t={{ s.thresholds|json_encode }} -->{% endfor %}
-                <div class="row">
-                    {% if server.latest_metrics['cpu_load'] is defined %}
-                    <div class="col-6 mb-2">
-                        <div class="d-flex justify-content-between">
-                            <small class="text-muted"><i class="fas fa-microchip"></i> CPU</small>
-                            <strong><span id='cpu-val-{{ server.id }}'>{{ server.latest_metrics['cpu_load'].value }}{{ server.latest_metrics['cpu_load'].unit }}</span></strong>
+{% else %}
+{% for groupName, group in groups %}
+<div class="card mb-3 border-0 shadow-sm">
+    <div class="card-header bg-dark text-white py-2" data-bs-toggle="collapse" data-bs-target="#group-{{ loop.index }}" style="cursor: pointer;">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="{{ group.icon|default('fa-server') }}"></i>
+                {{ groupName }}
+                <span class="badge bg-light text-dark ms-2">{{ group.servers|length }}</span>
+            </h5>
+            <i class="fas fa-chevron-down"></i>
+        </div>
+    </div>
+    <div id="group-{{ loop.index }}" class="collapse show">
+        <div class="card-body p-2">
+            <div class="row g-2">
+                {% for server in group.servers %}
+                <div class="col-6 col-lg-4 col-xl-3">
+                    <a href="/servers/{{ server.id }}" class="text-decoration-none">
+                        <div class="server-card compact p-2 rounded
+                            {% if server.status == 'offline' %}border-danger{% elseif server.status == 'warning' %}border-warning{% else %}border-success{% endif %}">
+                            <div class="d-flex justify-content-between align-items-start mb-1">
+                                <div class="d-flex align-items-center">
+                                    {% if server.status == 'online' %}
+                                        <span class="status-dot bg-success me-2"></span>
+                                    {% elseif server.status == 'warning' %}
+                                        <span class="status-dot bg-warning me-2"></span>
+                                    {% else %}
+                                        <span class="status-dot bg-danger me-2"></span>
+                                    {% endif %}
+                                    <strong class="server-name">{{ server.name }}</strong>
+                                </div>
+                                {% if server.active_alerts > 0 %}
+                                <span class="badge bg-danger badge-sm">{{ server.active_alerts }}</span>
+                                {% endif %}
+                            </div>
+                            <div class="compact-metrics">
+                                {% if server.latest_metrics['cpu_load'] is defined %}
+                                <div class="metric-mini">
+                                    <span class="text-muted">CPU</span>
+                                    <div class="progress-micro mb-1">
+                                        {% set cpu_val = server.latest_metrics['cpu_load'].value %}
+                                        {% set cpu_color = cpu_val > 80 ? 'bg-danger' : (cpu_val > 60 ? 'bg-warning' : 'bg-success') %}
+                                        <div class="progress-bar {{ cpu_color }}" style="width: {{ cpu_val }}%"></div>
+                                    </div>
+                                    <strong>{{ cpu_val }}%</strong>
+                                </div>
+                                {% endif %}
+                                {% if server.latest_metrics['ram_used'] is defined %}
+                                <div class="metric-mini">
+                                    <span class="text-muted">RAM</span>
+                                    <div class="progress-micro mb-1">
+                                        {% set ram_val = server.latest_metrics['ram_used'].value %}
+                                        {% set ram_color = ram_val > 80 ? 'bg-danger' : (ram_val > 60 ? 'bg-warning' : 'bg-success') %}
+                                        <div class="progress-bar {{ ram_color }}" style="width: {{ ram_val }}%"></div>
+                                    </div>
+                                    <strong>{{ ram_val }}%</strong>
+                                </div>
+                                {% endif %}
+                                {% set disk_metric = server.latest_metrics['disk_used_root'] ?? server.latest_metrics['disk_used'] ?? null %}
+                                {% if disk_metric is not null %}
+                                <div class="metric-mini">
+                                    <span class="text-muted">DISK</span>
+                                    <div class="progress-micro mb-1">
+                                        {% set disk_val = disk_metric.value %}
+                                        {% set disk_color = disk_val > 90 ? 'bg-danger' : (disk_val > 75 ? 'bg-warning' : 'bg-success') %}
+                                        <div class="progress-bar {{ disk_color }}" style="width: {{ disk_val }}%"></div>
+                                    </div>
+                                    <strong>{{ disk_val }}%</strong>
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% if server.latest_metrics['uptime'] is defined %}
+                            <div class="uptime-mini text-muted small mt-1">
+                                <i class="fas fa-clock"></i>
+                                {% set uptime_sec = server.latest_metrics['uptime'].value %}
+                                {% if uptime_sec >= 86400 %}
+                                    {{ (uptime_sec / 86400)|round(0, 'floor') }}д {{ ((uptime_sec % 86400) / 3600)|round(0, 'floor') }}ч
+                                {% elseif uptime_sec >= 3600 %}
+                                    {{ (uptime_sec / 3600)|round(0, 'floor') }}ч {{ ((uptime_sec % 3600) / 60)|round(0, 'floor') }}м
+                                {% else %}
+                                    {{ (uptime_sec / 60)|round(0, 'floor') }}м
+                                {% endif %}
+                            </div>
+                            {% endif %}
                         </div>
-                        {% set cpu_t = server.thresholds['cpu_load']|default(null) %}
-                        {% if cpu_t and server.latest_metrics['cpu_load'].value >= cpu_t.critical %}
-                            {% set cpu_color = 'bg-danger' %}
-                        {% elseif cpu_t and server.latest_metrics['cpu_load'].value >= cpu_t.warning %}
-                            {% set cpu_color = 'bg-warning' %}
-                        {% elseif server.latest_metrics['cpu_load'].value > 80 %}
-                            {% set cpu_color = 'bg-danger' %}
-                        {% elseif server.latest_metrics['cpu_load'].value > 60 %}
-                            {% set cpu_color = 'bg-warning' %}
-                        {% else %}
-                            {% set cpu_color = 'bg-success' %}
-                        {% endif %}
-                        <div class="progress" style="height: 6px;">
-                            <div class="progress-bar {{ cpu_color }}"
-                                 role="progressbar" id="cpu-bar-{{ server.id }}"
-                                 style="width: {{ server.latest_metrics['cpu_load'].value }}%"></div>
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    {% if server.latest_metrics['ram_used'] is defined %}
-                    <div class="col-6 mb-2">
-                        <div class="d-flex justify-content-between">
-                            <small class="text-muted"><i class="fas fa-memory"></i> RAM</small>
-                            <strong><span id='ram-val-{{ server.id }}'>{{ server.latest_metrics['ram_used'].value }}{{ server.latest_metrics['ram_used'].unit }}</span></strong>
-                        </div>
-                        {% set ram_t = server.thresholds['ram_used']|default(null) %}
-                        {% if ram_t and server.latest_metrics['ram_used'].value >= ram_t.critical %}
-                            {% set ram_color = 'bg-danger' %}
-                        {% elseif ram_t and server.latest_metrics['ram_used'].value >= ram_t.warning %}
-                            {% set ram_color = 'bg-warning' %}
-                        {% elseif server.latest_metrics['ram_used'].value > 80 %}
-                            {% set ram_color = 'bg-danger' %}
-                        {% elseif server.latest_metrics['ram_used'].value > 60 %}
-                            {% set ram_color = 'bg-warning' %}
-                        {% else %}
-                            {% set ram_color = 'bg-success' %}
-                        {% endif %}
-                        <div class="progress" style="height: 6px;">
-                            <div class="progress-bar {{ ram_color }}"
-                                 role="progressbar" id="ram-bar-{{ server.id }}"
-                                 style="width: {{ server.latest_metrics['ram_used'].value }}%"></div>
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    {% set diskMetric = server.latest_metrics['disk_used_root'] is defined and server.latest_metrics['disk_used_root'] ? server.latest_metrics['disk_used_root'] : (server.latest_metrics['disk_used'] is defined and server.latest_metrics['disk_used'] ? server.latest_metrics['disk_used'] : null) %}
-                    {% if diskMetric and diskMetric.value %}
-                    <div class="col-6 mb-2">
-                        <div class="d-flex justify-content-between">
-                            <small class="text-muted"><i class="fas fa-hdd"></i> Диск (/)</small>
-                            <strong><span id='disk-val-{{ server.id }}'>{{ diskMetric.value }}{{ diskMetric.unit|default('%') }}</span></strong>
-                        </div>
-                        {% set disk_t = server.thresholds['disk_used_root'] is defined ? server.thresholds['disk_used_root'] : null %}
-                        {% if disk_t and diskMetric.value >= disk_t.critical %}
-                            {% set disk_color = 'bg-danger' %}
-                        {% elseif disk_t and diskMetric.value >= disk_t.warning %}
-                            {% set disk_color = 'bg-warning' %}
-                        {% elseif diskMetric.value > 80 %}
-                            {% set disk_color = 'bg-danger' %}
-                        {% elseif diskMetric.value > 60 %}
-                            {% set disk_color = 'bg-warning' %}
-                        {% else %}
-                            {% set disk_color = 'bg-success' %}
-                        {% endif %}
-                        <div class="progress" style="height: 6px;">
-                            <div class="progress-bar {{ disk_color }}"
-                                 role="progressbar" id="disk-bar-{{ server.id }}"
-                                 style="width: {{ diskMetric.value }}%"></div>
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
-
-                {% if server.active_alerts > 0 %}
-                <div class="alert alert-danger py-2 mb-2">
-                    <small>
-                        <i class="fas fa-bell"></i>
-                        Активных алертов: <strong>{{ server.active_alerts }}</strong>
-                    </small>
-                </div>
-                {% endif %}
-
-                <!-- Время обновления -->
-                <div class="text-muted small mt-2">
-                    <i class="fas fa-clock"></i>
-                    {% if server.last_metrics_at %}
-                        Обновлено: <span id="updated-at-{{ server.id }}">{{ server.last_metrics_at|date('d.m.Y H:i:s') }}</span>
-                    {% else %}
-                        Метрики не получены
-                    {% endif %}
-                </div>
-            </div>
-            <div class="card-footer bg-light">
-                <div class="d-flex justify-content-between">
-                    <a href="/servers/{{ server.id }}" class="btn btn-sm btn-outline-primary">
-                        <i class="fas fa-chart-line"></i> Подробнее
-                    </a>
-                    <a href="/servers/{{ server.id }}/edit" class="btn btn-sm btn-outline-secondary">
-                        <i class="fas fa-edit"></i> Изменить
                     </a>
                 </div>
+                {% endfor %}
             </div>
         </div>
     </div>
-    {% else %}
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body text-center py-5">
-                <i class="fas fa-server fa-4x text-muted mb-3"></i>
-                <h4>Серверы пока не добавлены</h4>
-                <p class="lead text-muted">Добавьте первый сервер, чтобы начать мониторинг</p>
-                <a href="/servers/create" class="btn btn-primary btn-lg">
-                    <i class="fas fa-plus"></i> Добавить первый сервер
-                </a>
-            </div>
-        </div>
-    </div>
-    {% endfor %}
 </div>
+{% endfor %}
+{% endif %}
 
-<!-- Автообновление каждые 30 секунд -->
+<!-- Автообновление -->
 <script>
-    // Автообновление через 30 секунд
-    setTimeout(function() {
-        location.reload();
-    }, 30000);
-
-    // Визуальное обновление карточек с анимацией
-    document.addEventListener('DOMContentLoaded', function() {
-        // Добавляем плавную анимацию при наведении
-        document.querySelectorAll('.server-card').forEach(function(card) {
-            card.style.transition = 'transform 0.2s ease, box-shadow 0.2s ease';
-            card.addEventListener('mouseenter', function() {
-                this.style.transform = 'translateY(-4px)';
-                this.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)';
-            });
-            card.addEventListener('mouseleave', function() {
-                this.style.transform = 'translateY(0)';
-                this.style.boxShadow = '';
-            });
-        });
-    });
+    setTimeout(function() { location.reload(); }, 30000);
 </script>
 
 <style>
-    .server-card {
-        border: none;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
     }
-    .server-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    .server-card.compact {
+        background: #f8f9fa;
+        border-left: 4px solid #28a745;
+        transition: all 0.2s;
     }
-    .server-card .card-header {
-        border-radius: 0.5rem 0.5rem 0 0;
+    .server-card.compact:hover {
+        background: #e9ecef;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
-    .progress {
-        border-radius: 3px;
+    .server-card.border-warning { border-left-color: #ffc107 !important; }
+    .server-card.border-danger { border-left-color: #dc3545 !important; }
+    .server-name {
+        font-size: 0.9rem;
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .compact-metrics {
+        display: flex;
+        gap: 8px;
+        font-size: 0.75rem;
+    }
+    .metric-mini {
+        flex: 1;
+        min-width: 50px;
+    }
+    .metric-mini span {
+        font-size: 0.65rem;
+        display: block;
+    }
+    .metric-mini strong {
+        font-size: 0.8rem;
+    }
+    .progress-micro {
+        height: 4px;
+        border-radius: 2px;
+    }
+    .badge-sm {
+        font-size: 0.65rem;
+        padding: 0.15em 0.4em;
+    }
+    .uptime-mini i {
+        font-size: 0.7rem;
     }
 </style>
-
 {% endblock %}
