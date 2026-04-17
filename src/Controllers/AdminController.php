@@ -277,8 +277,11 @@ class AdminController extends Model
             return $response->withHeader('Location', '/')->withStatus(302);
         }
 
-        $stmt = $this->pdo->query("SELECT * FROM default_settings ORDER BY id");
-        $settings = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+        $stmt = $this->pdo->query("SELECT setting_key, setting_value FROM default_settings ORDER BY id");
+        $settings = [];
+        while ($row = $stmt->fetch()) {
+            $settings[$row['setting_key']] = $row['setting_value'];
+        }
 
         return $this->twig->render($response, 'admin/defaults.twig', [
             'title' => 'Дефолтные параметры',
