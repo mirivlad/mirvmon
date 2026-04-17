@@ -84,9 +84,11 @@
 
 <script>
 (function() {
-    let currentTargetInput = null;
+    if (window.iconPickerInitialized) return;
+    window.iconPickerInitialized = true;
 
-    const icons = [
+    var currentTargetInput = null;
+    var icons = [
         { name: 'fa-server', label: 'Сервер' },
         { name: 'fa-desktop', label: 'Компьютер' },
         { name: 'fa-laptop', label: 'Ноутбук' },
@@ -370,8 +372,6 @@
         { name: 'fa-server', label: 'Сервер' },
         { name: 'fa-server-stacked', label: 'Серверы стопка' }
     ];
-
-    let currentTargetInput = null;
 
     function renderIcons(filter = '') {
         const grid = document.getElementById('iconGrid');
