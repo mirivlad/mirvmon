@@ -141,10 +141,32 @@ $dashboardGroup = $app->group('', function ($group) use ($twig) {
         // Get servers with latest metrics
         $servers = $serverModel->getServersWithStatus();
 
+        // Group servers by group_name
+        $groups = [];
+        $noGroupServers = [];
+        foreach ($servers as $server) {
+            if (empty($server['group_name'])) {
+                $noGroupServers[] = $server;
+            } else {
+                $groups[$server['group_name']]['name'] = $server['group_name'];
+                $groups[$server['group_name']]['color'] = $server['group_color'] ?? '#6c757d';
+                $groups[$server['group_name']]['icon'] = $server['group_icon'] ?? 'fa-server';
+                $groups[$server['group_name']]['servers'][] = $server;
+            }
+        }
+        if (!empty($noGroupServers)) {
+            $groups['Без группы'] = [
+                'name' => 'Без группы',
+                'color' => '#6c757d',
+                'icon' => 'fa-server',
+                'servers' => $noGroupServers
+            ];
+        }
+
         $templateData = [
             'title' => 'Дашборд мониторинга',
             'stats' => $stats,
-            'servers' => $servers
+            'groups' => $groups
         ];
 
         return $twig->render($response, 'dashboard.twig', $templateData);
