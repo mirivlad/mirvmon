@@ -11,7 +11,7 @@ use Slim\Views\Twig;
 
 class AgentController extends Model
 {
-    public function generateInstallScript(Request $request, Response $response, $args)
+    private function validateAndGetToken(Request $request, Response $response): ?string
     {
         $queryParams = $request->getQueryParams();
         $token = $queryParams['token'] ?? null;
@@ -29,7 +29,32 @@ class AgentController extends Model
 
         if (empty($token)) {
             $response->getBody()->write('Token is required');
-            return $response->withStatus(400);
+            $response->withStatus(403);
+            return null;
+        }
+
+        $tokenHash = hash('sha256', $token);
+        $stmt = $this->pdo->prepare("SELECT server_id FROM agent_tokens WHERE token_hash = :hash LIMIT 1");
+        $stmt->execute([':hash' => $tokenHash]);
+        $result = $stmt->fetch();
+
+        if (!$result) {
+            $response->getBody()->write('Invalid token');
+            $response->withStatus(403);
+            return null;
+        }
+
+        $stmt = $this->pdo->prepare("UPDATE agent_tokens SET last_used_at = NOW() WHERE token_hash = :hash");
+        $stmt->execute([':hash' => $tokenHash]);
+
+        return $token;
+    }
+
+    public function generateInstallScript(Request $request, Response $response, $args)
+    {
+        $token = $this->validateAndGetToken($request, $response);
+        if ($token === null) {
+            return $response->withStatus(403);
         }
 
         $apiUrl = 'https://mon.mirv.top/api/v1/metrics';
@@ -285,27 +310,13 @@ BASH;
 
     public function generateWindowsInstallScript(Request $request, Response $response, $args)
     {
-        $queryParams = $request->getQueryParams();
-        $token = $queryParams['token'] ?? null;
-        $server_id = $queryParams['server_id'] ?? null;
-
-        if (!empty($server_id) && empty($token)) {
-            $stmt = $this->pdo->prepare("SELECT encrypted_token FROM agent_tokens WHERE server_id = :server_id LIMIT 1");
-            $stmt->execute([':server_id' => $server_id]);
-            $result = $stmt->fetch();
-
-            if ($result && !empty($result['encrypted_token'])) {
-                $token = EncryptionHelper::decrypt($result['encrypted_token']);
-            }
-        }
-
-        if (empty($token)) {
-            $response->getBody()->write('Token is required');
-            return $response->withStatus(400);
+        $token = $this->validateAndGetToken($request, $response);
+        if ($token === null) {
+            return $response->withStatus(403);
         }
 
         $apiUrl = 'https://mon.mirv.top/api/v1/metrics';
-        $agentPyUrl = 'https://mon.mirv.top/agent/agent.py';
+        $agentDownloadUrl = 'https://mon.mirv.top/get-agent?token=' . $token;
 
         // PowerShell скрипт установки
         $lines = [];
@@ -375,7 +386,7 @@ BASH;
         $lines[] = '';
         $lines[] = '# Скачиваем agent.py';
         $lines[] = 'Write-Host "Скачивание agent.py..." -ForegroundColor Yellow';
-        $lines[] = 'Invoke-WebRequest -Uri "' . addslashes($agentPyUrl) . '" -OutFile "$InstallDir\\agent.py" -UseBasicParsing';
+        $lines[] = 'Invoke-WebRequest -Uri "' . addslashes($agentDownloadUrl) . '" -OutFile "$InstallDir\\agent.py" -UseBasicParsing';
         $lines[] = '';
         $lines[] = '# Создаём Scheduled Task для автозапуска';
         $lines[] = 'Write-Host "Регистрация службы..." -ForegroundColor Yellow';
@@ -414,26 +425,13 @@ BASH;
 
     public function generateWindowsBatScript(Request $request, Response $response, $args)
     {
-        $queryParams = $request->getQueryParams();
-        $token = $queryParams['token'] ?? null;
-        $server_id = $queryParams['server_id'] ?? null;
-
-        if (!empty($server_id) && empty($token)) {
-            $stmt = $this->pdo->prepare("SELECT encrypted_token FROM agent_tokens WHERE server_id = :server_id LIMIT 1");
-            $stmt->execute([':server_id' => $server_id]);
-            $result = $stmt->fetch();
-            if ($result && !empty($result['encrypted_token'])) {
-                $token = EncryptionHelper::decrypt($result['encrypted_token']);
-            }
-        }
-
-        if (empty($token)) {
-            $response->getBody()->write('Token is required');
-            return $response->withStatus(400);
+        $token = $this->validateAndGetToken($request, $response);
+        if ($token === null) {
+            return $response->withStatus(403);
         }
 
         $apiUrl = 'https://mon.mirv.top/api/v1/metrics';
-        $agentPyUrl = 'https://mon.mirv.top/agent/agent.py';
+        $agentDownloadUrl = 'https://mon.mirv.top/get-agent?token=' . $token;
 
         // PowerShell скрипт (будет вставлен в BAT)
         $psLines = [];
@@ -465,7 +463,7 @@ BASH;
         $psLines[] = '$cfg = @{ token = $Token; api_url = $ApiUrl; interval_seconds = 60 } | ConvertTo-Json';
         $psLines[] = '$cfg | Out-File -FilePath "$InstallDir\\config.json" -Encoding UTF8 -Force';
         $psLines[] = 'Write-Host "Скачивание agent.py..." -ForegroundColor Yellow';
-        $psLines[] = 'Invoke-WebRequest -Uri "' . addslashes($agentPyUrl) . '" -OutFile "$InstallDir\\agent.py" -UseBasicParsing';
+        $psLines[] = 'Invoke-WebRequest -Uri "' . addslashes($agentDownloadUrl) . '" -OutFile "$InstallDir\\agent.py" -UseBasicParsing';
         $psLines[] = 'Write-Host "Регистрация службы..." -ForegroundColor Yellow';
         $psLines[] = 'Unregister-ScheduledTask -TaskName "MonAgent" -Confirm:$false -ErrorAction SilentlyContinue';
         $psLines[] = '$t = New-ScheduledTaskTrigger -AtStartup';
