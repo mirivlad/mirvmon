@@ -21,8 +21,6 @@ def _is_real_interface(name, stats):
             return False
     if not stats.isup:
         return False
-    if stats.speed <= 0:
-        return False
     return True
 
 
@@ -38,7 +36,7 @@ def get_network_metrics(interval=60):
                 continue
             if not _is_real_interface(name, stats[name]):
                 continue
-            speed_mbps = stats[name].speed
+            speed_mbps = stats[name].speed if stats[name].speed > 0 else 1000
             speed_bps = speed_mbps * 1000000 / 8
             if name in _prev_net_io:
                 prev = _prev_net_io[name]
@@ -78,38 +76,63 @@ def _is_real_partition(mountpoint, fstype):
 
 
 def get_disk_metrics():
-    """Собираем метрики диска для примонтированных разделов"""
+    """Собираем метрики диска для реальных разделов"""
     metrics = {}
-    total_used = 0
-    total_capacity = 0
+    skip_fstypes = {'tmpfs', 'devtmpfs', 'overlay', 'squashfs', 'snap',
+                    'devpts', 'proc', 'sysfs', 'cgroup', 'cgroup2',
+                    'pstore', 'hugetlbfs', 'mqueue', 'debugfs',
+                    'tracefs', 'bpf', 'fusectl', 'configfs',
+                    'securityfs', 'ramfs'}
+    skip_mounts = {'/run', '/run/lock', '/sys', '/proc', '/dev',
+                   '/dev/shm', '/dev/pts', '/sys/fs/cgroup'}
 
-    priority_mounts = ['/', '/home', '/boot', '/var', '/opt', '/data', '/mnt', '/srv', '/tmp']
-
-    for mountpoint in priority_mounts:
-        try:
-            usage = psutil.disk_usage(mountpoint)
-            name = mountpoint.strip('/').replace('/', '_') or 'root'
-            if name not in metrics:
-                metrics[f'disk_used_{name}'] = round(usage.percent, 1)
-                total_used += usage.used
-                total_capacity += usage.total
-        except (PermissionError, OSError, FileNotFoundError):
-            pass
-
+    # Собираем реальные разделы с их устройствами
+    partitions = []
     for part in psutil.disk_partitions(all=False):
-        name = part.mountpoint.strip('/').replace('/', '_') or 'root'
-        if name in metrics:
+        if part.fstype in skip_fstypes:
             continue
-        if not _is_real_partition(part.mountpoint, part.fstype):
+        if part.mountpoint in skip_mounts:
+            continue
+        if part.mountpoint == '/boot/efi':
             continue
         try:
             usage = psutil.disk_usage(part.mountpoint)
-            metrics[f'disk_used_{name}'] = round(usage.percent, 1)
+            partitions.append({
+                'mountpoint': part.mountpoint,
+                'device': part.device,
+                'usage': usage
+            })
         except (PermissionError, OSError):
             pass
 
-    if total_capacity > 0:
-        metrics['disk_used'] = round((total_used / total_capacity) * 100, 1)
+    # Определяем уникальные устройства
+    devices = {}
+    for p in partitions:
+        dev = p['device']
+        if dev not in devices:
+            devices[dev] = []
+        devices[dev].append(p)
+
+    # Если одно устройство - только /
+    # Если несколько - для каждого отдельного устройства
+    if len(devices) == 1:
+        # Один диск - только корень
+        for p in partitions:
+            if p['mountpoint'] == '/':
+                metrics['disk_used_root'] = round(p['usage'].percent, 1)
+                metrics['disk_total_gb_root'] = round(p['usage'].total / (1024**3), 1)
+                metrics['disk_used'] = round(p['usage'].percent, 1)
+                break
+    else:
+        # Несколько устройств - собираем для каждого
+        for dev, parts in devices.items():
+            for p in parts:
+                mp = p['mountpoint']
+                name = mp.strip('/').replace('/', '_') or 'root'
+                metrics[f'disk_used_{name}'] = round(p['usage'].percent, 1)
+                metrics[f'disk_total_gb_{name}'] = round(p['usage'].total / (1024**3), 1)
+                if mp == '/':
+                    metrics['disk_used'] = round(p['usage'].percent, 1)
 
     return metrics
 
@@ -122,12 +145,6 @@ def get_metrics():
     # Дисковые метрики для всех реальных разделов
     disk_metrics = get_disk_metrics()
 
-    # Получаем сетевую статистику
-    try:
-        net_io = psutil.net_io_counters()
-    except:
-        net_io = None
-
     result = {
         'cpu_load': cpu_percent,
         'ram_used': memory.percent,
@@ -137,36 +154,12 @@ def get_metrics():
     # Метрики использования сети
     net_metrics = get_network_metrics()
     result.update(net_metrics)
+    
     # RAM total GB
     result["ram_total_gb"] = round(memory.total / (1024**3), 1)
 
-    # Disk total GB - сначала приоритетные mountpoints
-    priority_mounts = ['/', '/home', '/boot', '/var', '/opt', '/data', '/mnt', '/srv', '/tmp']
-    for mountpoint in priority_mounts:
-        try:
-            usage = psutil.disk_usage(mountpoint)
-            name = mountpoint.strip("/").replace("/", "_") or "root"
-            if f"disk_total_gb_{name}" not in result:
-                result[f"disk_total_gb_{name}"] = round(usage.total / (1024**3), 1)
-        except (PermissionError, OSError, FileNotFoundError):
-            pass
-
-    for part in psutil.disk_partitions(all=False):
-        try:
-            usage = psutil.disk_usage(part.mountpoint)
-            name = part.mountpoint.strip("/").replace("/", "_") or "root"
-            if f"disk_total_gb_{name}" not in result:
-                result[f"disk_total_gb_{name}"] = round(usage.total / (1024**3), 1)
-        except (PermissionError, OSError):
-            pass
-
     if net_metrics:
         print(f"  Сетевые метрики: {net_metrics}")
-
-    # Сетевые метрики
-    if net_io:
-        result['network_rx'] = round(net_io.bytes_recv / (1024 * 1024), 2)
-        result['network_tx'] = round(net_io.bytes_sent / (1024 * 1024), 2)
 
     return result
 
