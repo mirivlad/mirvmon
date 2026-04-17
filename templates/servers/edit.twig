@@ -38,7 +38,43 @@
                         <textarea class="form-control" id="description" name="description" rows="3">{{ server.description|default('') }}</textarea>
                         <small class="form-text text-muted">Дополнительная информация о сервере</small>
                     </div>
-                    
+
+                    <hr>
+
+                    <h5 class="mb-3"><i class="fas fa-wifi"></i> Настройки мониторинга недоступности</h5>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="offline_timeout" class="form-label">Таймаут offline</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="offline_timeout" name="offline_timeout"
+                                           value="{{ server.offline_timeout|default(300) }}" min="0" max="86400">
+                                    <span class="input-group-text">секунд</span>
+                                </div>
+                                <small class="form-text text-muted">Сервер будет считаться offline если метрики не приходили N секунд (0 = выключено)</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Уведомления</label>
+                                <div class="form-check form-switch mt-2">
+                                    <input class="form-check-input" type="checkbox" name="notify_on_offline" id="notify_on_offline"
+                                           value="1" {% if server.notify_on_offline|default(1) %}checked{% endif %}>
+                                    <label class="form-check-label" for="notify_on_offline">
+                                        Уведомлять при offline
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if server.last_offline_alert_at %}
+                    <div class="alert alert-info small">
+                        <i class="fas fa-clock"></i> Последний offline алерт: {{ server.last_offline_alert_at|date('d.m.Y H:i:s') }}
+                    </div>
+                    {% endif %}
+
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                         <a href="/servers" class="btn btn-secondary me-md-2">
                             <i class="fas fa-arrow-left"></i> Назад

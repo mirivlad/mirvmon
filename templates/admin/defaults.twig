@@ -1,0 +1,137 @@
+{% extends "layout.twig" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2><i class="fas fa-sliders-h"></i> Дефолтные параметры</h2>
+        <p class="text-muted">Эти параметры будут использоваться по умолчанию для новых серверов и метрик</p>
+    </div>
+</div>
+
+{% if session.flash_message is defined and session.flash_message %}
+<div class="alert alert-{{ session.flash_type == 'error' ? 'danger' : 'success' }} alert-dismissible fade show">
+    {{ session.flash_message|nl2br }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<form method="post" action="/admin/defaults/save">
+    <input type="hidden" name="csrf_name" value="{{ csrf_name }}">
+    <input type="hidden" name="csrf_value" value="{{ csrf_value }}">
+
+    <!-- Offline настройки -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="fas fa-wifi"></i> Мониторинг недоступности (Offline)</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="offline_check_interval" class="form-label">
+                            <i class="fas fa-clock"></i> Интервал проверки offline
+                        </label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="offline_check_interval" name="offline_check_interval"
+                                   value="{{ settings.offline_check_interval|default(60) }}" min="30" max="3600">
+                            <span class="input-group-text">секунд</span>
+                        </div>
+                        <div class="form-text">CRON будет проверять серверы каждые N секунд (минимум 30)</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="default_offline_timeout" class="form-label">
+                            <i class="fas fa-hourglass-half"></i> Дефолтный таймаут offline
+                        </label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="default_offline_timeout" name="default_offline_timeout"
+                                   value="{{ settings.default_offline_timeout|default(300) }}" min="60" max="86400">
+                            <span class="input-group-text">секунд</span>
+                        </div>
+                        <div class="form-text">Сервер считается offline если метрики не приходили N секунд (по умолчанию 300 = 5 мин)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0"><i class="fas fa-chart-line"></i> Дефолтные пороги метрик</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="default_warning_threshold" class="form-label">
+                            <i class="fas fa-exclamation-triangle text-warning"></i> Warning threshold
+                        </label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="default_warning_threshold" name="default_warning_threshold"
+                                   value="{{ settings.default_warning_threshold|default(70) }}" min="0" max="100" step="0.1">
+                            <span class="input-group-text">%</span>
+                        </div>
+                        <div class="form-text">При превышении этого значения будет Warning</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="default_critical_threshold" class="form-label">
+                            <i class="fas fa-radiation text-danger"></i> Critical threshold
+                        </label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="default_critical_threshold" name="default_critical_threshold"
+                                   value="{{ settings.default_critical_threshold|default(90) }}" min="0" max="100" step="0.1">
+                            <span class="input-group-text">%</span>
+                        </div>
+                        <div class="form-text">При превышении этого значения будет Critical</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="default_duration" class="form-label">
+                            <i class="fas fa-hourglass-start"></i> Длительность превышения
+                        </label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="default_duration" name="default_duration"
+                                   value="{{ settings.default_duration|default(0) }}" min="0" max="60">
+                            <span class="input-group-text">минут</span>
+                        </div>
+                        <div class="form-text">Алерт отправится только если порог превышен N минут (0 = сразу)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Информация о CRON -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-terminal"></i> Настройка CRON</h5>
+                </div>
+                <div class="card-body">
+                    <p>Для автоматической проверки offline серверов добавьте в CRON:</p>
+                    <div class="bg-dark text-white p-3 rounded mb-3">
+                        <code>* * * * * php {{ app_path|default('/var/www/mon/public') }}/check_offline.php</code>
+                    </div>
+                    <p class="mb-0">
+                        <i class="fas fa-info-circle text-info"></i>
+                        Это запустит проверку каждую минуту. Интервал в настройках определяет как часто проверяется каждый сервер.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Кнопки -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save"></i> Сохранить настройки
+            </button>
+            <a href="/admin" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Назад в админку
+            </a>
+        </div>
+    </div>
+</form>
+
+{% endblock %}

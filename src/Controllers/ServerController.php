@@ -57,23 +57,33 @@ class ServerController extends Model
     {
         $params = $request->getParsedBody();
 
+        // Получаем дефолтные значения
+        $stmtDefault = $this->pdo->query("SELECT setting_key, setting_value FROM default_settings");
+        $defaults = [];
+        while ($row = $stmtDefault->fetch()) {
+            $defaults[$row['setting_key']] = $row['setting_value'];
+        }
+
+        $defaultOfflineTimeout = (int)($defaults['default_offline_timeout'] ?? 300);
+
         // Генерируем уникальный токен
-        $token = bin2hex(random_bytes(16)); // 32-символьный токен
+        $token = bin2hex(random_bytes(16));
         
         $this->pdo->beginTransaction();
         
         try {
-            // Сохраняем сервер
+            // Сохраняем сервер с дефолтными значениями
             $stmt = $this->pdo->prepare("
-                INSERT INTO servers (name, address, group_id, description) 
-                VALUES (:name, :address, :group_id, :description)
+                INSERT INTO servers (name, address, group_id, description, offline_timeout, notify_on_offline) 
+                VALUES (:name, :address, :group_id, :description, :offline_timeout, 1)
             ");
 
             $result = $stmt->execute([
                 ':name' => $params['name'],
                 ':address' => $params['address'] ?? '',
                 ':group_id' => $params['group_id'] ?? null,
-                ':description' => $params['description'] ?? ''
+                ':description' => $params['description'] ?? '',
+                ':offline_timeout' => $defaultOfflineTimeout
             ]);
 
             $serverId = $this->pdo->lastInsertId();
@@ -110,7 +120,6 @@ class ServerController extends Model
         } catch (\Exception $e) {
             $this->pdo->rollback();
             
-            // TODO: Обработка ошибки
             return $response->withHeader('Location', '/servers/create')->withStatus(302);
         }
     }
@@ -153,7 +162,12 @@ class ServerController extends Model
 
         $stmt = $this->pdo->prepare("
             UPDATE servers 
-            SET name = :name, address = :address, group_id = :group_id, description = :description 
+            SET name = :name, 
+                address = :address, 
+                group_id = :group_id, 
+                description = :description,
+                offline_timeout = :offline_timeout,
+                notify_on_offline = :notify_on_offline
             WHERE id = :id
         ");
 
@@ -162,13 +176,14 @@ class ServerController extends Model
             ':name' => $params['name'],
             ':address' => $params['address'] ?? '',
             ':group_id' => $params['group_id'] ?? null,
-            ':description' => $params['description'] ?? ''
+            ':description' => $params['description'] ?? '',
+            ':offline_timeout' => (int)($params['offline_timeout'] ?? 300),
+            ':notify_on_offline' => isset($params['notify_on_offline']) ? 1 : 0
         ]);
 
         if ($result) {
             return $response->withHeader('Location', '/servers')->withStatus(302);
         } else {
-            // TODO: Обработка ошибки
             return $response->withHeader('Location', '/servers/' . $id . '/edit')->withStatus(302);
         }
     }

@@ -210,6 +210,8 @@ $adminGroup = $app->group('/admin', function ($group) use ($adminController) {
     $group->get('/notifications', [$adminController, 'notificationSettings']);
     $group->post("/notifications/save", [$adminController, "saveNotificationSettings"]);
     $group->get("/notifications/test", [$adminController, "testNotification"]);
+    $group->get('/defaults', [$adminController, 'defaultSettings']);
+    $group->post("/defaults/save", [$adminController, "saveDefaultSettings"]);
 })->add($csrfMiddleware)->add(AuthMiddleware::class);
 
 // API route for agents (public, no auth middleware, no csrf)

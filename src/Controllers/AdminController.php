@@ -5,6 +5,7 @@ namespace App\Controllers;
 
 use App\Models\Model;
 use App\Services\NotificationService;
+use PDO;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Views\Twig;
@@ -266,5 +267,61 @@ class AdminController extends Model
         $_SESSION['flash_type'] = $status;
 
         return $response->withHeader('Location', '/admin/notifications')->withStatus(302);
+    }
+
+    // ==================== ДЕФОЛТНЫЕ ПАРАМЕТРЫ ====================
+
+    public function defaultSettings(Request $request, Response $response, $args)
+    {
+        if ($_SESSION['role'] !== 'admin') {
+            return $response->withHeader('Location', '/')->withStatus(302);
+        }
+
+        $stmt = $this->pdo->query("SELECT * FROM default_settings ORDER BY id");
+        $settings = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
+        return $this->twig->render($response, 'admin/defaults.twig', [
+            'title' => 'Дефолтные параметры',
+            'settings' => $settings
+        ]);
+    }
+
+    public function saveDefaultSettings(Request $request, Response $response, $args)
+    {
+        if ($_SESSION['role'] !== 'admin') {
+            return $response->withHeader('Location', '/')->withStatus(302);
+        }
+
+        $data = $request->getParsedBody();
+
+        $settingsToUpdate = [
+            'offline_check_interval' => (int)($data['offline_check_interval'] ?? 60),
+            'default_offline_timeout' => (int)($data['default_offline_timeout'] ?? 300),
+            'default_warning_threshold' => (float)($data['default_warning_threshold'] ?? 70),
+            'default_critical_threshold' => (float)($data['default_critical_threshold'] ?? 90),
+            'default_duration' => (int)($data['default_duration'] ?? 0),
+        ];
+
+        foreach ($settingsToUpdate as $key => $value) {
+            $stmt = $this->pdo->prepare("
+                INSERT INTO default_settings (setting_key, setting_value)
+                VALUES (:key, :value)
+                ON DUPLICATE KEY UPDATE setting_value = :value2
+            ");
+            $stmt->execute([':key' => $key, ':value' => $value, ':value2' => $value]);
+        }
+
+        $_SESSION['flash_message'] = 'Дефолтные параметры сохранены';
+        $_SESSION['flash_type'] = 'success';
+
+        return $response->withHeader('Location', '/admin/defaults')->withStatus(302);
+    }
+
+    public function getDefaultSetting($key, $default = null)
+    {
+        $stmt = $this->pdo->prepare("SELECT setting_value FROM default_settings WHERE setting_key = :key");
+        $stmt->execute([':key' => $key]);
+        $result = $stmt->fetch();
+        return $result ? $result['setting_value'] : $default;
     }
 }

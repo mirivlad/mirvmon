@@ -63,6 +63,36 @@ class NotificationService
     }
 
     /**
+     * Отправить уведомление о недоступности сервера (offline)
+     */
+    public function sendOfflineNotification($serverName, $secondsSinceUpdate)
+    {
+        $minutes = round($secondsSinceUpdate / 60);
+        $subject = "🛑 Сервер недоступен: {$serverName}";
+        $message = "🖥 Сервер: {$serverName}\n";
+        $message .= "📊 Статус: OFFLINE\n";
+        $message .= "⏱️ Последние метрики: {$minutes} мин. назад\n";
+        $message .= "🕒 Время: " . date('d.m.Y H:i:s') . "\n";
+        $message .= "🔔 Требуется проверка!";
+
+        $this->sendNotification($subject, $message);
+    }
+
+    /**
+     * Отправить уведомление о восстановлении сервера (online)
+     */
+    public function sendOnlineNotification($serverName)
+    {
+        $subject = "✅ Сервер восстановлен: {$serverName}";
+        $message = "🖥 Сервер: {$serverName}\n";
+        $message .= "📊 Статус: ONLINE\n";
+        $message .= "🕒 Время: " . date('d.m.Y H:i:s') . "\n";
+        $message .= "🟢 Метрики снова поступают";
+
+        $this->sendNotification($subject, $message);
+    }
+
+    /**
      * Отправить уведомление о сервисе (остановка/запуск)
      */
     public function sendServiceNotification($serverName, $serviceName, $action)
