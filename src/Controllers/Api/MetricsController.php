@@ -89,6 +89,30 @@ class MetricsController extends Model
                     $stmt = $this->pdo->prepare("SELECT id FROM metric_names WHERE name = :name");
                     $stmt->execute([':name' => $metricName]);
                     $metricInfo = $stmt->fetch();
+
+                    // Создаём дефолтные пороги для новой метрики
+                    if ($metricInfo) {
+                        $stmtCheck = $this->pdo->prepare("SELECT id FROM metric_thresholds WHERE server_id = :server_id AND metric_name_id = :metric_id");
+                        $stmtCheck->execute([':server_id' => $serverId, ':metric_id' => $metricInfo['id']]);
+                        if (!$stmtCheck->fetch()) {
+                            $stmtDefaults = $this->pdo->query("SELECT setting_key, setting_value FROM default_settings");
+                            $defaults = [];
+                            while ($row = $stmtDefaults->fetch()) {
+                                $defaults[$row['setting_key']] = $row['setting_value'];
+                            }
+                            $stmtInsertThreshold = $this->pdo->prepare("
+                                INSERT INTO metric_thresholds (server_id, metric_name_id, warning_threshold, critical_threshold, duration)
+                                VALUES (:server_id, :metric_name_id, :warning, :critical, :duration)
+                            ");
+                            $stmtInsertThreshold->execute([
+                                ':server_id' => $serverId,
+                                ':metric_name_id' => $metricInfo['id'],
+                                ':warning' => $defaults['default_warning_threshold'] ?? 70,
+                                ':critical' => $defaults['default_critical_threshold'] ?? 90,
+                                ':duration' => $defaults['default_duration'] ?? 0
+                            ]);
+                        }
+                    }
                 }
 
                 if ($metricInfo) {
@@ -200,6 +224,20 @@ class MetricsController extends Model
             ':metric_name_id' => $metricId
         ]);
         $thresholds = $stmt->fetch();
+
+        // Fallback на default_settings если пороги не заданы
+        if (!$thresholds || ($thresholds['warning_threshold'] === null && $thresholds['critical_threshold'] === null)) {
+            $stmtDefaults = $this->pdo->query("SELECT setting_key, setting_value FROM default_settings");
+            $defaults = [];
+            while ($row = $stmtDefaults->fetch()) {
+                $defaults[$row['setting_key']] = $row['setting_value'];
+            }
+            $thresholds = [
+                'warning_threshold' => $defaults['default_warning_threshold'] ?? 70,
+                'critical_threshold' => $defaults['default_critical_threshold'] ?? 90,
+                'duration' => $defaults['default_duration'] ?? 0
+            ];
+        }
 
         if ($thresholds) {
             $warningThreshold = $thresholds['warning_threshold'];
