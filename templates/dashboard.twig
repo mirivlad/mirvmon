@@ -80,7 +80,7 @@
 {% else %}
 {% for groupName, group in groups %}
 <div class="card mb-3 border-0 shadow-sm">
-    <div class="card-header bg-dark text-white py-2" data-bs-toggle="collapse" data-bs-target="#group-{{ loop.index }}" style="cursor: pointer;">
+    <div class="card-header text-white py-2" data-bs-toggle="collapse" data-bs-target="#group-{{ loop.index }}" style="cursor: pointer; background-color: {{ group.color|default('#6c757d') }};">
         <div class="d-flex justify-content-between align-items-center">
             <h5 class="mb-0">
                 <i class="{{ group.icon|default('fa-server') }}"></i>
@@ -113,42 +113,53 @@
                                 <span class="badge bg-danger badge-sm">{{ server.active_alerts }}</span>
                                 {% endif %}
                             </div>
+
+                            <!-- Метрики с иконками -->
                             <div class="compact-metrics">
                                 {% if server.latest_metrics['cpu_load'] is defined %}
-                                <div class="metric-mini">
-                                    <span class="text-muted">CPU</span>
-                                    <div class="progress-micro mb-1">
-                                        {% set cpu_val = server.latest_metrics['cpu_load'].value %}
-                                        {% set cpu_color = cpu_val > 80 ? 'bg-danger' : (cpu_val > 60 ? 'bg-warning' : 'bg-success') %}
-                                        <div class="progress-bar {{ cpu_color }}" style="width: {{ cpu_val }}%"></div>
-                                    </div>
-                                    <strong>{{ cpu_val }}%</strong>
-                                </div>
+                                {% set cpu_val = server.latest_metrics['cpu_load'].value %}
+                                {% set cpu_t = server.thresholds['cpu_load']|default(null) %}
+                                {% if cpu_t %}
+                                    {% set cpu_color_icon = cpu_val >= cpu_t.critical ? 'text-danger' : (cpu_val >= cpu_t.warning ? 'text-warning' : 'text-success') %}
+                                {% else %}
+                                    {% set cpu_color_icon = cpu_val > 80 ? 'text-danger' : (cpu_val > 60 ? 'text-warning' : 'text-success') %}
                                 {% endif %}
+                                <span id="cpu-icon-{{ server.id }}" class="metric-icon {{ cpu_color_icon }}" title="CPU">
+                                    <i class="fas fa-microchip"></i>
+                                </span>
+                                <span id="cpu-val-{{ server.id }}" class="metric-val {{ cpu_color_icon }}">{{ cpu_val }}%</span>
+                                {% endif %}
+
                                 {% if server.latest_metrics['ram_used'] is defined %}
-                                <div class="metric-mini">
-                                    <span class="text-muted">RAM</span>
-                                    <div class="progress-micro mb-1">
-                                        {% set ram_val = server.latest_metrics['ram_used'].value %}
-                                        {% set ram_color = ram_val > 80 ? 'bg-danger' : (ram_val > 60 ? 'bg-warning' : 'bg-success') %}
-                                        <div class="progress-bar {{ ram_color }}" style="width: {{ ram_val }}%"></div>
-                                    </div>
-                                    <strong>{{ ram_val }}%</strong>
-                                </div>
+                                {% set ram_val = server.latest_metrics['ram_used'].value %}
+                                {% set ram_t = server.thresholds['ram_used']|default(null) %}
+                                {% if ram_t %}
+                                    {% set ram_color_icon = ram_val >= ram_t.critical ? 'text-danger' : (ram_val >= ram_t.warning ? 'text-warning' : 'text-success') %}
+                                {% else %}
+                                    {% set ram_color_icon = ram_val > 80 ? 'text-danger' : (ram_val > 60 ? 'text-warning' : 'text-success') %}
                                 {% endif %}
+                                <span id="ram-icon-{{ server.id }}" class="metric-icon {{ ram_color_icon }}" title="RAM">
+                                    <i class="fas fa-memory"></i>
+                                </span>
+                                <span id="ram-val-{{ server.id }}" class="metric-val {{ ram_color_icon }}">{{ ram_val }}%</span>
+                                {% endif %}
+
                                 {% set disk_metric = server.latest_metrics['disk_used_root'] ?? server.latest_metrics['disk_used'] ?? null %}
                                 {% if disk_metric is not null %}
-                                <div class="metric-mini">
-                                    <span class="text-muted">DISK</span>
-                                    <div class="progress-micro mb-1">
-                                        {% set disk_val = disk_metric.value %}
-                                        {% set disk_color = disk_val > 90 ? 'bg-danger' : (disk_val > 75 ? 'bg-warning' : 'bg-success') %}
-                                        <div class="progress-bar {{ disk_color }}" style="width: {{ disk_val }}%"></div>
-                                    </div>
-                                    <strong>{{ disk_val }}%</strong>
-                                </div>
+                                {% set disk_val = disk_metric.value %}
+                                {% set disk_t = server.thresholds['disk_used_root']|default(null) %}
+                                {% if disk_t %}
+                                    {% set disk_color_icon = disk_val >= disk_t.critical ? 'text-danger' : (disk_val >= disk_t.warning ? 'text-warning' : 'text-success') %}
+                                {% else %}
+                                    {% set disk_color_icon = disk_val > 90 ? 'text-danger' : (disk_val > 75 ? 'text-warning' : 'text-success') %}
+                                {% endif %}
+                                <span id="disk-icon-{{ server.id }}" class="metric-icon {{ disk_color_icon }}" title="Disk">
+                                    <i class="fas fa-hdd"></i>
+                                </span>
+                                <span id="disk-val-{{ server.id }}" class="metric-val {{ disk_color_icon }}">{{ disk_val }}%</span>
                                 {% endif %}
                             </div>
+
                             {% if server.latest_metrics['uptime'] is defined %}
                             <div class="uptime-mini text-muted small mt-1">
                                 <i class="fas fa-clock"></i>
@@ -162,6 +173,15 @@
                                 {% endif %}
                             </div>
                             {% endif %}
+
+                            <!-- Время обновления (для AJAX) -->
+                            <div class="text-muted small updated-at" id="updated-at-{{ server.id }}">
+                                {% if server.last_metrics_at %}
+                                    {{ server.last_metrics_at|date('H:i') }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </div>
                         </div>
                     </a>
                 </div>
@@ -173,9 +193,49 @@
 {% endfor %}
 {% endif %}
 
-<!-- Автообновление -->
+<!-- AJAX автообновление -->
 <script>
-    setTimeout(function() { location.reload(); }, 30000);
+(function() {
+    let updateInterval = null;
+
+    function updateDashboard() {
+        fetch('/api/dashboard/stats')
+            .then(response => response.json())
+            .then(data => {
+                data.forEach(server => {
+                    // CPU
+                    const cpuVal = document.getElementById('cpu-val-' + server.id);
+                    if (cpuVal && server.metrics.cpu_load) {
+                        cpuVal.textContent = server.metrics.cpu_load.value + '%';
+                    }
+
+                    // RAM
+                    const ramVal = document.getElementById('ram-val-' + server.id);
+                    if (ramVal && server.metrics.ram_used) {
+                        ramVal.textContent = server.metrics.ram_used.value + '%';
+                    }
+
+                    // Disk
+                    const diskVal = document.getElementById('disk-val-' + server.id);
+                    if (diskVal && server.metrics.disk) {
+                        diskVal.textContent = server.metrics.disk.value + '%';
+                    }
+
+                    // Updated time
+                    const updatedAt = document.getElementById('updated-at-' + server.id);
+                    if (updatedAt) {
+                        updatedAt.textContent = server.updated_at.split(' ')[1].substring(0, 5);
+                    }
+                });
+            })
+            .catch(err => console.log('Dashboard update error:', err));
+    }
+
+    // Запускаем обновление каждые 30 секунд
+    document.addEventListener('DOMContentLoaded', function() {
+        updateInterval = setInterval(updateDashboard, 30000);
+    });
+})();
 </script>
 
 <style>
@@ -206,30 +266,30 @@
     }
     .compact-metrics {
         display: flex;
-        gap: 8px;
-        font-size: 0.75rem;
-    }
-    .metric-mini {
-        flex: 1;
-        min-width: 50px;
-    }
-    .metric-mini span {
-        font-size: 0.65rem;
-        display: block;
-    }
-    .metric-mini strong {
+        gap: 6px;
         font-size: 0.8rem;
+        align-items: center;
     }
-    .progress-micro {
-        height: 4px;
-        border-radius: 2px;
+    .metric-icon {
+        font-size: 0.9rem;
     }
+    .metric-val {
+        font-weight: 600;
+        min-width: 35px;
+    }
+    .metric-icon.text-danger, .metric-val.text-danger { color: #dc3545 !important; }
+    .metric-icon.text-warning, .metric-val.text-warning { color: #ffc107 !important; }
+    .metric-icon.text-success, .metric-val.text-success { color: #28a745 !important; }
     .badge-sm {
         font-size: 0.65rem;
         padding: 0.15em 0.4em;
     }
     .uptime-mini i {
         font-size: 0.7rem;
+    }
+    .updated-at {
+        font-size: 0.65rem;
+        margin-top: 2px;
     }
 </style>
 {% endblock %}
