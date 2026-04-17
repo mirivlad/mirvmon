@@ -79,12 +79,11 @@
 </div>
 {% else %}
 {% for groupName, group in groups %}
-{% set groupSlug = groupName|lower|replace({' ': '_', ' ': ''}) %}
+{% set groupSlug = groupName|lower|replace({' ': '-'}) %}
 <div class="card mb-3 border-0 shadow-sm">
     <div class="card-header text-white py-2 accordion-header" 
          data-bs-toggle="collapse" 
          data-bs-target="#group-{{ loop.index }}" 
-         data-group="{{ groupSlug }}"
          style="cursor: pointer; background-color: {{ group.color|default('#6c757d') }};">
         <div class="d-flex justify-content-between align-items-center">
             <h5 class="mb-0">
@@ -95,7 +94,7 @@
             <i class="fas accordion-icon"></i>
         </div>
     </div>
-    <div id="group-{{ loop.index }}" class="collapse" data-group="{{ groupSlug }}">
+    <div id="group-{{ loop.index }}" class="collapse" data-group-slug="{{ groupSlug }}">
         <div class="card-body p-2">
             <div class="row g-2">
                 {% for server in group.servers %}
@@ -203,7 +202,6 @@
 (function() {
     const COOKIE_NAME = 'dashboard_accordion';
 
-    // Получить состояние accordion из cookies
     function getAccordionState() {
         const cookies = document.cookie.split(';');
         for (let c of cookies) {
@@ -217,90 +215,74 @@
         return {};
     }
 
-    // Сохранить состояние accordion в cookies
     function saveAccordionState(state) {
         document.cookie = COOKIE_NAME + '=' + encodeURIComponent(JSON.stringify(state)) + 
-                          '; path=/; max-age=' + (30 * 24 * 60 * 60); // 30 дней
+                          '; path=/; max-age=' + (30 * 24 * 60 * 60);
     }
 
-    // Инициализация accordion из cookies
-    function initAccordionFromCookies() {
+    function updateIcon(header, isOpen) {
+        const icon = header.querySelector('.accordion-icon');
+        if (icon) {
+            icon.className = isOpen ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
         const state = getAccordionState();
+
+        // Инициализация иконок из cookies
         document.querySelectorAll('.accordion-header').forEach(header => {
             const groupId = header.dataset.group;
-            const targetId = header.dataset.bsTarget;
-            const target = document.querySelector(targetId);
-
-            if (target && state[groupId] === 'open') {
-                target.classList.add('show');
-                header.querySelector('.accordion-icon').className = 'fas fa-chevron-up';
-            } else {
-                header.querySelector('.accordion-icon').className = 'fas fa-chevron-down';
-            }
+            const isOpen = state[groupId] === 'open';
+            updateIcon(header, isOpen);
         });
-    }
 
-    // Обработчик клика на accordion header
-    function setupAccordionHandlers() {
-        const state = getAccordionState();
-
-        document.querySelectorAll('.accordion-header').forEach(header => {
-            const groupId = header.dataset.group;
-            const targetId = header.dataset.bsTarget;
-            const target = document.querySelector(targetId);
-            const icon = header.querySelector('.accordion-icon');
-
-            // Клик переключает состояние
-            header.addEventListener('click', function() {
-                const isOpen = target.classList.contains('show');
-                if (isOpen) {
-                    target.classList.remove('show');
-                    icon.className = 'fas fa-chevron-down';
-                    state[groupId] = 'closed';
-                } else {
-                    target.classList.add('show');
-                    icon.className = 'fas fa-chevron-up';
-                    state[groupId] = 'open';
-                }
+        // Слушаем события Bootstrap collapse
+        document.querySelectorAll('.collapse').forEach(el => {
+            el.addEventListener('hidden.bs.collapse', function() {
+                const groupId = this.dataset.groupSlug;
+                state[groupId] = 'closed';
                 saveAccordionState(state);
+                const header = document.querySelector('.accordion-header[data-bs-target="#' + this.id + '"]');
+                if (header) updateIcon(header, false);
+            });
+
+            el.addEventListener('shown.bs.collapse', function() {
+                const groupId = this.dataset.groupSlug;
+                state[groupId] = 'open';
+                saveAccordionState(state);
+                const header = document.querySelector('.accordion-header[data-bs-target="#' + this.id + '"]');
+                if (header) updateIcon(header, true);
             });
         });
-    }
 
-    // AJAX обновление данных
-    function updateDashboard() {
-        fetch('/api/dashboard/stats')
-            .then(response => response.json())
-            .then(data => {
-                data.forEach(server => {
-                    const cpuVal = document.getElementById('cpu-val-' + server.id);
-                    if (cpuVal && server.metrics.cpu_load) {
-                        cpuVal.textContent = server.metrics.cpu_load.value + '%';
-                    }
+        // AJAX обновление
+        function updateDashboard() {
+            fetch('/api/dashboard/stats')
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(server => {
+                        const cpuVal = document.getElementById('cpu-val-' + server.id);
+                        if (cpuVal && server.metrics.cpu_load) {
+                            cpuVal.textContent = server.metrics.cpu_load.value + '%';
+                        }
+                        const ramVal = document.getElementById('ram-val-' + server.id);
+                        if (ramVal && server.metrics.ram_used) {
+                            ramVal.textContent = server.metrics.ram_used.value + '%';
+                        }
+                        const diskVal = document.getElementById('disk-val-' + server.id);
+                        if (diskVal && server.metrics.disk) {
+                            diskVal.textContent = server.metrics.disk.value + '%';
+                        }
+                        const updatedAt = document.getElementById('updated-at-' + server.id);
+                        if (updatedAt && server.updated_at) {
+                            updatedAt.textContent = server.updated_at.split(' ')[1].substring(0, 5);
+                        }
+                    });
+                })
+                .catch(err => console.log('Dashboard update error:', err));
+        }
 
-                    const ramVal = document.getElementById('ram-val-' + server.id);
-                    if (ramVal && server.metrics.ram_used) {
-                        ramVal.textContent = server.metrics.ram_used.value + '%';
-                    }
-
-                    const diskVal = document.getElementById('disk-val-' + server.id);
-                    if (diskVal && server.metrics.disk) {
-                        diskVal.textContent = server.metrics.disk.value + '%';
-                    }
-
-                    const updatedAt = document.getElementById('updated-at-' + server.id);
-                    if (updatedAt && server.updated_at) {
-                        updatedAt.textContent = server.updated_at.split(' ')[1].substring(0, 5);
-                    }
-                });
-            })
-            .catch(err => console.log('Dashboard update error:', err));
-    }
-
-    // Запуск при загрузке страницы
-    document.addEventListener('DOMContentLoaded', function() {
-        initAccordionFromCookies();
-        setupAccordionHandlers();
         setInterval(updateDashboard, 30000);
     });
 })();
