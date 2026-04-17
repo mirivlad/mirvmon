@@ -24,8 +24,14 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="icon" class="form-label">Иконка (Font Awesome)</label>
-                                <input type="text" class="form-control" id="icon" name="icon" value="{{ group.icon|default('') }}" placeholder="например: fa-server">
-                                <small class="form-text text-muted">Используйте классы Font Awesome, например: fa-server, fa-desktop</small>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="icon" name="icon" value="{{ group.icon|default('fa-server') }}" placeholder="fa-server">
+                                    <span class="input-group-text"><i class="fas {{ group.icon|default('fa-server') }}" id="iconPreview"></i></span>
+                                    <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#iconPickerModal" data-icon-picker data-icon-input="icon">
+                                        <i class="fas fa-icons"></i>
+                                    </button>
+                                </div>
+                                <small class="form-text text-muted">Выберите иконку или введите вручную</small>
                             </div>
                         </div>
                         

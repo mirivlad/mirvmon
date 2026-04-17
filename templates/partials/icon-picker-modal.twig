@@ -1,0 +1,466 @@
+<!-- Icon Picker Modal -->
+<style>
+.icon-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.icon-picker-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 8px;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: #fff;
+}
+
+.icon-picker-item:hover {
+    border-color: #0d6efd;
+    background: #f8f9fa;
+    transform: translateY(-2px);
+}
+
+.icon-picker-item.selected {
+    border-color: #198754;
+    background: #d1e7dd;
+}
+
+.icon-picker-item i {
+    font-size: 24px;
+    margin-bottom: 5px;
+    color: #495057;
+}
+
+.icon-picker-item span {
+    font-size: 10px;
+    color: #6c757d;
+    text-align: center;
+    word-break: break-all;
+}
+
+.icon-picker-search {
+    margin-bottom: 15px;
+}
+
+.icon-picker-search input {
+    width: 100%;
+    padding: 10px 15px;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+.icon-picker-search input:focus {
+    outline: none;
+    border-color: #0d6efd;
+}
+</style>
+
+<div class="modal fade" id="iconPickerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-icons"></i> Выбор иконки</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <div class="modal-body">
+                <div class="icon-picker-search">
+                    <input type="text" id="iconSearchInput" placeholder="Поиск иконки..." autocomplete="off">
+                </div>
+                <div class="icon-picker-grid" id="iconGrid">
+                    <!-- Icons will be populated by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    let currentTargetInput = null;
+
+    const icons = [
+        { name: 'fa-server', label: 'Сервер' },
+        { name: 'fa-desktop', label: 'Компьютер' },
+        { name: 'fa-laptop', label: 'Ноутбук' },
+        { name: 'fa-tablet', label: 'Планшет' },
+        { name: 'fa-mobile', label: 'Телефон' },
+        { name: 'fa-database', label: 'База данных' },
+        { name: 'fa-cloud', label: 'Облако' },
+        { name: 'fa-cloud-sun', label: 'Облако с солнцем' },
+        { name: 'fa-cloud-moon', label: 'Облако с луной' },
+        { name: 'fa-shield', label: 'Щит' },
+        { name: 'fa-shield-halved', label: 'Щит половинка' },
+        { name: 'fa-hdd', label: 'Жёсткий диск' },
+        { name: 'fa-hard-drive', label: 'Диск' },
+        { name: 'fa-microchip', label: 'Микрочип' },
+        { name: 'fa-memory', label: 'Память' },
+        { name: 'fa-network-wired', label: 'Сеть проводная' },
+        { name: 'fa-wifi', label: 'WiFi' },
+        { name: 'fa-wifi-strong', label: 'WiFi сильный' },
+        { name: 'fa-router', label: 'Роутер' },
+        { name: 'fa-globe', label: 'Глобус' },
+        { name: 'fa-globe-americas', label: 'Америка' },
+        { name: 'fa-globe-europe', label: 'Европа' },
+        { name: 'fa-globe-asia', label: 'Азия' },
+        { name: 'fa-building', label: 'Здание' },
+        { name: 'fa-building-columns', label: 'Колонны' },
+        { name: 'fa-box', label: 'Коробка' },
+        { name: 'fa-boxes-stacked', label: 'Коробки' },
+        { name: 'fa-cube', label: 'Куб' },
+        { name: 'fa-cubes', label: 'Кубы' },
+        { name: 'fa-server fa-tower-broadcast', label: 'Башня' },
+        { name: 'fa-broadcast-tower', label: 'Вышка' },
+        { name: 'fa-tower-observation', label: 'Вышка смотровая' },
+        { name: 'fa-terminal', label: 'Терминал' },
+        { name: 'fa-code', label: 'Код' },
+        { name: 'fa-code-branch', label: 'Ветка кода' },
+        { name: 'fa-gears', label: 'Шестерни' },
+        { name: 'fa-gear', label: 'Шестерня' },
+        { name: 'fa-plug', label: 'Розетка' },
+        { name: 'fa-plug-circle-bolt', label: 'Розетка с молнией' },
+        { name: 'fa-plug-circle-check', label: 'Розетка галочка' },
+        { name: 'fa-plug-circle-xmark', label: 'Розетка крестик' },
+        { name: 'fa-bolt', label: 'Молния' },
+        { name: 'fa-bolt-lightning', label: 'Молния молния' },
+        { name: 'fa-temperature-half', label: 'Термометр' },
+        { name: 'fa-temperature-quarter', label: 'Термометр малый' },
+        { name: 'fa-fan', label: 'Вентилятор' },
+        { name: 'fa-fan-on', label: 'Вент. вкл' },
+        { name: 'fa-upload', label: 'Загрузка' },
+        { name: 'fa-download', label: 'Скачивание' },
+        { name: 'fa-arrows-spin', label: 'Стрелки' },
+        { name: 'fa-sync', label: 'Синхронизация' },
+        { name: 'fa-sync-alt', label: 'Синхронизация Alt' },
+        { name: 'fa-rotate', label: 'Ротировать' },
+        { name: 'fa-envelope', label: 'Почта' },
+        { name: 'fa-envelope-open', label: 'Почта открыта' },
+        { name: 'fa-at', label: '@' },
+        { name: 'fa-mail-bulk', label: 'Массовая почта' },
+        { name: 'fa-bell', label: 'Колокольчик' },
+        { name: 'fa-bell-slash', label: 'Колок без звука' },
+        { name: 'fa-comment', label: 'Комментарий' },
+        { name: 'fa-comments', label: 'Комментарии' },
+        { name: 'fa-message', label: 'Сообщение' },
+        { name: 'fa-paper-plane', label: 'Самолётик' },
+        { name: 'fa-inbox', label: 'Входящие' },
+        { name: 'fa-folder', label: 'Папка' },
+        { name: 'fa-folder-open', label: 'Папка открыта' },
+        { name: 'fa-folders', label: 'Папки' },
+        { name: 'fa-file', label: 'Файл' },
+        { name: 'fa-file-code', label: 'Файл кода' },
+        { name: 'fa-file-lines', label: 'Файл строки' },
+        { name: 'fa-image', label: 'Изображение' },
+        { name: 'fa-images', label: 'Изображения' },
+        { name: 'fa-video', label: 'Видео' },
+        { name: 'fa-camera', label: 'Камера' },
+        { name: 'fa-print', label: 'Печать' },
+        { name: 'fa-barcode', label: 'Штрихкод' },
+        { name: 'fa-qrcode', label: 'QR код' },
+        { name: 'fa-lock', label: 'Замок' },
+        { name: 'fa-lock-open', label: 'Замок открыт' },
+        { name: 'fa-key', label: 'Ключ' },
+        { name: 'fa-keySkeleton', label: 'Ключ скелет' },
+        { name: 'fa-user', label: 'Пользователь' },
+        { name: 'fa-users', label: 'Пользователи' },
+        { name: 'fa-user-shield', label: 'Юзер щит' },
+        { name: 'fa-user-lock', label: 'Юзер замок' },
+        { name: 'fa-fingerprint', label: 'Отпечаток' },
+        { name: 'fa-face-smile', label: 'Смайл' },
+        { name: 'fa-face-meh', label: 'Мей' },
+        { name: 'fa-face-frown', label: 'Фраун' },
+        { name: 'fa-brain', label: 'Мозг' },
+        { name: 'fa-heart', label: 'Сердце' },
+        { name: 'fa-heart-pulse', label: 'Пульс' },
+        { name: 'fa-lungs', label: 'Лёгкие' },
+        { name: 'fa-dna', label: 'ДНК' },
+        { name: 'fa-virus', label: 'Вирус' },
+        { name: 'fa-bug', label: 'Жук' },
+        { name: 'fa-spider', label: 'Паук' },
+        { name: 'fa-rocket', label: 'Ракета' },
+        { name: 'fa-satellite', label: 'Спутник' },
+        { name: 'fa-satellite-dish', label: 'Тарелка' },
+        { name: 'fa-tower-cell', label: 'Вышка сотовая' },
+        { name: 'fa-signal', label: 'Сигнал' },
+        { name: 'fa-signal-bars', label: 'Сигнал бары' },
+        { name: 'fa-chart-line', label: 'График' },
+        { name: 'fa-chart-bar', label: 'Столбцы' },
+        { name: 'fa-chart-pie', label: 'Пирог' },
+        { name: 'fa-gauge', label: 'Прибор' },
+        { name: 'fa-gauge-med', label: 'Прибор сред' },
+        { name: 'fa-gauge-high', label: 'Прибор выс' },
+        { name: 'fa-tachometer', label: 'Тахометр' },
+        { name: 'fa-fire', label: 'Огонь' },
+        { name: 'fa-flame', label: 'Пламя' },
+        { name: 'fa-lightbulb', label: 'Лампочка' },
+        { name: 'fa-lightbulb-on', label: 'Лампа вкл' },
+        { name: 'fa-power-off', label: 'Питание' },
+        { name: 'fa-plug-power', label: 'Питание розетка' },
+        { name: 'fa-credit-card', label: 'Карта' },
+        { name: 'fa-credit-card-alt', label: 'Карта Alt' },
+        { name: 'fa-money-bill', label: 'Купюра' },
+        { name: 'fa-coins', label: 'Монеты' },
+        { name: 'fa-wallet', label: 'Кошелёк' },
+        { name: 'fa-cart-shopping', label: 'Тележка' },
+        { name: 'fa-shop', label: 'Магазин' },
+        { name: 'fa-store', label: 'Склад' },
+        { name: 'fa-warehouse', label: 'Склад большой' },
+        { name: 'fa-industry', label: 'Промышленность' },
+        { name: 'fa-oil-well', label: 'Нефтяная вышка' },
+        { name: 'fa-solar-panel', label: 'Солнечная панель' },
+        { name: 'fa-wind', label: 'Ветер' },
+        { name: 'fa-water', label: 'Вода' },
+        { name: 'fa-droplet', label: 'Капля' },
+        { name: 'fa-fill-drip', label: 'Капли' },
+        { name: 'fa-fire-extinguisher', label: 'Огнетушитель' },
+        { name: 'fa-biohazard', label: 'Биоопасность' },
+        { name: 'fa-biohazard', label: 'Радиация' },
+        { name: 'fa-kit-medical', label: 'Аптечка' },
+        { name: 'fa-suitcase', label: 'Чемодан' },
+        { name: 'fa-suitcase-rolling', label: 'Чемодан катится' },
+        { name: 'fa-plane', label: 'Самолёт' },
+        { name: 'fa-plane-departure', label: 'Вылет' },
+        { name: 'fa-plane-arrival', label: 'Прилёт' },
+        { name: 'fa-ship', label: 'Корабль' },
+        { name: 'fa-bus', label: 'Автобус' },
+        { name: 'fa-bus-simple', label: 'Автобус простой' },
+        { name: 'fa-car', label: 'Машина' },
+        { name: 'fa-car-side', label: 'Машина сбоку' },
+        { name: 'fa-truck', label: 'Грузовик' },
+        { name: 'fa-van-shuttle', label: 'Шаттл' },
+        { name: 'fa-motorcycle', label: 'Мотоцикл' },
+        { name: 'fa-bicycle', label: 'Велосипед' },
+        { name: 'fa-train', label: 'Поезд' },
+        { name: 'fa-train-subway', label: 'Метро' },
+        { name: 'fa-subway', label: 'Метро' },
+        { name: 'fa-taxi', label: 'Такси' },
+        { name: 'fa-parking', label: 'Парковка' },
+        { name: 'fa-warehouse-full', label: 'Склад полный' },
+        { name: 'fa-school', label: 'Школа' },
+        { name: 'fa-graduation-cap', label: 'Шапка выпускника' },
+        { name: 'fa-book', label: 'Книга' },
+        { name: 'fa-book-open', label: 'Книга открыта' },
+        { name: 'fa-books', label: 'Книги' },
+        { name: 'fa-newspaper', label: 'Газета' },
+        { name: 'fa-pen', label: 'Ручка' },
+        { name: 'fa-pen-nib', label: 'Перо' },
+        { name: 'fa-pencil', label: 'Карандаш' },
+        { name: 'fa-paintbrush', label: 'Кисть' },
+        { name: 'fa-palette', label: 'Палитра' },
+        { name: 'fa-ruler', label: 'Линейка' },
+        { name: 'fa-compass', label: 'Компас' },
+        { name: 'fa-magnet', label: 'Магнит' },
+        { name: 'fa-toolbox', label: 'Инструменты' },
+        { name: 'fa-screwdriver-wrench', label: 'Отвёртка' },
+        { name: 'fa-hammer', label: 'Молоток' },
+        { name: 'fa-screwdriver', label: 'Отвёртка' },
+        { name: 'fa-wrench', label: 'Гаечный ключ' },
+        { name: 'fa-screwdriver-wrench', label: 'Набор инструментов' },
+        { name: 'fa-bullhorn', label: 'Мегафон' },
+        { name: 'fa-horn', label: 'Рог' },
+        { name: 'fa-music', label: 'Музыка' },
+        { name: 'fa-headphones', label: 'Наушники' },
+        { name: 'fa-microphone', label: 'Микрофон' },
+        { name: 'fa-microphone-lines', label: 'Микрофон линии' },
+        { name: 'fa-podcast', label: 'Подкаст' },
+        { name: 'fa-volume-high', label: 'Звук выс' },
+        { name: 'fa-volume-medium', label: 'Звук ср' },
+        { name: 'fa-volume-low', label: 'Звук низ' },
+        { name: 'fa-volume-off', label: 'Без звука' },
+        { name: 'fa-play', label: 'Плей' },
+        { name: 'fa-pause', label: 'Пауза' },
+        { name: 'fa-stop', label: 'Стоп' },
+        { name: 'fa-forward', label: 'Вперёд' },
+        { name: 'fa-backward', label: 'Назад' },
+        { name: 'fa-shuffle', label: 'Перемешать' },
+        { name: 'fa-repeat', label: 'Повторить' },
+        { name: 'fa-tv', label: 'Телевизор' },
+        { name: 'fa-television', label: 'ТВ' },
+        { name: 'fa-film', label: 'Плёнка' },
+        { name: 'fa-clapperboard', label: 'Киноплёнка' },
+        { name: 'fa-gamepad', label: 'Геймпад' },
+        { name: 'fa-chess', label: 'Шахматы' },
+        { name: 'fa-dice', label: 'Кости' },
+        { name: 'fa-puzzle-piece', label: 'Пазл' },
+        { name: 'fa-joystick', label: 'Джойстик' },
+        { name: 'fa-vr-goggles', label: 'VR очки' },
+        { name: 'fa-ticket', label: 'Билет' },
+        { name: 'fa-ticket-simple', label: 'Билет простой' },
+        { name: 'fa-tag', label: 'Тег' },
+        { name: 'fa-tags', label: 'Теги' },
+        { name: 'fa-tags', label: 'Цена' },
+        { name: 'fa-flag', label: 'Флаг' },
+        { name: 'fa-flag-checkered', label: 'Флаг клетка' },
+        { name: 'fa-flag-usa', label: 'Флаг США' },
+        { name: 'fa-map', label: 'Карта' },
+        { name: 'fa-map-location', label: 'Карта метка' },
+        { name: 'fa-map-location-dot', label: 'Карта точка' },
+        { name: 'fa-location-dot', label: 'Точка' },
+        { name: 'fa-location-crosshairs', label: 'Прицел' },
+        { name: 'fa-compass-drafting', label: 'Компас чертёж' },
+        { name: 'fa-anchor', label: 'Якорь' },
+        { name: 'fa-anchor-circle-check', label: 'Якорь галочка' },
+        { name: 'fa-ring', label: 'Кольцо' },
+        { name: 'fa-crown', label: 'Корона' },
+        { name: 'fa-chess-king', label: 'Король' },
+        { name: 'fa-chess-queen', label: 'Ферзь' },
+        { name: 'fa-chess-rook', label: 'Тура' },
+        { name: 'fa-chess-bishop', label: 'Слон' },
+        { name: 'fa-chess-knight', label: 'Конь' },
+        { name: 'fa-chess-pawn', label: 'Пешка' },
+        { name: 'fa-earth-americas', label: 'Земля' },
+        { name: 'fa-earth-oceania', label: 'Океания' },
+        { name: 'fa-earth-africa', label: 'Африка' },
+        { name: 'fa-earth-asia', label: 'Азия' },
+        { name: 'fa-umbrella', label: 'Зонт' },
+        { name: 'fa-umbrella-beach', label: 'Пляж' },
+        { name: 'fa-sun', label: 'Солнце' },
+        { name: 'fa-moon', label: 'Луна' },
+        { name: 'fa-star', label: 'Звезда' },
+        { name: 'fa-star-half', label: 'Звезда половинка' },
+        { name: 'fa-star-half-stroke', label: 'Звезда половинка' },
+        { name: 'fa-sparkles', label: 'Искры' },
+        { name: 'fa-shapes', label: 'Фигуры' },
+        { name: 'fa-circle', label: 'Круг' },
+        { name: 'fa-circle-dot', label: 'Круг точка' },
+        { name: 'fa-square', label: 'Квадрат' },
+        { name: 'fa-square-check', label: 'Галочка' },
+        { name: 'fa-triangle', label: 'Треугольник' },
+        { name: 'fa-hexagon', label: 'Шестиугольник' },
+        { name: 'fa-octagon', label: 'Восьмиугольник' },
+        { name: 'fa-pentagon', label: 'Пятиугольник' },
+        { name: 'fa-polygon', label: 'Многоугольник' },
+        { name: 'fa-vector-polygon', label: 'Вектор' },
+        { name: 'fa-layer-group', label: 'Слои' },
+        { name: 'fa-sitemap', label: 'Сitemap' },
+        { name: 'fa-tree', label: 'Дерево' },
+        { name: 'fa-fork', label: 'Вилка' },
+        { name: 'fa-code-fork', label: 'Вилка кода' },
+        { name: 'fa-branch', label: 'Ветка' },
+        { name: 'fa-stairs', label: 'Лестница' },
+        { name: 'fa-elevator', label: 'Лифт' },
+        { name: 'fa-stairs', label: 'Эскалатор' },
+        { name: 'fa-igloo', label: 'Иглу' },
+        { name: 'fa-tent', label: 'Палатка' },
+        { name: 'fa-tent-arrow-down-to-line', label: 'Палатка стрелка' },
+        { name: 'fa-house', label: 'Дом' },
+        { name: 'fa-house-chimney', label: 'Дом труба' },
+        { name: 'fa-house-crack', label: 'Дом трещина' },
+        { name: 'fa-house-flood-water', label: 'Дом вода' },
+        { name: 'fa-house-laptop', label: 'Дом ноут' },
+        { name: 'fa-house-medical', label: 'Дом медицина' },
+        { name: 'fa-house-signal', label: 'Дом сигнал' },
+        { name: 'fa-home', label: 'Домой' },
+        { name: 'fa-home-user', label: 'Дом юзер' },
+        { name: 'fa-home-lg', label: 'Дом большой' },
+        { name: 'fa-home-lg-user', label: 'Дом большой юзер' },
+        { name: 'fa-igloo', label: 'Купол' },
+        { name: 'fa-dungeon', label: 'Подземелье' },
+        { name: 'fa-hotel', label: 'Отель' },
+        { name: 'fa-hotel', label: 'Мотель' },
+        { name: 'fa-hosting', label: 'Хостинг' },
+        { name: 'fa-server-rack', label: 'Серверная стойка' },
+        { name: 'fa-server', label: 'Сервер' },
+        { name: 'fa-server-stacked', label: 'Серверы стопка' }
+    ];
+
+    let currentTargetInput = null;
+
+    function renderIcons(filter = '') {
+        const grid = document.getElementById('iconGrid');
+        if (!grid) return;
+        
+        filter = filter.toLowerCase();
+        grid.innerHTML = '';
+
+        icons.forEach(function(icon) {
+            const matchesFilter = icon.name.toLowerCase().includes(filter) || 
+                                icon.label.toLowerCase().includes(filter);
+            
+            if (filter && !matchesFilter) return;
+
+            const item = document.createElement('div');
+            item.className = 'icon-picker-item';
+            item.dataset.icon = icon.name;
+            item.innerHTML = '<i class="fas ' + icon.name + '"></i><span>' + icon.label + '</span>';
+            
+            item.addEventListener('click', function() {
+                selectIcon(icon.name);
+            });
+
+            grid.appendChild(item);
+        });
+    }
+
+    function selectIcon(iconName) {
+        if (currentTargetInput) {
+            currentTargetInput.value = iconName;
+            
+            // Обновляем preview - ищем span с иконкой рядом с input
+            var preview = currentTargetInput.nextElementSibling;
+            if (preview && preview.querySelector) {
+                var iconEl = preview.querySelector('i');
+                if (iconEl) {
+                    iconEl.className = 'fas ' + iconName;
+                }
+            } else {
+                // Fallback: ищем по id
+                var previewFallback = document.getElementById('iconPreview');
+                if (previewFallback) {
+                    previewFallback.className = 'fas ' + iconName;
+                }
+            }
+        }
+        
+        var modal = bootstrap.Modal.getInstance(document.getElementById('iconPickerModal'));
+        if (modal) {
+            modal.hide();
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        renderIcons();
+
+        const searchInput = document.getElementById('iconSearchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', function() {
+                renderIcons(this.value);
+            });
+        }
+
+        // Обработка кнопки выбора иконки
+        document.querySelectorAll('[data-icon-picker]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                currentTargetInput = document.getElementById(this.dataset.iconInput);
+            });
+        });
+
+        // Обновление preview при вводе в поле иконки
+        document.querySelectorAll('#icon').forEach(function(input) {
+            input.addEventListener('input', function() {
+                var preview = document.getElementById('iconPreview');
+                if (preview) {
+                    var iconName = this.value.trim() || 'fa-server';
+                    preview.className = 'fas ' + iconName;
+                }
+            });
+        });
+
+        // Открытие модала - запоминаем какой input открыл
+        document.getElementById('iconPickerModal').addEventListener('show.bs.modal', function(e) {
+            // Находим активный input через кнопку
+            var activeBtn = document.querySelector('[data-bs-target="#iconPickerModal"][data-icon-input]');
+            if (activeBtn) {
+                currentTargetInput = document.getElementById(activeBtn.dataset.iconInput);
+            }
+        });
+    });
+})();
+</script>
