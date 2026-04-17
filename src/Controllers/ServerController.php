@@ -127,6 +127,11 @@ class ServerController extends Model
         $stmt->execute();
         $groups = $stmt->fetchAll();
 
+        $stmt = $this->pdo->prepare("SELECT encrypted_token FROM agent_tokens WHERE server_id = :server_id");
+        $stmt->execute([':server_id' => $id]);
+        $tokenRow = $stmt->fetch();
+        $decryptedToken = $tokenRow ? \App\Utils\EncryptionHelper::decrypt($tokenRow['encrypted_token']) : null;
+
         if (!$server) {
             return $response->withHeader('Location', '/servers')->withStatus(302);
         }
@@ -134,7 +139,8 @@ class ServerController extends Model
         $templateData = [
             'title' => 'Редактировать сервер',
             'server' => $server,
-            'groups' => $groups
+            'groups' => $groups,
+            'agent_token' => $decryptedToken
         ];
 
         return $this->twig->render($response, 'servers/edit.twig', $templateData);

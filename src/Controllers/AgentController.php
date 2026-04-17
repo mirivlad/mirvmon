@@ -15,17 +15,6 @@ class AgentController extends Model
     {
         $queryParams = $request->getQueryParams();
         $token = $queryParams['token'] ?? null;
-        $server_id = $queryParams['server_id'] ?? null;
-
-        if (!empty($server_id) && empty($token)) {
-            $stmt = $this->pdo->prepare("SELECT encrypted_token FROM agent_tokens WHERE server_id = :server_id LIMIT 1");
-            $stmt->execute([':server_id' => $server_id]);
-            $result = $stmt->fetch();
-
-            if ($result && !empty($result['encrypted_token'])) {
-                $token = EncryptionHelper::decrypt($result['encrypted_token']);
-            }
-        }
 
         if (empty($token)) {
             $response->getBody()->write('Token is required');

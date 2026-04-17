@@ -53,14 +53,15 @@
                 
                 <div class="mt-4">
                     <h5>Управление агентом мониторинга:</h5>
+                    {% if agent_token %}
                     <div class="row">
                         <div class="col-md-4 mb-2">
-                            <a href="/agent/install.sh?server_id={{ server.id }}" class="btn btn-outline-primary w-100">
+                            <a href="/agent/install.sh?token={{ agent_token }}" class="btn btn-outline-primary w-100">
                                 <i class="fab fa-linux"></i> Агент для Linux
                             </a>
                         </div>
                         <div class="col-md-4 mb-2">
-                            <a href="/agent/install.bat?server_id={{ server.id }}" class="btn btn-outline-info w-100">
+                            <a href="/agent/install.bat?token={{ agent_token }}" class="btn btn-outline-info w-100">
                                 <i class="fab fa-windows"></i> Агент для Windows
                             </a>
                         </div>
@@ -71,6 +72,11 @@
                         </div>
                     </div>
                     <p class="mt-2">Если вы потеряли доступ к агенту или хотите создать новый токен безопасности, используйте кнопку "Сбросить токен".</p>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        Токен агента не создан. <a href="/servers/{{ server.id }}/regenerate-token">Создать токен</a>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
