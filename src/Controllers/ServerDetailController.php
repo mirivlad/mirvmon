@@ -200,8 +200,31 @@ class ServerDetailController extends Model
             ];
         }
 
-        // Типы метрик
-        $stmt = $this->pdo->query("SELECT id, name, unit FROM metric_names WHERE name NOT LIKE '%\_proc' AND name NOT LIKE 'disk_total_gb_%' AND name != 'disk_used' AND name != 'ram_total_gb' AND name NOT IN ('net_in', 'net_out') AND name NOT LIKE 'network_%' ORDER BY name");
+        // Типы метрик — только те что отображаются на графиках и есть у сервера
+        $stmt = $this->pdo->prepare("
+            SELECT DISTINCT mn.id, mn.name, mn.unit
+            FROM metric_names mn
+            JOIN server_metrics sm ON sm.metric_name_id = mn.id
+            WHERE sm.server_id = :id
+            AND (
+                mn.name IN ('cpu_load', 'ram_used')
+                OR mn.name LIKE 'disk_used_%'
+                OR mn.name LIKE 'net_in_%'
+                OR mn.name LIKE 'net_out_%'
+                OR mn.name LIKE 'temp_%'
+            )
+            ORDER BY 
+                CASE 
+                    WHEN mn.name = 'cpu_load' THEN 1
+                    WHEN mn.name = 'ram_used' THEN 2
+                    WHEN mn.name LIKE 'disk_used_%' THEN 3
+                    WHEN mn.name LIKE 'net_in_%' THEN 4
+                    WHEN mn.name LIKE 'net_out_%' THEN 5
+                    WHEN mn.name LIKE 'temp_%' THEN 6
+                END,
+                mn.name
+        ");
+        $stmt->execute([':id' => $id]);
         $allMetricTypes = $stmt->fetchAll();
 
         // Сервисы
@@ -286,7 +309,31 @@ class ServerDetailController extends Model
         $id = $args['id'];
         $params = $request->getParsedBody();
 
-        $stmt = $this->pdo->query("SELECT id, name FROM metric_names WHERE name NOT LIKE '%\_proc' AND name NOT LIKE 'disk_total_gb_%' AND name != 'disk_used' AND name != 'ram_total_gb' AND name NOT IN ('net_in', 'net_out') AND name NOT LIKE 'network_%' ORDER BY name");
+        // Получаем только метрики которые есть у сервера и отображаются на графиках
+        $stmt = $this->pdo->prepare("
+            SELECT DISTINCT mn.id, mn.name, mn.unit
+            FROM metric_names mn
+            JOIN server_metrics sm ON sm.metric_name_id = mn.id
+            WHERE sm.server_id = :id
+            AND (
+                mn.name IN ('cpu_load', 'ram_used')
+                OR mn.name LIKE 'disk_used_%'
+                OR mn.name LIKE 'net_in_%'
+                OR mn.name LIKE 'net_out_%'
+                OR mn.name LIKE 'temp_%'
+            )
+            ORDER BY 
+                CASE 
+                    WHEN mn.name = 'cpu_load' THEN 1
+                    WHEN mn.name = 'ram_used' THEN 2
+                    WHEN mn.name LIKE 'disk_used_%' THEN 3
+                    WHEN mn.name LIKE 'net_in_%' THEN 4
+                    WHEN mn.name LIKE 'net_out_%' THEN 5
+                    WHEN mn.name LIKE 'temp_%' THEN 6
+                END,
+                mn.name
+        ");
+        $stmt->execute([':id' => $id]);
         $metricTypes = $stmt->fetchAll();
 
         $stmt = $this->pdo->prepare("DELETE FROM metric_thresholds WHERE server_id = :server_id");

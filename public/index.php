@@ -233,6 +233,7 @@ $app->get('/api/status', function (Request $request, Response $response, $args) 
 $app->get('/agent/install.sh', [$agentController, 'generateInstallScript']);
 $app->get('/agent/install.ps1', [$agentController, 'generateWindowsInstallScript']);
 $app->get('/agent/install.bat', [$agentController, 'generateWindowsBatScript']);
+$app->get('/agent/agent.py', [$agentController, 'downloadAgent']);
 
 // Run app
 $app->run();

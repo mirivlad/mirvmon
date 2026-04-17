@@ -169,27 +169,40 @@
                             {% endif %}
                         {% endfor %}
 
-                        {% for iface in net_interfaces %}
-                        {% if metrics['net_in_' ~ iface] is defined and metrics['net_out_' ~ iface] is defined %}
-                        <div class="row">
-                            <div class="col-12 mb-4">
-                                <div class="card">
-                                    <div class="card-header">
-                                        <h6 class="mb-0"><i class="fas fa-network-wired"></i> Сеть: {{ iface }}</h6>
-                                    </div>
-                                    <div class="card-body">
-                                        <canvas id="chart-net-{{ iface }}" width="100%" height="200"></canvas>
+                        {% if net_interfaces|length > 0 %}
+                            {% for iface in net_interfaces %}
+                            {% if metrics['net_in_' ~ iface] is defined and metrics['net_out_' ~ iface] is defined %}
+                            <div class="row">
+                                <div class="col-12 mb-4">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 class="mb-0"><i class="fas fa-network-wired"></i> Сеть: {{ iface }}</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <canvas id="chart-net-{{ iface }}" width="100%" height="200"></canvas>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                            {% endif %}
+                            {% endfor %}
+                        {% else %}
+                            <div class="alert alert-warning mb-4">
+                                <i class="fas fa-network-wired"></i> Данные о сетевых интерфейсах не получены
+                            </div>
                         {% endif %}
-                        {% endfor %}
 
                         
 
                         
                         <!-- Температуры: один общий график -->
+                        {% set has_temps = false %}
+                        {% for metricName in metrics|keys %}
+                            {% if metricName starts with 'temp_' %}
+                                {% set has_temps = true %}
+                            {% endif %}
+                        {% endfor %}
+
                         <div class="row mb-4">
                             <div class="col-12">
                                 <div class="card">
@@ -197,44 +210,65 @@
                                         <h6 class="mb-0"><i class="fas fa-thermometer-half"></i> Температуры</h6>
                                     </div>
                                     <div class="card-body">
-                                        <canvas id="chart-temperatures" width="100%" height="300"></canvas>
+                                        {% if has_temps %}
+                                            <canvas id="chart-temperatures" width="100%" height="300"></canvas>
+                                        {% else %}
+                                            <div class="alert alert-info mb-0">
+                                                <i class="fas fa-thermometer-half"></i> Температурные датчики недоступны (возможно виртуальный сервер)
+                                            </div>
+                                        {% endif %}
                                     </div>
                                 </div>
                             </div>
                         </div>
 
 <!-- Диски: Doughnut графики -->
+                        {% set has_disk_parts = false %}
+                        {% for metricName in metrics|keys %}
+                            {% if metricName starts with 'disk_used_' and metricName != 'disk_used' %}
+                                {% set has_disk_parts = true %}
+                            {% endif %}
+                        {% endfor %}
+
                         <div class="row mb-3">
-                            {% for metricName, metricData in metrics %}
-                                {% if metricName starts with 'disk_used_' and metricName != 'disk_used' %}
-                                <div class="col-md-4 mb-3">
-                                    <div class="card h-100">
-                                        <div class="card-body text-center">
-                                            <h6 class="card-title mb-2">
-                                                {% if metricName == 'disk_used_root' %}/ (корень)
-                                                {% elseif metricName == 'disk_used_home' %}/home
-                                                {% elseif metricName == 'disk_used_boot' %}/boot
-                                                {% elseif metricName == 'disk_used_mnt_data' %}/mnt/data
-                                                {% else %}{{ metricName|replace({'disk_used_': '', '_': ' '})|title }}
-                                                {% endif %}
-                                            </h6>
-                                            {% set pct = metricData[0].value|round(1) %}
-                                            {% set iface = metricName|replace({'disk_used_': ''}) %}
-                                            {% set totalGB = metrics['disk_total_gb_' ~ iface][0].value|default(0) %}
-                                            {% set usedGB = (pct / 100 * totalGB)|round(1) %}
-                                            {% set freeGB = (totalGB - usedGB)|round(1) %}
-                                            <div class="mb-1">
-                                                <span class="badge bg-success">Свободно: {{ freeGB }} ГБ</span>
-                                                <span class="badge bg-danger ms-1">Занято: {{ usedGB }} ГБ</span>
+                            {% if has_disk_parts %}
+                                {% for metricName, metricData in metrics %}
+                                    {% if metricName starts with 'disk_used_' and metricName != 'disk_used' %}
+                                    <div class="col-md-4 mb-3">
+                                        <div class="card h-100">
+                                            <div class="card-body text-center">
+                                                <h6 class="card-title mb-2">
+                                                    {% if metricName == 'disk_used_root' %}/ (корень)
+                                                    {% elseif metricName == 'disk_used_home' %}/home
+                                                    {% elseif metricName == 'disk_used_boot' %}/boot
+                                                    {% elseif metricName == 'disk_used_mnt_data' %}/mnt/data
+                                                    {% else %}{{ metricName|replace({'disk_used_': '', '_': ' '})|title }}
+                                                    {% endif %}
+                                                </h6>
+                                                {% set pct = metricData[0].value|round(1) %}
+                                                {% set iface = metricName|replace({'disk_used_': ''}) %}
+                                                {% set totalGB = metrics['disk_total_gb_' ~ iface][0].value|default(0) %}
+                                                {% set usedGB = (pct / 100 * totalGB)|round(1) %}
+                                                {% set freeGB = (totalGB - usedGB)|round(1) %}
+                                                <div class="mb-1">
+                                                    <span class="badge bg-success">Свободно: {{ freeGB }} ГБ</span>
+                                                    <span class="badge bg-danger ms-1">Занято: {{ usedGB }} ГБ</span>
+                                                </div>
+                                                <p class="text-muted small mb-1">{{ pct }}% из {{ totalGB }} ГБ</p>
+                                                <p class="text-muted small">{{ metricData[0].created_at|date('d.m.Y H:i') }}</p>
+                                                <div style="max-width: 150px; margin: 0 auto;"><canvas id="chart-{{ metricName }}"></canvas></div>
                                             </div>
-                                            <p class="text-muted small mb-1">{{ pct }}% из {{ totalGB }} ГБ</p>
-                                            <p class="text-muted small">{{ metricData[0].created_at|date('d.m.Y H:i') }}</p>
-                                            <div style="max-width: 150px; margin: 0 auto;"><canvas id="chart-{{ metricName }}"></canvas></div>
                                         </div>
                                     </div>
+                                    {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                <div class="col-12">
+                                    <div class="alert alert-warning">
+                                        <i class="fas fa-hdd"></i> Данные о разделах диска не получены. Проверьте работу агента.
+                                    </div>
                                 </div>
-                                {% endif %}
-                            {% endfor %}
+                            {% endif %}
                         </div>
                     </div>
 
@@ -412,12 +446,36 @@
                             <div class="col-12">
                                 <form method="post" action="/servers/{{ server.id }}/thresholds">
                                     {% for metricType in allMetricTypes %}
+                                    {% set metricUnit = '%' %}
+                                    {% set metricLabel = metricType.name %}
+                                    {% if metricType.name starts with 'temp_' %}
+                                        {% set metricUnit = '°C' %}
+                                        {% set metricLabel = 'Температура ' ~ (metricType.name|replace({'temp_': '', '_': ' '}))|title %}
+                                    {% elseif metricType.name == 'cpu_load' %}
+                                        {% set metricLabel = 'Загрузка CPU' %}
+                                    {% elseif metricType.name == 'ram_used' %}
+                                        {% set metricLabel = 'Использование RAM' %}
+                                    {% elseif metricType.name starts with 'disk_used_' %}
+                                        {% set iface = metricType.name|replace({'disk_used_': ''}) %}
+                                        {% if iface == 'root' %}{% set metricLabel = 'Диск (корень /)' %}
+                                        {% elseif iface == 'home' %}{% set metricLabel = 'Диск (/home)' %}
+                                        {% elseif iface == 'boot' %}{% set metricLabel = 'Диск (/boot)' %}
+                                        {% elseif iface == 'mnt_data' %}{% set metricLabel = 'Диск (/mnt/data)' %}
+                                        {% else %}{% set metricLabel = 'Диск (/' ~ (iface|replace({'_': '/'})) ~ ')' %}
+                                        {% endif %}
+                                    {% elseif metricType.name starts with 'net_in_' %}
+                                        {% set iface = metricType.name|replace({'net_in_': ''}) %}
+                                        {% set metricLabel = 'Сеть входящая (' ~ iface ~ ')' %}
+                                    {% elseif metricType.name starts with 'net_out_' %}
+                                        {% set iface = metricType.name|replace({'net_out_': ''}) %}
+                                        {% set metricLabel = 'Сеть исходящая (' ~ iface ~ ')' %}
+                                    {% endif %}
                                     <div class="card mb-2">
                                         <div class="card-body py-2">
                                             <div class="row align-items-center">
                                                 <div class="col-md-3 mb-2 mb-md-0">
-                                                    <strong>{{ metricType.name|replace({'_': ' ', 'load': 'загрузка', 'used': 'использование'})|title }}</strong>
-                                                    {% if metricType.unit %}<small class="text-muted">({{ metricType.unit }})</small>{% endif %}
+                                                    <strong>{{ metricLabel }}</strong>
+                                                    <small class="text-muted">({{ metricUnit }})</small>
                                                 </div>
                                                 <div class="col-md-3 mb-2 mb-md-0">
                                                     <div class="input-group input-group-sm" title="Порог предупреждения">
@@ -430,7 +488,7 @@
                                                                {% if existingThresholds[metricType.name].warning is defined %}
                                                                value="{{ existingThresholds[metricType.name].warning }}"
                                                                {% endif %}>
-                                                        <span class="input-group-text">%</span>
+                                                        <span class="input-group-text">{{ metricUnit }}</span>
                                                     </div>
                                                 </div>
                                                 <div class="col-md-3 mb-2 mb-md-0">
@@ -444,7 +502,7 @@
                                                                {% if existingThresholds[metricType.name].critical is defined %}
                                                                value="{{ existingThresholds[metricType.name].critical }}"
                                                                {% endif %}>
-                                                        <span class="input-group-text">%</span>
+                                                        <span class="input-group-text">{{ metricUnit }}</span>
                                                     </div>
                                                 </div>
                                                 <div class="col-md-3">
@@ -566,7 +624,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Параметры системы
-var ramTotalGB = {{ metrics['ram_total_gb'] is defined ? metrics['ram_total_gb'][0].value : 0 }};
+var ramTotalGB = {{ metrics['ram_total_gb'] is defined ? metrics['ram_total_gb'][0].value : 'null' }};
 var diskTotalGB = {
 {% for m, _data in metrics %}
 {% if m starts with 'disk_total_gb_' %}
@@ -664,12 +722,18 @@ const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metr
                             lines.push('Время: ' + time);
 {% if metricName == 'ram_used' %}
                             var ramPct = data{{ metricName }}[dataIndex];
-                            var ramUsed = (ramPct / 100 * ramTotalGB).toFixed(1);
-                            var ramFree = (ramTotalGB - ramUsed).toFixed(1);
-                            lines.push('Всего: ' + ramTotalGB.toFixed(1) + ' ГБ');
-                            lines.push('Занято: ' + ramUsed + ' ГБ');
-                            lines.push('Свободно: ' + ramFree + ' ГБ');
-                            lines.push('');
+                            if (ramTotalGB !== null) {
+                                var ramUsed = (ramPct / 100 * ramTotalGB).toFixed(1);
+                                var ramFree = (ramTotalGB - ramUsed).toFixed(1);
+                                lines.push('Всего: ' + ramTotalGB.toFixed(1) + ' ГБ');
+                                lines.push('Занято: ' + ramUsed + ' ГБ');
+                                lines.push('Свободно: ' + ramFree + ' ГБ');
+                                lines.push('');
+                            } else {
+                                lines.push('RAM: ' + ramPct + '%');
+                                lines.push('(данные о памяти недоступны)');
+                                lines.push('');
+                            }
                             if (data.top_ram && data.top_ram.length > 0) {
                                 lines.push('TOP RAM:');
                                 data.top_ram.forEach(function(proc) {
