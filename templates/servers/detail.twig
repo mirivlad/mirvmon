@@ -24,9 +24,9 @@
                 </div>
             </div>
             <div class="card-body">
-                <!-- Информация о сервере -->
+                <!-- Информация о сервере и аптайм -->
                 <div class="row mb-4">
-                    <div class="col-md-6">
+                    <div class="col-md-8">
                         <h5>Информация о сервере</h5>
                         <table class="table table-borderless">
                             <tr>
@@ -62,6 +62,37 @@
                                 </td>
                             </tr>
                         </table>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-primary h-100">
+                            <div class="card-header bg-primary text-white">
+                                <h6 class="mb-0"><i class="fas fa-clock"></i> Время работы</h6>
+                            </div>
+                            <div class="card-body text-center d-flex flex-column justify-content-center">
+                                {% if server.latest_metrics.uptime is defined %}
+                                    {% set uptime_sec = server.latest_metrics.uptime.value %}
+                                    <div class="mb-2">
+                                        {% if uptime_sec >= 86400 %}
+                                            <span class="badge bg-success fs-6 me-1">{{ (uptime_sec / 86400)|round(0, 'floor') }}д</span>
+                                        {% endif %}
+                                        {% if uptime_sec >= 3600 %}
+                                            <span class="badge bg-info fs-6 me-1">{{ ((uptime_sec % 86400) / 3600)|round(0, 'floor') }}ч</span>
+                                        {% endif %}
+                                        {% if uptime_sec >= 60 %}
+                                            <span class="badge bg-secondary fs-6">{{ ((uptime_sec % 3600) / 60)|round(0, 'floor') }}м</span>
+                                        {% endif %}
+                                    </div>
+                                    <small class="text-muted">
+                                        <i class="fas fa-play"></i> {{ server.created_at|date('d.m.Y H:i') }}
+                                    </small>
+                                {% else %}
+                                    <div class="text-muted">
+                                        <i class="fas fa-clock fa-2x mb-2"></i>
+                                        <p class="mb-0">Нет данных</p>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -750,8 +781,8 @@ const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metr
                             lines.push('Занято: ' + diskUsed + ' ГБ');
                             lines.push('Свободно: ' + diskFree + ' ГБ');
 {% else %}
-                            lines.push('Значение: ' + data{{ metricName }}[dataIndex]);
 {% if metricName == 'cpu_load' %}
+                            lines.push('CPU: ' + data{{ metricName }}[dataIndex] + '%');
                             if (data.top_cpu && data.top_cpu.length > 0) {
                                 lines.push('');
                                 lines.push('TOP CPU:');
@@ -759,6 +790,8 @@ const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metr
                                     lines.push('  ' + ((proc.cmdline || '').trim() || proc.name) + ': ' + proc.value + '%');
                                 });
                             }
+{% else %}
+                            lines.push('Значение: ' + data{{ metricName }}[dataIndex]);
 {% endif %}
 {% endif %}
                             

@@ -206,6 +206,7 @@ class ServerDetailController extends Model
             FROM metric_names mn
             JOIN server_metrics sm ON sm.metric_name_id = mn.id
             WHERE sm.server_id = :id
+            AND mn.name != 'uptime'
             AND (
                 mn.name IN ('cpu_load', 'ram_used')
                 OR mn.name LIKE 'disk_used_%'
@@ -315,6 +316,7 @@ class ServerDetailController extends Model
             FROM metric_names mn
             JOIN server_metrics sm ON sm.metric_name_id = mn.id
             WHERE sm.server_id = :id
+            AND mn.name != 'uptime'
             AND (
                 mn.name IN ('cpu_load', 'ram_used')
                 OR mn.name LIKE 'disk_used_%'
