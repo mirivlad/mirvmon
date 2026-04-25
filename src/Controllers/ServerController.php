@@ -152,6 +152,12 @@ class ServerController extends Model
         $stmt->execute([':server_id' => $id]);
         $allMetrics = $stmt->fetchAll();
 
+        // Декодируем сохранённые метрики
+        $savedMetrics = [];
+        if (!empty($server['display_metrics'])) {
+            $savedMetrics = json_decode($server['display_metrics'], true) ?? [];
+        }
+
         if (!$server) {
             return $response->withHeader('Location', '/servers')->withStatus(302);
         }
@@ -161,7 +167,8 @@ class ServerController extends Model
             'server' => $server,
             'groups' => $groups,
             'agent_token' => $decryptedToken,
-            'allMetrics' => $allMetrics
+            'allMetrics' => $allMetrics,
+            'server_display_metrics' => $savedMetrics
         ];
 
         return $this->twig->render($response, 'servers/edit.twig', $templateData);
