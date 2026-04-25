@@ -867,6 +867,9 @@ function loadDetailedMetrics{{ metricName|replace({'-': '_', '.': '_'}) }}(start
                 chart.data.labels = data.labels;
                 chart.data.datasets[0].data = data.datasets[metricName];
                 chart.update();
+                
+                // Обновляем переменную labels для тултипов
+                window['labels{{ metricName }}'] = data.labels;
             }
         })
         .catch(function() {

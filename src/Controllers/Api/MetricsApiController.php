@@ -29,8 +29,19 @@ class MetricsApiController extends Model
 
         if ($startParam && $endParam) {
             // Используем переданные даты
-            $startDate = new DateTime($startParam);
-            $endDate = new DateTime($endParam);
+            // Парсим формат d.m H:i (20.04 13:59)
+            $startDateStr = $startParam;
+            $endDateStr = $endParam;
+            
+            if (preg_match('/^\d{1,2}\.\d{2} \d{1,2}:\d{2}$/', $startParam)) {
+                $startDateStr = date('Y') . '-' . preg_replace('/^(\d{1,2})\.(\d{2}) (\d{1,2}):(\d{2})$/', '$2-$1 $3:$4', $startParam);
+            }
+            if (preg_match('/^\d{1,2}\.\d{2} \d{1,2}:\d{2}$/', $endParam)) {
+                $endDateStr = date('Y') . '-' . preg_replace('/^(\d{1,2})\.(\d{2}) (\d{1,2}):(\d{2})$/', '$2-$1 $3:$4', $endParam);
+            }
+            
+            $startDate = new DateTime($startDateStr);
+            $endDate = new DateTime($endDateStr);
         } else {
             // Вычисляем по period
             switch ($period) {
