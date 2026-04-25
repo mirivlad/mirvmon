@@ -141,6 +141,17 @@ class ServerController extends Model
         $tokenRow = $stmt->fetch();
         $decryptedToken = $tokenRow ? \App\Utils\EncryptionHelper::decrypt($tokenRow['encrypted_token']) : null;
 
+        // Получаем все метрики которые есть у серве��а
+        $stmt = $this->pdo->prepare("
+            SELECT DISTINCT mn.id, mn.name, mn.unit
+            FROM metric_names mn
+            JOIN server_metrics sm ON sm.metric_name_id = mn.id
+            WHERE sm.server_id = :server_id
+            ORDER BY mn.name
+        ");
+        $stmt->execute([':server_id' => $id]);
+        $allMetrics = $stmt->fetchAll();
+
         if (!$server) {
             return $response->withHeader('Location', '/servers')->withStatus(302);
         }
@@ -149,7 +160,8 @@ class ServerController extends Model
             'title' => 'Редактировать сервер',
             'server' => $server,
             'groups' => $groups,
-            'agent_token' => $decryptedToken
+            'agent_token' => $decryptedToken,
+            'allMetrics' => $allMetrics
         ];
 
         return $this->twig->render($response, 'servers/edit.twig', $templateData);
@@ -160,6 +172,10 @@ class ServerController extends Model
         $id = $args['id'];
         $params = $request->getParsedBody();
 
+        // Собираем выбранные метрики
+        $displayMetrics = $params['display_metrics'] ?? [];
+        $displayMetricsJson = json_encode(array_values($displayMetrics));
+
         $stmt = $this->pdo->prepare("
             UPDATE servers 
             SET name = :name, 
@@ -167,7 +183,8 @@ class ServerController extends Model
                 group_id = :group_id, 
                 description = :description,
                 offline_timeout = :offline_timeout,
-                notify_on_offline = :notify_on_offline
+                notify_on_offline = :notify_on_offline,
+                display_metrics = :display_metrics
             WHERE id = :id
         ");
 
@@ -178,7 +195,8 @@ class ServerController extends Model
             ':group_id' => $params['group_id'] ?? null,
             ':description' => $params['description'] ?? '',
             ':offline_timeout' => (int)($params['offline_timeout'] ?? 300),
-            ':notify_on_offline' => isset($params['notify_on_offline']) ? 1 : 0
+            ':notify_on_offline' => isset($params['notify_on_offline']) ? 1 : 0,
+            ':display_metrics' => $displayMetricsJson
         ]);
 
         if ($result) {

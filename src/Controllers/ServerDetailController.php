@@ -38,6 +38,16 @@ class ServerDetailController extends Model
             return $response->withHeader('Location', '/servers')->withStatus(302);
         }
 
+        // Получаем настройки отображаемых метрик
+        $displayMetricsSetting = $server['display_metrics'] ?? null;
+        $displayMetrics = null;
+        if ($displayMetricsSetting) {
+            $decoded = json_decode($displayMetricsSetting, true);
+            if (is_array($decoded) && count($decoded) > 0) {
+                $displayMetrics = $decoded;
+            }
+        }
+
         // Получаем параметры
         $queryParams = $request->getQueryParams();
         $startDate = $queryParams['start'] ?? null;
@@ -121,6 +131,19 @@ class ServerDetailController extends Model
         $startStr = $startDate->format('Y-m-d H:i:s');
         $endStr = $endDate->format('Y-m-d H:i:s');
         
+        // Формируем фильтр метрик из настроек сервера
+        $metricsFilter = '';
+        $metricParams = [];
+        if ($displayMetrics) {
+            $placeholders = [];
+            foreach ($displayMetrics as $i => $m) {
+                $key = ':metric_' . $i;
+                $placeholders[] = $key;
+                $metricParams[$key] = $m;
+            }
+            $metricsFilter = 'AND mn.name IN (' . implode(', ', $placeholders) . ')';
+        }
+        
         // Запрос с агрегацией если нужно
         if ($groupBy) {
             // Оптимизированный запрос с подзапросом и LIMIT для больших периодов
@@ -140,15 +163,13 @@ class ServerDetailController extends Model
                     LIMIT 200000
                 ) sm
                 INNER JOIN metric_names mn ON mn.id = sm.metric_name_id
-                WHERE mn.name IN ('cpu_load', 'ram_used', 'ram_total_gb', 'disk_used', 'disk_used_root', 
-                    'disk_used_home', 'disk_used_boot', 'disk_total_gb_root', 'disk_total_gb_home', 
-                    'temp_cpu', 'temp_disk_sda', 'temp_disk_sdb', 'temp_disk_sdc',
-                    'net_in_enp4s0', 'net_out_enp4s0', 'disk_used_mnt_data')
+                WHERE 1=1 {$metricsFilter}
                 {$groupBy}
                 ORDER BY time_bucket ASC
             ";
             $stmt = $this->pdo->prepare($sql);
-            $stmt->execute([':id' => $id, ':start_date' => $startStr, ':end_date' => $endStr]);
+            $executeParams = array_merge([':id' => $id, ':start_date' => $startStr, ':end_date' => $endStr], $metricParams);
+            $stmt->execute($executeParams);
         } else {
             $sql = "
                 SELECT sm.value, mn.name, mn.unit, sm.created_at
@@ -158,15 +179,13 @@ class ServerDetailController extends Model
                 WHERE sm.server_id = :id
                 AND sm.created_at >= :start_date
                 AND sm.created_at <= :end_date
-                AND mn.name IN ('cpu_load', 'ram_used', 'ram_total_gb', 'disk_used', 'disk_used_root', 
-                    'disk_used_home', 'disk_used_boot', 'disk_total_gb_root', 'disk_total_gb_home', 
-                    'temp_cpu', 'temp_disk_sda', 'temp_disk_sdb', 'temp_disk_sdc',
-                    'net_in_enp4s0', 'net_out_enp4s0', 'disk_used_mnt_data')
+                {$metricsFilter}
                 ORDER BY sm.created_at ASC
                 LIMIT 5000
             ";
             $stmt = $this->pdo->prepare($sql);
-            $stmt->execute([':id' => $id, ':start_date' => $startStr, ':end_date' => $endStr]);
+            $executeParams = array_merge([':id' => $id, ':start_date' => $startStr, ':end_date' => $endStr], $metricParams);
+            $stmt->execute($executeParams);
         }
         
         $metrics = $stmt->fetchAll();
