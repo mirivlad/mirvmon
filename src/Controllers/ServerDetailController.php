@@ -122,19 +122,24 @@ class ServerDetailController extends Model
         $endStr = $endDate->format('Y-m-d H:i:s');
         
         // Запрос с агрегацией если нужно
+        // Используем подзапрос для ограничения данных и предотвращения таймаута
         if ($groupBy) {
             $sql = "
                 SELECT 
-                    AVG(sm.value) as value,
-                    mn.name,
-                    mn.unit,
-                    DATE_FORMAT(sm.created_at, '{$bucketFormat}') as time_bucket
-                FROM server_metrics sm
-                JOIN metric_names mn ON sm.metric_name_id = mn.id
-                WHERE sm.server_id = :id
-                AND sm.created_at >= :start_date
-                AND sm.created_at <= :end_date
-                AND mn.name != 'uptime'
+                    AVG(inner_q.value) as value,
+                    inner_q.name,
+                    inner_q.unit,
+                    DATE_FORMAT(inner_q.created_at, '{$bucketFormat}') as time_bucket
+                FROM (
+                    SELECT sm.value, mn.name, mn.unit, sm.created_at
+                    FROM server_metrics sm
+                    JOIN metric_names mn ON sm.metric_name_id = mn.id
+                    WHERE sm.server_id = :id
+                    AND sm.created_at >= :start_date
+                    AND sm.created_at <= :end_date
+                    AND mn.name != 'uptime'
+                    ORDER BY sm.created_at ASC
+                ) inner_q
                 {$groupBy}
                 ORDER BY time_bucket ASC
             ";
@@ -150,6 +155,7 @@ class ServerDetailController extends Model
                 AND sm.created_at <= :end_date
                 AND mn.name != 'uptime'
                 ORDER BY sm.created_at ASC
+                LIMIT 5000
             ";
             $stmt = $this->pdo->prepare($sql);
             $stmt->execute([':id' => $id, ':start_date' => $startStr, ':end_date' => $endStr]);
