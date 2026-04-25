@@ -436,60 +436,75 @@ class MetricsController extends Model
 
     public function getProcesses(Request $request, Response $response, $args)
     {
-        $serverId = $args['id'];
-        $timeParam = $request->getQueryParams()['time'] ?? null;
+        try {
+            $serverId = $args['id'];
+            $timeParam = $request->getQueryParams()['time'] ?? null;
 
-        if (!$timeParam) {
-            return $response->withStatus(400)->getBody()->write(json_encode(['error' => 'Time parameter required']));
+            if (!$timeParam) {
+                $response->getBody()->write(json_encode(['error' => 'Time parameter required']));
+                return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+            }
+
+            $timestamp = strtotime($timeParam);
+            // Парсинг формата d.m H:i (12.04 07:48)
+            if ($timestamp === false && preg_match("/^(\d{1,2})\.(\d{2}) (\d{1,2}):(\d{2})$/", $timeParam, $m)) {
+                $timestamp = strtotime(date("Y") . "-" . $m[2] . "-" . $m[1] . " " . $m[3] . ":" . $m[4] . ":00");
+            }
+
+            if ($timestamp === false && preg_match('/^\d{1,2}:\d{2}$/', $timeParam)) {
+                $today = date('Y-m-d');
+                $timestamp = strtotime($today . ' ' . $timeParam);
+            }
+
+            // Если timestamp всё ещё false или равен 0 (1970) - возвращаем пустой результат
+            if ($timestamp === false || $timestamp < 0) {
+                $response->getBody()->write(json_encode([
+                    'top_cpu' => [],
+                    'top_ram' => [],
+                    'time' => $timeParam,
+                    'error' => 'Invalid time format'
+                ]));
+                return $response->withHeader('Content-Type', 'application/json');
+            }
+
+            $time = date('Y-m-d H:i:s', $timestamp);
+
+            $stmt = $this->pdo->prepare("
+                SELECT value FROM server_metrics sm
+                JOIN metric_names mn ON sm.metric_name_id = mn.id
+                WHERE sm.server_id = :server_id AND mn.name = 'top_cpu_proc'
+                AND sm.created_at BETWEEN DATE_SUB(:time1, INTERVAL 30 SECOND) AND DATE_ADD(:time2, INTERVAL 30 SECOND)
+                ORDER BY ABS(TIMESTAMPDIFF(SECOND, sm.created_at, :time3)) LIMIT 1
+            ");
+            $stmt->execute([':server_id' => $serverId, ':time1' => $time, ':time2' => $time, ':time3' => $time]);
+            $topCpuResult = $stmt->fetch();
+
+            $stmt = $this->pdo->prepare("
+                SELECT value FROM server_metrics sm
+                JOIN metric_names mn ON sm.metric_name_id = mn.id
+                WHERE sm.server_id = :server_id AND mn.name = 'top_ram_proc'
+                AND sm.created_at BETWEEN DATE_SUB(:time1, INTERVAL 30 SECOND) AND DATE_ADD(:time2, INTERVAL 30 SECOND)
+                ORDER BY ABS(TIMESTAMPDIFF(SECOND, sm.created_at, :time3)) LIMIT 1
+            ");
+            $stmt->execute([':server_id' => $serverId, ':time1' => $time, ':time2' => $time, ':time3' => $time]);
+            $topRamResult = $stmt->fetch();
+
+            $topCpu = $topCpuResult ? json_decode($topCpuResult['value'], true) : [];
+            $topRam = $topRamResult ? json_decode($topRamResult['value'], true) : [];
+
+            $response->getBody()->write(json_encode([
+                'top_cpu' => $topCpu,
+                'top_ram' => $topRam,
+                'time' => $time
+            ]));
+
+            return $response->withHeader('Content-Type', 'application/json');
+        } catch (\Exception $e) {
+            $response->getBody()->write(json_encode([
+                'error' => $e->getMessage()
+            ]));
+            return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
         }
-
-        $timestamp = strtotime($timeParam);
-        // Парсинг формата d.m H:i (12.04 07:48)
-        if ($timestamp === false && preg_match("/^(\d{1,2})\.(\d{2}) (\d{1,2}):(\d{2})$/", $timeParam, $m)) {
-            $timestamp = strtotime(date("Y") . "-" . $m[2] . "-" . $m[1] . " " . $m[3] . ":" . $m[4] . ":00");
-        }
-
-        if ($timestamp === false && preg_match('/^\d{1,2}:\d{2}$/', $timeParam)) {
-            $today = date('Y-m-d');
-            $timestamp = strtotime($today . ' ' . $timeParam);
-        }
-
-        if ($timestamp === false) {
-            return $response->withStatus(400)->getBody()->write(json_encode(['error' => 'Invalid time format']));
-        }
-
-        $time = date('Y-m-d H:i:s', $timestamp);
-
-        $stmt = $this->pdo->prepare("
-            SELECT value FROM server_metrics sm
-            JOIN metric_names mn ON sm.metric_name_id = mn.id
-            WHERE sm.server_id = :server_id AND mn.name = 'top_cpu_proc'
-            AND sm.created_at BETWEEN DATE_SUB(:time1, INTERVAL 30 SECOND) AND DATE_ADD(:time2, INTERVAL 30 SECOND)
-            ORDER BY ABS(TIMESTAMPDIFF(SECOND, sm.created_at, :time3)) LIMIT 1
-        ");
-        $stmt->execute([':server_id' => $serverId, ':time1' => $time, ':time2' => $time, ':time3' => $time]);
-        $topCpuResult = $stmt->fetch();
-
-        $stmt = $this->pdo->prepare("
-            SELECT value FROM server_metrics sm
-            JOIN metric_names mn ON sm.metric_name_id = mn.id
-            WHERE sm.server_id = :server_id AND mn.name = 'top_ram_proc'
-            AND sm.created_at BETWEEN DATE_SUB(:time1, INTERVAL 30 SECOND) AND DATE_ADD(:time2, INTERVAL 30 SECOND)
-            ORDER BY ABS(TIMESTAMPDIFF(SECOND, sm.created_at, :time3)) LIMIT 1
-        ");
-        $stmt->execute([':server_id' => $serverId, ':time1' => $time, ':time2' => $time, ':time3' => $time]);
-        $topRamResult = $stmt->fetch();
-
-        $topCpu = $topCpuResult ? json_decode($topCpuResult['value'], true) : [];
-        $topRam = $topRamResult ? json_decode($topRamResult['value'], true) : [];
-
-        $response->getBody()->write(json_encode([
-            'top_cpu' => $topCpu,
-            'top_ram' => $topRam,
-            'time' => $time
-        ]));
-
-        return $response->withHeader('Content-Type', 'application/json');
     }
 
     public function getMetrics(Request $request, Response $response, $args)

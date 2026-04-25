@@ -6,6 +6,7 @@ use App\Controllers\AgentController;
 use App\Controllers\AdminController;
 use App\Controllers\AlertController;
 use App\Controllers\Api\MetricsController;
+use App\Controllers\Api\MetricsApiController;
 use App\Controllers\GroupController;
 use App\Controllers\ServerController;
 use App\Controllers\ServerDetailController;
@@ -186,6 +187,10 @@ $agentController = new AgentController();
 // API для дашборда
 $dashboardApiController = new DashboardController($twig);
 $app->get('/api/dashboard/stats', [$dashboardApiController, 'getDashboardData'])->add(AuthMiddleware::class);
+
+// API для метрик сервера (динамическая загрузка)
+$metricsApiController = new MetricsApiController();
+$app->get('/api/servers/{id}/metrics', [$metricsApiController, 'getServerMetrics'])->add(AuthMiddleware::class);
 
 // Routes for groups (protected with auth middleware and csrf)
 $groupsGroup = $app->group('/groups', function ($group) use ($groupController) {

@@ -25,7 +25,8 @@ class ServerDetailController extends Model
 
         // Получаем информацию о сервере
         $stmt = $this->pdo->prepare("
-            SELECT s.*, sg.name as group_name, sg.icon as group_icon, sg.color as group_color
+            SELECT s.*, sg.name as group_name, sg.icon as group_icon, sg.color as group_color,
+            (SELECT MAX(sm.created_at) FROM server_metrics sm WHERE sm.server_id = s.id) as last_seen
             FROM servers s
             LEFT JOIN server_groups sg ON s.group_id = sg.id
             WHERE s.id = :id
@@ -133,6 +134,7 @@ class ServerDetailController extends Model
                 WHERE sm.server_id = :id
                 AND sm.created_at >= :start_date
                 AND sm.created_at <= :end_date
+                AND mn.name != 'uptime'
                 {$groupBy}
                 ORDER BY time_bucket ASC
             ";
@@ -146,6 +148,7 @@ class ServerDetailController extends Model
                 WHERE sm.server_id = :id
                 AND sm.created_at >= :start_date
                 AND sm.created_at <= :end_date
+                AND mn.name != 'uptime'
                 ORDER BY sm.created_at ASC
             ";
             $stmt = $this->pdo->prepare($sql);
@@ -246,6 +249,19 @@ class ServerDetailController extends Model
             $monitorServices = json_decode($agentConfig['monitor_services'], true) ?? [];
         }
 
+        // Получаем последние значения метрик (для виджета аптайма)
+        $stmt = $this->pdo->prepare("
+            SELECT mn.name, sm.value, sm.created_at
+            FROM server_metrics sm
+            JOIN metric_names mn ON sm.metric_name_id = mn.id
+            WHERE sm.server_id = :id
+            AND mn.name = 'uptime'
+            ORDER BY sm.created_at DESC
+            LIMIT 1
+        ");
+        $stmt->execute([':id' => $id]);
+        $latestUptime = $stmt->fetch();
+
         $templateData = [
             'title' => 'Сервер: ' . $server['name'],
             'server' => $server,
@@ -254,6 +270,7 @@ class ServerDetailController extends Model
             'existingThresholds' => $existingThresholds,
             'allServices' => $allServices,
             'monitorServices' => $monitorServices,
+            'latestUptime' => $latestUptime,
             'startDate' => $startDate->format('Y-m-d\T H:i'),
             'endDate' => $endDate->format('Y-m-d\T H:i'),
             'aggregation' => $aggConfig,

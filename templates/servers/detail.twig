@@ -69,8 +69,8 @@
                                 <h6 class="mb-0"><i class="fas fa-clock"></i> Время работы</h6>
                             </div>
                             <div class="card-body text-center d-flex flex-column justify-content-center">
-                                {% if server.latest_metrics.uptime is defined %}
-                                    {% set uptime_sec = server.latest_metrics.uptime.value %}
+                                {% if latestUptime is defined %}
+                                    {% set uptime_sec = latestUptime.value %}
                                     <div class="mb-2">
                                         {% if uptime_sec >= 86400 %}
                                             <span class="badge bg-success fs-6 me-1">{{ (uptime_sec / 86400)|round(0, 'floor') }}д</span>
@@ -83,7 +83,7 @@
                                         {% endif %}
                                     </div>
                                     <small class="text-muted">
-                                        <i class="fas fa-play"></i> {{ server.created_at|date('d.m.Y H:i') }}
+                                        <i class="fas fa-play"></i> {{ server.last_seen|date('d.m.Y H:i') }}
                                     </small>
                                 {% else %}
                                     <div class="text-muted">
@@ -581,7 +581,8 @@
 function fetchProcesses(serverId, time) {
     return new Promise(function(resolve) {
         var fullTime = time;
-        if (time && time.indexOf('-') === -1) {
+        // Если нет пробела - значит только время, добавляем текущую дату
+        if (time && time.indexOf(' ') === -1) {
             var now = new Date();
             var year = now.getFullYear();
             var month = String(now.getMonth() + 1).padStart(2, '0');
@@ -666,7 +667,7 @@ var diskTotalGB = {
 
 // Графики метрик
 {% for metricName, metricData in metrics %}
-{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and metricName!="disk_used" and not (metricName starts with "disk_used_") and not (metricName starts with "disk_total_gb_") and metricName!="ram_total_gb" and not (metricName starts with "net_in_") and not (metricName starts with "net_out_") and metricName!="network_rx" and metricName!="network_tx" and not (metricName starts with "temp_") %}
+{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and metricName!="disk_used" and not (metricName starts with "disk_used_") and not (metricName starts with "disk_total_gb_") and metricName!="ram_total_gb" and not (metricName starts with "net_in_") and not (metricName starts with "net_out_") and metricName!="network_rx" and metricName!="network_tx" and not (metricName starts with "temp_") and metricName!="uptime" %}
 const ctx{{ metricName|replace({'-': '_', '.': '_'}) }} = document.getElementById('chart-{{ metricName }}').getContext('2d');
 
 // Подготовка данных для графика
@@ -744,35 +745,25 @@ const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metr
 
                     var dataIndex = context.tooltip._active[0].index;
                     var time = labels{{ metricName }}[dataIndex];
+                    var metricValue = context.chart.data.datasets[0].data[dataIndex];
                     
-                    // Fetch processes
-                    fetch('/api/v1/agent/' + {{ server.id }} + '/processes?time=' + encodeURIComponent(time))
-                        .then(response => response.json())
-                        .then(data => {
-                            var lines = [];
-                            lines.push('Время: ' + time);
+                    fetchProcesses({{ server.id }}, time).then(function(processLines) {
+                        var lines = [];
+                        lines.push('Время: ' + time);
 {% if metricName == 'ram_used' %}
-                            var ramPct = data{{ metricName }}[dataIndex];
+                            var ramPct = metricValue;
                             if (ramTotalGB !== null) {
                                 var ramUsed = (ramPct / 100 * ramTotalGB).toFixed(1);
                                 var ramFree = (ramTotalGB - ramUsed).toFixed(1);
                                 lines.push('Всего: ' + ramTotalGB.toFixed(1) + ' ГБ');
-                                lines.push('Занято: ' + ramUsed + ' ГБ');
+                                lines.push('Занято: ' + ramUsed + ' ГБ (' + ramPct + '%)');
                                 lines.push('Свободно: ' + ramFree + ' ГБ');
-                                lines.push('');
                             } else {
                                 lines.push('RAM: ' + ramPct + '%');
                                 lines.push('(данные о памяти недоступны)');
-                                lines.push('');
-                            }
-                            if (data.top_ram && data.top_ram.length > 0) {
-                                lines.push('TOP RAM:');
-                                data.top_ram.forEach(function(proc) {
-                                    lines.push('  ' + ((proc.cmdline || '').trim() || proc.name) + ': ' + proc.value + '%');
-                                });
                             }
 {% elseif metricName starts with 'disk_used_' %}
-                            var diskPct = data{{ metricName }}[dataIndex];
+                            var diskPct = metricValue;
                             var iface = '{{ metricName }}'.replace('disk_used_', '');
                             var diskTotal = diskTotalGB[iface] || 0;
                             var diskUsed = (diskPct / 100 * diskTotal).toFixed(1);
@@ -782,31 +773,24 @@ const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metr
                             lines.push('Свободно: ' + diskFree + ' ГБ');
 {% else %}
 {% if metricName == 'cpu_load' %}
-                            lines.push('CPU: ' + data{{ metricName }}[dataIndex] + '%');
-                            if (data.top_cpu && data.top_cpu.length > 0) {
-                                lines.push('');
-                                lines.push('TOP CPU:');
-                                data.top_cpu.forEach(function(proc) {
-                                    lines.push('  ' + ((proc.cmdline || '').trim() || proc.name) + ': ' + proc.value + '%');
-                                });
-                            }
+                            lines.push('CPU: ' + metricValue + '%');
 {% else %}
-                            lines.push('Значение: ' + data{{ metricName }}[dataIndex]);
+                            lines.push('Значение: ' + metricValue);
 {% endif %}
 {% endif %}
+                        
+                        if (processLines.length > 0) {
+                            lines.push('');
+                            lines = lines.concat(processLines);
+                        }
                             
-                            // Show tooltip
-                            var position = context.chart.canvas.getBoundingClientRect();
-                            tooltipEl.innerHTML = lines.join('<br>');
-                            tooltipEl.style.opacity = 1;
-                            tooltipEl.style.left = position.left + window.pageXOffset + context.tooltip.caretX + 10 + 'px';
-                            tooltipEl.style.top = position.top + window.pageYOffset + context.tooltip.caretY + 'px';
-                            
-                            // Hide after 3 seconds
-//                            setTimeout(function() {
-//                                tooltipEl.style.opacity = 0;
-//                            }, 3000);
-                        });
+                        // Show tooltip
+                        var position = context.chart.canvas.getBoundingClientRect();
+                        tooltipEl.innerHTML = lines.join('<br>');
+                        tooltipEl.style.opacity = 1;
+                        tooltipEl.style.left = position.left + window.pageXOffset + context.tooltip.caretX + 10 + 'px';
+                        tooltipEl.style.top = position.top + window.pageYOffset + context.tooltip.caretY + 'px';
+                    });
                 }
             },
             zoom: {
@@ -848,7 +832,7 @@ chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas.addEventListener('mou
 // Глобальный обработчик для скрытия тултипов при уходе курсора за пределы canvas
 document.addEventListener('mousemove', function(e) {
 {% for metricName, metricData in metrics %}
-{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and metricName!="disk_used" and not (metricName starts with "disk_used_") and not (metricName starts with "disk_total_gb_") and metricName!="ram_total_gb" and not (metricName starts with "net_in_") and not (metricName starts with "net_out_") and metricName!="network_rx" and metricName!="network_tx" and not (metricName starts with "temp_") %}
+{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and metricName!="disk_used" and not (metricName starts with "disk_used_") and not (metricName starts with "disk_total_gb_") and metricName!="ram_total_gb" and not (metricName starts with "net_in_") and not (metricName starts with "net_out_") and metricName!="network_rx" and metricName!="network_tx" and not (metricName starts with "temp_") and metricName!="uptime" %}
     (function() {
         var canvas = chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas;
         var rect = canvas.getBoundingClientRect();
