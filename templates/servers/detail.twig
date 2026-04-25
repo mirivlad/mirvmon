@@ -804,7 +804,39 @@ const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metr
                     wheel: {
                         enabled: true
                     },
-                    mode: 'x'
+                    mode: 'x',
+                    onZoomComplete: function(chart) {
+                        // Сохраняем оригинальный диапазон если ещё не сохраняли
+                        if (!chart._originalMinIndex && !chart._originalMaxIndex) {
+                            chart._originalMinIndex = 0;
+                            chart._originalMaxIndex = chart.data.labels.length - 1;
+                        }
+                        
+                        // Получаем новый диапазон после зума
+                        var scale = chart.scales.x;
+                        var newMinIndex = Math.floor(scale.min);
+                        var newMaxIndex = Math.ceil(scale.max);
+                        
+                        // Ограничиваем индексы
+                        newMinIndex = Math.max(0, newMinIndex);
+                        newMaxIndex = Math.min(chart.data.labels.length - 1, newMaxIndex);
+                        
+                        // Если зум слишком глубокий (менее 100 точек) - загружаем детальные данные
+                        var pointsInView = newMaxIndex - newMinIndex + 1;
+                        if (pointsInView < 100 && newMinIndex < newMaxIndex) {
+                            // Определяем диапазон дат
+                            var originalLabels = chart{{ metricName|replace({'-': '_', '.': '_'}) }}._originalLabels;
+                            if (!originalLabels) {
+                                originalLabels = chart{{ metricName|replace({'-': '_', '.': '_'}) }}._originalLabels = [...chart.data.labels];
+                            }
+                            
+                            var startTime = originalLabels[newMinIndex];
+                            var endTime = originalLabels[newMaxIndex];
+                            
+                            // Загружаем детальные данные
+                            loadDetailedMetrics{{ metricName|replace({'-': '_', '.': '_'}) }}(startTime, endTime);
+                        }
+                    }
                 },
                 pan: {
                     enabled: true,
@@ -814,6 +846,33 @@ const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metr
         }
     }
 });
+
+// Функция загрузки детальных данных при зуме
+function loadDetailedMetrics{{ metricName|replace({'-': '_', '.': '_'}) }}(startTime, endTime) {
+    var chart = chart{{ metricName|replace({'-': '_', '.': '_'}) }};
+    var metricName = '{{ metricName }}';
+    var serverId = {{ server.id }};
+    
+    // Debounce - не запрашивать слишком часто
+    if (loadDetailedMetrics{{ metricName|replace({'-': '_', '.': '_'}) }}._loading) return;
+    loadDetailedMetrics{{ metricName|replace({'-': '_', '.': '_'}) }}._loading = true;
+    setTimeout(function() { loadDetailedMetrics{{ metricName|replace({'-': '_', '.': '_'}) }}._loading = false; }, 500);
+    
+    var url = '/api/servers/' + serverId + '/metrics?start=' + encodeURIComponent(startTime) + '&end=' + encodeURIComponent(endTime);
+    
+    fetch(url)
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.labels && data.datasets && data.datasets[metricName]) {
+                chart.data.labels = data.labels;
+                chart.data.datasets[0].data = data.datasets[metricName];
+                chart.update();
+            }
+        })
+        .catch(function() {
+            console.log('Failed to load detailed metrics for ' + metricName);
+        });
+}
 
 // Скрывать tooltip при уходе курсора с canvas в любую сторону
 chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas.addEventListener('mouseleave', function() {
