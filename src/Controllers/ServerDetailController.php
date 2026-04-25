@@ -122,25 +122,28 @@ class ServerDetailController extends Model
         $endStr = $endDate->format('Y-m-d H:i:s');
         
         // Запрос с агрегацией если нужно
-        // Используем подзапрос для ограничения данных и предотвращения таймаута
         if ($groupBy) {
+            // Оптимизированный запрос с подзапросом и LIMIT для больших периодов
             $sql = "
                 SELECT 
-                    AVG(inner_q.value) as value,
-                    inner_q.name,
-                    inner_q.unit,
-                    inner_q.metric_id,
-                    DATE_FORMAT(inner_q.created_at, '{$bucketFormat}') as time_bucket
+                    AVG(sm.value) as value,
+                    mn.name,
+                    mn.unit,
+                    DATE_FORMAT(sm.created_at, '{$bucketFormat}') as time_bucket
                 FROM (
-                    SELECT sm.value, mn.name, mn.unit, mn.id as metric_id, sm.created_at
-                    FROM server_metrics sm
-                    JOIN metric_names mn ON sm.metric_name_id = mn.id
-                    WHERE sm.server_id = :id
-                    AND sm.created_at >= :start_date
-                    AND sm.created_at <= :end_date
-                    AND mn.name != 'uptime'
-                    ORDER BY sm.created_at ASC
-                ) inner_q
+                    SELECT sm_inner.value, sm_inner.metric_name_id, sm_inner.created_at
+                    FROM server_metrics sm_inner
+                    FORCE INDEX (idx_server_metric_time)
+                    WHERE sm_inner.server_id = :id
+                    AND sm_inner.created_at >= :start_date
+                    AND sm_inner.created_at <= :end_date
+                    LIMIT 200000
+                ) sm
+                INNER JOIN metric_names mn ON mn.id = sm.metric_name_id
+                WHERE mn.name IN ('cpu_load', 'ram_used', 'ram_total_gb', 'disk_used', 'disk_used_root', 
+                    'disk_used_home', 'disk_used_boot', 'disk_total_gb_root', 'disk_total_gb_home', 
+                    'temp_cpu', 'temp_disk_sda', 'temp_disk_sdb', 'temp_disk_sdc',
+                    'net_in_enp4s0', 'net_out_enp4s0', 'disk_used_mnt_data')
                 {$groupBy}
                 ORDER BY time_bucket ASC
             ";
@@ -150,11 +153,15 @@ class ServerDetailController extends Model
             $sql = "
                 SELECT sm.value, mn.name, mn.unit, sm.created_at
                 FROM server_metrics sm
-                JOIN metric_names mn ON sm.metric_name_id = mn.id
+                FORCE INDEX (idx_server_metric_time)
+                JOIN metric_names mn ON mn.id = sm.metric_name_id
                 WHERE sm.server_id = :id
                 AND sm.created_at >= :start_date
                 AND sm.created_at <= :end_date
-                AND mn.name != 'uptime'
+                AND mn.name IN ('cpu_load', 'ram_used', 'ram_total_gb', 'disk_used', 'disk_used_root', 
+                    'disk_used_home', 'disk_used_boot', 'disk_total_gb_root', 'disk_total_gb_home', 
+                    'temp_cpu', 'temp_disk_sda', 'temp_disk_sdb', 'temp_disk_sdc',
+                    'net_in_enp4s0', 'net_out_enp4s0', 'disk_used_mnt_data')
                 ORDER BY sm.created_at ASC
                 LIMIT 5000
             ";
@@ -308,21 +315,21 @@ class ServerDetailController extends Model
         } elseif ($aggregateMinutes < 60) {
             // Минуты — группировка по минутам
             return [
-                'groupBy' => "GROUP BY inner_q.metric_id, DATE_FORMAT(inner_q.created_at, '%Y-%m-%d %H:%i')",
+                'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:%i')",
                 'format' => '%Y-%m-%d %H:%i',
                 'aggregate_minutes' => $aggregateMinutes
             ];
         } elseif ($aggregateMinutes < 1440) {
             // Часы — группировка по часам
             return [
-                'groupBy' => "GROUP BY inner_q.metric_id, DATE_FORMAT(inner_q.created_at, '%Y-%m-%d %H:00')",
+                'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:00')",
                 'format' => '%Y-%m-%d %H:00',
                 'aggregate_minutes' => $aggregateMinutes
             ];
         } else {
             // Дни — группировка по дням
             return [
-                'groupBy' => "GROUP BY inner_q.metric_id, DATE_FORMAT(inner_q.created_at, '%Y-%m-%d')",
+                'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d')",
                 'format' => '%Y-%m-%d',
                 'aggregate_minutes' => $aggregateMinutes
             ];
