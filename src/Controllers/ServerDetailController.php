@@ -129,9 +129,10 @@ class ServerDetailController extends Model
                     AVG(inner_q.value) as value,
                     inner_q.name,
                     inner_q.unit,
+                    inner_q.metric_id,
                     DATE_FORMAT(inner_q.created_at, '{$bucketFormat}') as time_bucket
                 FROM (
-                    SELECT sm.value, mn.name, mn.unit, sm.created_at
+                    SELECT sm.value, mn.name, mn.unit, mn.id as metric_id, sm.created_at
                     FROM server_metrics sm
                     JOIN metric_names mn ON sm.metric_name_id = mn.id
                     WHERE sm.server_id = :id
@@ -307,21 +308,21 @@ class ServerDetailController extends Model
         } elseif ($aggregateMinutes < 60) {
             // Минуты — группировка по минутам
             return [
-                'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:%i')",
+                'groupBy' => "GROUP BY inner_q.metric_id, DATE_FORMAT(inner_q.created_at, '%Y-%m-%d %H:%i')",
                 'format' => '%Y-%m-%d %H:%i',
                 'aggregate_minutes' => $aggregateMinutes
             ];
         } elseif ($aggregateMinutes < 1440) {
             // Часы — группировка по часам
             return [
-                'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:00')",
+                'groupBy' => "GROUP BY inner_q.metric_id, DATE_FORMAT(inner_q.created_at, '%Y-%m-%d %H:00')",
                 'format' => '%Y-%m-%d %H:00',
                 'aggregate_minutes' => $aggregateMinutes
             ];
         } else {
             // Дни — группировка по дням
             return [
-                'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d')",
+                'groupBy' => "GROUP BY inner_q.metric_id, DATE_FORMAT(inner_q.created_at, '%Y-%m-%d')",
                 'format' => '%Y-%m-%d',
                 'aggregate_minutes' => $aggregateMinutes
             ];
