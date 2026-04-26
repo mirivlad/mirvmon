@@ -760,7 +760,6 @@ chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas.addEventListener('mou
 
 {% endif %}
 {% endfor %}
-});
 
 
 
@@ -874,7 +873,7 @@ chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas.addEventListener('mou
     var colorIdx = 0;
 
     {% for mn, md in metrics %}
-        {% if mn in displayMetrics and mn starts with 'temp_' %}
+    {% if mn in displayMetrics and mn starts with 'temp_' %}
     if (!labelsFilled) {
         {% for p in md|slice(-1000) %}
         labels.push('{{ p.time_bucket|default(p.created_at)|date("d.m H:i") }}');
@@ -902,7 +901,7 @@ chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas.addEventListener('mou
             borderWidth: 2
         });
     })();
-        {% endif %}
+    {% endif %}
     {% endfor %}
 
     var chart = new Chart(ctx.getContext('2d'), {
