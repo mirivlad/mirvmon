@@ -15,7 +15,7 @@ $errors = 0;
 for ($i = 1; $i <= $hours; $i++) {
     $hourStart = new DateTime();
     $hourStart->modify("-{$i} hour");
-    $hourStart->setMinute(0)->setSecond(0);
+    $hourStart->setTime((int)$hourStart->format('H'), 0, 0);
     
     $hourEnd = clone $hourStart;
     $hourEnd->modify('+59 minutes +59 seconds');
@@ -24,24 +24,27 @@ for ($i = 1; $i <= $hours; $i++) {
     $periodEndStr = $hourEnd->format('Y-m-d H:59:59');
     
     // Получаем все серверы
-    $stmt = $pdo->query("SELECT id FROM servers WHERE deleted_at IS NULL");
+    $stmt = $pdo->query("SELECT id FROM servers");
     $servers = $stmt->fetchAll(PDO::FETCH_COLUMN);
     
     foreach ($servers as $serverId) {
+        // Исключаем метрики с JSON данными (top_cpu_proc, top_ram_proc)
         $sql = "
             INSERT INTO server_metrics_trends (server_id, metric_name_id, period_start, avg_value, min_value, max_value, count_samples)
             SELECT 
                 sm.server_id,
                 sm.metric_name_id,
                 :period_start,
-                AVG(sm.value),
-                MIN(sm.value),
-                MAX(sm.value),
+                AVG(CAST(sm.value AS DECIMAL(20,4))),
+                MIN(CAST(sm.value AS DECIMAL(20,4))),
+                MAX(CAST(sm.value AS DECIMAL(20,4))),
                 COUNT(*)
             FROM server_metrics sm
+            INNER JOIN metric_names mn ON sm.metric_name_id = mn.id
             WHERE sm.server_id = :server_id
             AND sm.created_at >= :start_date
             AND sm.created_at <= :end_date
+            AND mn.name NOT IN ('top_cpu_proc', 'top_ram_proc')
             GROUP BY sm.server_id, sm.metric_name_id
             ON DUPLICATE KEY UPDATE 
                 avg_value = VALUES(avg_value),

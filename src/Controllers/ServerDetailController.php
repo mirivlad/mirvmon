@@ -333,6 +333,19 @@ class ServerDetailController extends Model
             'server' => $server,
             'metrics' => $groupedMetrics,
             'displayMetrics' => $displayMetrics,
+            // Группировка метрик по категориям для отдельных секций
+            'diskMetrics' => array_filter($groupedMetrics, function($key) {
+                return str_starts_with($key, 'disk_used_');
+            }, ARRAY_FILTER_USE_KEY),
+            'tempMetrics' => array_filter($groupedMetrics, function($key) {
+                return str_starts_with($key, 'temp_');
+            }, ARRAY_FILTER_USE_KEY),
+            'netInMetrics' => array_filter($groupedMetrics, function($key) {
+                return str_starts_with($key, 'net_in_');
+            }, ARRAY_FILTER_USE_KEY),
+            'netOutMetrics' => array_filter($groupedMetrics, function($key) {
+                return str_starts_with($key, 'net_out_');
+            }, ARRAY_FILTER_USE_KEY),
             'allMetricTypes' => $allMetricTypes,
             'existingThresholds' => $existingThresholds,
             'allServices' => $allServices,

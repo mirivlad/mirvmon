@@ -21,139 +21,17 @@
                     <a href="/servers" class="btn btn-outline-secondary">
                         <i class="fas fa-arrow-left"></i> <span class="d-none d-sm-inline">Назад к списку</span>
                     </a>
-                </div>
-            </div>
-            <div class="card-body">
-                <!-- Информация о сервере и аптайм -->
-                <div class="row mb-4">
-                    <div class="col-md-8">
-                        <h5>Информация о сервере</h5>
-                        <table class="table table-borderless">
-                            <tr>
-                                <td><strong>Название:</strong></td>
-                                <td>{{ server.name }}</td>
-                            </tr>
-                            <tr>
-                                <td><strong>Адрес:</strong></td>
-                                <td>{{ server.address|default('-') }}</td>
-                            </tr>
-                            <tr>
-                                <td><strong>Группа:</strong></td>
-                                <td>
-                                    {% if server.group_name %}
-                                        <i class="fas {{ server.group_icon|default('fa-box') }}" {% if server.group_color %}style="color: {{ server.group_color }}"{% endif %}></i> {{ server.group_name }}
-                                    {% else %}
-                                        -
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            <tr>
-                                <td><strong>Описание:</strong></td>
-                                <td>{{ server.description|default('-') }}</td>
-                            </tr>
-                            <tr>
-                                <td><strong>Последние метрики:</strong></td>
-                                <td>
-                                    {% if server.last_metrics_at %}
-                                        {{ server.last_metrics_at|date('d.m.Y H:i:s') }}
-                                    {% else %}
-                                        Нет данных
-                                    {% endif %}
-                                </td>
-                            </tr>
-                        </table>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="card border-primary h-100">
-                            <div class="card-header bg-primary text-white">
-                                <h6 class="mb-0"><i class="fas fa-clock"></i> Время работы</h6>
-                            </div>
-                            <div class="card-body text-center d-flex flex-column justify-content-center">
-                                {% if latestUptime is defined %}
-                                    {% set uptime_sec = latestUptime.value %}
-                                    <div class="mb-2">
-                                        {% if uptime_sec >= 86400 %}
-                                            <span class="badge bg-success fs-6 me-1">{{ (uptime_sec / 86400)|round(0, 'floor') }}д</span>
-                                        {% endif %}
-                                        {% if uptime_sec >= 3600 %}
-                                            <span class="badge bg-info fs-6 me-1">{{ ((uptime_sec % 86400) / 3600)|round(0, 'floor') }}ч</span>
-                                        {% endif %}
-                                        {% if uptime_sec >= 60 %}
-                                            <span class="badge bg-secondary fs-6">{{ ((uptime_sec % 3600) / 60)|round(0, 'floor') }}м</span>
-                                        {% endif %}
-                                    </div>
-                                    <small class="text-muted">
-                                        <i class="fas fa-play"></i> {{ server.last_seen|date('d.m.Y H:i') }}
-                                    </small>
-                                {% else %}
-                                    <div class="text-muted">
-                                        <i class="fas fa-clock fa-2x mb-2"></i>
-                                        <p class="mb-0">Нет данных</p>
-                                    </div>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Вкладки -->
-                <ul class="nav nav-tabs" id="serverTabs" role="tablist">
-                    <li class="nav-item">
-                        <button class="nav-link active" id="metrics-tab" data-bs-toggle="tab" data-bs-target="#metrics" type="button" role="tab">
-                            <i class="fas fa-chart-line"></i> Метрики
-                        </button>
-                    </li>
-                    <li class="nav-item">
-                        <button class="nav-link" id="services-tab" data-bs-toggle="tab" data-bs-target="#services" type="button" role="tab">
-                            <i class="fas fa-cogs"></i> Сервисы
-                        </button>
-                    </li>
-                    <li class="nav-item">
-                        <button class="nav-link" id="thresholds-tab" data-bs-toggle="tab" data-bs-target="#thresholds" type="button" role="tab">
-                            <i class="fas fa-bell"></i> Пороги
-                        </button>
-                    </li>
-                </ul>
-
-                <!-- Содержимое вкладок -->
-                <div class="tab-content mt-3">
-                    <!-- Вкладка "Метрики" -->
-                    <div class="tab-pane fade show active" id="metrics" role="tabpanel">
-                        <div class="row mt-2 mb-2">
-                            <div class="col-md-12">
-                                <small class="text-muted">Период:</small>
-                            </div>
-                            <div class="col-md-12 mt-1">
-                                <div class="btn-group d-flex" role="group">
-                                    <a href="?tab=metrics&amp;period=1h" class="btn btn-outline-primary w-100 {% if period == '1h' %}active{% endif %}">
-                                        1ч
-                                    </a>
-                                    <a href="?tab=metrics&amp;period=6h" class="btn btn-outline-primary w-100 {% if period == '6h' or period is empty %}active{% endif %}">
-                                        6ч
-                                    </a>
-                                    <a href="?tab=metrics&amp;period=24h" class="btn btn-outline-primary w-100 {% if period == '24h' %}active{% endif %}">
-                                        24ч
-                                    </a>
-                                    <a href="?tab=metrics&amp;period=7d" class="btn btn-outline-primary w-100 {% if period == '7d' %}active{% endif %}">
-                                        7д
-                                    </a>
-                                    <a href="?tab=metrics&amp;period=30d" class="btn btn-outline-primary w-100 {% if period == '30d' %}active{% endif %}">
-                                        30д
-                                    </a>
-                                </div>
-                                <div class="btn-group d-flex mt-1" role="group">
-                                    <button type="button" class="btn btn-sm btn-outline-secondary w-100" onclick="resetAllZoom()" title="Сбросить интерактивный зум">
-                                        <i class="fas fa-search-minus"></i> Сбросить зум
-                                    </button>
-                                </div>
-                                <small class="text-muted">💡 Колёсико мыши = зум, перетаскивание = выделение области, Shift+колёсико = панорама</small>
-                            </div>
+</div>
                         </div>
 
-
-
+{% if not displayMetrics or displayMetrics is empty %}
+                        <div class="alert alert-warning">
+                            <i class="fas fa-info-circle"></i>
+                            Выберите метрики для отображения в <a href="/servers/{{ server.id }}/edit">настройках сервера</a>
+                        </div>
+{% else %}
                         <div class="row">
-                            {% set visibleMetrics = displayMetrics ?: ['cpu_load', 'ram_used', 'disk_used_root', 'disk_used_home', 'disk_used_boot', 'temp_cpu', 'temp_disk_sda', 'temp_disk_sdb', 'temp_disk_sdc'] %}
+                            {% set visibleMetrics = displayMetrics %}
                             {% for metricName, metricData in metrics %}
                                 {% if metricName in visibleMetrics %}
                                 <div class="col-12 mb-4">
@@ -194,7 +72,7 @@
                         </div>
                         <!-- Графики сетевых интерфейсов -->
                         {% set net_interfaces = [] %}
-                        {% for metricName in metrics|keys %}
+                        {% for metricName in displayMetrics %}
                             {% if metricName starts with 'net_in_' %}
                                 {% set iface = metricName|replace({'net_in_': ''}) %}
                                 {% set net_interfaces = net_interfaces|merge([iface]) %}
@@ -203,7 +81,7 @@
 
                         {% if net_interfaces|length > 0 %}
                             {% for iface in net_interfaces %}
-                            {% if metrics['net_in_' ~ iface] is defined and metrics['net_out_' ~ iface] is defined %}
+                            {% if iface in displayMetrics and ('net_in_' ~ iface) in displayMetrics and ('net_out_' ~ iface) in displayMetrics and metrics['net_in_' ~ iface] is defined and metrics['net_out_' ~ iface] is defined %}
                             <div class="row">
                                 <div class="col-12 mb-4">
                                     <div class="card">
@@ -229,7 +107,7 @@
                         
                         <!-- Температуры: один общий график -->
                         {% set has_temps = false %}
-                        {% for metricName in metrics|keys %}
+                        {% for metricName in displayMetrics %}
                             {% if metricName starts with 'temp_' %}
                                 {% set has_temps = true %}
                             {% endif %}
@@ -256,7 +134,7 @@
 
 <!-- Диски: Doughnut графики -->
                         {% set has_disk_parts = false %}
-                        {% for metricName in metrics|keys %}
+                        {% for metricName in displayMetrics %}
                             {% if metricName starts with 'disk_used_' and metricName != 'disk_used' %}
                                 {% set has_disk_parts = true %}
                             {% endif %}
@@ -265,7 +143,7 @@
                         <div class="row mb-3">
                             {% if has_disk_parts %}
                                 {% for metricName, metricData in metrics %}
-                                    {% if metricName starts with 'disk_used_' and metricName != 'disk_used' %}
+                                    {% if metricName starts with 'disk_used_' and metricName != 'disk_used' and metricName in displayMetrics %}
                                     <div class="col-md-4 mb-3">
                                         <div class="card h-100">
                                             <div class="card-body text-center">
@@ -667,7 +545,7 @@ var diskTotalGB = {
 };
 
 // Графики метрик
-{% set visibleMetrics = displayMetrics ?: ['cpu_load', 'ram_used', 'disk_used_root', 'disk_used_home', 'disk_used_boot', 'temp_cpu', 'temp_disk_sda', 'temp_disk_sdb', 'temp_disk_sdc'] %}
+{% set visibleMetrics = displayMetrics %}
 {% for metricName, metricData in metrics %}
 {% if metricName in visibleMetrics and metricName != 'uptime' %}
 const ctx{{ metricName|replace({'-': '_', '.': '_'}) }} = document.getElementById('chart-{{ metricName }}').getContext('2d');
@@ -895,7 +773,7 @@ chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas.addEventListener('mou
 // Глобальный обработчик mousemove для скрытия тултипов при уходе курсора за пределы canvas
 // Глобальный обработчик для скрытия тултипов при уходе курсора за пределы canvas
 document.addEventListener('mousemove', function(e) {
-{% set visibleMetrics = displayMetrics ?: ['cpu_load', 'ram_used', 'disk_used_root', 'disk_used_home', 'disk_used_boot', 'temp_cpu', 'temp_disk_sda', 'temp_disk_sdb', 'temp_disk_sdc'] %}
+{% set visibleMetrics = displayMetrics %}
 {% for metricName, metricData in metrics %}
 {% if metricName in visibleMetrics and metricName != 'uptime' %}
     (function() {
@@ -1117,7 +995,7 @@ document.addEventListener('mousemove', function(e) {
 
 // Сбросить зум на всех графиках
 function resetAllZoom() {
-{% set visibleMetrics = displayMetrics ?: ['cpu_load', 'ram_used', 'disk_used_root', 'disk_used_home', 'disk_used_boot', 'temp_cpu', 'temp_disk_sda', 'temp_disk_sdb', 'temp_disk_sdc'] %}
+{% set visibleMetrics = displayMetrics %}
 {% for metricName, metricData in metrics %}
 {% if metricName in visibleMetrics and metricName != 'uptime' %}
     if (typeof chart{{ metricName|replace({'-': '_', '.': '_'}) }} !== 'undefined') {

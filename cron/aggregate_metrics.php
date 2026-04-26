@@ -16,7 +16,7 @@ $pdo = new PDO("mysql:host={$config['host']};dbname={$config['db_name']};charset
 // Вычисляем период - прошлый час (00:00 - 00:59)
 $hourStart = new DateTime();
 $hourStart->modify('-1 hour');
-$hourStart->setMinute(0)->setSecond(0);
+$hourStart->setTime((int)$hourStart->format('H'), 0, 0);
 
 $hourEnd = clone $hourStart;
 $hourEnd->modify('+59 minutes +59 seconds');
@@ -25,7 +25,7 @@ $periodStartStr = $hourStart->format('Y-m-d H:i:s');
 $periodEndStr = $hourEnd->format('Y-m-d H:i:s');
 
 // Получаем все серверы
-$stmt = $pdo->query("SELECT id FROM servers WHERE deleted_at IS NULL");
+$stmt = $pdo->query("SELECT id FROM servers");
 $servers = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
 $processed = 0;
@@ -39,14 +39,16 @@ foreach ($servers as $serverId) {
             sm.server_id,
             sm.metric_name_id,
             :period_start,
-            AVG(sm.value),
-            MIN(sm.value),
-            MAX(sm.value),
+            AVG(CAST(sm.value AS DECIMAL(20,4))),
+            MIN(CAST(sm.value AS DECIMAL(20,4))),
+            MAX(CAST(sm.value AS DECIMAL(20,4))),
             COUNT(*)
         FROM server_metrics sm
+        INNER JOIN metric_names mn ON sm.metric_name_id = mn.id
         WHERE sm.server_id = :server_id
         AND sm.created_at >= :start_date
         AND sm.created_at <= :end_date
+        AND mn.name NOT IN ('top_cpu_proc', 'top_ram_proc')
         GROUP BY sm.server_id, sm.metric_name_id
         ON DUPLICATE KEY UPDATE 
             avg_value = VALUES(avg_value),
