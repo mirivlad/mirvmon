@@ -13,7 +13,7 @@
 
 ```bash
 git clone <repository-url>
-cd monitoring-system
+cd mon
 ```
 
 ### 2. Установка зависимостей
@@ -78,15 +78,22 @@ server {
 }
 ```
 
-### 5. Настройка конфигурации базы данных
+### 5. Настройка окружения
 
-Отредактируйте файл `config/DatabaseConfig.php` для указания параметров подключения к базе данных:
+Скопируйте `.env.example` в `.env` и укажите параметры подключения к базе данных:
 
-```php
-private $host = 'localhost';
-private $db_name = 'monitoring_system';
-private $username = 'your_db_username';
-private $password = 'your_db_password';
+```bash
+cp .env.example .env
+```
+
+Ключевые переменные:
+
+```dotenv
+DB_HOST=localhost
+DB_NAME=monitoring_system
+DB_USERNAME=mon_user
+DB_PASSWORD=your_db_password
+APP_PORT=8082
 ```
 
 ## Использование
@@ -95,14 +102,10 @@ private $password = 'your_db_password';
 
 Перейдите на `http://mon.mirv.top/login` и войдите в систему.
 
-Для первоначальной настройки создайте администратора через SQL:
+По умолчанию миграция `007_seed_admin_user.sql` создаёт пользователя:
 
-```sql
-INSERT INTO users (username, password_hash, email, role) 
-VALUES ('admin', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin@example.com', 'admin');
-```
-
-Пароль: `password`
+- логин: `admin`
+- пароль: `mirvmon2026`
 
 ### 2. Добавление серверов
 
@@ -123,6 +126,15 @@ chmod +x install.sh
 ```
 
 Агент будет установлен как systemd-сервис и начнет отправлять метрики на сервер мониторинга.
+
+## Trends и длинные периоды
+
+Для графиков за периоды больше 24 часов используются агрегированные данные из `server_metrics_trends`.
+Если после установки или миграции нужно дозаполнить историю:
+
+```bash
+php /var/www/mon/cron/backfill_trends.php 30
+```
 
 ## API
 

@@ -95,7 +95,7 @@
 
 ---
 
-## 🗄️ База данных (8 таблиц)
+## 🗄️ База данных
 
 ### Схема
 ```
@@ -153,7 +153,7 @@ alerts                         # Алерты
 
 ### SQL инъекции
 - Prepared statements (PDO) во всех запросах
-- Базовый класс `Model` предоставляет методы `fetchAll()`, `fetchOne()`, `insert()`, `update()`
+- Базовый класс `Model` даёт единый доступ к PDO через `DatabaseConfig`
 
 ---
 
@@ -172,7 +172,8 @@ alerts                         # Алерты
 | Метод | Путь | Контроллер | Описание |
 |-------|------|------------|----------|
 | GET | `/` | `DashboardController` | Дашборд (карточки серверов) |
-| GET | `/server/{id}` | `ServerDetailController` | Детали сервера + графики |
+| GET | `/server/{id}` | redirect | Legacy redirect на `/servers/{id}` |
+| GET | `/servers/{id}` | `ServerDetailController` | Детали сервера + графики |
 | GET/POST | `/servers/create` | `ServerController` | Добавить сервер |
 | GET/POST | `/servers/{id}/edit` | `ServerController` | Редактировать сервер |
 | GET/POST | `/servers/{id}/delete` | `ServerController` | Удалить сервер |
@@ -198,6 +199,7 @@ alerts                         # Алерты
 - `net_in_{iface}`, `net_out_{iface}` - трафик (% от скорости интерфейса)
 - `temp_*` - температуры (°C)
 - `top_cpu_proc`, `top_ram_proc` - топ-5 процессов (JSON)
+- `uptime` - аптайм в секундах
 
 **Интервал сбора:** 60 секунд
 
@@ -241,9 +243,9 @@ alerts                         # Алерты
 - `alerts/*.twig` — список алертов
 
 ### JavaScript
-- Chart.js для графиков (CPU/RAM/Disk за 24ч/7д/30д)
+- Chart.js для графиков CPU/RAM/Network/Temperature/Disk
 - Автообновление дашборда через `setTimeout`
-- Внешний tooltip handler для загрузки данных процессов
+- Внешний tooltip handler для загрузки данных процессов и деталей RAM
 
 ---
 
@@ -311,7 +313,8 @@ certbot --nginx -d mon.mirv.top
 ### Период сбора
 - **Агент:** каждые 60 секунд
 - **Дашборд:** автообновление каждые 30 секунд
-- **Графики:** 24 часа / 7 дней / 30 дней
+- **Графики:** 1 час / 6 часов / 24 часа / 7 дней / 30 дней
+- **Длинные периоды:** данные берутся из `server_metrics_trends`
 
 ---
 
@@ -341,9 +344,9 @@ certbot --nginx -d mon.mirv.top
 
 ## 📝 Changelog
 
-### v1.0 (Февраль 2026)
+### v1.1 (Апрель 2026)
 - ✅ Ядро системы (Slim 4 + Twig + Bootstrap 5)
-- ✅ 8 таблиц базы данных
+- ✅ Базовая схема и последующие миграции для trends, сервисов и offline-логики
 - ✅ Аутентификация и авторизация
 - ✅ CRUD серверов и групп
 - ✅ API для приёма метрик

@@ -33,7 +33,7 @@ cd mirvmon
 cd docker && bash deploy.sh
 
 # 3. Открываем браузер
-# http://localhost:8080
+# http://localhost:8082
 # Логин: admin
 # Пароль: mirvmon2026 (смените сразу!)
 ```
@@ -73,18 +73,20 @@ composer install
 ```bash
 mysql -u root -p <<EOF
 CREATE DATABASE monitoring_system CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'mon_user'@'localhost' IDENTIFIED BY 'mon_password_123';
+CREATE USER 'mon_user'@'localhost' IDENTIFIED BY 'your_db_password';
 GRANT ALL PRIVILEGES ON monitoring_system.* TO 'mon_user'@'localhost';
 FLUSH PRIVILEGES;
 EOF
 
-# Загружаем миграции
+cp .env.example .env
+# Укажите в .env актуальные DB_HOST / DB_USERNAME / DB_PASSWORD
+
 for f in docker/migrations/*.sql; do
-    mysql -u mon_user -pmon_password_123 monitoring_system < "$f"
+    mysql -u mon_user -pyour_db_password monitoring_system < "$f"
 done
 ```
 
-#### 3. Настройка .env
+#### 3. Настройка `.env`
 
 ```bash
 cp .env.example .env
@@ -117,7 +119,7 @@ server {
 `http://your-server/login`
 
 - Логин: `admin`
-- Пароль: `mirvmon2026` (смените сразу!)
+- Пароль: `mirvmon2026` (создаётся миграцией `007_seed_admin_user.sql`, смените сразу)
 
 ---
 
@@ -240,6 +242,15 @@ docker compose logs app
 
 # Пересобрать
 docker compose down && docker compose up -d --build
+```
+
+### Графики за 7/30 дней показывают не всю историю
+
+Для длинных периодов страница сервера использует агрегированные данные из `server_metrics_trends`.
+Если history только что мигрировала или trends ещё не заполнены, выполните backfill:
+
+```bash
+php /var/www/mon/cron/backfill_trends.php 30
 ```
 
 ---
