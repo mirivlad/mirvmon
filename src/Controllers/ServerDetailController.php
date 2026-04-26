@@ -144,43 +144,80 @@ class ServerDetailController extends Model
             $metricsFilter = 'AND mn.name IN (' . implode(', ', $placeholders) . ')';
         }
         
+// Определяем источник данных на основе периода
+        // <= 24 часа: raw данные (высокая точность)
+        // > 24 часов: trends таблица (агрегированные данные)
+        
+        $isRawData = $totalMinutes <= 1440; // 24 часа = 1440 минут
+        
         // Запрос с агрегацией если нужно
-        if ($groupBy) {
-            // GROUP BY автоматически агрегирует до нужного количества точек (500 для любого периода)
+        if ($isRawData) {
+            // Читаем из raw данных
+            $timeExpr = "DATE_FORMAT(sm.created_at, '{$bucketFormat}')";
             $sql = "
                 SELECT 
-                    AVG(sm.value) as value,
-                    mn.name,
-                    mn.unit,
-                    DATE_FORMAT(sm.created_at, '{$bucketFormat}') as time_bucket
-                FROM server_metrics sm
-                FORCE INDEX (idx_server_metric_time)
-                INNER JOIN metric_names mn ON mn.id = sm.metric_name_id
-                WHERE sm.server_id = :id
-                AND sm.created_at >= :start_date
-                AND sm.created_at <= :end_date
-                AND 1=1 {$metricsFilter}
-                {$groupBy}
-                ORDER BY time_bucket ASC
+                    AVG(t.value) as value,
+                    t.name,
+                    t.unit,
+                    t.time_bucket
+                FROM (
+                    SELECT 
+                        sm.value, 
+                        mn.name, 
+                        mn.unit,
+                        {$timeExpr} as time_bucket,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY mn.name, {$timeExpr} 
+                            ORDER BY sm.created_at DESC
+                        ) as rn
+                    FROM server_metrics sm
+                    INNER JOIN metric_names mn ON mn.id = sm.metric_name_id
+                    WHERE sm.server_id = :id
+                    AND sm.created_at >= :start_date
+                    AND sm.created_at <= :end_date
+                    AND 1=1 {$metricsFilter}
+                ) t
+                WHERE t.rn = 1
+                GROUP BY t.name, t.unit, t.time_bucket
+                ORDER BY t.time_bucket ASC
             ";
             $stmt = $this->pdo->prepare($sql);
             $executeParams = array_merge([':id' => $id, ':start_date' => $startStr, ':end_date' => $endStr], $metricParams);
             $stmt->execute($executeParams);
         } else {
+            // Читаем из trends таблицы (быстрый запрос для больших периодов)
+            $periodStartStr = $startDate->format('Y-m-d H:00:00');
+            $periodEndStr = $endDate->format('Y-m-d H:59:59');
+            
             $sql = "
-                SELECT sm.value, mn.name, mn.unit, sm.created_at
-                FROM server_metrics sm
-                FORCE INDEX (idx_server_metric_time)
-                JOIN metric_names mn ON mn.id = sm.metric_name_id
-                WHERE sm.server_id = :id
-                AND sm.created_at >= :start_date
-                AND sm.created_at <= :end_date
-                {$metricsFilter}
-                ORDER BY sm.created_at ASC
-                LIMIT 5000
+                SELECT 
+                    t.avg_value as value,
+                    mn.name,
+                    mn.unit,
+                    t.period_start as time_bucket
+                FROM server_metrics_trends t
+                INNER JOIN metric_names mn ON mn.id = t.metric_name_id
+                WHERE t.server_id = :id
+                AND t.period_start >= :period_start
+                AND t.period_start <= :period_end
+                AND 1=1 {$metricsFilter}
+                ORDER BY t.period_start ASC
             ";
+            
+            // Конвертируем имена метрик в ID для filters
+            $metricIds = [];
+            if ($displayMetrics) {
+                $placeholders = [];
+                foreach ($displayMetrics as $i => $m) {
+                    $key = ':metric_' . $i;
+                    $placeholders[] = $key;
+                    $metricParams[$key] = $m;
+                }
+                $metricsFilter = 'AND mn.name IN (' . implode(', ', $placeholders) . ')';
+            }
+            
             $stmt = $this->pdo->prepare($sql);
-            $executeParams = array_merge([':id' => $id, ':start_date' => $startStr, ':end_date' => $endStr], $metricParams);
+            $executeParams = array_merge([':id' => $id, ':period_start' => $periodStartStr, ':period_end' => $periodEndStr], $metricParams);
             $stmt->execute($executeParams);
         }
         
