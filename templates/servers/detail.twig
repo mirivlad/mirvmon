@@ -153,8 +153,9 @@
 
 
                         <div class="row">
+                            {% set visibleMetrics = displayMetrics ?: ['cpu_load', 'ram_used', 'disk_used_root', 'disk_used_home', 'disk_used_boot', 'temp_cpu', 'temp_disk_sda', 'temp_disk_sdb', 'temp_disk_sdc'] %}
                             {% for metricName, metricData in metrics %}
-                                {% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and metricName!="disk_used" and not (metricName starts with "disk_used_") and not (metricName starts with "disk_total_gb_") and metricName!="ram_total_gb" and not (metricName starts with "net_in_") and not (metricName starts with "net_out_") and metricName!="network_rx" and metricName!="network_tx" and not (metricName starts with "temp_") %}
+                                {% if metricName in visibleMetrics %}
                                 <div class="col-12 mb-4">
                                     <div class="card">
                                         <div class="card-header">
@@ -666,8 +667,9 @@ var diskTotalGB = {
 };
 
 // Графики метрик
+{% set visibleMetrics = displayMetrics ?: ['cpu_load', 'ram_used', 'disk_used_root', 'disk_used_home', 'disk_used_boot', 'temp_cpu', 'temp_disk_sda', 'temp_disk_sdb', 'temp_disk_sdc'] %}
 {% for metricName, metricData in metrics %}
-{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and metricName!="disk_used" and not (metricName starts with "disk_used_") and not (metricName starts with "disk_total_gb_") and metricName!="ram_total_gb" and not (metricName starts with "net_in_") and not (metricName starts with "net_out_") and metricName!="network_rx" and metricName!="network_tx" and not (metricName starts with "temp_") and metricName!="uptime" %}
+{% if metricName in visibleMetrics and metricName != 'uptime' %}
 const ctx{{ metricName|replace({'-': '_', '.': '_'}) }} = document.getElementById('chart-{{ metricName }}').getContext('2d');
 
 // Подготовка данных для графика
@@ -893,8 +895,9 @@ chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas.addEventListener('mou
 // Глобальный обработчик mousemove для скрытия тултипов при уходе курсора за пределы canvas
 // Глобальный обработчик для скрытия тултипов при уходе курсора за пределы canvas
 document.addEventListener('mousemove', function(e) {
+{% set visibleMetrics = displayMetrics ?: ['cpu_load', 'ram_used', 'disk_used_root', 'disk_used_home', 'disk_used_boot', 'temp_cpu', 'temp_disk_sda', 'temp_disk_sdb', 'temp_disk_sdc'] %}
 {% for metricName, metricData in metrics %}
-{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and metricName!="disk_used" and not (metricName starts with "disk_used_") and not (metricName starts with "disk_total_gb_") and metricName!="ram_total_gb" and not (metricName starts with "net_in_") and not (metricName starts with "net_out_") and metricName!="network_rx" and metricName!="network_tx" and not (metricName starts with "temp_") and metricName!="uptime" %}
+{% if metricName in visibleMetrics and metricName != 'uptime' %}
     (function() {
         var canvas = chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas;
         var rect = canvas.getBoundingClientRect();
@@ -1114,8 +1117,9 @@ document.addEventListener('mousemove', function(e) {
 
 // Сбросить зум на всех графиках
 function resetAllZoom() {
+{% set visibleMetrics = displayMetrics ?: ['cpu_load', 'ram_used', 'disk_used_root', 'disk_used_home', 'disk_used_boot', 'temp_cpu', 'temp_disk_sda', 'temp_disk_sdb', 'temp_disk_sdc'] %}
 {% for metricName, metricData in metrics %}
-{% if metricName!="top_cpu_proc" and metricName!="top_ram_proc" and metricName!="disk_used" and not (metricName starts with "disk_used_") and not (metricName starts with "disk_total_gb_") and metricName!="ram_total_gb" and not (metricName starts with "net_in_") and not (metricName starts with "net_out_") and metricName!="network_rx" and metricName!="network_tx" and not (metricName starts with "temp_") %}
+{% if metricName in visibleMetrics and metricName != 'uptime' %}
     if (typeof chart{{ metricName|replace({'-': '_', '.': '_'}) }} !== 'undefined') {
         chart{{ metricName|replace({'-': '_', '.': '_'}) }}.resetZoom();
     }

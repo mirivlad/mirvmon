@@ -146,24 +146,20 @@ class ServerDetailController extends Model
         
         // Запрос с агрегацией если нужно
         if ($groupBy) {
-            // Оптимизированный запрос с подзапросом и LIMIT для больших периодов
+            // GROUP BY автоматически агрегирует до нужного количества точек (500 для любого периода)
             $sql = "
                 SELECT 
                     AVG(sm.value) as value,
                     mn.name,
                     mn.unit,
                     DATE_FORMAT(sm.created_at, '{$bucketFormat}') as time_bucket
-                FROM (
-                    SELECT sm_inner.value, sm_inner.metric_name_id, sm_inner.created_at
-                    FROM server_metrics sm_inner
-                    FORCE INDEX (idx_server_metric_time)
-                    WHERE sm_inner.server_id = :id
-                    AND sm_inner.created_at >= :start_date
-                    AND sm_inner.created_at <= :end_date
-                    LIMIT 200000
-                ) sm
+                FROM server_metrics sm
+                FORCE INDEX (idx_server_metric_time)
                 INNER JOIN metric_names mn ON mn.id = sm.metric_name_id
-                WHERE 1=1 {$metricsFilter}
+                WHERE sm.server_id = :id
+                AND sm.created_at >= :start_date
+                AND sm.created_at <= :end_date
+                AND 1=1 {$metricsFilter}
                 {$groupBy}
                 ORDER BY time_bucket ASC
             ";
@@ -299,6 +295,7 @@ class ServerDetailController extends Model
             'title' => 'Сервер: ' . $server['name'],
             'server' => $server,
             'metrics' => $groupedMetrics,
+            'displayMetrics' => $displayMetrics,
             'allMetricTypes' => $allMetricTypes,
             'existingThresholds' => $existingThresholds,
             'allServices' => $allServices,
