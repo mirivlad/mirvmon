@@ -552,8 +552,9 @@ var diskTotalGB = {
 {% if metricData[0] is defined %}
 {% set ctxVarName = 'ctx' ~ metricName|replace({'-': '_', '.': '_'}) %}
 const {{ ctxVarName }} = document.getElementById('chart-{{ metricName }}');
-if (!{{ ctxVarName }}) { return; }
+if (!{{ ctxVarName }}) { var skipChart = true; }
 
+{% if not skipChart is defined %}
 const ctxInstance{{ metricName|replace({'-': '_', '.': '_'}) }} = {{ ctxVarName }}.getContext('2d');
 
 // Подготовка данных для графика
@@ -567,6 +568,7 @@ labels{{ metricName }}.push('{{ time_val|date(time_format) }}');
 data{{ metricName }}.push({{ metric.value|raw }});
 {% endfor %}
 
+{% if not skipChart is defined %}
 const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctxInstance{{ metricName|replace({'-': '_', '.': '_'}) }}, {
     type: 'line',
     data: {
@@ -763,6 +765,7 @@ chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas.addEventListener('mou
     chart{{ metricName|replace({'-': '_', '.': '_'}) }}.update();
 });
 
+{% endif %}
 {% endif %}
 {% endif %}
 {% endfor %}
