@@ -317,10 +317,11 @@ class ServerDetailController extends Model
         $stmt->execute([':id' => $id]);
         $latestUptime = $stmt->fetch();
 
-        $simpleMetricCharts = $this->buildSimpleMetricCharts($groupedMetrics, $displayMetrics);
+        $simpleMetricCharts = $this->buildSimpleMetricCharts($groupedMetrics, $displayMetrics, $existingThresholds);
         $networkCharts = $this->buildNetworkCharts($groupedMetrics, $displayMetrics);
         $temperatureChart = $this->buildTemperatureChart($groupedMetrics, $displayMetrics);
         $diskCharts = $this->buildDiskCharts($groupedMetrics, $displayMetrics);
+        $summaryCards = $this->buildSummaryCards($groupedMetrics, $displayMetrics, $temperatureChart, $diskCharts, $networkCharts);
 
         $templateData = [
             'title' => 'Сервер: ' . $server['name'],
@@ -331,6 +332,7 @@ class ServerDetailController extends Model
             'networkCharts' => $networkCharts,
             'temperatureChart' => $temperatureChart,
             'diskCharts' => $diskCharts,
+            'summaryCards' => $summaryCards,
             'allMetricTypes' => $allMetricTypes,
             'existingThresholds' => $existingThresholds,
             'allServices' => $allServices,
@@ -399,6 +401,10 @@ class ServerDetailController extends Model
 
             $expanded[$metricName] = $metricName;
 
+            if ($metricName === 'ram_used') {
+                $expanded['ram_total_gb'] = 'ram_total_gb';
+            }
+
             if (str_starts_with($metricName, 'disk_used_')) {
                 $suffix = substr($metricName, strlen('disk_used_'));
                 $expanded['disk_total_gb_' . $suffix] = 'disk_total_gb_' . $suffix;
@@ -408,7 +414,7 @@ class ServerDetailController extends Model
         return array_values($expanded);
     }
 
-    private function buildSimpleMetricCharts(array $groupedMetrics, ?array $displayMetrics): array
+    private function buildSimpleMetricCharts(array $groupedMetrics, ?array $displayMetrics, array $existingThresholds): array
     {
         $charts = [];
         $config = [
@@ -431,8 +437,12 @@ class ServerDetailController extends Model
                 'values' => $this->extractValues($groupedMetrics[$metricName]),
                 'lastValue' => round((float)($groupedMetrics[$metricName][0]['value'] ?? 0), 2),
                 'lastTime' => $this->formatPointTime($groupedMetrics[$metricName][0] ?? []),
+                'thresholds' => $existingThresholds[$metricName] ?? null,
+                'details' => $metricName === 'ram_used' ? $this->buildRamDetails($groupedMetrics) : null,
             ];
         }
+
+        usort($charts, fn ($a, $b) => strnatcasecmp($a['title'], $b['title']));
 
         return $charts;
     }
@@ -490,6 +500,8 @@ class ServerDetailController extends Model
             ];
         }
 
+        usort($charts, fn ($a, $b) => strnatcasecmp($a['id'], $b['id']));
+
         return $charts;
     }
 
@@ -500,6 +512,8 @@ class ServerDetailController extends Model
         $colors = ['#dc3545', '#fd7e14', '#0dcaf0', '#6f42c1', '#20c997', '#ffc107', '#6610f2', '#198754'];
         $colorIndex = 0;
 
+        $tempSeries = [];
+
         foreach ($groupedMetrics as $metricName => $points) {
             if (!str_starts_with($metricName, 'temp_') || !$this->isMetricSelected($metricName, $displayMetrics) || empty($points)) {
                 continue;
@@ -509,10 +523,21 @@ class ServerDetailController extends Model
                 $labels = $this->extractLabels($points);
             }
 
-            $datasets[] = [
+            $tempSeries[] = [
                 'label' => $this->formatMetricLabel($metricName),
-                'color' => $colors[$colorIndex % count($colors)],
+                'metricName' => $metricName,
                 'values' => $this->extractValues($points),
+            ];
+        }
+
+        usort($tempSeries, fn ($a, $b) => strnatcasecmp($a['label'], $b['label']));
+
+        foreach ($tempSeries as $series) {
+            $datasets[] = [
+                'label' => $series['label'],
+                'metricName' => $series['metricName'],
+                'color' => $colors[$colorIndex % count($colors)],
+                'values' => $series['values'],
             ];
             $colorIndex++;
         }
@@ -557,7 +582,113 @@ class ServerDetailController extends Model
             ];
         }
 
+        usort($charts, fn ($a, $b) => strnatcasecmp($a['title'], $b['title']));
+
         return $charts;
+    }
+
+    private function buildSummaryCards(array $groupedMetrics, ?array $displayMetrics, array $temperatureChart, array $diskCharts, array $networkCharts): array
+    {
+        $cards = [];
+
+        if ($this->isMetricSelected('cpu_load', $displayMetrics) && isset($groupedMetrics['cpu_load'][0]['value'])) {
+            $cards[] = [
+                'title' => 'CPU сейчас',
+                'value' => round((float)$groupedMetrics['cpu_load'][0]['value'], 2) . '%',
+                'subtitle' => $this->formatPointTime($groupedMetrics['cpu_load'][0]),
+            ];
+        }
+
+        if ($this->isMetricSelected('ram_used', $displayMetrics) && isset($groupedMetrics['ram_used'][0]['value'])) {
+            $ramDetails = $this->buildRamDetails($groupedMetrics);
+            $cards[] = [
+                'title' => 'RAM сейчас',
+                'value' => round((float)$groupedMetrics['ram_used'][0]['value'], 2) . '%',
+                'subtitle' => $ramDetails
+                    ? sprintf('Всего: %.1f ГБ | Занято: %.1f ГБ | Свободно: %.1f ГБ', $ramDetails['totalGb'], $ramDetails['usedGb'], $ramDetails['freeGb'])
+                    : $this->formatPointTime($groupedMetrics['ram_used'][0]),
+            ];
+        }
+
+        if (!empty($temperatureChart['datasets'])) {
+            $hottest = null;
+            foreach ($temperatureChart['datasets'] as $dataset) {
+                $current = $dataset['values'][count($dataset['values']) - 1] ?? null;
+                if ($current === null) {
+                    continue;
+                }
+                if ($hottest === null || $current > $hottest['value']) {
+                    $hottest = ['label' => $dataset['label'], 'value' => $current];
+                }
+            }
+            if ($hottest) {
+                $cards[] = [
+                    'title' => 'Самый горячий датчик',
+                    'value' => $hottest['value'] . '°C',
+                    'subtitle' => $hottest['label'],
+                ];
+            }
+        }
+
+        if (!empty($diskCharts)) {
+            $topDisk = $diskCharts[0];
+            foreach ($diskCharts as $disk) {
+                if ($disk['percent'] > $topDisk['percent']) {
+                    $topDisk = $disk;
+                }
+            }
+            $cards[] = [
+                'title' => 'Самый занятый диск',
+                'value' => $topDisk['percent'] . '%',
+                'subtitle' => $topDisk['title'],
+            ];
+        }
+
+        if (!empty($networkCharts)) {
+            $topNetwork = null;
+            foreach ($networkCharts as $chart) {
+                $peak = 0.0;
+                foreach ($chart['datasets'] as $dataset) {
+                    foreach ($dataset['values'] as $value) {
+                        $peak = max($peak, (float)$value);
+                    }
+                }
+                if ($topNetwork === null || $peak > $topNetwork['value']) {
+                    $topNetwork = ['label' => $chart['title'], 'value' => round($peak, 2), 'unit' => $chart['unit'] ?? ''];
+                }
+            }
+            if ($topNetwork) {
+                $cards[] = [
+                    'title' => 'Самый активный интерфейс',
+                    'value' => $topNetwork['value'] . $topNetwork['unit'],
+                    'subtitle' => $topNetwork['label'],
+                ];
+            }
+        }
+
+        return $cards;
+    }
+
+    private function buildRamDetails(array $groupedMetrics): ?array
+    {
+        if (!isset($groupedMetrics['ram_used'][0]['value'], $groupedMetrics['ram_total_gb'][0]['value'])) {
+            return null;
+        }
+
+        $percentUsed = (float)$groupedMetrics['ram_used'][0]['value'];
+        $totalGb = (float)$groupedMetrics['ram_total_gb'][0]['value'];
+        if ($totalGb <= 0) {
+            return null;
+        }
+
+        $usedGb = round(($percentUsed / 100) * $totalGb, 1);
+        $freeGb = round($totalGb - $usedGb, 1);
+
+        return [
+            'totalGb' => round($totalGb, 1),
+            'usedGb' => $usedGb,
+            'freeGb' => $freeGb,
+        ];
     }
 
     private function isMetricSelected(string $metricName, ?array $displayMetrics): bool

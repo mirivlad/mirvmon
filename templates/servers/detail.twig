@@ -122,6 +122,22 @@
                             </div>
                         </div>
 
+                        {% if summaryCards is not empty %}
+                            <div class="row g-3 mb-4">
+                                {% for card in summaryCards %}
+                                    <div class="col-md-6 col-xl">
+                                        <div class="card h-100">
+                                            <div class="card-body">
+                                                <div class="small text-muted mb-1">{{ card.title }}</div>
+                                                <div class="fw-semibold">{{ card.value }}</div>
+                                                <div class="small text-muted mt-1">{{ card.subtitle }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
                         {% if not displayMetrics or displayMetrics is empty %}
                             <div class="alert alert-warning">
                                 <i class="fas fa-info-circle"></i>
@@ -140,6 +156,14 @@
                                         <h6 class="mb-0">{{ chart.title }}</h6>
                                         <div class="text-end">
                                             <div class="fw-semibold">{{ chart.lastValue }}{{ chart.unit }}</div>
+                                            {% if chart.id == 'ram_used' and chart.details %}
+                                                <div class="small text-muted">
+                                                    Всего: {{ chart.details.totalGb }} ГБ | Занято: {{ chart.details.usedGb }} ГБ
+                                                </div>
+                                                <div class="small text-muted">
+                                                    Свободно: {{ chart.details.freeGb }} ГБ
+                                                </div>
+                                            {% endif %}
                                             <div class="small text-muted">{{ chart.lastTime }}</div>
                                         </div>
                                     </div>
@@ -490,6 +514,16 @@ function renderProcessTooltip(context, chartMeta) {
 
     fetchProcesses({{ server.id }}, timestamp).then(function(data) {
         const lines = [`Время: ${chartMeta.labels[dataIndex]}`, valueText];
+
+        if (chartMeta.id === 'ram_used' && chartMeta.details && chartMeta.details.totalGb) {
+            const totalGb = Number(chartMeta.details.totalGb);
+            const usedGb = Number(((Number(value) / 100) * totalGb).toFixed(1));
+            const freeGb = Number((totalGb - usedGb).toFixed(1));
+            lines.push(`Всего: ${totalGb.toFixed(1)} ГБ`);
+            lines.push(`Занято: ${usedGb.toFixed(1)} ГБ`);
+            lines.push(`Свободно: ${freeGb.toFixed(1)} ГБ`);
+        }
+
         const processList = chartMeta.id === 'cpu_load' ? (data.top_cpu || []) : (data.top_ram || []);
 
         if (processList.length > 0) {
@@ -611,25 +645,56 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const simpleMetricCharts = {{ simpleMetricCharts|json_encode|raw }};
     simpleMetricCharts.forEach(function(chart) {
+        const datasets = [{
+            label: chart.title,
+            data: chart.values,
+            borderColor: chart.color,
+            backgroundColor: chart.color + '22',
+            fill: true,
+            tension: 0.2,
+            pointRadius: 0,
+            borderWidth: 2
+        }];
+
+        if (chart.thresholds && chart.thresholds.warning !== null) {
+            datasets.push({
+                label: 'Warning',
+                data: chart.labels.map(() => Number(chart.thresholds.warning)),
+                borderColor: '#fd7e14',
+                backgroundColor: 'transparent',
+                fill: false,
+                tension: 0,
+                pointRadius: 0,
+                borderWidth: 1.5,
+                borderDash: [6, 4]
+            });
+        }
+
+        if (chart.thresholds && chart.thresholds.critical !== null) {
+            datasets.push({
+                label: 'Critical',
+                data: chart.labels.map(() => Number(chart.thresholds.critical)),
+                borderColor: '#dc3545',
+                backgroundColor: 'transparent',
+                fill: false,
+                tension: 0,
+                pointRadius: 0,
+                borderWidth: 1.5,
+                borderDash: [3, 3]
+            });
+        }
+
         createLineChart(
             'chart-' + chart.id,
             chart.labels,
-            [{
-                label: chart.title,
-                data: chart.values,
-                borderColor: chart.color,
-                backgroundColor: chart.color + '22',
-                fill: true,
-                tension: 0.2,
-                pointRadius: 0,
-                borderWidth: 2
-            }],
+            datasets,
             chart.unit,
             {
                 id: chart.id,
                 labels: chart.labels,
                 timestamps: chart.timestamps || [],
-                unit: chart.unit
+                unit: chart.unit,
+                details: chart.details || null
             }
         );
     });
