@@ -550,10 +550,11 @@ var diskTotalGB = {
 {% for metricName, metricData in metrics %}
 {% if metricName in visibleMetrics and metricName != 'uptime' and metricData %}
 {% if metricData[0] is defined %}
-const ctx{{ metricName|replace({'-': '_', '.': '_'}) }} = document.getElementById('chart-{{ metricName }}');
-if (!ctx{{ metricName|replace({'-': '_', '.': '_'}) }}) { return; }
+{% set ctxVarName = 'ctx' ~ metricName|replace({'-': '_', '.': '_'}) %}
+const {{ ctxVarName }} = document.getElementById('chart-{{ metricName }}');
+if (!{{ ctxVarName }}) { return; }
 
-const ctxInstance{{ metricName|replace({'-': '_', '.': '_'}) }} = ctx{{ metricName|replace({'-': '_', '.': '_'}) }}.getContext('2d');
+const ctxInstance{{ metricName|replace({'-': '_', '.': '_'}) }} = {{ ctxVarName }}.getContext('2d');
 
 // Подготовка данных для графика
 var labels{{ metricName }} = [];
