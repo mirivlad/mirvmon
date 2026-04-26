@@ -33,7 +33,7 @@
                         <div class="row">
                             {% set visibleMetrics = displayMetrics %}
                             {% for metricName, metricData in metrics %}
-                                {% if metricName in visibleMetrics %}
+                                {% if metricName in visibleMetrics and not (metricName starts with 'temp_') and not (metricName starts with 'net_in_') and not (metricName starts with 'net_out_') and not (metricName starts with 'disk_used_') %}
                                 <div class="col-12 mb-4">
                                     <div class="card">
                                         <div class="card-header">
