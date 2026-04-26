@@ -548,8 +548,12 @@ var diskTotalGB = {
 // Графики метрик
 {% set visibleMetrics = displayMetrics %}
 {% for metricName, metricData in metrics %}
-{% if metricName in visibleMetrics and metricName != 'uptime' %}
-const ctx{{ metricName|replace({'-': '_', '.': '_'}) }} = document.getElementById('chart-{{ metricName }}').getContext('2d');
+{% if metricName in visibleMetrics and metricName != 'uptime' and metricData %}
+{% if metricData[0] is defined %}
+const ctx{{ metricName|replace({'-': '_', '.': '_'}) }} = document.getElementById('chart-{{ metricName }}');
+if (!ctx{{ metricName|replace({'-': '_', '.': '_'}) }}) { return; }
+
+const ctxInstance{{ metricName|replace({'-': '_', '.': '_'}) }} = ctx{{ metricName|replace({'-': '_', '.': '_'}) }}.getContext('2d');
 
 // Подготовка данных для графика
 var labels{{ metricName }} = [];
@@ -562,7 +566,7 @@ labels{{ metricName }}.push('{{ time_val|date(time_format) }}');
 data{{ metricName }}.push({{ metric.value|raw }});
 {% endfor %}
 
-const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metricName|replace({'-': '_', '.': '_'}) }}, {
+const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctxInstance{{ metricName|replace({'-': '_', '.': '_'}) }}, {
     type: 'line',
     data: {
         labels: labels{{ metricName }},
