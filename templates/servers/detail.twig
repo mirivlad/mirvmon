@@ -4,8 +4,8 @@
 <div class="row">
     <div class="col-12">
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h3>
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h3 class="mb-0">
                     <i class="fas fa-server"></i>
                     {{ server.name }}
                     {% if server.group_name %}
@@ -21,180 +21,212 @@
                     <a href="/servers" class="btn btn-outline-secondary">
                         <i class="fas fa-arrow-left"></i> <span class="d-none d-sm-inline">Назад к списку</span>
                     </a>
-</div>
-                        </div>
+                </div>
+            </div>
 
-{% if not displayMetrics or displayMetrics is empty %}
-                        <div class="alert alert-warning">
-                            <i class="fas fa-info-circle"></i>
-                            Выберите метрики для отображения в <a href="/servers/{{ server.id }}/edit">настройках сервера</a>
-                        </div>
-{% else %}
-                        <div class="row">
-                            {% set visibleMetrics = displayMetrics %}
-                            {% for metricName, metricData in metrics %}
-                                {% if metricName in visibleMetrics and not (metricName starts with 'temp_') and not (metricName starts with 'net_in_') and not (metricName starts with 'net_out_') and not (metricName starts with 'disk_used_') %}
-                                <div class="col-12 mb-4">
-                                    <div class="card">
-                                        <div class="card-header">
-                                            <h6 class="mb-0">
-                                                {{ metricName|replace({'_': ' ', 'load': 'загрузка', 'used': 'использование'})|title }}
-                                                {% if metricData[0].unit %}<small class="text-muted">({{ metricData[0].unit }})</small>{% endif %}
-                                            </h6>
+            <div class="card-body">
+                <ul class="nav nav-tabs mb-4" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="metrics-tab" data-bs-toggle="tab" data-bs-target="#metrics" type="button" role="tab" aria-controls="metrics" aria-selected="true">
+                            <i class="fas fa-chart-line me-1"></i> Метрики
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="services-tab" data-bs-toggle="tab" data-bs-target="#services" type="button" role="tab" aria-controls="services" aria-selected="false">
+                            <i class="fas fa-cogs me-1"></i> Сервисы
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="thresholds-tab" data-bs-toggle="tab" data-bs-target="#thresholds" type="button" role="tab" aria-controls="thresholds" aria-selected="false">
+                            <i class="fas fa-bell me-1"></i> Пороги
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="metrics" role="tabpanel" aria-labelledby="metrics-tab">
+                        <div class="card mb-4">
+                            <div class="card-body">
+                                <div class="d-flex flex-wrap gap-2 justify-content-between align-items-end">
+                                    <div>
+                                        <div class="small text-muted mb-2">Период отображения</div>
+                                        <div class="btn-group flex-wrap" role="group" aria-label="Период">
+                                            <a href="?period=1h&tab=metrics" class="btn btn-sm {% if period == '1h' %}btn-primary{% else %}btn-outline-primary{% endif %}">1 час</a>
+                                            <a href="?period=6h&tab=metrics" class="btn btn-sm {% if period == '6h' %}btn-primary{% else %}btn-outline-primary{% endif %}">6 часов</a>
+                                            <a href="?period=24h&tab=metrics" class="btn btn-sm {% if period == '24h' %}btn-primary{% else %}btn-outline-primary{% endif %}">24 часа</a>
+                                            <a href="?period=7d&tab=metrics" class="btn btn-sm {% if period == '7d' %}btn-primary{% else %}btn-outline-primary{% endif %}">7 дней</a>
+                                            <a href="?period=30d&tab=metrics" class="btn btn-sm {% if period == '30d' %}btn-primary{% else %}btn-outline-primary{% endif %}">30 дней</a>
                                         </div>
-                                        <div class="card-body">
-                                            {% if metricData %}
-                                                <h3 class="text-center text-end">{{ metricData[0].value|round(2) }}{{ metricData[0].unit|default('') }}</h3>
-                                                <p class="text-muted text-center mb-2">
-                                                    {{ metricData[0].created_at|date('d.m.Y H:i:s') }}
-                                                </p>
+                                    </div>
+                                    <form method="get" class="row g-2 align-items-end">
+                                        <input type="hidden" name="tab" value="metrics">
+                                        <div class="col-auto">
+                                            <label for="start" class="form-label small text-muted mb-1">Начало</label>
+                                            <input type="datetime-local" class="form-control form-control-sm" id="start" name="start" value="{{ startDate }}">
+                                        </div>
+                                        <div class="col-auto">
+                                            <label for="end" class="form-label small text-muted mb-1">Конец</label>
+                                            <input type="datetime-local" class="form-control form-control-sm" id="end" name="end" value="{{ endDate }}">
+                                        </div>
+                                        <div class="col-auto">
+                                            <button type="submit" class="btn btn-sm btn-outline-secondary">Применить</button>
+                                        </div>
+                                        <div class="col-auto">
+                                            <button type="button" class="btn btn-sm btn-outline-dark" onclick="resetAllZoom()">Сбросить зум</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
 
-                                                <!-- График для метрики -->
-                                                <div>
-                                                    <canvas id="chart-{{ metricName }}" width="100%" height="200"></canvas>
-                                                </div>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-4">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <div class="text-muted small mb-1">Последняя метрика</div>
+                                        <div class="fw-semibold">
+                                            {% if server.last_seen %}
+                                                {{ server.last_seen|date('d.m.Y H:i:s') }}
                                             {% else %}
-                                                <p class="text-center text-muted">Нет данных за этот период</p>
+                                                Нет данных
                                             {% endif %}
                                         </div>
                                     </div>
                                 </div>
-                                {% endif %}
-                            {% endfor %}
-
-                            {% if metrics|length == 0 %}
-                            <div class="col-12">
-                                <div class="alert alert-info text-center">
-                                    <i class="fas fa-info-circle"></i> Нет данных о метриках за выбранный период
-                                </div>
                             </div>
-                            {% endif %}
-                        </div>
-{% endif %}
-                        <!-- Графики сетевых интерфейсов -->
-                        {% set net_interfaces = [] %}
-                        {% for metricName in displayMetrics %}
-                            {% if metricName starts with 'net_in_' %}
-                                {% set iface = metricName|replace({'net_in_': ''}) %}
-                                {% set net_interfaces = net_interfaces|merge([iface]) %}
-                            {% endif %}
-                        {% endfor %}
-
-                        {% if net_interfaces|length > 0 %}
-                            {% for iface in net_interfaces %}
-                            {% if ('net_in_' ~ iface) in displayMetrics and ('net_out_' ~ iface) in displayMetrics and metrics['net_in_' ~ iface] is defined and metrics['net_in_' ~ iface]|length > 0 and metrics['net_out_' ~ iface] is defined and metrics['net_out_' ~ iface]|length > 0 %}
-                            <div class="row">
-                                <div class="col-12 mb-4">
-                                    <div class="card">
-                                        <div class="card-header">
-                                            <h6 class="mb-0"><i class="fas fa-network-wired"></i> Сеть: {{ iface }}</h6>
-                                        </div>
-                                        <div class="card-body">
-                                            <canvas id="chart-net-{{ iface }}" width="100%" height="200"></canvas>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            {% endif %}
-                            {% endfor %}
-                        {% else %}
-                            <div class="alert alert-warning mb-4">
-                                <i class="fas fa-network-wired"></i> Данные о сетевых интерфейсах не получены
-                            </div>
-                        {% endif %}
-
-                        
-
-                        
-                        <!-- Температуры: всегда один общий график, если есть данные -->
-                        {% set has_temps = false %}
-                        {% for metricName, metricData in metrics %}
-                            {% if metricName starts with 'temp_' and metricName in displayMetrics and metricData %}
-                                {% set has_temps = true %}
-                            {% endif %}
-                        {% endfor %}
-
-                        <div class="row mb-4">
-                            <div class="col-12">
-                                <div class="card">
-                                    <div class="card-header">
-                                        <h6 class="mb-0"><i class="fas fa-thermometer-half"></i> Температуры</h6>
-                                    </div>
+                            <div class="col-md-4">
+                                <div class="card h-100">
                                     <div class="card-body">
-                                        {% if has_temps %}
-                                            <canvas id="chart-temperatures" width="100%" height="300"></canvas>
-                                        {% else %}
-                                            <div class="alert alert-info mb-0">
-                                                <i class="fas fa-thermometer-half"></i> Температурные датчики не выбраны
-                                            </div>
+                                        <div class="text-muted small mb-1">Аптайм</div>
+                                        <div class="fw-semibold">
+                                            {% if uptimeText %}
+                                                {{ uptimeText }}
+                                            {% else %}
+                                                Нет данных
+                                            {% endif %}
+                                        </div>
+                                        {% if latestUptime and latestUptime.created_at %}
+                                            <div class="small text-muted mt-1">{{ latestUptime.created_at|date('d.m.Y H:i:s') }}</div>
                                         {% endif %}
                                     </div>
                                 </div>
                             </div>
-                        </div>
-
-<!-- Диски: Doughnut графики -->
-                        {% set has_disk_parts = false %}
-                        {% for metricName, metricData in metrics %}
-                            {% if metricName starts with 'disk_used_' and metricName != 'disk_used' and metricName in displayMetrics and metricData %}
-                                {% set has_disk_parts = true %}
-                            {% endif %}
-                        {% endfor %}
-
-                        <div class="row mb-3">
-                            {% if has_disk_parts %}
-                                {% for metricName, metricData in metrics %}
-                                    {% if metricName starts with 'disk_used_' and metricName != 'disk_used' and metricName in displayMetrics and metricData %}
-                                    <div class="col-md-4 mb-3">
-                                        <div class="card h-100">
-                                            <div class="card-body text-center">
-                                                <h6 class="card-title mb-2">
-                                                    {% if metricName == 'disk_used_root' %}/ (корень)
-                                                    {% elseif metricName == 'disk_used_home' %}/home
-                                                    {% elseif metricName == 'disk_used_boot' %}/boot
-                                                    {% elseif metricName == 'disk_used_mnt_data' %}/mnt/data
-                                                    {% else %}{{ metricName|replace({'disk_used_': '', '_': ' '})|title }}
-                                                    {% endif %}
-                                                </h6>
-                                                {% set pct = metricData[0].value|round(1) %}
-                                                {% set iface = metricName|replace({'disk_used_': ''}) %}
-                                                {% set totalGB = metrics['disk_total_gb_' ~ iface][0].value|default(0) %}
-                                                {% set usedGB = (pct / 100 * totalGB)|round(1) %}
-                                                {% set freeGB = (totalGB - usedGB)|round(1) %}
-                                                <div class="mb-1">
-                                                    <span class="badge bg-success">Свободно: {{ freeGB }} ГБ</span>
-                                                    <span class="badge bg-danger ms-1">Занято: {{ usedGB }} ГБ</span>
-                                                </div>
-                                                <p class="text-muted small mb-1">{{ pct }}% из {{ totalGB }} ГБ</p>
-                                                <p class="text-muted small">{{ metricData[0].created_at|date('d.m.Y H:i') }}</p>
-                                                <div style="max-width: 150px; margin: 0 auto;"><canvas id="chart-{{ metricName }}"></canvas></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    {% endif %}
-                                {% endfor %}
-                            {% else %}
-                                <div class="col-12">
-                                    <div class="alert alert-warning">
-                                        <i class="fas fa-hdd"></i> Данные о разделах диска не получены. Проверьте работу агента.
+                            <div class="col-md-4">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <div class="text-muted small mb-1">Выбранный период</div>
+                                        <div class="fw-semibold">{{ totalMinutes }} мин</div>
+                                        <div class="small text-muted mt-1">{{ period }}{% if zoom %}, zoom: {{ zoom }}{% endif %}</div>
                                     </div>
                                 </div>
-                            {% endif %}
+                            </div>
                         </div>
+
+                        {% if not displayMetrics or displayMetrics is empty %}
+                            <div class="alert alert-warning">
+                                <i class="fas fa-info-circle"></i>
+                                Метрики для отображения не выбраны. Настройте их в <a href="/servers/{{ server.id }}/edit">редактировании сервера</a>.
+                            </div>
+                        {% else %}
+                            {% if simpleMetricCharts is empty and networkCharts is empty and temperatureChart.datasets is empty and diskCharts is empty %}
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle"></i> Нет данных для выбранных метрик за указанный период.
+                                </div>
+                            {% endif %}
+
+                            {% for chart in simpleMetricCharts %}
+                                <div class="card mb-4">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
+                                        <h6 class="mb-0">{{ chart.title }}</h6>
+                                        <div class="text-end">
+                                            <div class="fw-semibold">{{ chart.lastValue }}{{ chart.unit }}</div>
+                                            <div class="small text-muted">{{ chart.lastTime }}</div>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <div style="height: 260px;">
+                                            <canvas id="chart-{{ chart.id }}"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+
+                            {% for chart in networkCharts %}
+                                <div class="card mb-4">
+                                    <div class="card-header">
+                                        <h6 class="mb-0"><i class="fas fa-network-wired me-1"></i>{{ chart.title }}</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div style="height: 260px;">
+                                            <canvas id="chart-net-{{ chart.id }}"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h6 class="mb-0"><i class="fas fa-thermometer-half me-1"></i>Температуры</h6>
+                                </div>
+                                <div class="card-body">
+                                    {% if temperatureChart.datasets is not empty %}
+                                        <div style="height: 320px;">
+                                            <canvas id="chart-temperatures"></canvas>
+                                        </div>
+                                    {% else %}
+                                        <div class="alert alert-info mb-0">
+                                            Температурные датчики не выбраны или по ним нет данных.
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                {% if diskCharts is not empty %}
+                                    {% for disk in diskCharts %}
+                                        <div class="col-md-6 col-xl-4 mb-4">
+                                            <div class="card h-100">
+                                                <div class="card-body text-center">
+                                                    <h6 class="card-title">{{ disk.title }}</h6>
+                                                    <div class="mb-3">
+                                                        <span class="badge bg-primary">{{ disk.percent }}%</span>
+                                                    </div>
+                                                    {% if disk.totalGb %}
+                                                        <div class="small text-muted mb-2">Всего: {{ disk.totalGb }} ГБ</div>
+                                                        <div class="small mb-3">
+                                                            <span class="text-danger">Занято: {{ disk.usedGb }} ГБ</span>
+                                                            <span class="mx-1">|</span>
+                                                            <span class="text-success">Свободно: {{ disk.freeGb }} ГБ</span>
+                                                        </div>
+                                                    {% endif %}
+                                                    <div style="max-width: 180px; margin: 0 auto;">
+                                                        <canvas id="disk-chart-{{ disk.id }}"></canvas>
+                                                    </div>
+                                                    <div class="small text-muted mt-3">{{ disk.updatedAt }}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                {% elseif displayMetrics|filter(v => v starts with 'disk_used_')|length > 0 %}
+                                    <div class="col-12">
+                                        <div class="alert alert-info">
+                                            Данные по дискам выбраны, но за этот период не найдены.
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        {% endif %}
                     </div>
 
-                        
-
-                    <!-- Вкладка "Сервисы" -->
-                    <div class="tab-pane fade" id="services" role="tabpanel">
+                    <div class="tab-pane fade" id="services" role="tabpanel" aria-labelledby="services-tab">
                         <div class="row mb-3">
                             <div class="col-12">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
-                                        <h4>
+                                        <h4 class="mb-0">
                                             <i class="fas fa-cogs"></i> Сервисы сервера
                                             {% if allServices is defined %}
-                                            <small class="text-muted">(найдено: {{ allServices|length }})</small>
+                                                <small class="text-muted">(найдено: {{ allServices|length }})</small>
                                             {% endif %}
                                         </h4>
                                     </div>
@@ -214,112 +246,78 @@
                                         <div class="card-body">
                                             <div class="form-check mb-2">
                                                 <input class="form-check-input" type="checkbox" id="selectAllServices">
-                                                <label class="form-check-label" for="selectAllServices">
-                                                    Выбрать все
-                                                </label>
+                                                <label class="form-check-label" for="selectAllServices">Выбрать все</label>
                                             </div>
 
                                             <hr>
 
                                             <div class="row" id="servicesList">
                                                 {% if allServices is defined and allServices|length > 0 %}
-                                                    {# Сортируем сервисы: сначала running, потом stopped, потом unknown, затем по имени #}
                                                     {% set runningServices = allServices|filter(s => s.status == 'running')|sort((a, b) => a.service_name|lower > b.service_name|lower) %}
                                                     {% set stoppedServices = allServices|filter(s => s.status == 'stopped')|sort((a, b) => a.service_name|lower > b.service_name|lower) %}
                                                     {% set unknownServices = allServices|filter(s => s.status != 'running' and s.status != 'stopped')|sort((a, b) => a.service_name|lower > b.service_name|lower) %}
-                                                    
-                                                    {# Выводим все сервисы по порядку #}
+
                                                     {% for service in runningServices %}
-                                                    <div class="col-md-4 col-lg-3 mb-2">
-                                                        <div class="card border-success">
-                                                            <div class="card-body p-2">
-                                                                <div class="d-flex justify-content-between align-items-start">
-                                                                    <div class="form-check mb-0">
-                                                                        <input class="form-check-input service-checkbox"
-                                                                               type="checkbox"
-                                                                               id="service_{{ service.service_name }}"
-                                                                               name="services[]"
-                                                                               value="{{ service.service_name }}"
-                                                                               {% if service.service_name in monitorServices %}
-                                                                               checked
-                                                                               {% endif %}>
-                                                                        <label class="form-check-label" for="service_{{ service.service_name }}">
-                                                                            <i class="fas fa-check-circle text-success me-1"></i>
-                                                                            {{ service.service_name }}
-                                                                        </label>
+                                                        <div class="col-md-4 col-lg-3 mb-2">
+                                                            <div class="card border-success">
+                                                                <div class="card-body p-2">
+                                                                    <div class="d-flex justify-content-between align-items-start">
+                                                                        <div class="form-check mb-0">
+                                                                            <input class="form-check-input service-checkbox" type="checkbox" id="service_{{ service.service_name }}" name="services[]" value="{{ service.service_name }}" {% if service.service_name in monitorServices %}checked{% endif %}>
+                                                                            <label class="form-check-label" for="service_{{ service.service_name }}">
+                                                                                <i class="fas fa-check-circle text-success me-1"></i>{{ service.service_name }}
+                                                                            </label>
+                                                                        </div>
+                                                                        <span class="badge bg-success">running</span>
                                                                     </div>
-                                                                    <div class="text-end">
-                                                                        <span class="badge bg-success mb-1">running</span>
+                                                                    <div class="small text-muted mt-1">
+                                                                        <small>Load: {{ service.load_state|default('-') }} | Active: {{ service.active_state|default('-') }}</small>
                                                                     </div>
-                                                                </div>
-                                                                <div class="small text-muted mt-1">
-                                                                    <small>Load: {{ service.load_state|default('-') }} | Active: {{ service.active_state|default('-') }}</small>
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
                                                     {% endfor %}
-                                                    
+
                                                     {% for service in stoppedServices %}
-                                                    <div class="col-md-4 col-lg-3 mb-2">
-                                                        <div class="card border-danger">
-                                                            <div class="card-body p-2">
-                                                                <div class="d-flex justify-content-between align-items-start">
-                                                                    <div class="form-check mb-0">
-                                                                        <input class="form-check-input service-checkbox"
-                                                                               type="checkbox"
-                                                                               id="service_{{ service.service_name }}"
-                                                                               name="services[]"
-                                                                               value="{{ service.service_name }}"
-                                                                               {% if service.service_name in monitorServices %}
-                                                                               checked
-                                                                               {% endif %}>
-                                                                        <label class="form-check-label" for="service_{{ service.service_name }}">
-                                                                            <i class="fas fa-times-circle text-danger me-1"></i>
-                                                                            {{ service.service_name }}
-                                                                        </label>
+                                                        <div class="col-md-4 col-lg-3 mb-2">
+                                                            <div class="card border-danger">
+                                                                <div class="card-body p-2">
+                                                                    <div class="d-flex justify-content-between align-items-start">
+                                                                        <div class="form-check mb-0">
+                                                                            <input class="form-check-input service-checkbox" type="checkbox" id="service_{{ service.service_name }}" name="services[]" value="{{ service.service_name }}" {% if service.service_name in monitorServices %}checked{% endif %}>
+                                                                            <label class="form-check-label" for="service_{{ service.service_name }}">
+                                                                                <i class="fas fa-times-circle text-danger me-1"></i>{{ service.service_name }}
+                                                                            </label>
+                                                                        </div>
+                                                                        <span class="badge bg-danger">stopped</span>
                                                                     </div>
-                                                                    <div class="text-end">
-                                                                        <span class="badge bg-danger mb-1">stopped</span>
+                                                                    <div class="small text-muted mt-1">
+                                                                        <small>Load: {{ service.load_state|default('-') }} | Active: {{ service.active_state|default('-') }}</small>
                                                                     </div>
-                                                                </div>
-                                                                <div class="small text-muted mt-1">
-                                                                    <small>Load: {{ service.load_state|default('-') }} | Active: {{ service.active_state|default('-') }}</small>
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
                                                     {% endfor %}
-                                                    
+
                                                     {% for service in unknownServices %}
-                                                    <div class="col-md-4 col-lg-3 mb-2">
-                                                        <div class="card border-warning">
-                                                            <div class="card-body p-2">
-                                                                <div class="d-flex justify-content-between align-items-start">
-                                                                    <div class="form-check mb-0">
-                                                                        <input class="form-check-input service-checkbox"
-                                                                               type="checkbox"
-                                                                               id="service_{{ service.service_name }}"
-                                                                               name="services[]"
-                                                                               value="{{ service.service_name }}"
-                                                                               {% if service.service_name in monitorServices %}
-                                                                               checked
-                                                                               {% endif %}>
-                                                                        <label class="form-check-label" for="service_{{ service.service_name }}">
-                                                                            <i class="fas fa-question-circle text-warning me-1"></i>
-                                                                            {{ service.service_name }}
-                                                                        </label>
+                                                        <div class="col-md-4 col-lg-3 mb-2">
+                                                            <div class="card border-warning">
+                                                                <div class="card-body p-2">
+                                                                    <div class="d-flex justify-content-between align-items-start">
+                                                                        <div class="form-check mb-0">
+                                                                            <input class="form-check-input service-checkbox" type="checkbox" id="service_{{ service.service_name }}" name="services[]" value="{{ service.service_name }}" {% if service.service_name in monitorServices %}checked{% endif %}>
+                                                                            <label class="form-check-label" for="service_{{ service.service_name }}">
+                                                                                <i class="fas fa-question-circle text-warning me-1"></i>{{ service.service_name }}
+                                                                            </label>
+                                                                        </div>
+                                                                        <span class="badge bg-warning">unknown</span>
                                                                     </div>
-                                                                    <div class="text-end">
-                                                                        <span class="badge bg-warning mb-1">unknown</span>
+                                                                    <div class="small text-muted mt-1">
+                                                                        <small>Load: {{ service.load_state|default('-') }} | Active: {{ service.active_state|default('-') }}</small>
                                                                     </div>
-                                                                </div>
-                                                                <div class="small text-muted mt-1">
-                                                                    <small>Load: {{ service.load_state|default('-') }} | Active: {{ service.active_state|default('-') }}</small>
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
                                                     {% endfor %}
                                                 {% else %}
                                                     <div class="col-12">
@@ -347,8 +345,7 @@
                         </div>
                     </div>
 
-                    <!-- Вкладка "Пороги" -->
-                    <div class="tab-pane fade" id="thresholds" role="tabpanel">
+                    <div class="tab-pane fade" id="thresholds" role="tabpanel" aria-labelledby="thresholds-tab">
                         <h4>Настройка порогов</h4>
                         <p class="text-muted mb-3">
                             <i class="fas fa-info-circle"></i> 0 = алерт сразу при превышении, >0 = алерт только если превышено дольше указанного времени. Оставьте поле пустым для отключения порога.
@@ -357,83 +354,61 @@
                             <div class="col-12">
                                 <form method="post" action="/servers/{{ server.id }}/thresholds">
                                     {% for metricType in allMetricTypes %}
-                                    {% set metricUnit = '%' %}
-                                    {% set metricLabel = metricType.name %}
-                                    {% if metricType.name starts with 'temp_' %}
-                                        {% set metricUnit = '°C' %}
-                                        {% set metricLabel = 'Температура ' ~ (metricType.name|replace({'temp_': '', '_': ' '}))|title %}
-                                    {% elseif metricType.name == 'cpu_load' %}
-                                        {% set metricLabel = 'Загрузка CPU' %}
-                                    {% elseif metricType.name == 'ram_used' %}
-                                        {% set metricLabel = 'Использование RAM' %}
-                                    {% elseif metricType.name starts with 'disk_used_' %}
-                                        {% set iface = metricType.name|replace({'disk_used_': ''}) %}
-                                        {% if iface == 'root' %}{% set metricLabel = 'Диск (корень /)' %}
-                                        {% elseif iface == 'home' %}{% set metricLabel = 'Диск (/home)' %}
-                                        {% elseif iface == 'boot' %}{% set metricLabel = 'Диск (/boot)' %}
-                                        {% elseif iface == 'mnt_data' %}{% set metricLabel = 'Диск (/mnt/data)' %}
-                                        {% else %}{% set metricLabel = 'Диск (/' ~ (iface|replace({'_': '/'})) ~ ')' %}
+                                        {% set metricUnit = '%' %}
+                                        {% set metricLabel = metricType.name %}
+                                        {% if metricType.name starts with 'temp_' %}
+                                            {% set metricUnit = '°C' %}
+                                            {% set metricLabel = 'Температура ' ~ (metricType.name|replace({'temp_': '', '_': ' '}))|title %}
+                                        {% elseif metricType.name == 'cpu_load' %}
+                                            {% set metricLabel = 'Загрузка CPU' %}
+                                        {% elseif metricType.name == 'ram_used' %}
+                                            {% set metricLabel = 'Использование RAM' %}
+                                        {% elseif metricType.name starts with 'disk_used_' %}
+                                            {% set iface = metricType.name|replace({'disk_used_': ''}) %}
+                                            {% if iface == 'root' %}{% set metricLabel = 'Диск (корень /)' %}
+                                            {% elseif iface == 'home' %}{% set metricLabel = 'Диск (/home)' %}
+                                            {% elseif iface == 'boot' %}{% set metricLabel = 'Диск (/boot)' %}
+                                            {% elseif iface == 'mnt_data' %}{% set metricLabel = 'Диск (/mnt/data)' %}
+                                            {% else %}{% set metricLabel = 'Диск (/' ~ (iface|replace({'_': '/'})) ~ ')' %}
+                                            {% endif %}
+                                        {% elseif metricType.name starts with 'net_in_' %}
+                                            {% set iface = metricType.name|replace({'net_in_': ''}) %}
+                                            {% set metricLabel = 'Сеть входящая (' ~ iface ~ ')' %}
+                                        {% elseif metricType.name starts with 'net_out_' %}
+                                            {% set iface = metricType.name|replace({'net_out_': ''}) %}
+                                            {% set metricLabel = 'Сеть исходящая (' ~ iface ~ ')' %}
                                         {% endif %}
-                                    {% elseif metricType.name starts with 'net_in_' %}
-                                        {% set iface = metricType.name|replace({'net_in_': ''}) %}
-                                        {% set metricLabel = 'Сеть входящая (' ~ iface ~ ')' %}
-                                    {% elseif metricType.name starts with 'net_out_' %}
-                                        {% set iface = metricType.name|replace({'net_out_': ''}) %}
-                                        {% set metricLabel = 'Сеть исходящая (' ~ iface ~ ')' %}
-                                    {% endif %}
-                                    <div class="card mb-2">
-                                        <div class="card-body py-2">
-                                            <div class="row align-items-center">
-                                                <div class="col-md-3 mb-2 mb-md-0">
-                                                    <strong>{{ metricLabel }}</strong>
-                                                    <small class="text-muted">({{ metricUnit }})</small>
-                                                </div>
-                                                <div class="col-md-3 mb-2 mb-md-0">
-                                                    <div class="input-group input-group-sm" title="Порог предупреждения">
-                                                        <span class="input-group-text" title="Порог предупреждения"><i class="fas fa-exclamation-triangle text-warning"></i></span>
-                                                        <input type="number" class="form-control" style="max-width: 90px;"
-                                                               name="{{ metricType.name }}_warning"
-                                                               step="0.01"
-                                                               placeholder="80"
-                                                               title="Порог предупреждения"
-                                                               {% if existingThresholds[metricType.name].warning is defined %}
-                                                               value="{{ existingThresholds[metricType.name].warning }}"
-                                                               {% endif %}>
-                                                        <span class="input-group-text">{{ metricUnit }}</span>
+                                        <div class="card mb-2">
+                                            <div class="card-body py-2">
+                                                <div class="row align-items-center">
+                                                    <div class="col-md-3 mb-2 mb-md-0">
+                                                        <strong>{{ metricLabel }}</strong>
+                                                        <small class="text-muted">({{ metricUnit }})</small>
                                                     </div>
-                                                </div>
-                                                <div class="col-md-3 mb-2 mb-md-0">
-                                                    <div class="input-group input-group-sm" title="Порог критический">
-                                                        <span class="input-group-text" title="Порог критический"><i class="fas fa-exclamation-circle text-danger"></i></span>
-                                                        <input type="number" class="form-control" style="max-width: 90px;"
-                                                               name="{{ metricType.name }}_critical"
-                                                               step="0.01"
-                                                               placeholder="90"
-                                                               title="Порог критический"
-                                                               {% if existingThresholds[metricType.name].critical is defined %}
-                                                               value="{{ existingThresholds[metricType.name].critical }}"
-                                                               {% endif %}>
-                                                        <span class="input-group-text">{{ metricUnit }}</span>
+                                                    <div class="col-md-3 mb-2 mb-md-0">
+                                                        <div class="input-group input-group-sm" title="Порог предупреждения">
+                                                            <span class="input-group-text"><i class="fas fa-exclamation-triangle text-warning"></i></span>
+                                                            <input type="number" class="form-control" style="max-width: 90px;" name="{{ metricType.name }}_warning" step="0.01" placeholder="80" {% if existingThresholds[metricType.name].warning is defined %}value="{{ existingThresholds[metricType.name].warning }}"{% endif %}>
+                                                            <span class="input-group-text">{{ metricUnit }}</span>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <div class="col-md-3">
-                                                    <div class="input-group input-group-sm" title="Длительность превышения (минуты)">
-                                                        <span class="input-group-text" title="Длительность превышения"><i class="fas fa-clock"></i></span>
-                                                        <input type="number" class="form-control" style="max-width: 90px;"
-                                                               name="{{ metricType.name }}_duration"
-                                                               min="0"
-                                                               step="1"
-                                                               placeholder="0"
-                                                               title="Длительность превышения (минуты)"
-                                                               {% if existingThresholds[metricType.name].duration is defined %}
-                                                               value="{{ existingThresholds[metricType.name].duration }}"
-                                                               {% endif %}>
-                                                        <span class="input-group-text">мин</span>
+                                                    <div class="col-md-3 mb-2 mb-md-0">
+                                                        <div class="input-group input-group-sm" title="Порог критический">
+                                                            <span class="input-group-text"><i class="fas fa-exclamation-circle text-danger"></i></span>
+                                                            <input type="number" class="form-control" style="max-width: 90px;" name="{{ metricType.name }}_critical" step="0.01" placeholder="90" {% if existingThresholds[metricType.name].critical is defined %}value="{{ existingThresholds[metricType.name].critical }}"{% endif %}>
+                                                            <span class="input-group-text">{{ metricUnit }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <div class="input-group input-group-sm" title="Длительность превышения (минуты)">
+                                                            <span class="input-group-text"><i class="fas fa-clock"></i></span>
+                                                            <input type="number" class="form-control" style="max-width: 90px;" name="{{ metricType.name }}_duration" min="0" step="1" placeholder="0" {% if existingThresholds[metricType.name].duration is defined %}value="{{ existingThresholds[metricType.name].duration }}"{% endif %}>
+                                                            <span class="input-group-text">мин</span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
                                     {% endfor %}
 
                                     <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-3">
@@ -451,57 +426,12 @@
     </div>
 </div>
 
-<!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
 <script src="/chartjs-plugin-zoom.min.js"></script>
 <script>
+const managedCharts = [];
 
-// Функция для получения топ-процессов для указанного времени
-function fetchProcesses(serverId, time) {
-    return new Promise(function(resolve) {
-        var fullTime = time;
-        // Если нет пробела - значит только время, добавляем текущую дату
-        if (time && time.indexOf(' ') === -1) {
-            var now = new Date();
-            var year = now.getFullYear();
-            var month = String(now.getMonth() + 1).padStart(2, '0');
-            var day = String(now.getDate()).padStart(2, '0');
-            fullTime = year + '-' + month + '-' + day + ' ' + time;
-        }
-        fetch('/api/v1/agent/' + serverId + '/processes?time=' + encodeURIComponent(fullTime))
-            .then(response => response.json())
-            .then(data => {
-                var lines = [];
-                
-                // Добавляем топ-процессы CPU
-                if (data.top_cpu && data.top_cpu.length > 0) {
-                    lines.push('');
-                    lines.push('🏆 Топ CPU:');
-                    data.top_cpu.forEach(function(proc) {
-                        lines.push('  ' + (proc.cmdline || proc.name) + ': ' + proc.value + '%');
-                    });
-                }
-                
-                // Добавляем топ-процессы RAM
-                if (data.top_ram && data.top_ram.length > 0) {
-                    lines.push('');
-                    lines.push('💾 Топ RAM:');
-                    data.top_ram.forEach(function(proc) {
-                        lines.push('  ' + (proc.cmdline || proc.name) + ': ' + proc.value + '%');
-                    });
-                }
-                
-                resolve(lines);
-            })
-            .catch(function() {
-                resolve([]);
-            });
-    });
-}
-
-
-// Функция для получения списка сервисов
 function requestServices() {
     fetch('/api/v1/agent/{{ server.id }}/services')
         .then(response => response.json())
@@ -515,482 +445,251 @@ function requestServices() {
         });
 }
 
-// Обработчик кнопки "Выбрать все"
-document.getElementById('selectAllServices').addEventListener('change', function() {
-    const checkboxes = document.querySelectorAll('.service-checkbox');
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = this.checked;
-    });
-});
+function fetchProcesses(serverId, time) {
+    return fetch('/api/v1/agent/' + serverId + '/processes?time=' + encodeURIComponent(time))
+        .then(response => response.json())
+        .catch(() => ({ top_cpu: [], top_ram: [] }));
+}
 
-// Активация нужной вкладки при загрузке
+function renderProcessTooltip(context, chartMeta) {
+    let tooltipEl = document.getElementById('chartjs-tooltip-' + chartMeta.id);
+    if (!tooltipEl) {
+        tooltipEl = document.createElement('div');
+        tooltipEl.id = 'chartjs-tooltip-' + chartMeta.id;
+        tooltipEl.style.opacity = 0;
+        tooltipEl.style.position = 'absolute';
+        tooltipEl.style.background = 'rgba(33, 37, 41, 0.92)';
+        tooltipEl.style.color = '#fff';
+        tooltipEl.style.borderRadius = '6px';
+        tooltipEl.style.padding = '10px 12px';
+        tooltipEl.style.fontSize = '12px';
+        tooltipEl.style.pointerEvents = 'none';
+        tooltipEl.style.whiteSpace = 'pre-line';
+        tooltipEl.style.zIndex = 1080;
+        document.body.appendChild(tooltipEl);
+    }
+
+    const tooltip = context.tooltip;
+    if (!tooltip || tooltip.opacity === 0 || !tooltip.dataPoints || !tooltip.dataPoints.length) {
+        tooltipEl.style.opacity = 0;
+        return;
+    }
+
+    const point = tooltip.dataPoints[0];
+    const dataIndex = point.dataIndex;
+    const timestamp = chartMeta.timestamps[dataIndex] || chartMeta.labels[dataIndex];
+    const value = point.raw;
+    const valueText = `${point.dataset.label}: ${value}${chartMeta.unit || ''}`;
+
+    tooltipEl.innerHTML = `Время: ${chartMeta.labels[dataIndex]}<br>${valueText}<br><span class="text-muted">Загрузка...</span>`;
+    tooltipEl.style.opacity = 1;
+
+    const position = context.chart.canvas.getBoundingClientRect();
+    tooltipEl.style.left = position.left + window.pageXOffset + tooltip.caretX + 12 + 'px';
+    tooltipEl.style.top = position.top + window.pageYOffset + tooltip.caretY + 'px';
+
+    fetchProcesses({{ server.id }}, timestamp).then(function(data) {
+        const lines = [`Время: ${chartMeta.labels[dataIndex]}`, valueText];
+        const processList = chartMeta.id === 'cpu_load' ? (data.top_cpu || []) : (data.top_ram || []);
+
+        if (processList.length > 0) {
+            lines.push('');
+            lines.push(chartMeta.id === 'cpu_load' ? 'Топ CPU:' : 'Топ RAM:');
+            processList.slice(0, 5).forEach(function(proc) {
+                lines.push(`${proc.cmdline || proc.name}: ${proc.value}%`);
+            });
+        }
+
+        tooltipEl.innerHTML = lines.join('<br>');
+    });
+}
+
+function createLineChart(canvasId, labels, datasets, unit, chartMeta = null) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) {
+        return;
+    }
+
+    const chart = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: datasets.length > 1, position: 'top' },
+                tooltip: chartMeta ? {
+                    enabled: false,
+                    external: function(context) {
+                        renderProcessTooltip(context, chartMeta);
+                    }
+                } : {
+                    enabled: true
+                },
+                zoom: {
+                    zoom: {
+                        wheel: { enabled: true },
+                        pinch: { enabled: true },
+                        drag: { enabled: true },
+                        mode: 'x'
+                    },
+                    pan: {
+                        enabled: true,
+                        mode: 'x'
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    ticks: {
+                        callback: function(value) {
+                            return unit ? value + unit : value;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    managedCharts.push(chart);
+    return chart;
+}
+
+function createDoughnutChart(canvasId, percent) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) {
+        return;
+    }
+
+    const color = percent >= 85 ? '#dc3545' : (percent >= 70 ? '#fd7e14' : '#198754');
+
+    new Chart(canvas.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Использовано', 'Свободно'],
+            datasets: [{
+                data: [percent, Math.max(0, 100 - percent)],
+                backgroundColor: [color, '#e9ecef'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            cutout: '68%',
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.label + ': ' + context.parsed.toFixed(1) + '%';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const urlParams = new URLSearchParams(window.location.search);
     const activeTab = urlParams.get('tab') || 'metrics';
-
-    // Находим кнопку нужной вкладки и кликаем
     const tabButton = document.getElementById(activeTab + '-tab');
     if (tabButton) {
         tabButton.click();
     }
-});
 
-// Параметры системы
-var ramTotalGB = {{ metrics['ram_total_gb'] is defined ? metrics['ram_total_gb'][0].value : 'null' }};
-var diskTotalGB = {
-{% for m, _data in metrics %}
-{% if m starts with 'disk_total_gb_' %}
-    '{{ m|replace({'disk_total_gb_': ''}) }}': {{ metrics[m][0].value|default(0) }},
-{% endif %}
-{% endfor %}
-};
-
-// Графики метрик
-{% set visibleMetrics = displayMetrics %}
-{% for metricName, metricData in metrics %}
-{% if metricName in visibleMetrics and metricName != 'uptime' and metricData %}
-{% if metricData[0] is defined %}
-{% set ctxVarName = 'ctx' ~ metricName|replace({'-': '_', '.': '_'}) %}
-const {{ ctxVarName }} = document.getElementById('chart-{{ metricName }}');
-if (!{{ ctxVarName }}) { var skipChart = true; }
-
-{% if not skipChart is defined %}
-const ctxInstance{{ metricName|replace({'-': '_', '.': '_'}) }} = {{ ctxVarName }}.getContext('2d');
-
-// Подготовка данных для графика
-var labels{{ metricName }} = [];
-var data{{ metricName }} = [];
-
-{% for metric in metricData|slice(0, 50000) %}
-{% set time_val = metric.time_bucket|default(metric.created_at) %}
-{% set time_format = metric.time_bucket ? 'd.m H:i' : 'H:i' %}
-labels{{ metricName }}.push('{{ time_val|date(time_format) }}');
-data{{ metricName }}.push({{ metric.value|raw }});
-{% endfor %}
-
-{% if not skipChart is defined %}
-const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctxInstance{{ metricName|replace({'-': '_', '.': '_'}) }}, {
-    type: 'line',
-    data: {
-        labels: labels{{ metricName }},
-        datasets: [{
-            label: '{{ metricName|replace({'_': ' ', 'load': 'загрузка', 'used': 'использование'})|title }}',
-            data: data{{ metricName }},
-{% if metricName == 'cpu_load' %}{% set lineColor = 'rgba(54, 162, 235, 1)' %}{% set fillColor = 'rgba(54, 162, 235, 0.15)' %}{% elseif metricName == 'ram_used' %}{% set lineColor = 'rgba(153, 102, 255, 1)' %}{% set fillColor = 'rgba(153, 102, 255, 0.15)' %}{% elseif metricName starts with 'disk_used_' %}{% set lineColor = 'rgba(255, 159, 64, 1)' %}{% set fillColor = 'rgba(255, 159, 64, 0.15)' %}{% else %}{% set lineColor = 'rgba(75, 192, 192, 1)' %}{% set fillColor = 'rgba(75, 192, 192, 0.15)' %}{% endif %}
-            borderColor: '{{ lineColor }}',
-            backgroundColor: '{{ fillColor }}',
-            tension: 0.1
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-            y: {
-                beginAtZero: false
-            }
-        },
-        plugins: {
-            tooltip: {
-                enabled: false,
-                mode: 'index',
-                intersect: false,
-{% set metricType = metricName %}
-
-                external: function(context) {
-                    // Tooltip element
-                    var tooltipEl = document.getElementById('chartjs-tooltip-' + {{ server.id }} + '-' + '{{ metricName }}');
-                    
-                    if (!tooltipEl) {
-                        tooltipEl = document.createElement('div');
-                        tooltipEl.id = 'chartjs-tooltip-' + {{ server.id }} + '-' + '{{ metricName }}';
-                        tooltipEl.style.opacity = 0;
-                        tooltipEl.style.position = 'absolute';
-                        tooltipEl.style.background = 'rgba(0,0,0,0.7)';
-                        tooltipEl.style.color = 'white';
-                        tooltipEl.style.borderRadius = '3px';
-                        tooltipEl.style.padding = '10px';
-                        tooltipEl.style.fontSize = '12px';
-                        tooltipEl.style.pointerEvents = 'none';
-                        document.body.appendChild(tooltipEl);
-                    }
-                    
-                    // Если нет активного элемента - прячем тултип
-                    if (!context.tooltip._active || context.tooltip._active.length === 0) {
-                        tooltipEl.style.opacity = '0';
-                        return;
-                    }
-
-                    var dataIndex = context.tooltip._active[0].index;
-                    var time = labels{{ metricName }}[dataIndex];
-                    var metricValue = context.chart.data.datasets[0].data[dataIndex];
-                    
-                    fetchProcesses({{ server.id }}, time).then(function(processLines) {
-                        var lines = [];
-                        lines.push('Время: ' + time);
-{% if metricName == 'ram_used' %}
-                            var ramPct = metricValue;
-                            if (ramTotalGB !== null) {
-                                var ramUsed = (ramPct / 100 * ramTotalGB).toFixed(1);
-                                var ramFree = (ramTotalGB - ramUsed).toFixed(1);
-                                lines.push('Всего: ' + ramTotalGB.toFixed(1) + ' ГБ');
-                                lines.push('Занято: ' + ramUsed + ' ГБ (' + ramPct + '%)');
-                                lines.push('Свободно: ' + ramFree + ' ГБ');
-                            } else {
-                                lines.push('RAM: ' + ramPct + '%');
-                                lines.push('(данные о памяти недоступны)');
-                            }
-{% elseif metricName starts with 'disk_used_' %}
-                            var diskPct = metricValue;
-                            var iface = '{{ metricName }}'.replace('disk_used_', '');
-                            var diskTotal = diskTotalGB[iface] || 0;
-                            var diskUsed = (diskPct / 100 * diskTotal).toFixed(1);
-                            var diskFree = (diskTotal - diskUsed).toFixed(1);
-                            lines.push('Всего: ' + diskTotal.toFixed(1) + ' ГБ');
-                            lines.push('Занято: ' + diskUsed + ' ГБ');
-                            lines.push('Свободно: ' + diskFree + ' ГБ');
-{% else %}
-{% if metricName == 'cpu_load' %}
-                            lines.push('CPU: ' + metricValue + '%');
-{% else %}
-                            lines.push('Значение: ' + metricValue);
-{% endif %}
-{% endif %}
-                        
-                        if (processLines.length > 0) {
-                            lines.push('');
-                            lines = lines.concat(processLines);
-                        }
-                            
-                        // Show tooltip
-                        var position = context.chart.canvas.getBoundingClientRect();
-                        tooltipEl.innerHTML = lines.join('<br>');
-                        tooltipEl.style.opacity = 1;
-                        tooltipEl.style.left = position.left + window.pageXOffset + context.tooltip.caretX + 10 + 'px';
-                        tooltipEl.style.top = position.top + window.pageYOffset + context.tooltip.caretY + 'px';
-                    });
-                }
-            },
-            zoom: {
-                zoom: {
-                    drag: {
-                        enabled: true
-                    },
-                    pinch: {
-                        enabled: true
-                    },
-                    wheel: {
-                        enabled: true
-                    },
-                    mode: 'x',
-                    onZoomComplete: function(chart) {
-                        // Сохраняем оригинальный диапазон если ещё не сохраняли
-                        if (!chart._originalMinIndex && !chart._originalMaxIndex) {
-                            chart._originalMinIndex = 0;
-                            chart._originalMaxIndex = chart.data.labels.length - 1;
-                        }
-                        
-                        // Получаем новый диапазон после зума
-                        var scale = chart.scales.x;
-                        var newMinIndex = Math.floor(scale.min);
-                        var newMaxIndex = Math.ceil(scale.max);
-                        
-                        // Ограничиваем индексы
-                        newMinIndex = Math.max(0, newMinIndex);
-                        newMaxIndex = Math.min(chart.data.labels.length - 1, newMaxIndex);
-                        
-                        // Если зум слишком глубокий (менее 100 точек) - загружаем детальные данные
-                        var pointsInView = newMaxIndex - newMinIndex + 1;
-                        if (pointsInView < 100 && newMinIndex < newMaxIndex) {
-                            // Определяем диапазон дат
-                            var originalLabels = chart{{ metricName|replace({'-': '_', '.': '_'}) }}._originalLabels;
-                            if (!originalLabels) {
-                                originalLabels = chart{{ metricName|replace({'-': '_', '.': '_'}) }}._originalLabels = [...chart.data.labels];
-                            }
-                            
-                            var startTime = originalLabels[newMinIndex];
-                            var endTime = originalLabels[newMaxIndex];
-                            
-                            // Загружаем детальные данные
-                            loadDetailedMetrics{{ metricName|replace({'-': '_', '.': '_'}) }}(startTime, endTime);
-                        }
-                    }
-                },
-                pan: {
-                    enabled: true,
-                    mode: 'x'
-                }
-            }
-        }
-    }
-});
-
-// Функция загрузки детальных данных при зуме
-function loadDetailedMetrics{{ metricName|replace({'-': '_', '.': '_'}) }}(startTime, endTime) {
-    var chart = chart{{ metricName|replace({'-': '_', '.': '_'}) }};
-    var metricName = '{{ metricName }}';
-    var serverId = {{ server.id }};
-    
-    // Debounce - не запрашивать слишком часто
-    if (loadDetailedMetrics{{ metricName|replace({'-': '_', '.': '_'}) }}._loading) return;
-    loadDetailedMetrics{{ metricName|replace({'-': '_', '.': '_'}) }}._loading = true;
-    setTimeout(function() { loadDetailedMetrics{{ metricName|replace({'-': '_', '.': '_'}) }}._loading = false; }, 500);
-    
-    var url = '/api/servers/' + serverId + '/metrics?start=' + encodeURIComponent(startTime) + '&end=' + encodeURIComponent(endTime);
-    
-    fetch(url)
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
-            if (data.labels && data.datasets && data.datasets[metricName]) {
-                chart.data.labels = data.labels;
-                chart.data.datasets[0].data = data.datasets[metricName];
-                chart.update();
-                
-                // Обновляем переменную labels для тултипов
-                window['labels{{ metricName }}'] = data.labels;
-            }
-        })
-        .catch(function() {
-            console.log('Failed to load detailed metrics for ' + metricName);
+    const selectAllServices = document.getElementById('selectAllServices');
+    if (selectAllServices) {
+        selectAllServices.addEventListener('change', function() {
+            document.querySelectorAll('.service-checkbox').forEach(function(checkbox) {
+                checkbox.checked = selectAllServices.checked;
+            });
         });
-}
-
-// Скрывать tooltip при уходе курсора с canvas
-chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas.addEventListener('mouseleave', function() {
-    var tooltipEl = document.getElementById('chartjs-tooltip-{{ server.id }}-{{ metricName }}');
-    if (tooltipEl) {
-        tooltipEl.style.opacity = '0';
     }
-    chart{{ metricName|replace({'-': '_', '.': '_'}) }}.tooltip._active = [];
-    chart{{ metricName|replace({'-': '_', '.': '_'}) }}.update();
-});
 
-{% endif %}
-{% endif %}
-{% endif %}
-{% endfor %}
-
-
-
-
-// Графики сетевых интерфейсов (две линии: In зелёная, Out красная)
-{% set net_interfaces = [] %}
-{% for metricName in metrics|keys %}
-    {% if metricName starts with 'net_in_' %}
-        {% set net_interfaces = net_interfaces|merge([metricName|replace({'net_in_': ''})]) %}
-    {% endif %}
-{% endfor %}
-
-{% set net_interfaces_js = [] %}
-{% for m in displayMetrics %}
-    {% if m starts with 'net_in_' %}
-        {% set iface = m|replace({'net_in_': ''}) %}
-        {% set net_interfaces_js = net_interfaces_js|merge([iface]) %}
-    {% endif %}
-{% endfor %}
-
-{% for iface in net_interfaces_js %}
-{% if ('net_in_' ~ iface) in displayMetrics and ('net_out_' ~ iface) in displayMetrics and metrics['net_in_' ~ iface] is defined and metrics['net_out_' ~ iface] is defined %}
-(function() {
-    var ctx = document.getElementById('chart-net-{{ iface }}');
-    if (!ctx) return;
-
-    var labels = [];
-    var inData = [];
-    var outData = [];
-
-{% for m in metrics['net_in_' ~ iface]|slice(0, 500)|reverse %}
-    labels.push('{{ m.created_at|date("d.m H:i") }}');
-    inData.push({{ m.value }});
-{% endfor %}
-
-{% set outMetrics = metrics['net_out_' ~ iface]|slice(0, 500)|reverse %}
-{% for m in outMetrics %}
-    outData.push({{ m.value }});
-{% endfor %}
-
-    new Chart(ctx.getContext('2d'), {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: 'Входящий (In)',
-                    data: inData,
-                    borderColor: 'rgba(25, 135, 84, 1)',
-                    backgroundColor: 'rgba(25, 135, 84, 0.1)',
-                    fill: true,
-                    tension: 0.1,
-                    pointRadius: 0,
-                    borderWidth: 1.5
-                },
-                {
-                    label: 'Исходящий (Out)',
-                    data: outData,
-                    borderColor: 'rgba(220, 53, 69, 1)',
-                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                    fill: true,
-                    tension: 0.1,
-                    pointRadius: 0,
-                    borderWidth: 1.5
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
-            plugins: {
-                legend: { display: true, position: 'top' },
-                tooltip: { enabled: true, mode: 'index', intersect: false },
-                zoom: {
-                    zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' },
-                    pan: { enabled: true, mode: 'x' }
-                }
-            },
-            scales: {
-                y: { beginAtZero: true, ticks: { callback: function(v) { return v + '%'; } } }
+    const simpleMetricCharts = {{ simpleMetricCharts|json_encode|raw }};
+    simpleMetricCharts.forEach(function(chart) {
+        createLineChart(
+            'chart-' + chart.id,
+            chart.labels,
+            [{
+                label: chart.title,
+                data: chart.values,
+                borderColor: chart.color,
+                backgroundColor: chart.color + '22',
+                fill: true,
+                tension: 0.2,
+                pointRadius: 0,
+                borderWidth: 2
+            }],
+            chart.unit,
+            {
+                id: chart.id,
+                labels: chart.labels,
+                timestamps: chart.timestamps || [],
+                unit: chart.unit
             }
-        }
-    });
-})();
-{% endif %}
-{% endfor %}
-
-
-// График температур — ВСЕ temp_* на одном графике
-(function() {
-    var ctx = document.getElementById('chart-temperatures');
-    if (!ctx) return;
-
-    var tempColors = [
-        { border: 'rgba(255, 99, 132, 1)', bg: 'rgba(255, 99, 132, 0.1)' },
-        { border: 'rgba(75, 192, 192, 1)', bg: 'rgba(75, 192, 192, 0.1)' },
-        { border: 'rgba(255, 159, 64, 1)', bg: 'rgba(255, 159, 64, 0.1)' },
-        { border: 'rgba(255, 205, 86, 1)', bg: 'rgba(255, 205, 86, 0.1)' },
-        { border: 'rgba(201, 203, 207, 1)', bg: 'rgba(201, 203, 207, 0.1)' },
-        { border: 'rgba(54, 162, 235, 1)', bg: 'rgba(54, 162, 235, 0.1)' },
-        { border: 'rgba(153, 102, 255, 1)', bg: 'rgba(153, 102, 255, 0.1)' },
-        { border: 'rgba(255, 99, 255, 1)', bg: 'rgba(255, 99, 255, 0.1)' },
-        { border: 'rgba(100, 200, 100, 1)', bg: 'rgba(100, 200, 100, 0.1)' },
-        { border: 'rgba(200, 150, 50, 1)', bg: 'rgba(200, 150, 50, 0.1)' }
-    ];
-
-    var labels = [];
-    var labelsFilled = false;
-    var datasets = [];
-    var colorIdx = 0;
-
-    {% for mn, md in metrics %}
-    {% if mn in displayMetrics and mn starts with 'temp_' %}
-    if (!labelsFilled) {
-        {% for p in md|slice(-1000) %}
-        labels.push('{{ p.time_bucket|default(p.created_at)|date("d.m H:i") }}');
-        {% endfor %}
-        labelsFilled = true;
-    }
-
-    (function() {
-        var data = [];
-        {% for p in md|slice(-1000) %}
-        data.push({{ p.value }});
-        {% endfor %}
-
-        var color = tempColors[colorIdx % tempColors.length];
-        colorIdx++;
-
-        datasets.push({
-            label: '{{ mn|replace({'temp_': '', '_': ' '})|title }}',
-            data: data,
-            borderColor: color.border,
-            backgroundColor: color.bg,
-            fill: false,
-            tension: 0.1,
-            pointRadius: 1,
-            borderWidth: 2
-        });
-    })();
-    {% endif %}
-    {% endfor %}
-
-    var chart = new Chart(ctx.getContext('2d'), {
-        type: 'line',
-        data: { labels: labels, datasets: datasets },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
-            plugins: {
-                legend: { display: true, position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
-                tooltip: { enabled: true, mode: 'index', intersect: false },
-                zoom: {
-                    zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' },
-                    pan: { enabled: true, mode: 'x' }
-                }
-            },
-            scales: { y: { beginAtZero: false, ticks: { callback: function(v) { return v + '°C'; } } } }
-        }
+        );
     });
 
-    window.chartTemperatures = chart;
-})();
+    const networkCharts = {{ networkCharts|json_encode|raw }};
+    networkCharts.forEach(function(chart) {
+        createLineChart(
+            'chart-net-' + chart.id,
+            chart.labels,
+            chart.datasets.map(function(dataset) {
+                return {
+                    label: dataset.label,
+                    data: dataset.values,
+                    borderColor: dataset.color,
+                    backgroundColor: dataset.color + '22',
+                    fill: false,
+                    tension: 0.2,
+                    pointRadius: 0,
+                    borderWidth: 2
+                };
+            }),
+            chart.unit,
+            null
+        );
+    });
 
-// Doughnut графики для разделов дисков
-{% for metricName, metricData in metrics %}
-{% if metricName starts with 'disk_used_' and metricName != 'disk_used' %}
-{% if metricData %}
-(function() {
-    var ctx = document.getElementById('chart-{{ metricName }}');
-    if (ctx) {
-        var value = {{ metricData[0].value }};
-        var color = value > 80 ? 'rgba(220, 53, 69, 0.8)' : value > 60 ? 'rgba(255, 193, 7, 0.8)' : 'rgba(25, 135, 84, 0.8)';
-        var colorBorder = value > 80 ? 'rgba(220, 53, 69, 1)' : value > 60 ? 'rgba(255, 193, 7, 1)' : 'rgba(25, 135, 84, 1)';
-        new Chart(ctx.getContext('2d'), {
-            type: 'doughnut',
-            data: {
-                labels: ['Использовано', 'Свободно'],
-                datasets: [{
-                    data: [value, 100 - value],
-                    backgroundColor: [color, 'rgba(200, 200, 200, 0.3)'],
-                    borderColor: [colorBorder, 'rgba(200, 200, 200, 0.5)'],
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                cutout: '65%',
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return context.label + ': ' + context.parsed.toFixed(1) + '%';
-                            }
-                        }
-                    }
-                }
-            }
-        });
+    const temperatureChart = {{ temperatureChart|json_encode|raw }};
+    if (temperatureChart.datasets && temperatureChart.datasets.length > 0) {
+        createLineChart(
+            'chart-temperatures',
+            temperatureChart.labels,
+            temperatureChart.datasets.map(function(dataset) {
+                return {
+                    label: dataset.label,
+                    data: dataset.values,
+                    borderColor: dataset.color,
+                    backgroundColor: dataset.color + '22',
+                    fill: false,
+                    tension: 0.2,
+                    pointRadius: 0,
+                    borderWidth: 2
+                };
+            }),
+            temperatureChart.unit || '',
+            null
+        );
     }
-})();
-{% endif %}
-{% endif %}
-{% endfor %}
 
-// Сбросить зум на всех графиках
+    const diskCharts = {{ diskCharts|json_encode|raw }};
+    diskCharts.forEach(function(disk) {
+        createDoughnutChart('disk-chart-' + disk.id, disk.percent);
+    });
+});
+
 function resetAllZoom() {
-{% set visibleMetrics = displayMetrics %}
-{% for metricName, metricData in metrics %}
-{% if metricName in visibleMetrics and metricName != 'uptime' %}
-    if (typeof chart{{ metricName|replace({'-': '_', '.': '_'}) }} !== 'undefined') {
-        chart{{ metricName|replace({'-': '_', '.': '_'}) }}.resetZoom();
-    }
-{% endif %}
-{% endfor %}
-    if (typeof window.chartTemperatures !== 'undefined') {
-        window.chartTemperatures.resetZoom();
-    }
+    managedCharts.forEach(function(chart) {
+        if (chart && typeof chart.resetZoom === 'function') {
+            chart.resetZoom();
+        }
+    });
 }
-
 </script>
 {% endblock %}

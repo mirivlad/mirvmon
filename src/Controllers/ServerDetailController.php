@@ -131,15 +131,17 @@ class ServerDetailController extends Model
         $startStr = $startDate->format('Y-m-d H:i:s');
         $endStr = $endDate->format('Y-m-d H:i:s');
         
-        // Формируем фильтр метрик из настроек сервера
+        // Формируем фильтр метрик из настроек сервера.
+        // Дополнительные метрики подгружаем автоматически, если они нужны для отображения.
         $metricsFilter = '';
         $metricParams = [];
-        if ($displayMetrics) {
+        $queryMetricNames = $displayMetrics ? $this->expandDisplayMetrics($displayMetrics) : [];
+        if ($queryMetricNames) {
             $placeholders = [];
-            foreach ($displayMetrics as $i => $m) {
+            foreach (array_values($queryMetricNames) as $i => $metricName) {
                 $key = ':metric_' . $i;
                 $placeholders[] = $key;
-                $metricParams[$key] = $m;
+                $metricParams[$key] = $metricName;
             }
             $metricsFilter = 'AND mn.name IN (' . implode(', ', $placeholders) . ')';
         }
@@ -203,19 +205,6 @@ class ServerDetailController extends Model
                 AND 1=1 {$metricsFilter}
                 ORDER BY t.period_start ASC
             ";
-            
-            // Конвертируем имена метрик в ID для filters
-            $metricIds = [];
-            if ($displayMetrics) {
-                $placeholders = [];
-                foreach ($displayMetrics as $i => $m) {
-                    $key = ':metric_' . $i;
-                    $placeholders[] = $key;
-                    $metricParams[$key] = $m;
-                }
-                $metricsFilter = 'AND mn.name IN (' . implode(', ', $placeholders) . ')';
-            }
-            
             $stmt = $this->pdo->prepare($sql);
             $executeParams = array_merge([':id' => $id, ':period_start' => $periodStartStr, ':period_end' => $periodEndStr], $metricParams);
             $stmt->execute($executeParams);
@@ -328,31 +317,28 @@ class ServerDetailController extends Model
         $stmt->execute([':id' => $id]);
         $latestUptime = $stmt->fetch();
 
+        $simpleMetricCharts = $this->buildSimpleMetricCharts($groupedMetrics, $displayMetrics);
+        $networkCharts = $this->buildNetworkCharts($groupedMetrics, $displayMetrics);
+        $temperatureChart = $this->buildTemperatureChart($groupedMetrics, $displayMetrics);
+        $diskCharts = $this->buildDiskCharts($groupedMetrics, $displayMetrics);
+
         $templateData = [
             'title' => 'Сервер: ' . $server['name'],
             'server' => $server,
             'metrics' => $groupedMetrics,
             'displayMetrics' => $displayMetrics,
-            // Группировка метрик по категориям для отдельных секций
-            'diskMetrics' => array_filter($groupedMetrics, function($key) {
-                return str_starts_with($key, 'disk_used_');
-            }, ARRAY_FILTER_USE_KEY),
-            'tempMetrics' => array_filter($groupedMetrics, function($key) {
-                return str_starts_with($key, 'temp_');
-            }, ARRAY_FILTER_USE_KEY),
-            'netInMetrics' => array_filter($groupedMetrics, function($key) {
-                return str_starts_with($key, 'net_in_');
-            }, ARRAY_FILTER_USE_KEY),
-            'netOutMetrics' => array_filter($groupedMetrics, function($key) {
-                return str_starts_with($key, 'net_out_');
-            }, ARRAY_FILTER_USE_KEY),
+            'simpleMetricCharts' => $simpleMetricCharts,
+            'networkCharts' => $networkCharts,
+            'temperatureChart' => $temperatureChart,
+            'diskCharts' => $diskCharts,
             'allMetricTypes' => $allMetricTypes,
             'existingThresholds' => $existingThresholds,
             'allServices' => $allServices,
             'monitorServices' => $monitorServices,
             'latestUptime' => $latestUptime,
-            'startDate' => $startDate->format('Y-m-d\T H:i'),
-            'endDate' => $endDate->format('Y-m-d\T H:i'),
+            'uptimeText' => $this->formatUptime($latestUptime['value'] ?? null),
+            'startDate' => $startDate->format('Y-m-d\TH:i'),
+            'endDate' => $endDate->format('Y-m-d\TH:i'),
             'aggregation' => $aggConfig,
             'totalMinutes' => $totalMinutes,
             'period' => $period,
@@ -400,6 +386,283 @@ class ServerDetailController extends Model
                 'aggregate_minutes' => $aggregateMinutes
             ];
         }
+    }
+
+    private function expandDisplayMetrics(array $displayMetrics): array
+    {
+        $expanded = [];
+
+        foreach ($displayMetrics as $metricName) {
+            if ($metricName === 'uptime') {
+                continue;
+            }
+
+            $expanded[$metricName] = $metricName;
+
+            if (str_starts_with($metricName, 'disk_used_')) {
+                $suffix = substr($metricName, strlen('disk_used_'));
+                $expanded['disk_total_gb_' . $suffix] = 'disk_total_gb_' . $suffix;
+            }
+        }
+
+        return array_values($expanded);
+    }
+
+    private function buildSimpleMetricCharts(array $groupedMetrics, ?array $displayMetrics): array
+    {
+        $charts = [];
+        $config = [
+            'cpu_load' => ['title' => 'Загрузка CPU', 'color' => '#0d6efd'],
+            'ram_used' => ['title' => 'Использование RAM', 'color' => '#198754'],
+        ];
+
+        foreach ($config as $metricName => $meta) {
+            if (!$this->isMetricSelected($metricName, $displayMetrics) || empty($groupedMetrics[$metricName])) {
+                continue;
+            }
+
+            $charts[] = [
+                'id' => $metricName,
+                'title' => $meta['title'],
+                'unit' => $groupedMetrics[$metricName][0]['unit'] ?? '',
+                'color' => $meta['color'],
+                'labels' => $this->extractLabels($groupedMetrics[$metricName]),
+                'timestamps' => $this->extractTimestamps($groupedMetrics[$metricName]),
+                'values' => $this->extractValues($groupedMetrics[$metricName]),
+                'lastValue' => round((float)($groupedMetrics[$metricName][0]['value'] ?? 0), 2),
+                'lastTime' => $this->formatPointTime($groupedMetrics[$metricName][0] ?? []),
+            ];
+        }
+
+        return $charts;
+    }
+
+    private function buildNetworkCharts(array $groupedMetrics, ?array $displayMetrics): array
+    {
+        $interfaces = [];
+
+        foreach (array_keys($groupedMetrics) as $metricName) {
+            if (str_starts_with($metricName, 'net_in_')) {
+                $interfaces[substr($metricName, strlen('net_in_'))] = true;
+            }
+            if (str_starts_with($metricName, 'net_out_')) {
+                $interfaces[substr($metricName, strlen('net_out_'))] = true;
+            }
+        }
+
+        $charts = [];
+        foreach (array_keys($interfaces) as $iface) {
+            $inMetric = 'net_in_' . $iface;
+            $outMetric = 'net_out_' . $iface;
+            $showIn = $this->isMetricSelected($inMetric, $displayMetrics) && !empty($groupedMetrics[$inMetric]);
+            $showOut = $this->isMetricSelected($outMetric, $displayMetrics) && !empty($groupedMetrics[$outMetric]);
+
+            if (!$showIn && !$showOut) {
+                continue;
+            }
+
+            $baseSeries = $showIn ? $groupedMetrics[$inMetric] : $groupedMetrics[$outMetric];
+            $datasets = [];
+
+            if ($showIn) {
+                $datasets[] = [
+                    'label' => 'Входящий трафик',
+                    'color' => '#198754',
+                    'values' => $this->extractValues($groupedMetrics[$inMetric]),
+                ];
+            }
+
+            if ($showOut) {
+                $datasets[] = [
+                    'label' => 'Исходящий трафик',
+                    'color' => '#dc3545',
+                    'values' => $this->extractValues($groupedMetrics[$outMetric]),
+                ];
+            }
+
+            $charts[] = [
+                'id' => $iface,
+                'title' => 'Сеть: ' . $iface,
+                'unit' => $baseSeries[0]['unit'] ?? '',
+                'labels' => $this->extractLabels($baseSeries),
+                'timestamps' => $this->extractTimestamps($baseSeries),
+                'datasets' => $datasets,
+            ];
+        }
+
+        return $charts;
+    }
+
+    private function buildTemperatureChart(array $groupedMetrics, ?array $displayMetrics): array
+    {
+        $datasets = [];
+        $labels = [];
+        $colors = ['#dc3545', '#fd7e14', '#0dcaf0', '#6f42c1', '#20c997', '#ffc107', '#6610f2', '#198754'];
+        $colorIndex = 0;
+
+        foreach ($groupedMetrics as $metricName => $points) {
+            if (!str_starts_with($metricName, 'temp_') || !$this->isMetricSelected($metricName, $displayMetrics) || empty($points)) {
+                continue;
+            }
+
+            if (!$labels) {
+                $labels = $this->extractLabels($points);
+            }
+
+            $datasets[] = [
+                'label' => $this->formatMetricLabel($metricName),
+                'color' => $colors[$colorIndex % count($colors)],
+                'values' => $this->extractValues($points),
+            ];
+            $colorIndex++;
+        }
+
+        return [
+            'unit' => '°C',
+            'labels' => $labels,
+            'timestamps' => $labels ? $this->extractTimestamps($points) : [],
+            'datasets' => $datasets,
+        ];
+    }
+
+    private function buildDiskCharts(array $groupedMetrics, ?array $displayMetrics): array
+    {
+        $charts = [];
+
+        foreach ($groupedMetrics as $metricName => $points) {
+            if (
+                !str_starts_with($metricName, 'disk_used_')
+                || $metricName === 'disk_used'
+                || !$this->isMetricSelected($metricName, $displayMetrics)
+                || empty($points)
+            ) {
+                continue;
+            }
+
+            $suffix = substr($metricName, strlen('disk_used_'));
+            $totalMetric = 'disk_total_gb_' . $suffix;
+            $percent = (float)($points[0]['value'] ?? 0);
+            $totalGb = isset($groupedMetrics[$totalMetric][0]['value']) ? (float)$groupedMetrics[$totalMetric][0]['value'] : 0.0;
+            $usedGb = $totalGb > 0 ? round(($percent / 100) * $totalGb, 1) : null;
+            $freeGb = $totalGb > 0 ? round($totalGb - $usedGb, 1) : null;
+
+            $charts[] = [
+                'id' => $suffix,
+                'title' => $this->formatDiskTitle($suffix),
+                'percent' => round($percent, 1),
+                'totalGb' => $totalGb > 0 ? round($totalGb, 1) : null,
+                'usedGb' => $usedGb,
+                'freeGb' => $freeGb,
+                'updatedAt' => $this->formatPointTime($points[0]),
+            ];
+        }
+
+        return $charts;
+    }
+
+    private function isMetricSelected(string $metricName, ?array $displayMetrics): bool
+    {
+        return is_array($displayMetrics) && in_array($metricName, $displayMetrics, true);
+    }
+
+    private function extractLabels(array $points): array
+    {
+        $labels = [];
+
+        foreach ($points as $point) {
+            $labels[] = $this->formatPointTime($point, 'd.m H:i');
+        }
+
+        return $labels;
+    }
+
+    private function extractValues(array $points): array
+    {
+        $values = [];
+
+        foreach ($points as $point) {
+            $values[] = round((float)($point['value'] ?? 0), 2);
+        }
+
+        return $values;
+    }
+
+    private function extractTimestamps(array $points): array
+    {
+        $timestamps = [];
+
+        foreach ($points as $point) {
+            $timestamps[] = $point['time_bucket'] ?? $point['created_at'] ?? null;
+        }
+
+        return $timestamps;
+    }
+
+    private function formatPointTime(array $point, string $format = 'd.m.Y H:i:s'): string
+    {
+        $raw = $point['time_bucket'] ?? $point['created_at'] ?? null;
+        if (!$raw) {
+            return '';
+        }
+
+        return (new DateTime($raw))->format($format);
+    }
+
+    private function formatMetricLabel(string $metricName): string
+    {
+        if ($metricName === 'cpu_load') {
+            return 'Загрузка CPU';
+        }
+
+        if ($metricName === 'ram_used') {
+            return 'Использование RAM';
+        }
+
+        if (str_starts_with($metricName, 'temp_')) {
+            return 'Температура ' . str_replace('_', ' ', substr($metricName, strlen('temp_')));
+        }
+
+        return str_replace('_', ' ', $metricName);
+    }
+
+    private function formatDiskTitle(string $suffix): string
+    {
+        return match ($suffix) {
+            'root' => '/ (корень)',
+            'home' => '/home',
+            'boot' => '/boot',
+            'mnt_data' => '/mnt/data',
+            default => '/' . str_replace('_', '/', $suffix),
+        };
+    }
+
+    private function formatUptime($value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $seconds = (int)round((float)$value);
+        if ($seconds < 0) {
+            return null;
+        }
+
+        $days = intdiv($seconds, 86400);
+        $seconds %= 86400;
+        $hours = intdiv($seconds, 3600);
+        $seconds %= 3600;
+        $minutes = intdiv($seconds, 60);
+
+        $parts = [];
+        if ($days > 0) {
+            $parts[] = $days . ' д';
+        }
+        if ($hours > 0 || $days > 0) {
+            $parts[] = $hours . ' ч';
+        }
+        $parts[] = $minutes . ' мин';
+
+        return implode(' ', $parts);
     }
 
     public function saveThresholds(Request $request, Response $response, $args)

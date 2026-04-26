@@ -141,12 +141,20 @@ class ServerController extends Model
         $tokenRow = $stmt->fetch();
         $decryptedToken = $tokenRow ? \App\Utils\EncryptionHelper::decrypt($tokenRow['encrypted_token']) : null;
 
-        // Получаем все метрики которые есть у серве��а
+        // Получаем только метрики, которые можно показывать на странице сервера
         $stmt = $this->pdo->prepare("
             SELECT DISTINCT mn.id, mn.name, mn.unit
             FROM metric_names mn
             JOIN server_metrics sm ON sm.metric_name_id = mn.id
             WHERE sm.server_id = :server_id
+              AND mn.name NOT LIKE '%_proc'
+              AND (
+                  mn.name IN ('uptime', 'cpu_load', 'ram_used')
+                  OR mn.name LIKE 'disk_used_%'
+                  OR mn.name LIKE 'net_in_%'
+                  OR mn.name LIKE 'net_out_%'
+                  OR mn.name LIKE 'temp_%'
+              )
             ORDER BY mn.name
         ");
         $stmt->execute([':server_id' => $id]);
@@ -181,7 +189,8 @@ class ServerController extends Model
 
         // Собираем выбранные метрики
         $displayMetrics = $params['display_metrics'] ?? [];
-        $displayMetricsJson = json_encode(array_values($displayMetrics));
+        $displayMetrics = array_values(array_unique(array_filter($displayMetrics, fn ($metric) => is_string($metric) && $metric !== '')));
+        $displayMetricsJson = json_encode($displayMetrics);
 
         $stmt = $this->pdo->prepare("
             UPDATE servers 
