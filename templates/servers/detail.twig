@@ -82,7 +82,7 @@
 
                         {% if net_interfaces|length > 0 %}
                             {% for iface in net_interfaces %}
-                            {% if iface in displayMetrics and ('net_in_' ~ iface) in displayMetrics and ('net_out_' ~ iface) in displayMetrics and metrics['net_in_' ~ iface] is defined and metrics['net_out_' ~ iface] is defined %}
+                            {% if ('net_in_' ~ iface) in displayMetrics and ('net_out_' ~ iface) in displayMetrics and metrics['net_in_' ~ iface] is defined and metrics['net_in_' ~ iface]|length > 0 and metrics['net_out_' ~ iface] is defined and metrics['net_out_' ~ iface]|length > 0 %}
                             <div class="row">
                                 <div class="col-12 mb-4">
                                     <div class="card">
@@ -106,10 +106,10 @@
                         
 
                         
-                        <!-- Температуры: всегда один общий график, если выбрана хоть 1 температура -->
+                        <!-- Температуры: всегда один общий график, если есть данные -->
                         {% set has_temps = false %}
-                        {% for metricName in displayMetrics %}
-                            {% if metricName starts with 'temp_' %}
+                        {% for metricName, metricData in metrics %}
+                            {% if metricName starts with 'temp_' and metricName in displayMetrics and metricData %}
                                 {% set has_temps = true %}
                             {% endif %}
                         {% endfor %}
@@ -135,8 +135,8 @@
 
 <!-- Диски: Doughnut графики -->
                         {% set has_disk_parts = false %}
-                        {% for metricName in displayMetrics %}
-                            {% if metricName starts with 'disk_used_' and metricName != 'disk_used' %}
+                        {% for metricName, metricData in metrics %}
+                            {% if metricName starts with 'disk_used_' and metricName != 'disk_used' and metricName in displayMetrics and metricData %}
                                 {% set has_disk_parts = true %}
                             {% endif %}
                         {% endfor %}
@@ -144,7 +144,7 @@
                         <div class="row mb-3">
                             {% if has_disk_parts %}
                                 {% for metricName, metricData in metrics %}
-                                    {% if metricName starts with 'disk_used_' and metricName != 'disk_used' and metricName in displayMetrics %}
+                                    {% if metricName starts with 'disk_used_' and metricName != 'disk_used' and metricName in displayMetrics and metricData %}
                                     <div class="col-md-4 mb-3">
                                         <div class="card h-100">
                                             <div class="card-body text-center">
@@ -608,20 +608,10 @@ const chart{{ metricName|replace({'-': '_', '.': '_'}) }} = new Chart(ctx{{ metr
                         document.body.appendChild(tooltipEl);
                     }
                     
-                    // Прячем если курсор ушел с графика
+                    // Если нет активного элемента - прячем тултип
                     if (!context.tooltip._active || context.tooltip._active.length === 0) {
-                        tooltipEl.style.opacity = 0;
+                        tooltipEl.style.opacity = '0';
                         return;
-                    }
-                    
-                    // Проверка: курсор внутри chartArea (все 4 границы)
-                    var chartArea = context.chart.chartArea;
-                    if (chartArea && context.tooltip.caretX !== undefined && context.tooltip.caretY !== undefined) {
-                        if (context.tooltip.caretX < chartArea.left || context.tooltip.caretX > chartArea.right ||
-                            context.tooltip.caretY < chartArea.top || context.tooltip.caretY > chartArea.bottom) {
-                            tooltipEl.style.opacity = 0;
-                            return;
-                        }
                     }
 
                     var dataIndex = context.tooltip._active[0].index;
@@ -758,40 +748,19 @@ function loadDetailedMetrics{{ metricName|replace({'-': '_', '.': '_'}) }}(start
         });
 }
 
-// Скрывать tooltip при уходе курсора с canvas в любую сторону
+// Скрывать tooltip при уходе курсора с canvas
 chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas.addEventListener('mouseleave', function() {
     var tooltipEl = document.getElementById('chartjs-tooltip-{{ server.id }}-{{ metricName }}');
     if (tooltipEl) {
-        tooltipEl.style.opacity = 0;
+        tooltipEl.style.opacity = '0';
     }
     chart{{ metricName|replace({'-': '_', '.': '_'}) }}.tooltip._active = [];
-    chart{{ metricName|replace({'-': '_', '.': '_'}) }}.draw();
+    chart{{ metricName|replace({'-': '_', '.': '_'}) }}.update();
 });
 
 {% endif %}
 {% endfor %}
-
-// Глобальный обработчик mousemove для скрытия тултипов при уходе курсора за пределы canvas
-// Глобальный обработчик для скрытия тултипов при уходе курсора за пределы canvas
-document.addEventListener('mousemove', function(e) {
-{% set visibleMetrics = displayMetrics %}
-{% for metricName, metricData in metrics %}
-{% if metricName in visibleMetrics and metricName != 'uptime' %}
-    (function() {
-        var canvas = chart{{ metricName|replace({'-': '_', '.': '_'}) }}.canvas;
-        var rect = canvas.getBoundingClientRect();
-        var isOverCanvas = (e.clientX >= rect.left && e.clientX <= rect.right &&
-                           e.clientY >= rect.top && e.clientY <= rect.bottom);
-        if (!isOverCanvas) {
-            var tooltipEl = document.getElementById('chartjs-tooltip-{{ server.id }}-{{ metricName }}');
-            if (tooltipEl && tooltipEl.style.opacity !== '0') {
-                tooltipEl.style.opacity = 0;
-                chart{{ metricName|replace({'-': '_', '.': '_'}) }}.tooltip._active = [];
-                chart{{ metricName|replace({'-': '_', '.': '_'}) }}.draw();
-            }
-        }
-    })();
-{% endif %}
+});
 {% endfor %}
 });
 
