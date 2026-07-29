@@ -89,7 +89,7 @@
                                 <label for="offline_timeout" class="form-label">Таймаут offline</label>
                                 <div class="input-group">
                                     <input type="number" class="form-control" id="offline_timeout" name="offline_timeout"
-                                           value="{{ server.offline_timeout|default(300) }}" min="0" max="86400">
+                                           value="{{ server.offline_timeout_seconds|default(300) }}" min="0" max="86400">
                                     <span class="input-group-text">секунд</span>
                                 </div>
                                 <small class="form-text text-muted">Сервер будет считаться offline если метрики не приходили N секунд (0 = выключено)</small>

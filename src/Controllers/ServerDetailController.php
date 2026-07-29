@@ -1,329 +1,105 @@
 <?php
-// src/Controllers/ServerDetailController.php
+
+declare(strict_types=1);
 
 namespace App\Controllers;
 
-use App\Models\Model;
+use App\Repositories\MetricRepository;
+use App\Repositories\ServerRepository;
+use DateTimeImmutable;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Views\Twig;
-use DateTime;
+use Throwable;
 
-class ServerDetailController extends Model
+final class ServerDetailController
 {
-    private $twig;
+    private const PERIODS = [
+        '1h' => '-1 hour',
+        '6h' => '-6 hours',
+        '24h' => '-24 hours',
+        '7d' => '-7 days',
+        '30d' => '-30 days',
+    ];
 
-    public function __construct(Twig $twig)
-    {
-        parent::__construct();
-        $this->twig = $twig;
+    public function __construct(
+        private readonly Twig $twig,
+        private readonly ServerRepository $servers,
+        private readonly MetricRepository $metrics
+    ) {
     }
 
-    public function show(Request $request, Response $response, $args)
+    public function show(Request $request, Response $response, array $args): Response
     {
-        $id = $args['id'];
-
-        // Получаем информацию о сервере
-        $stmt = $this->pdo->prepare("
-            SELECT s.*, sg.name as group_name, sg.icon as group_icon, sg.color as group_color,
-            (SELECT MAX(sm.created_at) FROM server_metrics sm WHERE sm.server_id = s.id) as last_seen
-            FROM servers s
-            LEFT JOIN server_groups sg ON s.group_id = sg.id
-            WHERE s.id = :id
-        ");
-        $stmt->execute([':id' => $id]);
-        $server = $stmt->fetch();
-
-        if (!$server) {
+        $serverId = $this->serverId($args);
+        if ($serverId === null) {
             return $response->withHeader('Location', '/servers')->withStatus(302);
         }
 
-        // Получаем настройки отображаемых метрик
-        $displayMetricsSetting = $server['display_metrics'] ?? null;
-        $displayMetrics = null;
-        if ($displayMetricsSetting) {
-            $decoded = json_decode($displayMetricsSetting, true);
-            if (is_array($decoded) && count($decoded) > 0) {
-                $displayMetrics = $decoded;
-            }
+        $server = $this->servers->find($serverId);
+        if ($server === null) {
+            return $response->withHeader('Location', '/servers')->withStatus(302);
         }
 
-        // Получаем параметры
-        $queryParams = $request->getQueryParams();
-        $startDate = $queryParams['start'] ?? null;
-        $endDate = $queryParams['end'] ?? null;
-        $period = $queryParams['period'] ?? '24h';
-        $zoom = $queryParams['zoom'] ?? null;
-        
-        // Если даты не указаны, вычисляем по period
-        if (!$startDate || !$endDate) {
-            $endDate = new DateTime();
-            $startDate = clone $endDate;
-            
-            switch ($period) {
-                case '1h':
-                    $startDate->modify('-1 hour');
-                    break;
-                case '6h':
-                    $startDate->modify('-6 hours');
-                    break;
-                case '7d':
-                    $startDate->modify('-7 days');
-                    break;
-                case '30d':
-                    $startDate->modify('-30 days');
-                    break;
-                case '24h':
-                default:
-                    $startDate->modify('-24 hours');
-                    break;
-            }
-        } else {
-            $startDate = new DateTime($startDate);
-            $endDate = new DateTime($endDate);
-        }
-        
-        // Применяем zoom — ограничиваем end по zoom-периоду
-        if ($zoom && $zoom !== 'auto') {
-            $zoomEnd = new DateTime();
-            $zoomStart = clone $zoomEnd;
-            switch ($zoom) {
-                case '1h':
-                    $zoomStart->modify('-1 hour');
-                    break;
-                case '6h':
-                    $zoomStart->modify('-6 hours');
-                    break;
-                case '24h':
-                    $zoomStart->modify('-24 hours');
-                    break;
-                case '7d':
-                    $zoomStart->modify('-7 days');
-                    break;
-                case '30d':
-                    $zoomStart->modify('-30 days');
-                    break;
-            }
-            // Zoom не может выйти за рамки выбранного периода
-            if ($zoomStart < $startDate) $zoomStart = clone $startDate;
-            if ($zoomEnd > $endDate) $zoomEnd = clone $endDate;
-            $startDate = $zoomStart;
-            $endDate = $zoomEnd;
-        }
-        
-        // Валидация: end > start
-        if ($endDate <= $startDate) {
-            $endDate = clone $startDate;
-            $endDate->modify('+24 hours');
-        }
-        
-        // Вычисляем длительность периода для агрегации
-        $interval = $startDate->diff($endDate);
-        $totalMinutes = ($interval->days * 24 * 60) + ($interval->h * 60) + $interval->i;
-        
-        // Конфигурация агрегации на основе дат
-        $aggConfig = $this->getAggregationConfigFromDates($startDate, $endDate, $totalMinutes);
-        
-        $groupBy = $aggConfig['groupBy'];
-        $bucketFormat = $aggConfig['format'];
-        
-        // Форматируем даты для SQL
-        $startStr = $startDate->format('Y-m-d H:i:s');
-        $endStr = $endDate->format('Y-m-d H:i:s');
-        
-        // Формируем фильтр метрик из настроек сервера.
-        // Дополнительные метрики подгружаем автоматически, если они нужны для отображения.
-        $metricsFilter = '';
-        $metricParams = [];
-        $queryMetricNames = $displayMetrics ? $this->expandDisplayMetrics($displayMetrics) : [];
-        if ($queryMetricNames) {
-            $placeholders = [];
-            foreach (array_values($queryMetricNames) as $i => $metricName) {
-                $key = ':metric_' . $i;
-                $placeholders[] = $key;
-                $metricParams[$key] = $metricName;
-            }
-            $metricsFilter = 'AND mn.name IN (' . implode(', ', $placeholders) . ')';
-        }
-        
-// Определяем источник данных на основе периода
-        // <= 24 часа: raw данные (высокая точность)
-        // > 24 часов: trends таблица (агрегированные данные)
-        
-        $isRawData = $totalMinutes <= 1440; // 24 часа = 1440 минут
-        
-        // Запрос с агрегацией если нужно
-        if ($isRawData) {
-            // Читаем из raw данных
-            $timeExpr = "DATE_FORMAT(sm.created_at, '{$bucketFormat}')";
-            $sql = "
-                SELECT 
-                    AVG(t.value) as value,
-                    t.name,
-                    t.unit,
-                    t.time_bucket
-                FROM (
-                    SELECT 
-                        sm.value, 
-                        mn.name, 
-                        mn.unit,
-                        {$timeExpr} as time_bucket,
-                        ROW_NUMBER() OVER (
-                            PARTITION BY mn.name, {$timeExpr} 
-                            ORDER BY sm.created_at DESC
-                        ) as rn
-                    FROM server_metrics sm
-                    INNER JOIN metric_names mn ON mn.id = sm.metric_name_id
-                    WHERE sm.server_id = :id
-                    AND sm.created_at >= :start_date
-                    AND sm.created_at <= :end_date
-                    AND 1=1 {$metricsFilter}
-                ) t
-                WHERE t.rn = 1
-                GROUP BY t.name, t.unit, t.time_bucket
-                ORDER BY t.time_bucket ASC
-            ";
-            $stmt = $this->pdo->prepare($sql);
-            $executeParams = array_merge([':id' => $id, ':start_date' => $startStr, ':end_date' => $endStr], $metricParams);
-            $stmt->execute($executeParams);
-        } else {
-            // Читаем из trends таблицы (быстрый запрос для больших периодов)
-            $periodStartStr = $startDate->format('Y-m-d H:00:00');
-            $periodEndStr = $endDate->format('Y-m-d H:59:59');
-            
-            $sql = "
-                SELECT 
-                    t.avg_value as value,
-                    mn.name,
-                    mn.unit,
-                    t.period_start as time_bucket
-                FROM server_metrics_trends t
-                INNER JOIN metric_names mn ON mn.id = t.metric_name_id
-                WHERE t.server_id = :id
-                AND t.period_start >= :period_start
-                AND t.period_start <= :period_end
-                AND 1=1 {$metricsFilter}
-                ORDER BY t.period_start ASC
-            ";
-            $stmt = $this->pdo->prepare($sql);
-            $executeParams = array_merge([':id' => $id, ':period_start' => $periodStartStr, ':period_end' => $periodEndStr], $metricParams);
-            $stmt->execute($executeParams);
-        }
-        
-        $metrics = $stmt->fetchAll();
+        $query = $request->getQueryParams();
+        $period = is_string($query['period'] ?? null) && isset(self::PERIODS[$query['period']])
+            ? $query['period']
+            : '24h';
+        $zoom = is_string($query['zoom'] ?? null) ? $query['zoom'] : null;
+        [$startDate, $endDate] = $this->metricRange($query, $period, $zoom);
+        $totalMinutes = max(
+            1,
+            (int) ceil(($endDate->getTimestamp() - $startDate->getTimestamp()) / 60)
+        );
 
-        // Группируем метрики
-        $groupedMetrics = [];
-        foreach ($metrics as $metric) {
-            $metricName = $metric['name'];
-            if (!isset($groupedMetrics[$metricName])) {
-                $groupedMetrics[$metricName] = [];
-            }
-            $groupedMetrics[$metricName][] = $metric;
-        }
+        $displayMetrics = $server['display_metrics'] === []
+            ? null
+            : $server['display_metrics'];
+        $queryMetricNames = $displayMetrics === null
+            ? []
+            : $this->expandDisplayMetrics($displayMetrics);
+        $series = $queryMetricNames === []
+            ? [
+                'source' => $this->metrics->sourceForRange($startDate, $endDate),
+                'bucket_seconds' => 0,
+                'points' => [],
+            ]
+            : $this->metrics->series(
+                $serverId,
+                $startDate,
+                $endDate,
+                $queryMetricNames
+            );
+        $groupedMetrics = $this->groupMetricPoints($series['points']);
+        $currentMetrics = $queryMetricNames === []
+            ? []
+            : $this->metrics->latestValues($serverId, $queryMetricNames);
+        $existingThresholds = $this->servers->thresholds($serverId);
+        $latestUptime = $this->metrics->latestUptime($serverId);
 
-        // Сортируем метрики в фиксированном порядке: cpu_load → ram_used → disk_used → остальные
-        $priorityOrder = ['cpu_load', 'ram_used', 'disk_used'];
-        $sortedMetrics = [];
-        
-        // Сначала добавляем приоритетные метрики в нужном порядке
-        foreach ($priorityOrder as $metricName) {
-            if (isset($groupedMetrics[$metricName])) {
-                $sortedMetrics[$metricName] = $groupedMetrics[$metricName];
-                unset($groupedMetrics[$metricName]);
-            }
-        }
-        
-        // Затем добавляем остальные метрики (например, top_cpu_proc, top_ram_proc)
-        foreach ($groupedMetrics as $metricName => $metricData) {
-            $sortedMetrics[$metricName] = $metricData;
-        }
-        
-        $groupedMetrics = $sortedMetrics;
-
-        // Пороги
-        $stmt = $this->pdo->prepare("
-            SELECT mt.warning_threshold, mt.critical_threshold, mt.duration, mn.name
-            FROM metric_thresholds mt
-            JOIN metric_names mn ON mt.metric_name_id = mn.id
-            WHERE mt.server_id = :id
-        ");
-        $stmt->execute([':id' => $id]);
-        $existingThresholds = [];
-        foreach ($stmt->fetchAll() as $threshold) {
-            $existingThresholds[$threshold['name']] = [
-                'warning' => $threshold['warning_threshold'],
-                'critical' => $threshold['critical_threshold'],
-                'duration' => $threshold['duration']
-            ];
-        }
-
-        // Типы метрик — только те что отображаются на графиках и есть у сервера
-        $stmt = $this->pdo->prepare("
-            SELECT DISTINCT mn.id, mn.name, mn.unit
-            FROM metric_names mn
-            JOIN server_metrics sm ON sm.metric_name_id = mn.id
-            WHERE sm.server_id = :id
-            AND mn.name != 'uptime'
-            AND (
-                mn.name IN ('cpu_load', 'ram_used')
-                OR mn.name LIKE 'disk_used_%'
-                OR mn.name LIKE 'net_in_%'
-                OR mn.name LIKE 'net_out_%'
-                OR mn.name LIKE 'temp_%'
-            )
-            ORDER BY 
-                CASE 
-                    WHEN mn.name = 'cpu_load' THEN 1
-                    WHEN mn.name = 'ram_used' THEN 2
-                    WHEN mn.name LIKE 'disk_used_%' THEN 3
-                    WHEN mn.name LIKE 'net_in_%' THEN 4
-                    WHEN mn.name LIKE 'net_out_%' THEN 5
-                    WHEN mn.name LIKE 'temp_%' THEN 6
-                END,
-                mn.name
-        ");
-        $stmt->execute([':id' => $id]);
-        $allMetricTypes = $stmt->fetchAll();
-
-        // Сервисы
-        $stmt = $this->pdo->prepare("
-            SELECT service_name, status, load_state, active_state, sub_state
-            FROM service_status WHERE server_id = :server_id ORDER BY service_name
-        ");
-        $stmt->execute([':server_id' => $id]);
-        $allServices = $stmt->fetchAll();
-
-        // Мониторинг сервисов
-        $stmt = $this->pdo->prepare("SELECT monitor_services FROM agent_configs WHERE server_id = :server_id");
-        $stmt->execute([':server_id' => $id]);
-        $agentConfig = $stmt->fetch();
-
-        $monitorServices = [];
-        if ($agentConfig && !empty($agentConfig['monitor_services'])) {
-            $monitorServices = json_decode($agentConfig['monitor_services'], true) ?? [];
-        }
-
-        // Получаем последние значения метрик (для виджета аптайма)
-        $stmt = $this->pdo->prepare("
-            SELECT mn.name, sm.value, sm.created_at
-            FROM server_metrics sm
-            JOIN metric_names mn ON sm.metric_name_id = mn.id
-            WHERE sm.server_id = :id
-            AND mn.name = 'uptime'
-            ORDER BY sm.created_at DESC
-            LIMIT 1
-        ");
-        $stmt->execute([':id' => $id]);
-        $latestUptime = $stmt->fetch();
-
-        $simpleMetricCharts = $this->buildSimpleMetricCharts($groupedMetrics, $displayMetrics, $existingThresholds);
+        $simpleMetricCharts = $this->buildSimpleMetricCharts(
+            $groupedMetrics,
+            $displayMetrics,
+            $existingThresholds,
+            $currentMetrics
+        );
         $networkCharts = $this->buildNetworkCharts($groupedMetrics, $displayMetrics);
         $temperatureChart = $this->buildTemperatureChart($groupedMetrics, $displayMetrics);
-        $diskCharts = $this->buildDiskCharts($groupedMetrics, $displayMetrics);
-        $summaryCards = $this->buildSummaryCards($groupedMetrics, $displayMetrics, $temperatureChart, $diskCharts, $networkCharts);
+        $diskCharts = $this->buildDiskCharts(
+            $groupedMetrics,
+            $displayMetrics,
+            $currentMetrics
+        );
+        $summaryCards = $this->buildSummaryCards(
+            $groupedMetrics,
+            $displayMetrics,
+            $temperatureChart,
+            $diskCharts,
+            $networkCharts,
+            $currentMetrics
+        );
 
-        $templateData = [
+        return $this->twig->render($response, 'servers/detail.twig', [
             'title' => 'Сервер: ' . $server['name'],
             'server' => $server,
             'metrics' => $groupedMetrics,
@@ -333,61 +109,95 @@ class ServerDetailController extends Model
             'temperatureChart' => $temperatureChart,
             'diskCharts' => $diskCharts,
             'summaryCards' => $summaryCards,
-            'allMetricTypes' => $allMetricTypes,
+            'allMetricTypes' => $this->metrics->metricTypes($serverId),
             'existingThresholds' => $existingThresholds,
-            'allServices' => $allServices,
-            'monitorServices' => $monitorServices,
+            'allServices' => $this->servers->services($serverId),
+            'monitorServices' => $this->servers->monitoredServices($serverId),
             'latestUptime' => $latestUptime,
             'uptimeText' => $this->formatUptime($latestUptime['value'] ?? null),
             'startDate' => $startDate->format('Y-m-d\TH:i'),
             'endDate' => $endDate->format('Y-m-d\TH:i'),
-            'aggregation' => $aggConfig,
+            'aggregation' => [
+                'source' => $series['source'],
+                'seconds' => $series['bucket_seconds'],
+            ],
             'totalMinutes' => $totalMinutes,
             'period' => $period,
-            'zoom' => $zoom
-        ];
-
-        return $this->twig->render($response, 'servers/detail.twig', $templateData);
+            'zoom' => $zoom,
+        ]);
     }
-    
-    private function getAggregationConfigFromDates(DateTime $startDate, DateTime $endDate, int $totalMinutes): array
+
+    /** @param array<string, mixed> $args */
+    private function serverId(array $args): ?int
     {
-        // Target: ~400 points on chart for optimal performance
-        // Formula: aggregate_minutes = total_minutes / 400
-        
-        $targetPoints = 400;
-        $aggregateMinutes = ceil($totalMinutes / $targetPoints);
-        
-        // Определяем формат группировки на основе длительности агрегации
-        if ($aggregateMinutes <= 1) {
-            // Менее 1 минуты — без агрегации
-            return [
-                'groupBy' => null,
-                'format' => '%Y-%m-%d %H:%i:%s',
-                'aggregate_minutes' => 0
-            ];
-        } elseif ($aggregateMinutes < 60) {
-            // Минуты — группировка по минутам
-            return [
-                'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:%i')",
-                'format' => '%Y-%m-%d %H:%i',
-                'aggregate_minutes' => $aggregateMinutes
-            ];
-        } elseif ($aggregateMinutes < 1440) {
-            // Часы — группировка по часам
-            return [
-                'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d %H:00')",
-                'format' => '%Y-%m-%d %H:00',
-                'aggregate_minutes' => $aggregateMinutes
-            ];
-        } else {
-            // Дни — группировка по дням
-            return [
-                'groupBy' => "GROUP BY mn.id, DATE_FORMAT(sm.created_at, '%Y-%m-%d')",
-                'format' => '%Y-%m-%d',
-                'aggregate_minutes' => $aggregateMinutes
-            ];
+        $serverId = filter_var(
+            $args['id'] ?? null,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1]]
+        );
+
+        return $serverId === false ? null : $serverId;
+    }
+
+    /**
+     * @param array<string, mixed> $query
+     * @return array{DateTimeImmutable, DateTimeImmutable}
+     */
+    private function metricRange(array $query, string $period, ?string $zoom): array
+    {
+        $end = new DateTimeImmutable();
+        $start = $end->modify(self::PERIODS[$period]);
+
+        if (is_string($query['start'] ?? null) && is_string($query['end'] ?? null)) {
+            try {
+                $requestedStart = new DateTimeImmutable($query['start']);
+                $requestedEnd = new DateTimeImmutable($query['end']);
+                if ($requestedEnd > $requestedStart) {
+                    $start = $requestedStart;
+                    $end = $requestedEnd;
+                }
+            } catch (Throwable) {
+                // Keep the selected safe period for malformed optional dates.
+            }
         }
+
+        if ($zoom !== null && isset(self::PERIODS[$zoom])) {
+            $zoomStart = $end->modify(self::PERIODS[$zoom]);
+            if ($zoomStart > $start) {
+                $start = $zoomStart;
+            }
+        }
+
+        $maximumStart = $end->modify('-2 years');
+        if ($start < $maximumStart) {
+            $start = $maximumStart;
+        }
+
+        return [$start, $end];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $points
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private function groupMetricPoints(array $points): array
+    {
+        $grouped = [];
+        foreach ($points as $point) {
+            $grouped[$point['name']][] = $point;
+        }
+
+        $priority = ['cpu_load', 'ram_used', 'disk_used'];
+        uksort($grouped, static function (string $left, string $right) use ($priority): int {
+            $leftPriority = array_search($left, $priority, true);
+            $rightPriority = array_search($right, $priority, true);
+            $leftOrder = $leftPriority === false ? PHP_INT_MAX : $leftPriority;
+            $rightOrder = $rightPriority === false ? PHP_INT_MAX : $rightPriority;
+
+            return $leftOrder <=> $rightOrder ?: strnatcasecmp($left, $right);
+        });
+
+        return $grouped;
     }
 
     private function expandDisplayMetrics(array $displayMetrics): array
@@ -414,7 +224,12 @@ class ServerDetailController extends Model
         return array_values($expanded);
     }
 
-    private function buildSimpleMetricCharts(array $groupedMetrics, ?array $displayMetrics, array $existingThresholds): array
+    private function buildSimpleMetricCharts(
+        array $groupedMetrics,
+        ?array $displayMetrics,
+        array $existingThresholds,
+        array $currentMetrics
+    ): array
     {
         $charts = [];
         $config = [
@@ -427,18 +242,22 @@ class ServerDetailController extends Model
                 continue;
             }
 
+            $latestPoint = $currentMetrics[$metricName]
+                ?? $this->latestPoint($groupedMetrics[$metricName]);
             $charts[] = [
                 'id' => $metricName,
                 'title' => $meta['title'],
-                'unit' => $groupedMetrics[$metricName][0]['unit'] ?? '',
+                'unit' => $latestPoint['unit'] ?? '',
                 'color' => $meta['color'],
                 'labels' => $this->extractLabels($groupedMetrics[$metricName]),
                 'timestamps' => $this->extractTimestamps($groupedMetrics[$metricName]),
                 'values' => $this->extractValues($groupedMetrics[$metricName]),
-                'lastValue' => round((float)($groupedMetrics[$metricName][0]['value'] ?? 0), 2),
-                'lastTime' => $this->formatPointTime($groupedMetrics[$metricName][0] ?? []),
+                'lastValue' => round((float) ($latestPoint['value'] ?? 0), 2),
+                'lastTime' => $this->formatPointTime($latestPoint),
                 'thresholds' => $existingThresholds[$metricName] ?? null,
-                'details' => $metricName === 'ram_used' ? $this->buildRamDetails($groupedMetrics) : null,
+                'details' => $metricName === 'ram_used'
+                    ? $this->buildRamDetails($groupedMetrics, $currentMetrics)
+                    : null,
             ];
         }
 
@@ -509,6 +328,7 @@ class ServerDetailController extends Model
     {
         $datasets = [];
         $labels = [];
+        $timestamps = [];
         $colors = ['#dc3545', '#fd7e14', '#0dcaf0', '#6f42c1', '#20c997', '#ffc107', '#6610f2', '#198754'];
         $colorIndex = 0;
 
@@ -521,6 +341,7 @@ class ServerDetailController extends Model
 
             if (!$labels) {
                 $labels = $this->extractLabels($points);
+                $timestamps = $this->extractTimestamps($points);
             }
 
             $tempSeries[] = [
@@ -545,12 +366,16 @@ class ServerDetailController extends Model
         return [
             'unit' => '°C',
             'labels' => $labels,
-            'timestamps' => $labels ? $this->extractTimestamps($points) : [],
+            'timestamps' => $timestamps,
             'datasets' => $datasets,
         ];
     }
 
-    private function buildDiskCharts(array $groupedMetrics, ?array $displayMetrics): array
+    private function buildDiskCharts(
+        array $groupedMetrics,
+        ?array $displayMetrics,
+        array $currentMetrics
+    ): array
     {
         $charts = [];
 
@@ -566,8 +391,11 @@ class ServerDetailController extends Model
 
             $suffix = substr($metricName, strlen('disk_used_'));
             $totalMetric = 'disk_total_gb_' . $suffix;
-            $percent = (float)($points[0]['value'] ?? 0);
-            $totalGb = isset($groupedMetrics[$totalMetric][0]['value']) ? (float)$groupedMetrics[$totalMetric][0]['value'] : 0.0;
+            $latestPoint = $currentMetrics[$metricName] ?? $this->latestPoint($points);
+            $latestTotal = $currentMetrics[$totalMetric]
+                ?? $this->latestPoint($groupedMetrics[$totalMetric] ?? []);
+            $percent = (float) ($latestPoint['value'] ?? 0);
+            $totalGb = (float) ($latestTotal['value'] ?? 0);
             $usedGb = $totalGb > 0 ? round(($percent / 100) * $totalGb, 1) : null;
             $freeGb = $totalGb > 0 ? round($totalGb - $usedGb, 1) : null;
 
@@ -578,7 +406,7 @@ class ServerDetailController extends Model
                 'totalGb' => $totalGb > 0 ? round($totalGb, 1) : null,
                 'usedGb' => $usedGb,
                 'freeGb' => $freeGb,
-                'updatedAt' => $this->formatPointTime($points[0]),
+                'updatedAt' => $this->formatPointTime($latestPoint),
             ];
         }
 
@@ -587,33 +415,46 @@ class ServerDetailController extends Model
         return $charts;
     }
 
-    private function buildSummaryCards(array $groupedMetrics, ?array $displayMetrics, array $temperatureChart, array $diskCharts, array $networkCharts): array
+    private function buildSummaryCards(
+        array $groupedMetrics,
+        ?array $displayMetrics,
+        array $temperatureChart,
+        array $diskCharts,
+        array $networkCharts,
+        array $currentMetrics
+    ): array
     {
         $cards = [];
+        $latestCpu = $currentMetrics['cpu_load']
+            ?? $this->latestPoint($groupedMetrics['cpu_load'] ?? []);
 
-        if ($this->isMetricSelected('cpu_load', $displayMetrics) && isset($groupedMetrics['cpu_load'][0]['value'])) {
+        if ($this->isMetricSelected('cpu_load', $displayMetrics) && isset($latestCpu['value'])) {
             $cards[] = [
                 'title' => 'CPU сейчас',
-                'value' => round((float)$groupedMetrics['cpu_load'][0]['value'], 2) . '%',
-                'subtitle' => $this->formatPointTime($groupedMetrics['cpu_load'][0]),
+                'value' => round((float) $latestCpu['value'], 2) . '%',
+                'subtitle' => $this->formatPointTime($latestCpu),
             ];
         }
 
-        if ($this->isMetricSelected('ram_used', $displayMetrics) && isset($groupedMetrics['ram_used'][0]['value'])) {
-            $ramDetails = $this->buildRamDetails($groupedMetrics);
+        $latestRam = $currentMetrics['ram_used']
+            ?? $this->latestPoint($groupedMetrics['ram_used'] ?? []);
+        if ($this->isMetricSelected('ram_used', $displayMetrics) && isset($latestRam['value'])) {
+            $ramDetails = $this->buildRamDetails($groupedMetrics, $currentMetrics);
             $cards[] = [
                 'title' => 'RAM сейчас',
-                'value' => round((float)$groupedMetrics['ram_used'][0]['value'], 2) . '%',
+                'value' => round((float) $latestRam['value'], 2) . '%',
                 'subtitle' => $ramDetails
                     ? sprintf('Всего: %.1f ГБ | Занято: %.1f ГБ | Свободно: %.1f ГБ', $ramDetails['totalGb'], $ramDetails['usedGb'], $ramDetails['freeGb'])
-                    : $this->formatPointTime($groupedMetrics['ram_used'][0]),
+                    : $this->formatPointTime($latestRam),
             ];
         }
 
         if (!empty($temperatureChart['datasets'])) {
             $hottest = null;
             foreach ($temperatureChart['datasets'] as $dataset) {
-                $current = $dataset['values'][count($dataset['values']) - 1] ?? null;
+                $current = $currentMetrics[$dataset['metricName']]['value']
+                    ?? $dataset['values'][count($dataset['values']) - 1]
+                    ?? null;
                 if ($current === null) {
                     continue;
                 }
@@ -669,14 +510,21 @@ class ServerDetailController extends Model
         return $cards;
     }
 
-    private function buildRamDetails(array $groupedMetrics): ?array
+    private function buildRamDetails(
+        array $groupedMetrics,
+        array $currentMetrics = []
+    ): ?array
     {
-        if (!isset($groupedMetrics['ram_used'][0]['value'], $groupedMetrics['ram_total_gb'][0]['value'])) {
+        $latestRam = $currentMetrics['ram_used']
+            ?? $this->latestPoint($groupedMetrics['ram_used'] ?? []);
+        $latestTotal = $currentMetrics['ram_total_gb']
+            ?? $this->latestPoint($groupedMetrics['ram_total_gb'] ?? []);
+        if (!isset($latestRam['value'], $latestTotal['value'])) {
             return null;
         }
 
-        $percentUsed = (float)$groupedMetrics['ram_used'][0]['value'];
-        $totalGb = (float)$groupedMetrics['ram_total_gb'][0]['value'];
+        $percentUsed = (float) $latestRam['value'];
+        $totalGb = (float) $latestTotal['value'];
         if ($totalGb <= 0) {
             return null;
         }
@@ -723,7 +571,10 @@ class ServerDetailController extends Model
         $timestamps = [];
 
         foreach ($points as $point) {
-            $timestamps[] = $point['time_bucket'] ?? $point['created_at'] ?? null;
+            $timestamps[] = $point['time_bucket']
+                ?? $point['sample_time']
+                ?? $point['created_at']
+                ?? null;
         }
 
         return $timestamps;
@@ -731,12 +582,25 @@ class ServerDetailController extends Model
 
     private function formatPointTime(array $point, string $format = 'd.m.Y H:i:s'): string
     {
-        $raw = $point['time_bucket'] ?? $point['created_at'] ?? null;
+        $raw = $point['time_bucket']
+            ?? $point['sample_time']
+            ?? $point['created_at']
+            ?? null;
         if (!$raw) {
             return '';
         }
 
-        return (new DateTime($raw))->format($format);
+        return (new DateTimeImmutable((string) $raw))->format($format);
+    }
+
+    /** @param list<array<string, mixed>> $points */
+    private function latestPoint(array $points): array
+    {
+        if ($points === []) {
+            return [];
+        }
+
+        return $points[array_key_last($points)];
     }
 
     private function formatMetricLabel(string $metricName): string
@@ -796,125 +660,143 @@ class ServerDetailController extends Model
         return implode(' ', $parts);
     }
 
-    public function saveThresholds(Request $request, Response $response, $args)
-    {
-        $id = $args['id'];
+    public function saveThresholds(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        $serverId = $this->serverId($args);
+        if ($serverId === null) {
+            return $response->withHeader('Location', '/servers')->withStatus(302);
+        }
+
         $params = $request->getParsedBody();
-
-        // Получаем только метрики которые есть у сервера и отображаются на графиках
-        $stmt = $this->pdo->prepare("
-            SELECT DISTINCT mn.id, mn.name, mn.unit
-            FROM metric_names mn
-            JOIN server_metrics sm ON sm.metric_name_id = mn.id
-            WHERE sm.server_id = :id
-            AND mn.name != 'uptime'
-            AND (
-                mn.name IN ('cpu_load', 'ram_used')
-                OR mn.name LIKE 'disk_used_%'
-                OR mn.name LIKE 'net_in_%'
-                OR mn.name LIKE 'net_out_%'
-                OR mn.name LIKE 'temp_%'
-            )
-            ORDER BY 
-                CASE 
-                    WHEN mn.name = 'cpu_load' THEN 1
-                    WHEN mn.name = 'ram_used' THEN 2
-                    WHEN mn.name LIKE 'disk_used_%' THEN 3
-                    WHEN mn.name LIKE 'net_in_%' THEN 4
-                    WHEN mn.name LIKE 'net_out_%' THEN 5
-                    WHEN mn.name LIKE 'temp_%' THEN 6
-                END,
-                mn.name
-        ");
-        $stmt->execute([':id' => $id]);
-        $metricTypes = $stmt->fetchAll();
-
-        $stmt = $this->pdo->prepare("DELETE FROM metric_thresholds WHERE server_id = :server_id");
-        $stmt->execute([':server_id' => $id]);
-
-        $insertStmt = $this->pdo->prepare("
-            INSERT INTO metric_thresholds (server_id, metric_name_id, warning_threshold, critical_threshold, duration)
-            VALUES (:server_id, :metric_name_id, :warning_threshold, :critical_threshold, :duration)
-        ");
-
-        // Дефолтные значения порогов (пока хардкод, потом из настроек)
-        $defaultWarning = 80;
-        $defaultCritical = 90;
-        $defaultDuration = 0;
-
+        $params = is_array($params) ? $params : [];
+        $defaults = $this->servers->thresholdDefaults();
+        $thresholds = [];
         $saved = [];
         $usedDefaults = [];
 
-        foreach ($metricTypes as $metricType) {
+        foreach ($this->metrics->metricTypes($serverId) as $metricType) {
             $warning = $params[$metricType['name'] . '_warning'] ?? '';
             $critical = $params[$metricType['name'] . '_critical'] ?? '';
             $duration = $params[$metricType['name'] . '_duration'] ?? '';
 
-            // Сохраняем если хотя бы один порог заполнен
-            if ($warning !== '' || $critical !== '') {
-                // Если не указано - используем дефолт
-                $warningVal = $warning !== '' ? (float)$warning : $defaultWarning;
-                $criticalVal = $critical !== '' ? (float)$critical : $defaultCritical;
-                $durationVal = $duration !== '' ? (int)$duration : $defaultDuration;
+            if ($warning === '' && $critical === '') {
+                continue;
+            }
 
-                $insertStmt->execute([
-                    ':server_id' => $id,
-                    ':metric_name_id' => $metricType['id'],
-                    ':warning_threshold' => $warningVal,
-                    ':critical_threshold' => $criticalVal,
-                    ':duration' => $durationVal
-                ]);
+            $warningValue = $warning === '' ? $defaults['warning'] : $this->finiteFloat($warning);
+            $criticalValue = $critical === '' ? $defaults['critical'] : $this->finiteFloat($critical);
+            $durationValue = $duration === '' ? $defaults['duration'] : filter_var(
+                $duration,
+                FILTER_VALIDATE_INT,
+                ['options' => ['min_range' => 0, 'max_range' => 86400]]
+            );
 
-                $name = $metricType['name'];
-                $used = [];
-                if ($warning === '') $used[] = 'warning=' . $defaultWarning;
-                if ($critical === '') $used[] = 'critical=' . $defaultCritical;
-                if ($duration === '') $used[] = 'duration=' . $defaultDuration;
+            if (
+                $warningValue === null
+                || $criticalValue === null
+                || $durationValue === false
+                || $criticalValue < $warningValue
+            ) {
+                $_SESSION['flash_message'] = 'Проверьте пороги: critical должен быть не ниже warning, длительность — от 0 до 86400 секунд.';
+                $_SESSION['flash_type'] = 'danger';
 
-                if (count($used) > 0) {
-                    $usedDefaults[] = $name . ' (' . implode(', ', $used) . ')';
-                } else {
-                    $saved[] = $name;
-                }
+                return $response
+                    ->withHeader('Location', "/servers/{$serverId}?tab=thresholds")
+                    ->withStatus(302);
+            }
+
+            $thresholds[] = [
+                'metric_id' => $metricType['id'],
+                'warning' => $warningValue,
+                'critical' => $criticalValue,
+                'duration' => (int) $durationValue,
+            ];
+
+            $used = [];
+            if ($warning === '') {
+                $used[] = 'warning=' . $defaults['warning'];
+            }
+            if ($critical === '') {
+                $used[] = 'critical=' . $defaults['critical'];
+            }
+            if ($duration === '') {
+                $used[] = 'duration=' . $defaults['duration'];
+            }
+
+            if ($used !== []) {
+                $usedDefaults[] = $metricType['name'] . ' (' . implode(', ', $used) . ')';
+            } else {
+                $saved[] = $metricType['name'];
             }
         }
 
-        // Формируем flash сообщение
+        $this->servers->replaceThresholds($serverId, $thresholds);
+
         $messages = [];
-        if (count($saved) > 0) {
+        if ($saved !== []) {
             $messages[] = 'Сохранено: ' . implode(', ', $saved);
         }
-        if (count($usedDefaults) > 0) {
+        if ($usedDefaults !== []) {
             $messages[] = 'Для остальных подставлены значения по умолчанию: ' . implode(', ', $usedDefaults);
         }
-        if (count($messages) === 0) {
+        if ($messages === []) {
             $messages[] = 'Все пороги удалены';
         }
 
         $_SESSION['flash_message'] = implode('. ', $messages);
-        $_SESSION['flash_type'] = count($usedDefaults) > 0 ? 'warning' : 'success';
+        $_SESSION['flash_type'] = $usedDefaults !== [] ? 'warning' : 'success';
 
-        return $response->withHeader('Location', "/servers/{$id}?tab=thresholds")->withStatus(302);
+        return $response
+            ->withHeader('Location', "/servers/{$serverId}?tab=thresholds")
+            ->withStatus(302);
     }
 
-    public function saveServices(Request $request, Response $response, $args)
-    {
-        $id = $args['id'];
-        $params = $request->getParsedBody();
-        $services = $params['services'] ?? [];
-
-        if (is_string($services)) {
-            $services = json_decode($services, true) ?? [];
+    public function saveServices(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        $serverId = $this->serverId($args);
+        if ($serverId === null) {
+            return $response->withHeader('Location', '/servers')->withStatus(302);
         }
 
-        $stmt = $this->pdo->prepare("
-            INSERT INTO agent_configs (server_id, interval_seconds, monitor_services, enabled)
-            VALUES (:server_id, 60, :services, TRUE)
-            ON DUPLICATE KEY UPDATE monitor_services = VALUES(monitor_services), updated_at = CURRENT_TIMESTAMP
-        ");
+        $params = $request->getParsedBody();
+        $params = is_array($params) ? $params : [];
+        $services = $params['services'] ?? [];
+        if (is_string($services)) {
+            try {
+                $services = json_decode($services, true, 512, JSON_THROW_ON_ERROR);
+            } catch (Throwable) {
+                $services = [];
+            }
+        }
 
-        $stmt->execute([':server_id' => $id, ':services' => json_encode($services)]);
+        $services = is_array($services) ? $services : [];
+        $services = array_slice(array_values(array_unique(array_filter(
+            $services,
+            static fn (mixed $service): bool => is_string($service)
+                && $service !== ''
+                && strlen($service) <= 255
+        ))), 0, 100);
+        $this->servers->saveMonitoredServices($serverId, $services);
 
-        return $response->withHeader('Location', "/servers/{$id}?tab=services")->withStatus(302);
+        return $response
+            ->withHeader('Location', "/servers/{$serverId}?tab=services")
+            ->withStatus(302);
+    }
+
+    private function finiteFloat(mixed $value): ?float
+    {
+        if (!is_numeric($value)) {
+            return null;
+        }
+
+        $number = (float) $value;
+
+        return is_finite($number) ? $number : null;
     }
 }

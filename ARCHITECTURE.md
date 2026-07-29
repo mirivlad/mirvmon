@@ -72,6 +72,7 @@ PostgreSQL 17 + TimescaleDB 2.28:
   `metric_thresholds`, `agent_tokens`, `installer_tokens`, `agent_configs`,
   `service_status`, `alerts`, `notification_settings`, `app_settings`;
 - idempotency: `ingested_samples`;
+- current read model: `current_metric_values`;
 - hypertables: `metric_samples`, `process_snapshots`;
 - delivery: `notification_outbox`;
 - security/audit support: `login_attempts`, `schema_migrations`.
@@ -79,6 +80,11 @@ PostgreSQL 17 + TimescaleDB 2.28:
 Числовые метрики находятся в `metric_samples` как `DOUBLE PRECISION`.
 Процессы находятся в `process_snapshots` как `JSONB`, поэтому они не загрязняют
 числовые агрегаты.
+
+`current_metric_values` содержит ровно одну последнюю точку на пару
+server/metric. Ingestion обновляет её только более новым `(sample_time,
+sample_id)`. Dashboard читает этот компактный read model, а не сканирует
+историю hypertable.
 
 Непрерывные агрегаты:
 
@@ -130,11 +136,16 @@ Telegram и SMTP являются независимыми transports. Telegram 
 ## Масштабирование
 
 - dashboard reads выполняются set-based, без запроса на каждую карточку;
-- latest values выбираются по индексам времени;
-- короткие интервалы читаются из raw hypertable, средние/длинные — из
-  continuous aggregates;
+- current values читаются из `current_metric_values`, поэтому объём истории не
+  влияет на dashboard query;
+- интервалы до 48 часов читаются из raw hypertable, до 90 дней — из hourly
+  aggregate, более длинные — из daily aggregate;
 - ingestion и notification delivery разделены;
 - один `app` контейнер содержит web runtime и управляемые supervisor workers.
+
+`bin/benchmark-dashboard` воспроизводимо проверяет set-based query на 50 и
+1000 синтетических серверах. Все benchmark fixtures создаются в транзакции и
+откатываются.
 
 При росте нагрузки application image остаётся stateless относительно БД.
 Ограничение двумя контейнерами относится к стандартному deployment, поэтому

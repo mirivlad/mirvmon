@@ -16,6 +16,9 @@ use App\Controllers\ServerController;
 use App\Controllers\ServerDetailController;
 use App\Controllers\SetupController;
 use App\Database\ConnectionFactory;
+use App\Repositories\MetricRepository;
+use App\Repositories\ServerRepository;
+use App\Services\ServerStatusService;
 use Config\DatabaseConfig;
 use DateTimeZone;
 use PDO;
@@ -72,6 +75,22 @@ final class Bootstrap
         $container->set('settings', $settings);
         $container->set(PDO::class, $pdo);
         $container->set(Twig::class, $twig);
+        $container->set(
+            ServerRepository::class,
+            static fn (Container $container): ServerRepository => new ServerRepository(
+                $container->get(PDO::class)
+            )
+        );
+        $container->set(
+            MetricRepository::class,
+            static fn (Container $container): MetricRepository => new MetricRepository(
+                $container->get(PDO::class)
+            )
+        );
+        $container->set(
+            ServerStatusService::class,
+            static fn (): ServerStatusService => new ServerStatusService()
+        );
 
         $applicationKey = base64_decode((string) $settings['app_key'], true);
         if ($applicationKey === false || strlen($applicationKey) !== 32) {
@@ -97,7 +116,9 @@ final class Bootstrap
         $container->set(
             DashboardController::class,
             static fn (Container $container): DashboardController => new DashboardController(
-                $container->get(Twig::class)
+                $container->get(Twig::class),
+                $container->get(ServerRepository::class),
+                $container->get(ServerStatusService::class)
             )
         );
         $container->set(
@@ -115,7 +136,9 @@ final class Bootstrap
         $container->set(
             ServerDetailController::class,
             static fn (Container $container): ServerDetailController => new ServerDetailController(
-                $container->get(Twig::class)
+                $container->get(Twig::class),
+                $container->get(ServerRepository::class),
+                $container->get(MetricRepository::class)
             )
         );
         $container->set(
@@ -137,7 +160,9 @@ final class Bootstrap
         );
         $container->set(
             MetricsApiController::class,
-            static fn (): MetricsApiController => new MetricsApiController()
+            static fn (Container $container): MetricsApiController => new MetricsApiController(
+                $container->get(MetricRepository::class)
+            )
         );
 
         return $container;

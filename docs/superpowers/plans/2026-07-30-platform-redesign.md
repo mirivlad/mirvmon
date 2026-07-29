@@ -363,6 +363,7 @@ git push origin master
 - Create: `src/Repositories/ServerRepository.php`
 - Create: `src/Repositories/MetricRepository.php`
 - Create: `src/Services/ServerStatusService.php`
+- Create: `migrations/003_current_metric_values.sql`
 - Modify: `src/Controllers/DashboardController.php`
 - Modify: `src/Controllers/ServerDetailController.php`
 - Modify: `src/Controllers/Api/MetricsApiController.php`
@@ -388,9 +389,9 @@ selection, and N+1 query count failures.
 
 - [ ] **Step 3: Implement repositories and status service**
 
-Use PostgreSQL CTEs and `DISTINCT ON`/window functions for latest values and
-alerts. Select raw data for short periods, hourly aggregate for medium periods,
-and daily aggregate for long periods.
+Use PostgreSQL CTEs for alerts and a compact `current_metric_values` read model
+for newest values. Select raw data for short periods, hourly aggregate for
+medium periods, and daily aggregate for long periods.
 
 - [ ] **Step 4: Verify behavior and explain plans**
 

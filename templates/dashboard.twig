@@ -78,8 +78,8 @@
     </div>
 </div>
 {% else %}
-{% for groupName, group in groups %}
-{% set groupSlug = groupName|lower|replace({' ': '-'}) %}
+{% for groupKey, group in groups %}
+{% set groupSlug = groupKey %}
 <div class="card mb-3 border-0 shadow-sm">
     <div class="card-header text-white py-2 accordion-header" 
          data-group="{{ groupSlug }}"
@@ -88,7 +88,7 @@
         <div class="d-flex justify-content-between align-items-center">
             <h5 class="mb-0">
                 <i class="fas {{ group.icon|default('fa-server')|replace({'fas ': ''}) }}"></i>
-                {{ groupName }}
+                {{ group.name }}
                 <span class="badge bg-light text-dark ms-2">{{ group.servers|length }}</span>
             </h5>
             <i class="fas accordion-icon"></i>
@@ -100,22 +100,22 @@
                 {% for server in group.servers %}
                 <div class="col-6 col-lg-4 col-xl-3">
                     <a href="/servers/{{ server.id }}" class="text-decoration-none">
-                        <div class="server-card compact p-2 rounded
-                            {% if server.status == 'offline' %}border-danger{% elseif server.status == 'warning' %}border-warning{% else %}border-success{% endif %}">
+                        <div id="server-card-{{ server.id }}" class="server-card compact p-2 rounded
+                            {% if server.status == 'offline' or server.status == 'critical' %}border-danger{% elseif server.status == 'warning' %}border-warning{% else %}border-success{% endif %}">
                             <div class="d-flex justify-content-between align-items-start mb-1">
                                 <div class="d-flex align-items-center">
                                     {% if server.status == 'online' %}
-                                        <span class="status-dot bg-success me-2"></span>
+                                        <span id="status-dot-{{ server.id }}" class="status-dot bg-success me-2"></span>
                                     {% elseif server.status == 'warning' %}
-                                        <span class="status-dot bg-warning me-2"></span>
+                                        <span id="status-dot-{{ server.id }}" class="status-dot bg-warning me-2"></span>
+                                    {% elseif server.status == 'critical' %}
+                                        <span id="status-dot-{{ server.id }}" class="status-dot bg-danger me-2"></span>
                                     {% else %}
-                                        <span class="status-dot bg-danger me-2"></span>
+                                        <span id="status-dot-{{ server.id }}" class="status-dot bg-danger me-2"></span>
                                     {% endif %}
                                     <strong class="server-name">{{ server.name }}</strong>
                                 </div>
-                                {% if server.active_alerts > 0 %}
-                                <span class="badge bg-danger badge-sm">{{ server.active_alerts }}</span>
-                                {% endif %}
+                                <span id="alert-count-{{ server.id }}" class="badge bg-danger badge-sm{% if server.active_alerts == 0 %} d-none{% endif %}">{{ server.active_alerts }}</span>
                             </div>
 
                             <!-- Метрики с иконками -->
@@ -271,7 +271,28 @@
                         var diskVal = document.getElementById('disk-val-' + server.id);
                         if (diskVal && server.metrics.disk) diskVal.textContent = server.metrics.disk.value + '%';
                         var updatedAt = document.getElementById('updated-at-' + server.id);
-                        if (updatedAt && server.updated_at) updatedAt.textContent = server.updated_at.split(' ')[1].substring(0, 5);
+                        if (updatedAt && server.last_metrics_at) {
+                            updatedAt.textContent = new Date(server.last_metrics_at).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+                        }
+                        var card = document.getElementById('server-card-' + server.id);
+                        var statusDot = document.getElementById('status-dot-' + server.id);
+                        var danger = server.status === 'offline' || server.status === 'critical';
+                        if (card) {
+                            card.classList.remove('border-success', 'border-warning', 'border-danger');
+                            card.classList.add(danger ? 'border-danger' : (server.status === 'warning' ? 'border-warning' : 'border-success'));
+                        }
+                        if (statusDot) {
+                            statusDot.classList.remove('bg-success', 'bg-warning', 'bg-danger');
+                            statusDot.classList.add(danger ? 'bg-danger' : (server.status === 'warning' ? 'bg-warning' : 'bg-success'));
+                        }
+                        var alertCount = document.getElementById('alert-count-' + server.id);
+                        if (alertCount) {
+                            alertCount.textContent = server.active_alerts;
+                            alertCount.classList.toggle('d-none', server.active_alerts === 0);
+                        }
                     });
                 });
         }

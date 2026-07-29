@@ -426,10 +426,10 @@
                                                         </div>
                                                     </div>
                                                     <div class="col-md-3">
-                                                        <div class="input-group input-group-sm" title="Длительность превышения (минуты)">
+                                                        <div class="input-group input-group-sm" title="Длительность превышения (секунды)">
                                                             <span class="input-group-text"><i class="fas fa-clock"></i></span>
                                                             <input type="number" class="form-control" style="max-width: 90px;" name="{{ metricType.name }}_duration" min="0" step="1" placeholder="0" {% if existingThresholds[metricType.name].duration is defined %}value="{{ existingThresholds[metricType.name].duration }}"{% endif %}>
-                                                            <span class="input-group-text">мин</span>
+                                                            <span class="input-group-text">сек</span>
                                                         </div>
                                                     </div>
                                                 </div>

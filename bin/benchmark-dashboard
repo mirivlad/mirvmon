@@ -1,0 +1,233 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use App\Database\ConnectionFactory;
+use App\Repositories\ServerRepository;
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+$environment = [];
+foreach ([
+    'DB_HOST',
+    'DB_PORT',
+    'DB_NAME',
+    'DB_USERNAME',
+    'DB_PASSWORD',
+    'DB_SSLMODE',
+] as $name) {
+    $value = getenv($name);
+    if ($value !== false) {
+        $environment[$name] = $value;
+    }
+}
+
+$pdo = new BenchmarkPdo(
+    ConnectionFactory::dsn($environment),
+    $environment['DB_USERNAME'] ?? '',
+    $environment['DB_PASSWORD'] ?? '',
+    [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES => false,
+        PDO::ATTR_STRINGIFY_FETCHES => false,
+    ]
+);
+
+$results = [];
+foreach ([50, 1000] as $serverCount) {
+    $results[] = benchmark($pdo, $serverCount);
+}
+
+echo json_encode(
+    ['benchmarks' => $results],
+    JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES
+) . PHP_EOL;
+
+/**
+ * @return array<string, mixed>
+ */
+function benchmark(BenchmarkPdo $pdo, int $serverCount): array
+{
+    $pdo->beginTransaction();
+
+    try {
+        $prefix = 'benchmark-' . bin2hex(random_bytes(5)) . '-';
+        $serverInsert = $pdo->prepare(
+            <<<'SQL'
+            INSERT INTO servers (
+                name,
+                display_metrics,
+                last_metrics_at,
+                offline_timeout_seconds
+            )
+            SELECT
+                :prefix || sequence.number,
+                '["cpu_load","ram_used","disk_used"]'::jsonb,
+                CURRENT_TIMESTAMP,
+                300
+            FROM generate_series(1, :server_count) AS sequence(number)
+            SQL
+        );
+        $serverInsert->execute([
+            'prefix' => $prefix,
+            'server_count' => $serverCount,
+        ]);
+
+        $sampleInsert = $pdo->prepare(
+            <<<'SQL'
+            INSERT INTO metric_samples (
+                sample_time,
+                server_id,
+                metric_id,
+                sample_id,
+                value
+            )
+            SELECT
+                CURRENT_TIMESTAMP - samples.number * INTERVAL '1 minute',
+                servers.id,
+                metrics.id,
+                md5(
+                    servers.id::text
+                    || ':'
+                    || metrics.id::text
+                    || ':'
+                    || samples.number::text
+                )::uuid,
+                ((servers.id + metrics.id + samples.number) % 100)::double precision
+            FROM servers
+            CROSS JOIN metric_names AS metrics
+            CROSS JOIN generate_series(0, 9) AS samples(number)
+            WHERE servers.name LIKE :prefix_pattern
+              AND metrics.name IN ('cpu_load', 'ram_used', 'disk_used')
+            SQL
+        );
+        $sampleInsert->execute(['prefix_pattern' => $prefix . '%']);
+
+        $currentInsert = $pdo->prepare(
+            <<<'SQL'
+            INSERT INTO current_metric_values (
+                server_id,
+                metric_id,
+                sample_time,
+                sample_id,
+                value
+            )
+            SELECT DISTINCT ON (samples.server_id, samples.metric_id)
+                samples.server_id,
+                samples.metric_id,
+                samples.sample_time,
+                samples.sample_id,
+                samples.value
+            FROM metric_samples AS samples
+            INNER JOIN servers ON servers.id = samples.server_id
+            WHERE servers.name LIKE :prefix_pattern
+            ORDER BY
+                samples.server_id,
+                samples.metric_id,
+                samples.sample_time DESC,
+                samples.sample_id DESC
+            SQL
+        );
+        $currentInsert->execute(['prefix_pattern' => $prefix . '%']);
+
+        $thresholdInsert = $pdo->prepare(
+            <<<'SQL'
+            INSERT INTO metric_thresholds (
+                server_id,
+                metric_id,
+                warning_threshold,
+                critical_threshold
+            )
+            SELECT servers.id, metrics.id, 70, 90
+            FROM servers
+            CROSS JOIN metric_names AS metrics
+            WHERE servers.name LIKE :prefix_pattern
+              AND metrics.name IN ('cpu_load', 'ram_used', 'disk_used')
+            SQL
+        );
+        $thresholdInsert->execute(['prefix_pattern' => $prefix . '%']);
+
+        $alertInsert = $pdo->prepare(
+            <<<'SQL'
+            INSERT INTO alerts (server_id, severity, subject)
+            SELECT servers.id, 'warning', 'benchmark'
+            FROM servers
+            WHERE servers.name LIKE :prefix_pattern
+              AND servers.id % 10 = 0
+            SQL
+        );
+        $alertInsert->execute(['prefix_pattern' => $prefix . '%']);
+
+        $pdo->recordQueries = true;
+        $startedAt = hrtime(true);
+        $rows = (new ServerRepository($pdo))->dashboardServers();
+        $applicationMilliseconds = (hrtime(true) - $startedAt) / 1_000_000;
+        $pdo->recordQueries = false;
+
+        $dashboardSql = $pdo->recordedQuery;
+        if ($dashboardSql === null) {
+            throw new RuntimeException('Dashboard query was not recorded.');
+        }
+
+        $planJson = $pdo->query(
+            'EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ' . $dashboardSql
+        )?->fetchColumn();
+        $plan = json_decode((string) $planJson, true, 512, JSON_THROW_ON_ERROR);
+        $nodeTypes = [];
+        collectNodeTypes($plan[0]['Plan'] ?? [], $nodeTypes);
+
+        return [
+            'servers' => $serverCount,
+            'metric_samples' => $serverCount * 3 * 10,
+            'returned_rows' => count($rows),
+            'application_ms' => round($applicationMilliseconds, 3),
+            'planning_ms' => round((float) ($plan[0]['Planning Time'] ?? 0), 3),
+            'execution_ms' => round((float) ($plan[0]['Execution Time'] ?? 0), 3),
+            'plan_nodes' => array_values(array_unique($nodeTypes)),
+        ];
+    } finally {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+    }
+}
+
+/**
+ * @param array<string, mixed> $node
+ * @param list<string> $nodeTypes
+ */
+function collectNodeTypes(array $node, array &$nodeTypes): void
+{
+    if (isset($node['Node Type']) && is_string($node['Node Type'])) {
+        $nodeTypes[] = $node['Node Type'];
+    }
+    if (isset($node['Custom Plan Provider']) && is_string($node['Custom Plan Provider'])) {
+        $nodeTypes[] = $node['Custom Plan Provider'];
+    }
+
+    foreach ($node['Plans'] ?? [] as $child) {
+        if (is_array($child)) {
+            collectNodeTypes($child, $nodeTypes);
+        }
+    }
+}
+
+final class BenchmarkPdo extends PDO
+{
+    public bool $recordQueries = false;
+    public ?string $recordedQuery = null;
+
+    public function query(
+        string $query,
+        ?int $fetchMode = null,
+        mixed ...$fetchModeArgs
+    ): PDOStatement|false {
+        if ($this->recordQueries) {
+            $this->recordedQuery = $query;
+        }
+
+        return parent::query($query, $fetchMode, ...$fetchModeArgs);
+    }
+}

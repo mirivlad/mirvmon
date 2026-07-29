@@ -32,6 +32,10 @@ Production stack состоит ровно из двух контейнеров:
 - внешний nginx завершает TLS и проксирует запросы на loopback-порт приложения;
 - данные приложения и БД находятся в именованных Docker volumes.
 
+История метрик хранится в TimescaleDB hypertable и continuous aggregates.
+Dashboard читает отдельный компактный `current_metric_values`, поэтому его
+время ответа не растёт вместе с 60-дневной raw-историей.
+
 ## Запуск через Portainer
 
 1. Создайте Docker Standalone stack из Git-репозитория.

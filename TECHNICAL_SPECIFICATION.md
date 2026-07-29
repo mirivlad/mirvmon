@@ -94,11 +94,14 @@ notifications. Время сервера не заменяет accepted sample t
 ## Хранение данных
 
 - `metric_samples` и `process_snapshots` — Timescale hypertables;
+- `current_metric_values` — компактная последняя точка каждой server/metric
+  пары для dashboard и detail summary;
 - raw/process retention — 60 дней;
 - hourly aggregate retention — 730 дней;
 - daily aggregate хранит долгосрочные trends;
 - columnstore policy применяется к закрытым chunks;
-- access paths индексируются по server, metric и descending sample time.
+- история индексируется по server, metric и descending sample time;
+- dashboard query не читает `metric_samples` и не зависит от размера истории.
 
 ## Deployment contract
 

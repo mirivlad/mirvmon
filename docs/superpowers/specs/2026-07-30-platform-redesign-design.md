@@ -48,6 +48,7 @@ PostgreSQL owns relational state:
 - server groups and servers;
 - agent identities and configuration;
 - metric definitions and thresholds;
+- one current value per server and metric;
 - service current state and service state-change events;
 - alerts;
 - notification settings and an outbox;
@@ -68,6 +69,13 @@ TimescaleDB owns time-series state:
 
 Metric names are bounded, validated, and resolved in one batch. Process payloads
 and other JSON are never stored in this numeric table.
+
+### `current_metric_values`
+
+This relational read model contains one latest row per `(server_id, metric_id)`.
+Ingestion upserts it only when `(sample_time, sample_id)` is newer. Dashboard
+and current detail cards read this table, so their latency is independent of
+the retained hypertable history.
 
 ### Continuous aggregates
 

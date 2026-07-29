@@ -17,6 +17,7 @@ final class SchemaTest extends TestCase
     {
         self::assertFileExists(dirname(__DIR__, 3) . '/migrations/001_initial.sql');
         self::assertFileExists(dirname(__DIR__, 3) . '/migrations/002_timeseries_policies.sql');
+        self::assertFileExists(dirname(__DIR__, 3) . '/migrations/003_current_metric_values.sql');
 
         if (getenv('TEST_DB_HOST') === false) {
             self::markTestSkipped('Set TEST_DB_* to run the TimescaleDB integration suite.');
@@ -68,6 +69,7 @@ final class SchemaTest extends TestCase
              WHERE table_schema = 'public'
                AND table_name IN (
                    'agent_tokens',
+                   'current_metric_values',
                    'ingested_samples',
                    'installer_tokens',
                    'notification_outbox',
@@ -78,6 +80,7 @@ final class SchemaTest extends TestCase
 
         self::assertSame([
             'agent_tokens',
+            'current_metric_values',
             'ingested_samples',
             'installer_tokens',
             'notification_outbox',
@@ -141,12 +144,13 @@ final class SchemaTest extends TestCase
              WHERE contype = 'f'
                AND conrelid IN (
                    'metric_samples'::regclass,
+                   'current_metric_values'::regclass,
                    'process_snapshots'::regclass,
                    'notification_outbox'::regclass,
                    'agent_tokens'::regclass
                )"
         )->fetchColumn();
-        self::assertSame('6', (string) $foreignKeys);
+        self::assertSame('8', (string) $foreignKeys);
     }
 
     public function testTimescaleMaintenancePoliciesAreInstalled(): void
@@ -180,6 +184,6 @@ final class SchemaTest extends TestCase
         self::assertSame([], $migrator->migrate());
 
         $count = self::$pdo?->query('SELECT count(*) FROM schema_migrations')->fetchColumn();
-        self::assertSame('2', (string) $count);
+        self::assertSame('3', (string) $count);
     }
 }
