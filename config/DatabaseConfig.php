@@ -1,50 +1,22 @@
 <?php
-// config/DatabaseConfig.php
+
+declare(strict_types=1);
 
 namespace Config;
 
+use App\Database\ConnectionFactory;
 use PDO;
-use PDOException;
 
-class DatabaseConfig 
+final class DatabaseConfig
 {
-    private static $instance = null;
-    private $connection;
+    private static ?PDO $instance = null;
 
-    private $host;
-    private $db_name;
-    private $username;
-    private $password;
-    private $charset = 'utf8mb4';
-
-    private function __construct() 
+    private function __construct()
     {
-        // Читаем из переменных окружения с фоллбэками для совместимости
-        $this->host = getenv('DB_HOST') ?: 'localhost';
-        $this->db_name = getenv('DB_NAME') ?: 'monitoring_system';
-        $this->username = getenv('DB_USERNAME') ?: 'mon_user';
-        $this->password = getenv('DB_PASSWORD') ?: 'mon_password_123';
-
-        $dsn = "mysql:host={$this->host};dbname={$this->db_name};charset={$this->charset}";
-        $options = [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES => false,
-        ];
-
-        try {
-            $this->connection = new PDO($dsn, $this->username, $this->password, $options);
-        } catch (PDOException $e) {
-            throw new PDOException($e->getMessage(), (int)$e->getCode());
-        }
     }
 
-    public static function getInstance()
+    public static function getInstance(): PDO
     {
-        if (self::$instance === null) {
-            self::$instance = new self();
-        }
-        
-        return self::$instance->connection;
+        return self::$instance ??= ConnectionFactory::fromEnvironment();
     }
 }

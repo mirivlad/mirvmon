@@ -1,0 +1,27 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use App\Database\ConnectionFactory;
+use App\Database\Migrator;
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+try {
+    $migrator = new Migrator(
+        ConnectionFactory::fromEnvironment(),
+        dirname(__DIR__) . '/migrations'
+    );
+    $applied = $migrator->migrate();
+
+    if ($applied === []) {
+        fwrite(STDOUT, "Database schema is current.\n");
+        exit(0);
+    }
+
+    fwrite(STDOUT, 'Applied migrations: ' . implode(', ', $applied) . "\n");
+} catch (Throwable $exception) {
+    fwrite(STDERR, 'Migration failed: ' . $exception->getMessage() . "\n");
+    exit(1);
+}
