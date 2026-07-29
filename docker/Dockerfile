@@ -1,42 +1,73 @@
-FROM php:8.3-fpm
+FROM composer:2.10.1@sha256:7725eb4545c438629ae8bde3ef0bb9a5038ef566126ad878442a69007242d267 AS vendor
 
-# Устанавливаем системные зависимости
-RUN apt-get update && apt-get install -y \
-    libmariadb-dev \
-    zip \
-    unzip \
-    git \
-    default-mysql-client \
-    && docker-php-ext-install pdo pdo_mysql \
+WORKDIR /app
+
+COPY composer.json composer.lock ./
+
+RUN composer install \
+    --no-dev \
+    --no-interaction \
+    --no-progress \
+    --no-scripts \
+    --no-autoloader \
+    --ignore-platform-req=ext-pdo_pgsql \
+    --prefer-dist
+
+COPY src ./src
+COPY config ./config
+
+RUN composer dump-autoload \
+    --no-dev \
+    --classmap-authoritative \
+    --no-interaction
+
+FROM dunglas/frankenphp:1.12.6-php8.5-trixie@sha256:da270879b95225345b2ee984f717aef5cba7336e1f206ec005074a79235af347
+
+USER root
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        curl \
+        supervisor \
+        tini \
+    && install-php-extensions \
+        intl \
+        opcache \
+        pdo_pgsql \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Устанавливаем Composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+RUN useradd \
+        --uid 10001 \
+        --create-home \
+        --home-dir /home/app \
+        --shell /usr/sbin/nologin \
+        app \
+    && setcap -r /usr/local/bin/frankenphp \
+    && mkdir -p /app/var/cache /app/var/log /config/caddy /data/caddy \
+    && chown -R app:app /app/var /config /data
 
-WORKDIR /var/www
+WORKDIR /app
 
-# Копируем composer.json и ставим зависимости (кэш слой)
-COPY composer.json composer.lock* ./
-RUN composer install --no-dev --optimize-autoloader --no-interaction --no-progress 2>/dev/null \
-    || composer install --no-dev --optimize-autoloader --no-interaction --no-progress
+COPY . /app
+COPY --from=vendor /app/vendor /app/vendor
+COPY --from=vendor /usr/bin/composer /usr/local/bin/composer
+COPY docker/Caddyfile /etc/frankenphp/Caddyfile
+COPY docker/php.ini /usr/local/etc/php/conf.d/zz-mirvmon.ini
+COPY docker/supervisord.conf /etc/supervisor/conf.d/mirvmon.conf
 
-# Копируем всё приложение
-COPY . .
+RUN chmod 0555 /app/docker/entrypoint.sh /app/bin/migrate \
+    && chown -R app:app /app/var \
+    && composer check-platform-reqs --no-dev
 
-# Создаём директории для кэша и логов
-RUN mkdir -p /var/www/var/cache /var/www/var/log \
-    && chown -R www-data:www-data /var/www
+ENV APP_ENV=production \
+    SERVER_NAME=:8080 \
+    XDG_CONFIG_HOME=/config \
+    XDG_DATA_HOME=/data
 
-# Скрипт инициализации
-COPY docker/init.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+EXPOSE 8080
 
-# Скрипт миграций
-COPY docker/migrate.sh /usr/local/bin/migrate.sh
-RUN chmod +x /usr/local/bin/migrate.sh
+USER app
 
-EXPOSE 9000
-
-ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["php-fpm"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/app/docker/entrypoint.sh"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/mirvmon.conf"]

@@ -1,77 +1,102 @@
-# MirvMon — Docker Setup
+# MirvMon in Docker
 
-## Быстрый старт
+Production uses two containers:
+
+- `app`: rootless FrankenPHP/PHP 8.5 application on container port 8080;
+- `db`: PostgreSQL 17 with TimescaleDB 2.28, available only on the internal
+  Compose network.
+
+TLS is terminated by an external nginx reverse proxy. The application port is
+bound to `127.0.0.1:8080` by default and the database is never published.
+
+## Portainer
+
+Create a **Docker Standalone** stack from a Git repository:
+
+1. Repository: `https://github.com/mirivlad/mirvmon`
+2. Reference: a release tag for production, or `master` while developing.
+3. Compose path: `docker/docker-compose.yml`
+4. Add the variables from `docker/.env.example`.
+
+`APP_KEY` and `DB_PASSWORD` are required and must be random. Generate them
+outside Portainer:
 
 ```bash
-# 1. Копируем конфиг
+openssl rand -base64 32
+openssl rand -hex 32
+```
+
+For production, set `MIRVMON_IMAGE` to the same immutable release tag as the
+repository reference. Keep the named volumes when redeploying. Do not enable a
+published database port.
+
+The production Compose file pulls a published image and contains no `build`
+step. This works with local and remote Portainer Docker environments.
+
+## Local build
+
+The optional build overlay compiles the image from the checked-out source:
+
+```bash
 cp .env.example .env
-
-# 2. Меняем пароли в .env
-nano .env
-
-# 3. Запускаем
-docker compose up -d --build
-
-# 4. Открываем http://localhost:8080
-# Логин: admin
-# Пароль: mirvmon2026 (сменить сразу!)
+# Set APP_KEY and DB_PASSWORD.
+docker compose --env-file .env \
+  -f docker/docker-compose.yml \
+  -f docker/docker-compose.build.yml \
+  up -d --build
 ```
 
-## Обновление
+Alternatively, `docker/deploy.sh` creates `.env` with random secrets, validates
+the Compose model, builds and starts the same two services.
+
+## External nginx
+
+Example location inside an existing HTTPS server:
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 60s;
+    client_max_body_size 2m;
+}
+```
+
+Agents make outbound `POST` requests to the public HTTPS URL. They do not need
+an inbound port and therefore work behind NAT.
+
+Set `PUBLIC_BASE_URL=https://monitoring.example.com` when the canonical URL is
+known. If it is empty, MirvMon derives installer URLs from trusted reverse-proxy
+headers. Never expose port 8080 to an untrusted network while accepting proxy
+headers.
+
+## Operations
+
+Health:
 
 ```bash
-# Обновить код и пересобрать
-git pull
-docker compose up -d --build
-
-# Или если образы в registry:
-docker compose pull
-docker compose up -d
+docker compose -f docker/docker-compose.yml ps
+curl --fail http://127.0.0.1:8080/livez
 ```
 
-## Структура
+Logs:
 
-```
-docker/
-├── Dockerfile              # PHP 8.3 FPM + приложение
-├── docker-compose.yml      # app + nginx + db
-├── nginx.conf              # конфиг nginx
-├── init.sh                 # entrypoint (ждёт БД + миграции)
-├── migrate.sh              # скрипт миграций
-├── migrations/             # SQL миграции с версионированием
-│   ├── 001_create_base_schema.sql
-│   ├── 002_add_encrypted_token.sql
-│   ├── ...
-├── .env.example            # шаблон конфига
-└── README.md               # этот файл
-```
-
-## Миграции
-
-Каждая миграция — SQL файл с номером в имени. Система отслеживает применённые в таблице `schema_migrations`.
-
-Добавить новую:
 ```bash
-echo "ALTER TABLE servers ADD COLUMN foo VARCHAR(50);" > docker/migrations/009_add_foo.sql
-docker compose up -d --build
+docker compose -f docker/docker-compose.yml logs -f app
+docker compose -f docker/docker-compose.yml logs -f db
 ```
 
-## Переменные окружения (.env)
+Database backup:
 
-| Переменная | Описание | По умолчанию |
-|---|---|---|
-| `APP_PORT` | Порт веб-интерфейса | `8080` |
-| `DB_HOST` | Хост БД | `db` |
-| `DB_NAME` | Имя базы | `monitoring_system` |
-| `DB_USERNAME` | Пользователь БД | `mon_user` |
-| `DB_PASSWORD` | Пароль БД | `mon_password_123` |
-| `DB_ROOT_PASSWORD` | Root пароль БД | (обязательно сменить!) |
+```bash
+docker compose -f docker/docker-compose.yml exec -T db \
+  pg_dump --format=custom --no-owner --username="$DB_USERNAME" "$DB_NAME" \
+  > mirvmon.dump
+```
 
-## Тома (persistent data)
-
-| Volume | Что хранит |
-|---|---|
-| `db_data` | База данных MariaDB |
-| `app_var` | Кэш Twig и логи PHP |
-
-Код приложения **не** монтируется — он внутри образа. Обновление = новый образ.
+Database migrations run under an advisory lock whenever the app container
+starts. Applied files are checksum-protected in `schema_migrations`.

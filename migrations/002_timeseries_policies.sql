@@ -51,7 +51,7 @@ SELECT add_continuous_aggregate_policy(
 ALTER TABLE metric_samples SET (
     timescaledb.enable_columnstore = TRUE,
     timescaledb.segmentby = 'server_id,metric_id',
-    timescaledb.orderby = 'sample_time DESC'
+    timescaledb.orderby = 'sample_time DESC,sample_id'
 );
 
 CALL add_columnstore_policy(
@@ -63,7 +63,7 @@ CALL add_columnstore_policy(
 ALTER TABLE process_snapshots SET (
     timescaledb.enable_columnstore = TRUE,
     timescaledb.segmentby = 'server_id',
-    timescaledb.orderby = 'sample_time DESC'
+    timescaledb.orderby = 'sample_time DESC,sample_id'
 );
 
 CALL add_columnstore_policy(

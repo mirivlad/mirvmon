@@ -1,88 +1,55 @@
-#!/bin/bash
-# deploy.sh — Быстрый разворот MirvMon на чистом сервере
-# Использование: cd docker/ && bash deploy.sh
-# Все файлы .env лежат в корне проекта (../.env)
+#!/bin/sh
 
-set -e
+set -eu
+umask 077
 
-echo "🚀 MirvMon — Deploy to new server"
-echo ""
+script_directory="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
+project_directory="$(dirname "$script_directory")"
+environment_file="$project_directory/.env"
 
-# ------------------------------------------
-# 1. Проверяем Docker
-# ------------------------------------------
-if ! command -v docker &>/dev/null; then
-    echo "❌ Docker not installed. Installing..."
-    apt update -qq && apt install -y -qq docker.io docker-compose 2>/dev/null
-    echo "✅ Docker installed"
+if ! command -v docker >/dev/null 2>&1; then
+    echo "Docker Engine is required." >&2
+    exit 1
 fi
 
-DOCKER_COMPOSE_CMD="docker-compose"
-if docker compose version &>/dev/null 2>&1; then
-    DOCKER_COMPOSE_CMD="docker compose"
+if ! docker compose version >/dev/null 2>&1; then
+    echo "Docker Compose v2 is required." >&2
+    exit 1
 fi
 
-echo "✅ Docker: $(docker --version)"
-echo "✅ Compose: $($DOCKER_COMPOSE_CMD version 2>/dev/null || echo 'v1')"
-echo ""
-
-# ------------------------------------------
-# 2. Определяем пути
-# ------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-ENV_FILE="$PROJECT_DIR/.env"
-ENV_EXAMPLE="$SCRIPT_DIR/.env.example"
-
-# ------------------------------------------
-# 3. Создаём .env если нет
-# ------------------------------------------
-if [ ! -f "$ENV_FILE" ]; then
-    echo "📝 Creating .env from template..."
-    cp "$ENV_EXAMPLE" "$ENV_FILE"
-
-    # Генерируем случайные пароли
-    ROOT_PASS=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 20)
-    DB_PASS=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 20)
-    ADMIN_PASS=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 20)
-
-    sed -i "s/DB_ROOT_PASSWORD=.*/DB_ROOT_PASSWORD=${ROOT_PASS}/" "$ENV_FILE"
-    sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=${DB_PASS}/" "$ENV_FILE"
-
-    echo "🔐 Generated random passwords:"
-    echo "   DB root: $ROOT_PASS"
-    echo "   DB user: $DB_PASS"
-    echo "   Admin web: mirvmon2026 (по умолчанию, смени в настройках)"
-    echo ""
-    echo "⚠️  Save these! Change .env if you want custom passwords."
-else
-    echo "✅ .env already exists"
+if ! command -v openssl >/dev/null 2>&1; then
+    echo "OpenSSL is required to generate application secrets." >&2
+    exit 1
 fi
-echo ""
 
-# ------------------------------------------
-# 4. Запускаем из директории проекта
-# ------------------------------------------
-echo "📦 Building and starting services..."
-cd "$PROJECT_DIR"
-$DOCKER_COMPOSE_CMD -f docker/docker-compose.yml up -d --build
+if [ ! -f "$environment_file" ]; then
+    cp "$project_directory/.env.example" "$environment_file"
 
-echo ""
-echo "⏳ Waiting for migrations..."
-sleep 15
+    database_password="$(openssl rand -hex 32)"
+    application_key="$(openssl rand -base64 32 | tr -d '\n')"
 
-# Проверяем статус
-$DOCKER_COMPOSE_CMD -f docker/docker-compose.yml ps
+    sed -i "s|^DB_PASSWORD=$|DB_PASSWORD=$database_password|" "$environment_file"
+    sed -i "s|^APP_KEY=$|APP_KEY=$application_key|" "$environment_file"
 
-APP_PORT=$(grep APP_PORT "$ENV_FILE" | head -1 | cut -d= -f2)
+    echo "Created $environment_file with mode 600 and random secrets."
+fi
 
-echo ""
-echo "✅ MirvMon is running!"
-echo ""
-echo "🌐 Web UI: http://localhost:${APP_PORT:-8080}"
-echo "👤 Login: admin"
-echo "🔑 Password: mirvmon2026"
-echo ""
-echo "📊 To check logs: $DOCKER_COMPOSE_CMD -f docker/docker-compose.yml logs -f app"
-echo "🔧 To stop: $DOCKER_COMPOSE_CMD -f docker/docker-compose.yml down"
-echo ""
+chmod 600 "$environment_file"
+
+docker compose \
+    --env-file "$environment_file" \
+    -f "$script_directory/docker-compose.yml" \
+    -f "$script_directory/docker-compose.build.yml" \
+    config --quiet
+
+docker compose \
+    --env-file "$environment_file" \
+    -f "$script_directory/docker-compose.yml" \
+    -f "$script_directory/docker-compose.build.yml" \
+    up --detach --build --remove-orphans
+
+docker compose \
+    --env-file "$environment_file" \
+    -f "$script_directory/docker-compose.yml" \
+    -f "$script_directory/docker-compose.build.yml" \
+    ps

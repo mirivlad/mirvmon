@@ -7,6 +7,7 @@ vendor
 *.log
 *.sql
 !composer.lock
+!migrations/*.sql
 tests
 .env
 monitoring_system_dump.sql
