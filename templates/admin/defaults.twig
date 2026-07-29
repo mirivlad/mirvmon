@@ -16,8 +16,7 @@
 {% endif %}
 
 <form method="post" action="/admin/defaults/save">
-    <input type="hidden" name="csrf_name" value="{{ csrf_name }}">
-    <input type="hidden" name="csrf_value" value="{{ csrf_value }}">
+    {% include "partials/csrf.twig" %}
 
     <!-- Offline настройки -->
     <div class="row mb-4">

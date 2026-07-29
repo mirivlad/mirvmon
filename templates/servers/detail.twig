@@ -266,6 +266,7 @@
                         <div class="row mb-3">
                             <div class="col-12">
                                 <form method="post" action="/servers/{{ server.id }}/services">
+                                    {% include "partials/csrf.twig" %}
                                     <div class="card">
                                         <div class="card-body">
                                             <div class="form-check mb-2">
@@ -377,6 +378,7 @@
                         <div class="row">
                             <div class="col-12">
                                 <form method="post" action="/servers/{{ server.id }}/thresholds">
+                                    {% include "partials/csrf.twig" %}
                                     {% for metricType in allMetricTypes %}
                                         {% set metricUnit = '%' %}
                                         {% set metricLabel = metricType.name %}

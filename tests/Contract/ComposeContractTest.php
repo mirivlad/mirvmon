@@ -48,12 +48,17 @@ final class ComposeContractTest extends TestCase
         self::assertStringNotContainsString("\n    build:", $application);
         self::assertStringContainsString('127.0.0.1', $application);
         self::assertStringContainsString('healthcheck:', $application);
+        self::assertStringContainsString('/readyz', $application);
         self::assertStringContainsString('read_only: true', $application);
         self::assertStringContainsString('no-new-privileges:true', $application);
         self::assertStringContainsString('SERVER_NAME: ":8080"', $application);
         self::assertStringContainsString('mem_limit:', $application);
         self::assertStringContainsString('cpus:', $application);
         self::assertStringContainsString('USER app', $this->dockerfile);
+        self::assertStringContainsString(
+            'SETUP_TOKEN: "${SETUP_TOKEN:?Set SETUP_TOKEN in Portainer or .env}"',
+            $application
+        );
     }
 
     public function testRuntimeImagesAreCurrentAndReproducible(): void

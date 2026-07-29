@@ -1,5 +1,6 @@
 <?php
-// src/Middlewares/SessionMiddleware.php
+
+declare(strict_types=1);
 
 namespace App\Middlewares;
 
@@ -8,18 +9,18 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Server\RequestHandlerInterface as RequestHandler;
 use Slim\Views\Twig;
 
-class SessionMiddleware
+final class SessionMiddleware
 {
-    private $twig;
-
-    public function __construct(Twig $twig)
+    public function __construct(private readonly Twig $twig)
     {
-        $this->twig = $twig;
     }
 
     public function __invoke(Request $request, RequestHandler $handler): Response
     {
-        // Добавляем данные сессии в контекст Twig
+        if ($request->getAttribute(SessionSecurityMiddleware::STATELESS_ATTRIBUTE) === true) {
+            return $handler->handle($request);
+        }
+
         $sessionData = [
             'user_id' => $_SESSION['user_id'] ?? null,
             'username' => $_SESSION['username'] ?? null,
@@ -28,12 +29,8 @@ class SessionMiddleware
             'flash_type' => $_SESSION['flash_type'] ?? null
         ];
 
-        // Очищаем flash после чтения
         unset($_SESSION['flash_message'], $_SESSION['flash_type']);
-
-        // Получаем environment и добавляем session в глобальный контекст
-        $environment = $this->twig->getEnvironment();
-        $environment->addGlobal('session', $sessionData);
+        $this->twig->getEnvironment()->addGlobal('session', $sessionData);
 
         return $handler->handle($request);
     }

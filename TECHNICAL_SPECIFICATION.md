@@ -1,189 +1,147 @@
-# ТЕХНИЧЕСКОЕ ЗАДАНИЕ: Система мониторинга серверов
+# Техническая спецификация MirvMon
 
-## 1. Общие требования
-- **Язык:** PHP 8.1+
-- **Фреймворк:** Slim Framework 4 (с PSR-7, Twig)
-- **Фронтенд:** Bootstrap 5, Font Awesome 6 (через CDN), Chart.js для графиков
-- **База данных:** MySQL 8+ / MariaDB 10.5+
-- **Архитектура:** MVC в рамках Slim (Controllers, Models, Templates)
-- **Интерфейс:** **Полностью на русском языке** (все надписи, кнопки, формы, меню)
-- **Безопасность:** Prepared Statements для всех SQL-запросов, хеши паролей (`password_hash`), **токены агентов хранятся только как SHA-256 хеши**.
+## Назначение
 
-## 2. Структура базы данных
-| Таблица | Поля (ключевые) | Назначение |
-| ------------------------------ | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| **users** | `id, username (unique), password_hash, email, role(admin/user), created_at` | Управление доступом |
-| **user_notification_settings** | `id, user_id, telegram_chat_id, email_for_alerts` | Персональные настройки уведомлений |
-| **server_groups** | `id, name, description, icon, color` | Группировка серверов |
-| **servers** | `id, name, address (nullable), group_id, description, last_metrics_at, created_at` | Основные данные серверов |
-| **metric_names** | `id, name (unique), unit, description` | Справочник метрик (cpu_load, ram_used, …) |
-| **metric_thresholds** | `id, server_id, metric_name_id, warning_threshold, critical_threshold, duration` | **Индивидуальные пороги** для каждой метрики на каждом сервере |
-| **server_metrics** | `id, server_id, metric_name_id, value, created_at` | **Исторические данные** метрик (с индексом `(server_id, metric_name_id, created_at)`) |
-| **agent_tokens** | `id, server_id (unique), token_hash, created_at, last_used_at` | **Хеши** токенов для авторизации агентов |
-| **alerts** | `id, server_id, metric_name, value, severity(warning/critical), resolved, created_at, resolved_at` | История срабатывания алертов |
+MirvMon принимает push-метрики серверов, отображает их текущее и историческое
+состояние, создаёт алерты и доставляет уведомления. Система предназначена для
+публичной публикации и собственного production-использования, а не для
+одноразового прототипа.
 
-## 3. Функциональные модули (что должна делать система)
+## Обязательный стек
 
-### 3.1. Аутентификация и авторизация
-- Доступ ко всем страницам, кроме `/login` и `/api/v1/metrics`, **только после входа**.
-- Сессионная авторизация с middleware.
+| Слой | Требование |
+|---|---|
+| Runtime | PHP 8.5, Slim 4, Twig 3 |
+| Primary HTTP adapter | FrankenPHP 1.12 classic mode |
+| Database | PostgreSQL 17 + TimescaleDB 2.28 |
+| Agent | Python 3.11+, `psutil`, HTTPS client |
+| UI | Bootstrap 5, Chart.js 4, локально закреплённые assets |
+| Deployment | два контейнера: `app`, `db` |
+| TLS | внешний nginx reverse proxy |
 
-### 3.2. Дашборд (главная страница `/`)
-- **Цветные карточки серверов** (Bootstrap cards):
-  - **Зеленый:** `last_metrics_at` < 2 мин назад И все метрики ниже порогов.
-  - **Желтый:** метрики свежие (<2 мин), но есть превышение порогов.
-  - **Красный:** `last_metrics_at` > 5 мин назад (сервер «молчит»).
-- В карточке: имя сервера, текущие значения CPU/RAM, время последнего обновления.
-- **Автообновление** каждые 30 секунд (через `setTimeout`).
+Application/domain code должен оставаться переносимым на nginx + PHP-FPM.
 
-### 3.3. Управление серверами
-- **Добавление сервера:** форма с полями (имя, адрес опционально, группа, описание).
-- **После сохранения:**
-  1. Генерация **уникального токена** (32 символа).
-  2. Сохранение **хеша токена** в `agent_tokens`.
-  3. Показ пользователю: **«Токен для агента: [токен]. Скачайте скрипт установки: [install.sh?token=...]»**.
-- **Редактирование сервера:** возможность изменить все поля, **повторно скачать скрипт** (токен остается прежним).
+## Функциональные требования
 
-### 3.4. API для агентов
-- **Эндпоинт:** `POST /api/v1/metrics` (публичный, без авторизации сессии).
-- **Ожидаемый JSON:** `{"token": "...", "metrics": {"cpu_load": 45.2, "ram_used": 89.1}}`.
-- **Логика:**
-  1. Проверка токена (сравнение хеша).
-  2. Обновление `servers.last_metrics_at` и `agent_tokens.last_used_at`.
-  3. Сохранение каждой метрики в `server_metrics`.
-  4. **Проверка порогов:** если значение превышает `warning_threshold` из `metric_thresholds` → создание записи в `alerts`.
+### Пользователи и безопасность
 
-### 3.5. Агент мониторинга
-- **Скрипт установки:** `GET /agent/install.sh?token=...` → динамически генерирует **bash-скрипт**, который:
-  1. Устанавливает Python3, psutil, lm-sensors, smartmontools.
-  2. Скачивает Python-агента (`agent.py`) с вашего сервера.
-  3. Подставляет **токен** и **URL API** в конфиг агента.
-  4. Создает systemd-сервис для автостарта.
-- **Python-агент:** собирает CPU, RAM, Disk, Network, Temperature раз в **60 секунд**, отправляет на `/api/v1/metrics`.
+- стандартные логин и пароль отсутствуют;
+- первый administrator создаётся через `/setup` с `SETUP_TOKEN`;
+- после создания первого пользователя повторный bootstrap запрещён;
+- password hashing использует `password_hash()` и автоматический rehash;
+- login attempts ограничиваются по username и HMAC источника;
+- session ID меняется после login/setup;
+- состояние изменяется только небезопасными HTTP verbs с CSRF;
+- API возвращает JSON 4xx/5xx без stack trace и секретных значений;
+- forwarded headers доверяются только явно заданным proxy networks.
 
-### 3.6. Страница сервера (`/servers/{id}`)
-- Основной маршрут: `/servers/{id}` (`/server/{id}` оставлен как legacy redirect).
-- **Текущие значения** ключевых метрик.
-- **Графики Chart.js**:
-  - CPU и RAM — отдельные линейные графики.
-  - Network — отдельный график на каждый интерфейс (In/Out).
-  - Temperature — один общий график по всем выбранным `temp_*`.
-  - Disk — donut-графики по разделам.
-  - `uptime` показывается текстом, без графика.
-  - Кнопки выбора периода: **1 час, 6 часов, 24 часа, 7 дней, 30 дней**.
-  - Для периодов больше 24 часов используются агрегаты из `server_metrics_trends`.
-  - **Управление порогами:** форма настройки `warning_threshold`, `critical_threshold` и `duration`.
+### Серверы и группы
 
-### 3.7. Система алертов
-- **Автоматическое создание** при превышении порога.
-- **Страница `/alerts`:** список активных алертов с кнопкой **«Исправлено»** (помечает `resolved=1`).
-- **Логика статуса на дашборде** учитывает только **неисправленные (resolved=0)** алерты.
+- CRUD групп и серверов;
+- per-server offline timeout и notification policy;
+- per-metric warning/critical threshold и duration;
+- управление monitored services;
+- отображение current state, active alerts и last sample time.
 
-### 3.8. Уведомления
-- **Email:** отправка через SMTP (PHPMailer) при срабатывании алерта.
-- **Telegram Bot:** отправка сообщения в заданный чат.
-- **Настройка:** в админке (`/admin/notifications`) указываются: SMTP параметры, Telegram Bot Token, Chat ID.
+### Метрики
 
-### 3.9. Администрирование
-- **CRUD пользователей:** страница `/admin/users` (только для `role='admin'`).
-- **Управление группами серверов.**
-- **Повторная выдача скрипта:** на странице сервера кнопка **«Скачать скрипт агента»**.
+Protocol v2 envelope должен содержать:
 
----
+- protocol version;
+- sample UUID;
+- UTC sample timestamp;
+- agent credential;
+- до 100 конечных числовых метрик;
+- optional bounded process snapshot;
+- service states.
 
-## План поэтапной реализации (9 этапов)
+Повторная доставка одного sample не создаёт повторных rows, alerts или
+notifications. Время сервера не заменяет accepted sample timestamp.
 
-### Этап 1: Ядро системы
-- **Цель:** Slim Framework + Twig + Bootstrap работают.
-- **Результат:** Открываю `http://localhost:8082/test` → вижу «Система мониторинга».
-- ✅ **Выполнен**
+### Агент
 
-### Этап 2: База данных
-- **Цель:** Базовая схема и справочник метрик созданы.
-- **Результат:** Импорт `schema.sql` и миграций → в MySQL есть основные таблицы, включая `metric_names` с записями `cpu_load`, `ram_used`.
-- ✅ **Выполнен**
+- только исходящие HTTPS-запросы, без polling агента извне;
+- URL сервиса задаётся `PUBLIC_BASE_URL` либо origin установщика;
+- Linux и Windows installers;
+- отдельный непривилегированный пользователь на Linux;
+- TLS verification включена по умолчанию;
+- proxy environment поддерживается HTTP client;
+- bounded persistent retry queue переживает restart;
+- конфигурация и queue записываются атомарно с ограниченными правами;
+- логи не содержат token, proxy credential или URL query secrets.
 
-### Этап 3: Аутентификация + CRUD групп
-- **Цель:** Вход/выход, управление группами.
-- **Результат:**
-  1. Неавторизован → редирект на `/login` (форма на русском).
-  2. Вход как `admin:123` → переход на дашборд.
-  3. Меню «Группы» → создаю группу «Веб-серверы» → она отображается в списке.
-- ✅ **Выполнен**
+### Алерты и уведомления
 
-### Этап 4: CRUD серверов + генерация токена
-- **Цель:** Добавление сервера с получением токена.
-- **Результат:**
-  1. Форма «Добавить сервер» → заполняю → нажимаю «Сохранить».
-  2. Вижу страницу: **«Сервер добавлен. Токен: abc123... Скачайте скрипт: [install.sh?token=abc123...]»**.
-  3. Перехожу по ссылке → скачивается `install.sh`.
-- ✅ **Выполнен**
+- состояния `ok`, `warning`, `critical`, `offline` меняются только по явным
+  transitions;
+- ingestion записывает событие в transactional outbox;
+- workers выполняют отправку асинхронно с retries и `SKIP LOCKED`;
+- Telegram и SMTP настраиваются в dashboard;
+- Telegram proxy: HTTP, HTTPS, SOCKS4, SOCKS4A, SOCKS5, SOCKS5H;
+- bot/proxy/SMTP secrets шифруются, не отображаются обратно и очищаются только
+  явным действием.
 
-### Этап 5: API + логика статусов
-- **Цель:** Приём метрик, цветные карточки на дашборде.
-- **Результат:**
-  1. Через `curl` отправляю метрики с токеном.
-  2. Обновляю дашборд → вижу карточку сервера **зелёного цвета** (метрики в норме).
-  3. Отправляю `cpu_load: 95` → карточка становится **жёлтой**.
-- ✅ **Выполнен**
+### Dashboard
 
-### Этап 6: Агент и скрипт установки
-- **Цель:** Рабочий агент, отправляющий метрики каждые 10 сек.
-- **Результат:**
-  1. В виртуальной машине запускаю `bash install.sh` → устанавливается Python-агент.
-  2. `systemctl status server-mon-agent` → сервис работает.
-  3. В логах агента вижу: «Отправлено: cpu_load=12.3» каждые 10 сек.
-- ✅ **Выполнен**
+- summary и server cards используют единый status algorithm;
+- current metric — последняя по sample timestamp;
+- загрузка dashboard имеет bounded query count;
+- responsive layout работает от 390 px без обрезания значений;
+- status выражен текстом, цвет не является единственным сигналом;
+- доступны search/filter/sort и относительное время;
+- frontend не зависит от CDN.
 
-### Этап 7: Детали сервера + графики
-- **Цель:** Страница с графиками и выбором периода.
-- **Результат:**
-  1. Кликаю на карточку сервера → открывается `/servers/1`.
-  2. Вижу график CPU за 24 часа.
-  3. Нажимаю «7 дней» → график перерисовывается за неделю.
-- ✅ **Выполнен**
+## Хранение данных
 
-### Этап 8: Пороги и алерты
-- **Цель:** Настройка порогов, срабатывание алертов.
-- **Результат:**
-  1. На странице сервера ставлю порог CPU: 80%.
-  2. Отправляю метрику `cpu_load: 90` → в таблице `alerts` появляется запись.
-  3. Страница `/alerts` показывает «Превышение CPU на сервере X».
-- ✅ **Выполнен**
+- `metric_samples` и `process_snapshots` — Timescale hypertables;
+- raw/process retention — 60 дней;
+- hourly aggregate retention — 730 дней;
+- daily aggregate хранит долгосрочные trends;
+- columnstore policy применяется к закрытым chunks;
+- access paths индексируются по server, metric и descending sample time.
 
-### Этап 9: Уведомления + админка
-- **Цель:** Отправка email/Telegram, управление пользователями.
-- **Результат:**
-  1. В админке указываю свой Telegram Chat ID.
-  2. При срабатывании алерта получаю сообщение в Telegram.
-  3. В меню «Админка» → «Пользователи» создаю нового пользователя.
-- ✅ **Выполнен**
+## Deployment contract
 
----
+Production Compose:
 
-## История реализации
+- содержит только `app` и `db`;
+- не публикует PostgreSQL port;
+- запускает `app` rootless с read-only filesystem, dropped capabilities и
+  resource limits;
+- хранит persistent данные в volumes;
+- требует `APP_KEY`, `SETUP_TOKEN`, `DB_PASSWORD`;
+- использует pinned base/database images;
+- healthcheck приложения вызывает `/readyz`;
+- выполняет checksum-protected migrations при старте.
 
-### Выполненные этапы:
-- ✅ Этап 1: Ядро системы (Slim Framework 4, Twig, Bootstrap 5, Font Awesome 6)
-- ✅ Этап 2: База данных (схема создана, миграции и стандартные метрики применены)
-- ✅ Этап 3: Аутентификация и авторизация (middleware, формы входа/выхода, CRUD групп)
-- ✅ Этап 4: CRUD серверов (добавление/редактирование/удаление, генерация токенов)
-- ✅ Этап 5: API для агентов (прием метрик, проверка токенов, обновление статусов)
-- ✅ Этап 6: Скрипт установки агента (динамическая генерация bash-скрипта)
-- ✅ Этап 7: Детали сервера и графики (страница с метриками и графиками Chart.js)
-- ✅ Этап 8: Система алертов (обнаружение превышений, страница алертов)
-- ✅ Этап 9: Администрирование (управление пользователями, настройки уведомлений)
+Portainer использует готовый `MIRVMON_IMAGE`. Локальная разработка добавляет
+`docker/docker-compose.build.yml`.
 
-### Архитектура:
-- **Frontend:** Bootstrap 5, Font Awesome 6, Chart.js (через CDN)
-- **Backend:** Slim Framework 4, Twig templates, PSR-7
-- **Database:** MySQL/MariaDB с базовой схемой и последующими миграциями
-- **Security:** Password hashing, SHA-256 token hashes, prepared statements
-- **Language:** Полный перевод интерфейса на русский язык
+## Quality gates
 
-### Компоненты:
-- Веб-интерфейс для управления серверами и мониторинга
-- API для приема метрик от агентов
-- Скрипт установки агента для мониторинга серверов
-- Система алертов и уведомлений
-- Административная панель
+Обязательные проверки перед release:
+
+```bash
+composer test
+composer analyse
+composer validate --strict
+composer audit
+shellcheck docker/*.sh
+docker compose config
+docker build -f docker/Dockerfile .
+```
+
+Schema integration tests выполняются на чистой TimescaleDB и повторно после
+всех миграций. Agent tests выполняются поддерживаемыми версиями Python.
+Dashboard проверяется browser tests на desktop и mobile viewport.
+
+## Критерии приёмки
+
+- clean two-container deployment становится healthy без ручного SQL;
+- первый admin создаётся только с setup token;
+- агент за NAT отправляет метрики через внешний HTTPS endpoint;
+- duplicate envelope идемпотентен;
+- недоступный Telegram не увеличивает latency ingestion;
+- current status согласован на summary, cards и details;
+- proxy credentials и application secrets отсутствуют в HTTP responses/logs;
+- документация соответствует release compose и environment variables.

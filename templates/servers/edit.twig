@@ -9,6 +9,7 @@
             </div>
             <div class="card-body">
                 <form method="post" action="/servers/{{ server.id }}">
+                    {% include "partials/csrf.twig" %}
                     
                     <div class="mb-3">
                         <label for="name" class="form-label">Название сервера *</label>
@@ -141,15 +142,22 @@
                             </a>
                         </div>
                         <div class="col-md-4 mb-2">
-                            <a href="/servers/{{ server.id }}/regenerate-token" class="btn btn-outline-warning w-100" onclick="return confirm('Вы уверены, что хотите сгенерировать новый токен? Это сделает недействительным старый скрипт установки.');">
-                                <i class="fas fa-sync-alt"></i> Сбросить токен
-                            </a>
+                            <form method="post" action="/servers/{{ server.id }}/regenerate-token">
+                                {% include "partials/csrf.twig" %}
+                                <button type="submit" class="btn btn-outline-warning w-100" onclick="return confirm('Вы уверены, что хотите сгенерировать новый токен? Это сделает недействительным старый скрипт установки.');">
+                                    <i class="fas fa-sync-alt"></i> Сбросить токен
+                                </button>
+                            </form>
                         </div>
                     </div>
                     <p class="mt-2">Если вы потеряли доступ к агенту или хотите создать новый токен безопасности, используйте кнопку "Сбросить токен".</p>
                     {% else %}
                     <div class="alert alert-warning">
-                        Токен агента не создан. <a href="/servers/{{ server.id }}/regenerate-token">Создать токен</a>
+                        Токен агента не создан.
+                        <form method="post" action="/servers/{{ server.id }}/regenerate-token" class="d-inline">
+                            {% include "partials/csrf.twig" %}
+                            <button type="submit" class="btn btn-link p-0 align-baseline">Создать токен</button>
+                        </form>
                     </div>
                     {% endif %}
                 </div>

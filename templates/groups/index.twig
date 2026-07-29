@@ -44,9 +44,12 @@
                                     <a href="/groups/{{ group.id }}/edit" class="btn btn-sm btn-outline-primary me-1">
                                         <i class="fas fa-edit"></i> <span class="d-none d-sm-inline">Редактировать</span>
                                     </a>
-                                    <a href="/groups/{{ group.id }}/delete" class="btn btn-sm btn-outline-danger" onclick="return confirm('Вы уверены, что хотите удалить эту группу?');">
-                                        <i class="fas fa-trash"></i> <span class="d-none d-sm-inline">Удалить</span>
-                                    </a>
+                                    <form method="post" action="/groups/{{ group.id }}/delete" class="d-inline">
+                                        {% include "partials/csrf.twig" %}
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Вы уверены, что хотите удалить эту группу?');">
+                                            <i class="fas fa-trash"></i> <span class="d-none d-sm-inline">Удалить</span>
+                                        </button>
+                                    </form>
                                 </td>
                             </tr>
                             {% endfor %}

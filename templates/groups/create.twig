@@ -9,6 +9,7 @@
             </div>
             <div class="card-body">
                 <form method="post" action="/groups">
+                    {% include "partials/csrf.twig" %}
                     <div class="mb-3">
                         <label for="name" class="form-label">Название группы *</label>
                         <input type="text" class="form-control" id="name" name="name" required>

@@ -1,175 +1,143 @@
-# Установка и запуск системы мониторинга
+# Установка MirvMon
+
+Поддерживаемый production-вариант — Docker Compose/Portainer с двумя
+контейнерами. TLS завершает внешний nginx.
 
 ## Требования
 
-- PHP 8.3 или выше
-- Composer
-- MySQL 8+ или MariaDB 10.5+
-- Apache или Nginx
+- Docker Engine с Compose v2 либо Portainer Docker Standalone;
+- внешний nginx с настроенным HTTPS-сертификатом;
+- не менее 2 GiB RAM для рекомендованной конфигурации БД;
+- опубликованный образ MirvMon, указанный в `MIRVMON_IMAGE`.
 
-## Установка
+## Portainer
 
-### 1. Клонирование проекта
+Создайте Git stack:
 
-```bash
-git clone <repository-url>
-cd mon
-```
+1. repository: `https://github.com/mirivlad/mirvmon`;
+2. compose path: `docker/docker-compose.yml`;
+3. reference: release tag для production;
+4. environment variables: значения из `docker/.env.example`.
 
-### 2. Установка зависимостей
-
-```bash
-composer install
-```
-
-### 3. Настройка базы данных
-
-1. Создайте базу данных:
-
-```sql
-CREATE DATABASE monitoring_system CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-```
-
-2. Импортируйте схему:
+Сгенерируйте независимые секреты:
 
 ```bash
-mysql -u root -p monitoring_system < schema.sql
+openssl rand -base64 32  # APP_KEY
+openssl rand -hex 32     # SETUP_TOKEN
+openssl rand -hex 32     # DB_PASSWORD
 ```
 
-### 4. Настройка веб-сервера
+Обязательные переменные:
 
-#### Apache
-
-Создайте виртуальный хост:
-
-```apache
-<VirtualHost *:80>
-    ServerName mon.mirv.top
-    DocumentRoot /path/to/monitoring-system/public
-    
-    <Directory /path/to/monitoring-system/public>
-        AllowOverride All
-        Require all granted
-    </Directory>
-    
-    ErrorLog ${APACHE_LOG_DIR}/mon_error.log
-    CustomLog ${APACHE_LOG_DIR}/mon_access.log combined
-</VirtualHost>
+```dotenv
+MIRVMON_IMAGE=ghcr.io/mirivlad/mirvmon:1.0.0
+APP_KEY=<base64-encoded-32-byte-key>
+SETUP_TOKEN=<random-hex-token>
+DB_PASSWORD=<random-database-password>
 ```
 
-#### Nginx
+Не публикуйте порт БД и не храните реальные значения в Git.
+
+## Локальная сборка
+
+```bash
+git clone https://github.com/mirivlad/mirvmon.git
+cd mirvmon
+cp .env.example .env
+# Заполните APP_KEY, SETUP_TOKEN и DB_PASSWORD.
+
+docker compose --env-file .env \
+  -f docker/docker-compose.yml \
+  -f docker/docker-compose.build.yml \
+  up -d --build
+```
+
+`docker/deploy.sh` выполняет тот же запуск и при первом вызове сам создаёт `.env`
+с правами `0600` и случайными секретами.
+
+Если registry недоступен напрямую, настройте proxy Docker daemon. Для локальной
+сборки overlay также принимает `HTTP_PROXY`, `HTTPS_PROXY` и `NO_PROXY`.
+
+## Внешний nginx
+
+Приложение по умолчанию доступно только на `127.0.0.1:8080`.
 
 ```nginx
 server {
-    listen 80;
-    server_name mon.mirv.top;
-    root /path/to/monitoring-system/public;
-    index index.php;
+    listen 443 ssl http2;
+    server_name monitoring.example.com;
+
+    # ssl_certificate и ssl_certificate_key задаются вашей инфраструктурой.
 
     location / {
-        try_files $uri $uri/ /index.php?$query_string;
-    }
-
-    location ~ \.php$ {
-        include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+        client_max_body_size 2m;
     }
 }
 ```
 
-### 5. Настройка окружения
-
-Скопируйте `.env.example` в `.env` и укажите параметры подключения к базе данных:
-
-```bash
-cp .env.example .env
-```
-
-Ключевые переменные:
+Если внешний URL известен, задайте:
 
 ```dotenv
-DB_HOST=localhost
-DB_NAME=monitoring_system
-DB_USERNAME=mon_user
-DB_PASSWORD=your_db_password
-APP_PORT=8082
+PUBLIC_BASE_URL=https://monitoring.example.com
 ```
 
-## Использование
+При пустом `PUBLIC_BASE_URL` MirvMon использует host и scheme запроса только от
+сетей из `TRUSTED_PROXIES`. Не доверяйте произвольным внешним адресам.
 
-### 1. Вход в систему
+## Первый запуск
 
-Перейдите на `http://mon.mirv.top/login` и войдите в систему.
+После успешного старта откройте:
 
-По умолчанию миграция `007_seed_admin_user.sql` создаёт пользователя:
+```text
+https://monitoring.example.com/setup
+```
 
-- логин: `admin`
-- пароль: `mirvmon2026`
+Введите `SETUP_TOKEN` и создайте администратора с паролем не короче 12
+символов. Стандартной учётной записи нет. Создание через `/setup` блокируется,
+как только в таблице пользователей появляется первая запись.
 
-### 2. Добавление серверов
-
-1. Перейдите в раздел "Серверы"
-2. Нажмите "Добавить сервер"
-3. Заполните форму и сохраните
-4. На странице подтверждения скопируйте токен и скачайте скрипт установки
-
-### 3. Установка агента на мониторимый сервер
-
-1. Скачайте скрипт установки с сервера мониторинга
-2. Загрузите его на сервер, который нужно мониторить
-3. Выполните:
+## Проверка
 
 ```bash
-chmod +x install.sh
-./install.sh
+docker compose --env-file .env -f docker/docker-compose.yml ps
+curl --fail http://127.0.0.1:8080/livez
+curl --fail http://127.0.0.1:8080/readyz
 ```
 
-Агент будет установлен как systemd-сервис и начнет отправлять метрики на сервер мониторинга.
+- `/livez` проверяет HTTP runtime;
+- `/readyz` проверяет приложение и соединение с TimescaleDB;
+- healthcheck контейнера использует `/readyz`.
 
-## Trends и длинные периоды
+## Обновление
 
-Для графиков за периоды больше 24 часов используются агрегированные данные из `server_metrics_trends`.
-Если после установки или миграции нужно дозаполнить историю:
+1. Сделайте backup БД.
+2. Укажите новый immutable tag в `MIRVMON_IMAGE`.
+3. Выполните redeploy stack.
+4. Проверьте `/readyz` и журналы.
+
+Миграции выполняются автоматически при старте под advisory lock. Приложение
+откажется запускаться, если checksum уже применённого SQL-файла изменился.
+
+## Backup
 
 ```bash
-php /var/www/mon/cron/backfill_trends.php 30
+docker compose --env-file .env -f docker/docker-compose.yml exec -T db \
+  pg_dump --format=custom --no-owner \
+  --username=mirvmon mirvmon > mirvmon.dump
 ```
 
-## API
+Имя пользователя и БД замените, если меняли `DB_USERNAME` или `DB_NAME`.
 
-### Отправка метрик
+## Альтернативный HTTP runtime
 
-Агенты отправляют метрики на эндпоинт `/api/v1/metrics` методом POST:
-
-```json
-{
-    "token": "токен_сервера",
-    "metrics": {
-        "cpu_load": 45.2,
-        "ram_used": 89.1,
-        "ram_total_gb": 16.0,
-        "disk_used_root": 65.5,
-        "net_in_ens3": 12.3,
-        "net_out_ens3": 5.6
-    },
-    "services": [
-        {"name": "nginx", "status": "running"}
-    ]
-}
-```
-
-### Скачивание агента
-
-```
-GET /get-agent?token=<server_token>
-GET /agent/install.sh?token=<server_token>
-GET /agent/install.bat?token=<server_token>
-```
-
-## Безопасность
-
-- Все пароли хешируются с помощью `password_hash()`
-- Токены агентов хранятся в виде SHA-256 хешей
-- Все SQL-запросы используют подготовленные выражения
-- Вход на все страницы требует аутентификации (кроме API и страницы входа)
+Прикладное ядро не зависит от FrankenPHP. Для запуска через nginx + PHP-FPM
+нужны PHP 8.5, Composer dependencies и расширения `pdo_pgsql`, `curl`, `intl`,
+`sodium`. Эта схема не является основным Portainer deployment и должна
+сохранять те же environment variables и public root `public/`.

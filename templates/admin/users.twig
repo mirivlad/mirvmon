@@ -56,11 +56,13 @@
                                             onclick="openEditModal({{ user.id }}, '{{ user.username }}', '{{ user.email }}', '{{ user.role }}', '{{ user.telegram_chat_id }}', '{{ user.email_for_alerts }}')">
                                         <i class="fas fa-edit"></i>
                                     </button>
-                                    <a href="/admin/users/{{ user.id }}/delete" 
-                                       class="btn btn-sm btn-outline-danger"
-                                       onclick="return confirm('Удалить пользователя {{ user.username }}?')">
-                                        <i class="fas fa-trash"></i>
-                                    </a>
+                                    <form method="post" action="/admin/users/{{ user.id }}/delete" class="d-inline">
+                                        {% include "partials/csrf.twig" %}
+                                        <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                onclick="return confirm('Удалить пользователя {{ user.username }}?')">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -83,8 +85,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <form id="userForm" method="post" action="/admin/users/save">
-                <input type="hidden" name="csrf_name" value="{{ csrf_name }}">
-                <input type="hidden" name="csrf_value" value="{{ csrf_value }}">
+                {% include "partials/csrf.twig" %}
                 <input type="hidden" id="user_id" name="user_id" value="">
                 
                 <div class="modal-header">

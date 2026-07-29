@@ -3,6 +3,7 @@
 .gitignore
 node_modules
 vendor
+var
 *.md
 *.log
 *.sql

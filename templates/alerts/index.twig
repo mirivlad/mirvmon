@@ -37,9 +37,12 @@
                                 </td>
                                 <td>{{ alert.created_at|date('d.m.Y H:i:s') }}</td>
                                 <td>
-                                    <a href="/alerts/{{ alert.id }}/resolve" class="btn btn-sm btn-outline-success" onclick="return confirm('Вы уверены, что хотите отметить этот алерт как исправленный?');">
-                                        <i class="fas fa-check"></i> <span class="d-none d-sm-inline">Исправлено</span>
-                                    </a>
+                                    <form method="post" action="/alerts/{{ alert.id }}/resolve">
+                                        {% include "partials/csrf.twig" %}
+                                        <button type="submit" class="btn btn-sm btn-outline-success" onclick="return confirm('Вы уверены, что хотите отметить этот алерт как исправленный?');">
+                                            <i class="fas fa-check"></i> <span class="d-none d-sm-inline">Исправлено</span>
+                                        </button>
+                                    </form>
                                 </td>
                             </tr>
                             {% endfor %}

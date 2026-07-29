@@ -19,4 +19,9 @@ final class DatabaseConfig
     {
         return self::$instance ??= ConnectionFactory::fromEnvironment();
     }
+
+    public static function setInstance(PDO $pdo): void
+    {
+        self::$instance = $pdo;
+    }
 }

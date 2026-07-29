@@ -1,0 +1,40 @@
+{% extends "login-layout.twig" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-7 col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h1 class="h3 text-center mb-0">Первоначальная настройка</h1>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Создайте первого администратора. Токен настройки задаётся при запуске контейнера.</p>
+                <form method="post" action="/setup">
+                    {% include "partials/csrf.twig" %}
+                    <div class="mb-3">
+                        <label for="setup_token" class="form-label">Токен настройки</label>
+                        <input type="password" class="form-control" id="setup_token" name="setup_token" required autocomplete="off">
+                    </div>
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Имя пользователя</label>
+                        <input type="text" class="form-control" id="username" name="username" minlength="3" maxlength="80" required autocomplete="username">
+                    </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" maxlength="254" autocomplete="email">
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Пароль</label>
+                        <input type="password" class="form-control" id="password" name="password" minlength="12" required autocomplete="new-password">
+                    </div>
+                    <div class="mb-3">
+                        <label for="password_confirmation" class="form-label">Повторите пароль</label>
+                        <input type="password" class="form-control" id="password_confirmation" name="password_confirmation" minlength="12" required autocomplete="new-password">
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Создать администратора</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -52,9 +52,12 @@
                                     <a href="/servers/{{ server.id }}/edit" class="btn btn-sm btn-outline-primary" title="Редактировать">
                                         <i class="fas fa-edit"></i> <span class="d-none d-sm-inline">Редактировать</span>
                                     </a>
-                                    <a href="/servers/{{ server.id }}/delete" class="btn btn-sm btn-outline-danger" title="Удалить" onclick="return confirm('Вы уверены, что хотите удалить этот сервер?');">
-                                        <i class="fas fa-trash"></i> <span class="d-none d-sm-inline">Удалить</span>
-                                    </a>
+                                    <form method="post" action="/servers/{{ server.id }}/delete" class="d-inline">
+                                        {% include "partials/csrf.twig" %}
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Удалить" onclick="return confirm('Вы уверены, что хотите удалить этот сервер?');">
+                                            <i class="fas fa-trash"></i> <span class="d-none d-sm-inline">Удалить</span>
+                                        </button>
+                                    </form>
                                 </td>
                             </tr>
                             {% endfor %}

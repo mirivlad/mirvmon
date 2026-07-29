@@ -27,9 +27,11 @@ if [ ! -f "$environment_file" ]; then
 
     database_password="$(openssl rand -hex 32)"
     application_key="$(openssl rand -base64 32 | tr -d '\n')"
+    setup_token="$(openssl rand -hex 32)"
 
     sed -i "s|^DB_PASSWORD=$|DB_PASSWORD=$database_password|" "$environment_file"
     sed -i "s|^APP_KEY=$|APP_KEY=$application_key|" "$environment_file"
+    sed -i "s|^SETUP_TOKEN=$|SETUP_TOKEN=$setup_token|" "$environment_file"
 
     echo "Created $environment_file with mode 600 and random secrets."
 fi

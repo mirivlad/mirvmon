@@ -20,7 +20,16 @@ if [ -n "${APP_KEY_FILE:-}" ]; then
     export APP_KEY
 fi
 
-for required_name in DB_HOST DB_NAME DB_USERNAME DB_PASSWORD APP_KEY; do
+if [ -n "${SETUP_TOKEN_FILE:-}" ]; then
+    if [ ! -r "$SETUP_TOKEN_FILE" ]; then
+        echo "SETUP_TOKEN_FILE is not readable." >&2
+        exit 1
+    fi
+    SETUP_TOKEN="$(cat "$SETUP_TOKEN_FILE")"
+    export SETUP_TOKEN
+fi
+
+for required_name in DB_HOST DB_NAME DB_USERNAME DB_PASSWORD APP_KEY SETUP_TOKEN; do
     eval "required_value=\${$required_name:-}"
     if [ -z "$required_value" ]; then
         echo "$required_name is required." >&2
@@ -30,6 +39,11 @@ done
 
 if [ "${#DB_PASSWORD}" -lt 16 ]; then
     echo "DB_PASSWORD must contain at least 16 characters." >&2
+    exit 1
+fi
+
+if [ "${#SETUP_TOKEN}" -lt 32 ]; then
+    echo "SETUP_TOKEN must contain at least 32 characters." >&2
     exit 1
 fi
 

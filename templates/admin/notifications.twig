@@ -16,8 +16,7 @@
 {% endif %}
 
 <form method="post" action="/admin/notifications/save">
-    <input type="hidden" name="csrf_name" value="{{ csrf_name }}">
-    <input type="hidden" name="csrf_value" value="{{ csrf_value }}">
+    {% include "partials/csrf.twig" %}
 
     <div class="row">
         <!-- Email настройки -->
@@ -179,10 +178,11 @@
                 </button>
             </div>
             <div>
-                <a href="/admin/notifications/test" class="btn btn-outline-success"
-                   onclick="return confirm('Отправить тестовое уведомление?')">
+                <button type="submit" formaction="/admin/notifications/test"
+                        class="btn btn-outline-success"
+                        onclick="return confirm('Отправить тестовое уведомление?')">
                     <i class="fas fa-paper-plane"></i> Тест уведомлений
-                </a>
+                </button>
             </div>
         </div>
     </div>

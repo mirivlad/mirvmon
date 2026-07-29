@@ -18,13 +18,18 @@ Create a **Docker Standalone** stack from a Git repository:
 3. Compose path: `docker/docker-compose.yml`
 4. Add the variables from `docker/.env.example`.
 
-`APP_KEY` and `DB_PASSWORD` are required and must be random. Generate them
+`APP_KEY`, `SETUP_TOKEN`, and `DB_PASSWORD` are required and must be random. Generate them
 outside Portainer:
 
 ```bash
 openssl rand -base64 32
 openssl rand -hex 32
+openssl rand -hex 32
 ```
+
+After the first start, open `/setup`, enter `SETUP_TOKEN`, and create the first
+administrator. MirvMon never seeds a default account or password. Once any user
+exists, `/setup` no longer permits account creation.
 
 For production, set `MIRVMON_IMAGE` to the same immutable release tag as the
 repository reference. Keep the named volumes when redeploying. Do not enable a
@@ -39,7 +44,7 @@ The optional build overlay compiles the image from the checked-out source:
 
 ```bash
 cp .env.example .env
-# Set APP_KEY and DB_PASSWORD.
+# Set APP_KEY, SETUP_TOKEN, and DB_PASSWORD.
 docker compose --env-file .env \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.build.yml \
@@ -81,7 +86,11 @@ Health:
 ```bash
 docker compose -f docker/docker-compose.yml ps
 curl --fail http://127.0.0.1:8080/livez
+curl --fail http://127.0.0.1:8080/readyz
 ```
+
+`/livez` checks the HTTP runtime; `/readyz` additionally checks database
+connectivity and is used by the container health check.
 
 Logs:
 

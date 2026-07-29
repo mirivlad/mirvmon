@@ -11,6 +11,7 @@ services:
       APP_ENV: production
       APP_DEBUG: "0"
       APP_KEY: "${APP_KEY:?Set APP_KEY in Portainer or .env}"
+      SETUP_TOKEN: "${SETUP_TOKEN:?Set SETUP_TOKEN in Portainer or .env}"
       APP_TIMEZONE: "${APP_TIMEZONE:-UTC}"
       PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-}"
       TRUSTED_PROXIES: "${TRUSTED_PROXIES:-private_ranges}"
@@ -38,7 +39,7 @@ services:
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:8080/livez"]
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:8080/readyz"]
       start_period: 15s
       interval: 15s
       timeout: 5s
