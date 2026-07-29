@@ -3,3 +3,8 @@ node_modules/
 *.log
 .env
 docker/.env
+.phpunit.cache/
+var/phpstan/
+coverage/
+__pycache__/
+*.py[cod]
