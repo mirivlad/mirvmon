@@ -1,0 +1,76 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Integration\Services;
+
+use App\Database\ConnectionFactory;
+use App\Database\Migrator;
+use App\Services\AgentCredentialIssuer;
+use PDO;
+use PHPUnit\Framework\TestCase;
+use RuntimeException;
+
+final class AgentCredentialIssuerTest extends TestCase
+{
+    private static ?PDO $pdo = null;
+    private AgentCredentialIssuer $issuer;
+    private int $serverId;
+
+    public static function setUpBeforeClass(): void
+    {
+        if (getenv('TEST_DB_HOST') === false) {
+            self::markTestSkipped('Set TEST_DB_* to run the TimescaleDB integration suite.');
+        }
+
+        self::$pdo = ConnectionFactory::connect([
+            'DB_HOST' => (string) getenv('TEST_DB_HOST'),
+            'DB_PORT' => (string) (getenv('TEST_DB_PORT') ?: '5432'),
+            'DB_NAME' => (string) getenv('TEST_DB_NAME'),
+            'DB_USERNAME' => (string) getenv('TEST_DB_USERNAME'),
+            'DB_PASSWORD' => (string) getenv('TEST_DB_PASSWORD'),
+            'DB_SSLMODE' => (string) (getenv('TEST_DB_SSLMODE') ?: 'disable'),
+        ]);
+        (new Migrator(self::$pdo, dirname(__DIR__, 3) . '/migrations'))->migrate();
+    }
+
+    protected function setUp(): void
+    {
+        self::$pdo?->beginTransaction();
+        $this->serverId = (int) self::$pdo?->query(
+            "INSERT INTO servers (name) VALUES ('installer-server') RETURNING id"
+        )->fetchColumn();
+        $this->issuer = new AgentCredentialIssuer(self::$pdo);
+    }
+
+    protected function tearDown(): void
+    {
+        if (self::$pdo?->inTransaction()) {
+            self::$pdo->rollBack();
+        }
+    }
+
+    public function testInstallerCredentialIsOneTimeAndOnlyAgentHashIsStored(): void
+    {
+        $installerToken = $this->issuer->issueInstaller($this->serverId);
+        $credential = $this->issuer->exchange($installerToken);
+
+        self::assertSame($this->serverId, $credential->serverId);
+        self::assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $credential->token);
+        self::assertSame(
+            hash('sha256', $credential->token),
+            self::$pdo?->query(
+                'SELECT token_hash FROM agent_tokens WHERE server_id = ' . $this->serverId
+            )->fetchColumn()
+        );
+        self::assertSame(
+            'true',
+            self::$pdo?->query(
+                'SELECT (consumed_at IS NOT NULL)::text FROM installer_tokens'
+            )->fetchColumn()
+        );
+
+        $this->expectException(RuntimeException::class);
+        $this->issuer->exchange($installerToken);
+    }
+}

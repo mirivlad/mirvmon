@@ -62,6 +62,10 @@ final class AppFactory
 
         $app->get('/get-agent', self::controller($container, AgentController::class, 'downloadAgent'));
         $app->get(
+            '/agent/files/{file:[A-Za-z0-9_.-]+}',
+            self::controller($container, AgentController::class, 'downloadAgentFile')
+        );
+        $app->get(
             '/agent/install.sh',
             self::controller($container, AgentController::class, 'generateInstallScript')
         );
@@ -184,6 +188,10 @@ final class AppFactory
             '/api/v1/metrics',
             self::controller($container, MetricsController::class, 'collectMetrics')
         );
+        $app->get(
+            '/api/v1/agent/config',
+            self::controller($container, AgentController::class, 'getAgentConfig')
+        );
         $app->get('/readyz', static function (
             ServerRequestInterface $request,
             ResponseInterface $response
@@ -204,9 +212,11 @@ final class AppFactory
                 '/readyz',
                 '/api/v1/metrics',
                 '/get-agent',
+                '/agent/files/*',
                 '/agent/install.sh',
                 '/agent/install.ps1',
                 '/agent/install.bat',
+                '/api/v1/agent/config',
             ]
         ));
         $app->add(new RequestSizeMiddleware($responseFactory, (int) $settings['max_request_bytes']));

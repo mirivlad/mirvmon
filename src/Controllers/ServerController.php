@@ -1,270 +1,442 @@
 <?php
-// src/Controllers/ServerController.php
+
+declare(strict_types=1);
 
 namespace App\Controllers;
 
-use App\Models\Model;
-use App\Utils\EncryptionHelper;
-use Config\DatabaseConfig;
+use App\Services\AgentCredentialIssuer;
+use JsonException;
+use PDO;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Views\Twig;
+use Throwable;
 
-class ServerController extends Model
+final class ServerController
 {
-    private $twig;
-
-    public function __construct(Twig $twig)
-    {
-        parent::__construct();
-        $this->twig = $twig;
+    public function __construct(
+        private readonly PDO $pdo,
+        private readonly Twig $twig,
+        private readonly AgentCredentialIssuer $credentials
+    ) {
     }
 
-    public function index(Request $request, Response $response, $args)
-    {
-        $stmt = $this->pdo->prepare("
-            SELECT s.*, sg.name as group_name 
-            FROM servers s 
-            LEFT JOIN server_groups sg ON s.group_id = sg.id 
-            ORDER BY s.name
-        ");
-        $stmt->execute();
-        $servers = $stmt->fetchAll();
+    public function index(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        $servers = $this->pdo->query(
+            'SELECT servers.*, server_groups.name AS group_name
+             FROM servers
+             LEFT JOIN server_groups ON server_groups.id = servers.group_id
+             ORDER BY servers.name, servers.id'
+        )?->fetchAll() ?? [];
 
-        $templateData = [
+        return $this->twig->render($response, 'servers/index.twig', [
             'title' => 'Серверы',
-            'servers' => $servers
-        ];
-
-        return $this->twig->render($response, 'servers/index.twig', $templateData);
+            'servers' => $servers,
+        ]);
     }
 
-    public function create(Request $request, Response $response, $args)
-    {
-        $stmt = $this->pdo->prepare("SELECT * FROM server_groups ORDER BY name");
-        $stmt->execute();
-        $groups = $stmt->fetchAll();
-
-        $templateData = [
+    public function create(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        return $this->twig->render($response, 'servers/create.twig', [
             'title' => 'Добавить сервер',
-            'groups' => $groups
-        ];
-
-        return $this->twig->render($response, 'servers/create.twig', $templateData);
+            'groups' => $this->groups(),
+        ]);
     }
 
-    public function store(Request $request, Response $response, $args)
-    {
-        $params = $request->getParsedBody();
-
-        // Получаем дефолтные значения
-        $stmtDefault = $this->pdo->query("SELECT setting_key, setting_value FROM default_settings");
-        $defaults = [];
-        while ($row = $stmtDefault->fetch()) {
-            $defaults[$row['setting_key']] = $row['setting_value'];
+    public function store(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        $body = $request->getParsedBody();
+        if (!is_array($body)) {
+            return $this->redirect($response, '/servers/create');
+        }
+        $name = trim((string) ($body['name'] ?? ''));
+        if ($name === '' || strlen($name) > 100) {
+            return $this->redirect($response, '/servers/create');
         }
 
-        $defaultOfflineTimeout = (int)($defaults['default_offline_timeout'] ?? 300);
-
-        // Генерируем уникальный токен
-        $token = bin2hex(random_bytes(16));
-        
-        $this->pdo->beginTransaction();
-        
+        $ownsTransaction = $this->beginTransaction('server_store');
         try {
-            // Сохраняем сервер с дефолтными значениями
-            $stmt = $this->pdo->prepare("
-                INSERT INTO servers (name, address, group_id, description, offline_timeout, notify_on_offline) 
-                VALUES (:name, :address, :group_id, :description, :offline_timeout, 1)
-            ");
-
-            $result = $stmt->execute([
-                ':name' => $params['name'],
-                ':address' => $params['address'] ?? '',
-                ':group_id' => $params['group_id'] ?? null,
-                ':description' => $params['description'] ?? '',
-                ':offline_timeout' => $defaultOfflineTimeout
+            $statement = $this->pdo->prepare(
+                'INSERT INTO servers (
+                    name,
+                    address,
+                    group_id,
+                    description,
+                    offline_timeout_seconds,
+                    notify_on_offline
+                 ) VALUES (
+                    :name,
+                    :address,
+                    :group_id,
+                    :description,
+                    :offline_timeout_seconds,
+                    TRUE
+                 )
+                 RETURNING id'
+            );
+            $statement->execute([
+                'name' => $name,
+                'address' => $this->optionalString($body['address'] ?? null, 255),
+                'group_id' => $this->optionalId($body['group_id'] ?? null),
+                'description' => $this->optionalString($body['description'] ?? null),
+                'offline_timeout_seconds' => $this->defaultOfflineTimeout(),
             ]);
+            $serverId = (int) $statement->fetchColumn();
 
-            $serverId = $this->pdo->lastInsertId();
+            $config = $this->pdo->prepare(
+                'INSERT INTO agent_configs (server_id) VALUES (:server_id)'
+            );
+            $config->execute(['server_id' => $serverId]);
+            $installerTokens = $this->installerTokens($serverId);
+            $this->commitTransaction($ownsTransaction, 'server_store');
 
-            // Сохраняем хеш токена и зашифрованный токен
-            $tokenHash = hash('sha256', $token);
-            $encryptedToken = EncryptionHelper::encrypt($token);
-            
-            $stmt = $this->pdo->prepare("
-                INSERT INTO agent_tokens (server_id, token_hash, encrypted_token) 
-                VALUES (:server_id, :token_hash, :encrypted_token)
-            ");
+            return $this->createdResponse(
+                $response,
+                $serverId,
+                $name,
+                $installerTokens
+            );
+        } catch (Throwable) {
+            $this->rollbackTransaction($ownsTransaction, 'server_store');
 
-            $result = $stmt->execute([
-                ':server_id' => $serverId,
-                ':token_hash' => $tokenHash,
-                ':encrypted_token' => $encryptedToken
-            ]);
-
-            $this->pdo->commit();
-
-            // Передаем токен для отображения на странице
-            $templateData = [
-                'title' => 'Сервер добавлен',
-                'server' => [
-                    'id' => $serverId,
-                    'name' => $params['name']
-                ],
-                'token' => $token
-            ];
-
-            return $this->twig->render($response, 'servers/created.twig', $templateData);
-
-        } catch (\Exception $e) {
-            $this->pdo->rollback();
-            
-            return $response->withHeader('Location', '/servers/create')->withStatus(302);
+            return $this->redirect($response, '/servers/create');
         }
     }
 
-    public function edit(Request $request, Response $response, $args)
-    {
-        $id = $args['id'];
-
-        $stmt = $this->pdo->prepare("SELECT * FROM servers WHERE id = :id");
-        $stmt->execute([':id' => $id]);
-        $server = $stmt->fetch();
-
-        $stmt = $this->pdo->prepare("SELECT * FROM server_groups ORDER BY name");
-        $stmt->execute();
-        $groups = $stmt->fetchAll();
-
-        $stmt = $this->pdo->prepare("SELECT encrypted_token FROM agent_tokens WHERE server_id = :server_id");
-        $stmt->execute([':server_id' => $id]);
-        $tokenRow = $stmt->fetch();
-        $decryptedToken = $tokenRow ? \App\Utils\EncryptionHelper::decrypt($tokenRow['encrypted_token']) : null;
-
-        // Получаем только метрики, которые можно показывать на странице сервера
-        $stmt = $this->pdo->prepare("
-            SELECT DISTINCT mn.id, mn.name, mn.unit
-            FROM metric_names mn
-            JOIN server_metrics sm ON sm.metric_name_id = mn.id
-            WHERE sm.server_id = :server_id
-              AND mn.name NOT LIKE '%_proc'
-              AND (
-                  mn.name IN ('uptime', 'cpu_load', 'ram_used')
-                  OR mn.name LIKE 'disk_used_%'
-                  OR mn.name LIKE 'net_in_%'
-                  OR mn.name LIKE 'net_out_%'
-                  OR mn.name LIKE 'temp_%'
-              )
-            ORDER BY mn.name
-        ");
-        $stmt->execute([':server_id' => $id]);
-        $allMetrics = $stmt->fetchAll();
-
-        // Декодируем сохранённые метрики
-        $savedMetrics = [];
-        if (!empty($server['display_metrics'])) {
-            $savedMetrics = json_decode($server['display_metrics'], true) ?? [];
+    public function edit(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        $serverId = $this->serverId($args);
+        if ($serverId === null) {
+            return $this->redirect($response, '/servers');
         }
 
-        if (!$server) {
-            return $response->withHeader('Location', '/servers')->withStatus(302);
+        $statement = $this->pdo->prepare(
+            'SELECT * FROM servers WHERE id = :server_id'
+        );
+        $statement->execute(['server_id' => $serverId]);
+        $server = $statement->fetch();
+        if (!is_array($server)) {
+            return $this->redirect($response, '/servers');
         }
 
-        $templateData = [
+        $metrics = $this->pdo->prepare(
+            'SELECT DISTINCT metric_names.id, metric_names.name, metric_names.unit
+             FROM current_metric_values
+             INNER JOIN metric_names
+               ON metric_names.id = current_metric_values.metric_id
+             WHERE current_metric_values.server_id = :server_id
+             ORDER BY metric_names.name'
+        );
+        $metrics->execute(['server_id' => $serverId]);
+        $hasToken = $this->pdo->prepare(
+            'SELECT EXISTS(
+                SELECT 1 FROM agent_tokens WHERE server_id = :server_id
+             )'
+        );
+        $hasToken->execute(['server_id' => $serverId]);
+
+        return $this->twig->render($response, 'servers/edit.twig', [
             'title' => 'Редактировать сервер',
             'server' => $server,
-            'groups' => $groups,
-            'agent_token' => $decryptedToken,
-            'allMetrics' => $allMetrics,
-            'server_display_metrics' => $savedMetrics
-        ];
-
-        return $this->twig->render($response, 'servers/edit.twig', $templateData);
+            'groups' => $this->groups(),
+            'has_agent_token' => $this->toBool($hasToken->fetchColumn()),
+            'allMetrics' => $metrics->fetchAll(),
+            'server_display_metrics' => $this->decodeStringList(
+                $server['display_metrics'] ?? '[]'
+            ),
+        ]);
     }
 
-    public function update(Request $request, Response $response, $args)
-    {
-        $id = $args['id'];
-        $params = $request->getParsedBody();
+    public function update(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        $serverId = $this->serverId($args);
+        $body = $request->getParsedBody();
+        if ($serverId === null || !is_array($body)) {
+            return $this->redirect($response, '/servers');
+        }
 
-        // Собираем выбранные метрики
-        $displayMetrics = $params['display_metrics'] ?? [];
-        $displayMetrics = array_values(array_unique(array_filter($displayMetrics, fn ($metric) => is_string($metric) && $metric !== '')));
-        $displayMetricsJson = json_encode($displayMetrics);
+        $name = trim((string) ($body['name'] ?? ''));
+        $timeout = filter_var(
+            $body['offline_timeout'] ?? 300,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 0, 'max_range' => 86400]]
+        );
+        $displayMetrics = $body['display_metrics'] ?? [];
+        if (
+            $name === ''
+            || strlen($name) > 100
+            || $timeout === false
+            || !is_array($displayMetrics)
+        ) {
+            return $this->redirect($response, '/servers/' . $serverId . '/edit');
+        }
+        $displayMetrics = array_values(array_unique(array_filter(
+            $displayMetrics,
+            static fn (mixed $metric): bool =>
+                is_string($metric)
+                && preg_match('/^[a-z][a-z0-9_]{0,99}$/', $metric) === 1
+        )));
 
-        $stmt = $this->pdo->prepare("
-            UPDATE servers 
-            SET name = :name, 
-                address = :address, 
-                group_id = :group_id, 
+        $statement = $this->pdo->prepare(
+            'UPDATE servers SET
+                name = :name,
+                address = :address,
+                group_id = :group_id,
                 description = :description,
-                offline_timeout = :offline_timeout,
+                offline_timeout_seconds = :offline_timeout_seconds,
                 notify_on_offline = :notify_on_offline,
-                display_metrics = :display_metrics
-            WHERE id = :id
-        ");
-
-        $result = $stmt->execute([
-            ':id' => $id,
-            ':name' => $params['name'],
-            ':address' => $params['address'] ?? '',
-            ':group_id' => $params['group_id'] ?? null,
-            ':description' => $params['description'] ?? '',
-            ':offline_timeout' => (int)($params['offline_timeout'] ?? 300),
-            ':notify_on_offline' => isset($params['notify_on_offline']) ? 1 : 0,
-            ':display_metrics' => $displayMetricsJson
+                display_metrics = CAST(:display_metrics AS jsonb)
+             WHERE id = :server_id'
+        );
+        $statement->execute([
+            'server_id' => $serverId,
+            'name' => $name,
+            'address' => $this->optionalString($body['address'] ?? null, 255),
+            'group_id' => $this->optionalId($body['group_id'] ?? null),
+            'description' => $this->optionalString($body['description'] ?? null),
+            'offline_timeout_seconds' => $timeout,
+            'notify_on_offline' => isset($body['notify_on_offline']),
+            'display_metrics' => json_encode($displayMetrics, JSON_THROW_ON_ERROR),
         ]);
 
-        if ($result) {
-            return $response->withHeader('Location', '/servers')->withStatus(302);
-        } else {
-            return $response->withHeader('Location', '/servers/' . $id . '/edit')->withStatus(302);
+        return $this->redirect($response, '/servers');
+    }
+
+    public function delete(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        $serverId = $this->serverId($args);
+        if ($serverId !== null) {
+            $statement = $this->pdo->prepare(
+                'DELETE FROM servers WHERE id = :server_id'
+            );
+            $statement->execute(['server_id' => $serverId]);
+        }
+
+        return $this->redirect($response, '/servers');
+    }
+
+    public function regenerateToken(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        $serverId = $this->serverId($args);
+        if ($serverId === null) {
+            return $this->redirect($response, '/servers');
+        }
+
+        $statement = $this->pdo->prepare(
+            'SELECT name FROM servers WHERE id = :server_id'
+        );
+        $statement->execute(['server_id' => $serverId]);
+        $name = $statement->fetchColumn();
+        if ($name === false) {
+            return $this->redirect($response, '/servers');
+        }
+
+        $ownsTransaction = $this->beginTransaction('server_regenerate');
+        try {
+            $deleteAgent = $this->pdo->prepare(
+                'DELETE FROM agent_tokens WHERE server_id = :server_id'
+            );
+            $deleteAgent->execute(['server_id' => $serverId]);
+            $expireInstallers = $this->pdo->prepare(
+                'UPDATE installer_tokens
+                 SET consumed_at = CURRENT_TIMESTAMP
+                 WHERE server_id = :server_id AND consumed_at IS NULL'
+            );
+            $expireInstallers->execute(['server_id' => $serverId]);
+            $installerTokens = $this->installerTokens($serverId);
+            $this->commitTransaction($ownsTransaction, 'server_regenerate');
+
+            return $this->createdResponse(
+                $response,
+                $serverId,
+                (string) $name,
+                $installerTokens
+            );
+        } catch (Throwable) {
+            $this->rollbackTransaction($ownsTransaction, 'server_regenerate');
+
+            return $this->redirect($response, '/servers/' . $serverId . '/edit');
         }
     }
 
-    public function delete(Request $request, Response $response, $args)
+    /** @return list<array<string, mixed>> */
+    private function groups(): array
     {
-        $id = $args['id'];
+        return $this->pdo->query(
+            'SELECT * FROM server_groups ORDER BY name, id'
+        )?->fetchAll() ?? [];
+    }
 
-        $stmt = $this->pdo->prepare("DELETE FROM servers WHERE id = :id");
-        $result = $stmt->execute([':id' => $id]);
+    private function defaultOfflineTimeout(): int
+    {
+        $statement = $this->pdo->prepare(
+            "SELECT setting_value
+             FROM app_settings
+             WHERE setting_key = 'default_offline_timeout'"
+        );
+        $statement->execute();
+        $value = $statement->fetchColumn();
+        if ($value === false) {
+            return 300;
+        }
 
-        if ($result) {
-            return $response->withHeader('Location', '/servers')->withStatus(302);
-        } else {
-            // TODO: Обработка ошибки
-            return $response->withHeader('Location', '/servers')->withStatus(302);
+        try {
+            return max(0, min(86400, (int) json_decode(
+                (string) $value,
+                true,
+                512,
+                JSON_THROW_ON_ERROR
+            )));
+        } catch (JsonException) {
+            return 300;
         }
     }
-    
-    public function regenerateToken(Request $request, Response $response, $args)
-    {
-        $id = $args['id'];
-        
-        // Генерируем новый токен
-        $newToken = bin2hex(random_bytes(16));
-        $tokenHash = hash('sha256', $newToken);
-        $encryptedToken = EncryptionHelper::encrypt($newToken);
-        
-        // Обновляем или создаем запись в agent_tokens
-        $stmt = $this->pdo->prepare("
-            INSERT INTO agent_tokens (server_id, token_hash, encrypted_token) 
-            VALUES (:server_id, :token_hash, :encrypted_token)
-            ON DUPLICATE KEY UPDATE token_hash = VALUES(token_hash), encrypted_token = VALUES(encrypted_token)
-        ");
-        
-        $result = $stmt->execute([
-            ':server_id' => $id,
-            ':token_hash' => $tokenHash,
-            ':encrypted_token' => $encryptedToken
-        ]);
 
-        if ($result) {
-            // Перенаправляем обратно на страницу редактирования
-            return $response->withHeader('Location', '/servers/' . $id . '/edit')->withStatus(302);
-        } else {
-            // TODO: Обработка ошибки
-            return $response->withHeader('Location', '/servers/' . $id . '/edit')->withStatus(302);
+    /** @return array{linux: string, powershell: string, batch: string} */
+    private function installerTokens(int $serverId): array
+    {
+        return [
+            'linux' => $this->credentials->issueInstaller($serverId),
+            'powershell' => $this->credentials->issueInstaller($serverId),
+            'batch' => $this->credentials->issueInstaller($serverId),
+        ];
+    }
+
+    /**
+     * @param array{linux: string, powershell: string, batch: string} $tokens
+     */
+    private function createdResponse(
+        Response $response,
+        int $serverId,
+        string $name,
+        array $tokens
+    ): Response {
+        return $this->twig->render($response, 'servers/created.twig', [
+            'title' => 'Установщики агента',
+            'server' => ['id' => $serverId, 'name' => $name],
+            'installer_tokens' => $tokens,
+        ]);
+    }
+
+    private function optionalString(mixed $value, int $maximum = 5000): ?string
+    {
+        if (!is_string($value)) {
+            return null;
         }
+        $value = trim($value);
+
+        return $value === '' ? null : substr($value, 0, $maximum);
+    }
+
+    private function optionalId(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        $id = filter_var(
+            $value,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1]]
+        );
+
+        return $id === false ? null : $id;
+    }
+
+    /** @return list<string> */
+    private function decodeStringList(mixed $value): array
+    {
+        try {
+            $decoded = is_string($value)
+                ? json_decode($value, true, 512, JSON_THROW_ON_ERROR)
+                : $value;
+        } catch (JsonException) {
+            return [];
+        }
+
+        return is_array($decoded)
+            ? array_values(array_filter($decoded, 'is_string'))
+            : [];
+    }
+
+    /** @param array<string, mixed> $args */
+    private function serverId(array $args): ?int
+    {
+        $serverId = filter_var(
+            $args['id'] ?? null,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1]]
+        );
+
+        return $serverId === false ? null : $serverId;
+    }
+
+    private function toBool(mixed $value): bool
+    {
+        return $value === true || $value === 1 || $value === '1' || $value === 't';
+    }
+
+    private function redirect(Response $response, string $location): Response
+    {
+        return $response->withHeader('Location', $location)->withStatus(302);
+    }
+
+    private function beginTransaction(string $savepoint): bool
+    {
+        if (!$this->pdo->inTransaction()) {
+            $this->pdo->beginTransaction();
+            return true;
+        }
+
+        $this->pdo->exec('SAVEPOINT ' . $savepoint);
+        return false;
+    }
+
+    private function commitTransaction(
+        bool $ownsTransaction,
+        string $savepoint
+    ): void {
+        if ($ownsTransaction) {
+            $this->pdo->commit();
+            return;
+        }
+
+        $this->pdo->exec('RELEASE SAVEPOINT ' . $savepoint);
+    }
+
+    private function rollbackTransaction(
+        bool $ownsTransaction,
+        string $savepoint
+    ): void {
+        if ($ownsTransaction) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            return;
+        }
+
+        $this->pdo->exec('ROLLBACK TO SAVEPOINT ' . $savepoint);
+        $this->pdo->exec('RELEASE SAVEPOINT ' . $savepoint);
     }
 }

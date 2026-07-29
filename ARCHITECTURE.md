@@ -99,9 +99,10 @@ PostgreSQL advisory lock, выполняет файл транзакционно
 
 ## Агентский поток
 
-Агент собирает CPU, RAM, диски, сеть, температуру, uptime, сервисы и
-ограниченный снимок процессов. Он отправляет versioned envelope с UUID sample
-ID и UTC timestamp на публичный `POST /api/v1/metrics`.
+Агент собирает CPU, RAM, диски, сеть, температуру, uptime, изменившиеся
+состояния сервисов и ограниченный снимок процессов. Он отправляет envelope
+`version=2` с UUID `sample_id`, UTC `sample_time`, числовыми `metrics` и
+credential в HTTPS body на публичный `POST /api/v1/metrics`.
 
 Целевая последовательность ingestion:
 
@@ -122,9 +123,17 @@ ID и UTC timestamp на публичный `POST /api/v1/metrics`.
 определяется по текущему запросу после trusted-proxy normalization. В коде нет
 предустановленного домена.
 
-Installer credential одноразовый и короткоживущий. Постоянный agent token
-хранится на сервере только как SHA-256 hash. Агент использует outbound HTTPS и
-локальную persistent retry queue; входящий сетевой доступ ему не нужен.
+Для Linux, PowerShell и BAT создаются независимые installer credentials:
+каждый одноразовый и действует один час. При скачивании credential атомарно
+обменивается на новый permanent agent token, после чего повторное скачивание
+невозможно. Исходники агента публичны и скачиваются без credential; permanent
+token хранится на сервере только как SHA-256 hash и никогда не попадает в query
+string.
+
+Агент использует outbound HTTPS, стандартные proxy environment variables и
+локальную bounded persistent retry queue; входящий сетевой доступ ему не нужен.
+На Linux процесс работает под отдельным `mirvmon-agent`, на Windows code и
+state разделены между `Program Files` и `ProgramData`.
 
 ## Уведомления
 

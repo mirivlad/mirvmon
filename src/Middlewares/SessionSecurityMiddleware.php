@@ -31,7 +31,7 @@ final class SessionSecurityMiddleware implements MiddlewareInterface
         ServerRequestInterface $request,
         RequestHandlerInterface $handler
     ): ResponseInterface {
-        if (in_array($request->getUri()->getPath(), $this->statelessPaths, true)) {
+        if ($this->isStatelessPath($request->getUri()->getPath())) {
             return $handler->handle(
                 $request->withAttribute(self::STATELESS_ATTRIBUTE, true)
             );
@@ -100,6 +100,23 @@ final class SessionSecurityMiddleware implements MiddlewareInterface
 
             throw $exception;
         }
+    }
+
+    private function isStatelessPath(string $path): bool
+    {
+        foreach ($this->statelessPaths as $pattern) {
+            if ($path === $pattern) {
+                return true;
+            }
+            if (
+                str_ends_with($pattern, '*')
+                && str_starts_with($path, substr($pattern, 0, -1))
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function withSessionCookie(

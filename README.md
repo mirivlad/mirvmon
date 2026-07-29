@@ -119,14 +119,51 @@ docker compose -f docker/docker-compose.yml logs -f db
 
 ## Установка агента
 
-Добавьте сервер в веб-интерфейсе и скачайте с него установщик агента. Агент
-отправляет данные на публичный HTTPS endpoint и не принимает входящих
-соединений. На Linux его состояние и журнал доступны через systemd:
+Добавьте сервер в веб-интерфейсе и скачайте один из одноразовых установщиков:
+Linux shell, PowerShell или BAT. Ссылка действует один час и при скачивании
+обменивается на постоянный ключ агента. Постоянный ключ не передаётся в URL и в
+БД хранится только как SHA-256.
+
+Если задан `PUBLIC_BASE_URL`, установщик привязывается к нему. Иначе используется
+scheme, host и port запроса, уже нормализованные middleware доверенного reverse
+proxy. В исходниках нет предустановленного домена.
+
+Linux-установщик создаёт непривилегированного пользователя `mirvmon-agent`,
+виртуальное окружение с закреплёнными `requests 2.34.2` и `psutil 7.2.2`,
+конфигурацию `/etc/mirvmon-agent/config.json` и persistent queue в
+`/var/lib/mirvmon-agent`. Агент отправляет данные на публичный HTTPS endpoint и
+не принимает входящих соединений. Его состояние и журнал доступны через
+systemd:
 
 ```bash
 sudo systemctl status mirvmon-agent
 sudo journalctl -u mirvmon-agent -f
 ```
+
+Для outbound proxy задайте `HTTPS_PROXY`, `HTTP_PROXY` и при необходимости
+`NO_PROXY` в `/etc/default/mirvmon-agent`. TLS-сертификаты проверяются по
+умолчанию. При недоступности сервиса bounded disk queue переживает перезапуск,
+а повтор одного `sample_id` обрабатывается сервером идемпотентно.
+
+### Протокол отправки
+
+`POST /api/v1/metrics` принимает JSON v2:
+
+```json
+{
+  "version": 2,
+  "sample_id": "018f47a2-8e4c-7d0a-8d8b-45de8fd746a1",
+  "sample_time": "2026-07-30T12:00:00Z",
+  "token": "<agent-token>",
+  "metrics": {"cpu_load": 12.5, "ram_used": 48.1},
+  "services": [],
+  "process_snapshot": {"top_cpu": [], "top_memory": []}
+}
+```
+
+Новый sample получает `202`, уже принятый — `200`. Конфигурацию агент
+периодически получает исходящим запросом `GET /api/v1/agent/config` с Bearer
+token.
 
 ## Разработка и проверки
 
@@ -135,6 +172,7 @@ composer install
 composer test
 composer analyse
 composer audit
+PYTHONPATH=agent python3 -m unittest discover -s agent/tests
 ```
 
 Для schema integration tests требуется отдельная TimescaleDB. Переменные

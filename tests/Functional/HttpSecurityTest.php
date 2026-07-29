@@ -262,6 +262,22 @@ final class HttpSecurityTest extends TestCase
         self::assertSame('', $response->getHeaderLine('Set-Cookie'));
     }
 
+    public function testPublicAgentFilesAndConfigEndpointDoNotCreateSessions(): void
+    {
+        $source = $this->app->handle(
+            $this->request('GET', '/agent/files/config.py')
+        );
+        self::assertSame(200, $source->getStatusCode());
+        self::assertSame('', $source->getHeaderLine('Set-Cookie'));
+
+        $config = $this->app->handle(
+            $this->request('GET', '/api/v1/agent/config')
+                ->withHeader('Accept', 'application/json')
+        );
+        self::assertSame(401, $config->getStatusCode());
+        self::assertSame('', $config->getHeaderLine('Set-Cookie'));
+    }
+
     public function testExpiredSessionIsRejectedAndReceivesReplacementCookie(): void
     {
         session_name('mirvmon_test');

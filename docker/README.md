@@ -79,6 +79,11 @@ known. If it is empty, MirvMon derives installer URLs from trusted reverse-proxy
 headers. Never expose port 8080 to an untrusted network while accepting proxy
 headers.
 
+Installer links are one-time credentials valid for one hour. Downloading an
+installer exchanges its credential for an agent token; the permanent token is
+embedded only in the downloaded script, never in a download URL, and only its
+SHA-256 hash is stored by MirvMon.
+
 ## Operations
 
 Health:

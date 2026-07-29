@@ -33,6 +33,7 @@ RUN apt-get update \
     && install-php-extensions \
         intl \
         opcache \
+        pcntl \
         pdo_pgsql \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -56,7 +57,7 @@ COPY docker/Caddyfile /etc/frankenphp/Caddyfile
 COPY docker/php.ini /usr/local/etc/php/conf.d/zz-mirvmon.ini
 COPY docker/supervisord.conf /etc/supervisor/conf.d/mirvmon.conf
 
-RUN chmod 0555 /app/docker/entrypoint.sh /app/bin/migrate \
+RUN chmod 0555 /app/docker/entrypoint.sh /app/bin/migrate /app/bin/offline-worker \
     && chown -R app:app /app/var \
     && composer check-platform-reqs --no-dev
 

@@ -1,0 +1,56 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use App\Database\ConnectionFactory;
+use App\Repositories\NotificationOutboxRepository;
+use App\Workers\OfflineStatusWorker;
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+$interval = filter_var(
+    getenv('OFFLINE_CHECK_INTERVAL') ?: 15,
+    FILTER_VALIDATE_INT,
+    ['options' => ['min_range' => 5, 'max_range' => 300]]
+);
+if ($interval === false) {
+    fwrite(STDERR, "OFFLINE_CHECK_INTERVAL must be between 5 and 300 seconds.\n");
+    exit(1);
+}
+
+$once = in_array('--once', $argv, true);
+$running = true;
+if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
+    pcntl_async_signals(true);
+    pcntl_signal(SIGTERM, static function () use (&$running): void {
+        $running = false;
+    });
+    pcntl_signal(SIGINT, static function () use (&$running): void {
+        $running = false;
+    });
+}
+
+$pdo = ConnectionFactory::fromEnvironment();
+$worker = new OfflineStatusWorker(
+    $pdo,
+    new NotificationOutboxRepository($pdo)
+);
+
+do {
+    try {
+        $worker->runOnce();
+    } catch (Throwable $exception) {
+        fwrite(
+            STDERR,
+            'offline_worker_failed:' . $exception::class . PHP_EOL
+        );
+    }
+
+    if ($once) {
+        break;
+    }
+    for ($second = 0; $second < $interval && $running; $second++) {
+        sleep(1);
+    }
+} while ($running);

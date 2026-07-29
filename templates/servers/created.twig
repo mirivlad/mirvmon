@@ -10,25 +10,17 @@
             <div class="card-body">
                 <div class="alert alert-success" role="alert">
                     <h4 class="alert-heading">Сервер "{{ server.name }}" успешно добавлен!</h4>
-                    <p>Для подключения агента мониторинга используйте следующий токен:</p>
-                    <hr>
-                    <div class="row">
-                        <div class="col-md-10">
-                            <input type="text" class="form-control" value="{{ token }}" readonly onclick="this.select();">
-                        </div>
-                        <div class="col-md-2">
-                            <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('{{ token }}')">
-                                <i class="fas fa-copy"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <p class="mb-0 mt-3">Скачайте скрипт установки агента:</p>
-                    <div class="d-flex gap-2 mt-2">
-                        <a href="/agent/install.sh?token={{ token }}" class="btn btn-primary">
+                    <p>Скачайте один подходящий установщик. Каждая ссылка
+                       одноразовая и действует один час.</p>
+                    <div class="d-flex flex-wrap gap-2 mt-2">
+                        <a href="/agent/install.sh?token={{ installer_tokens.linux|url_encode }}" class="btn btn-primary">
                             <i class="fab fa-linux"></i> Агент для Linux
                         </a>
-                        <a href="/agent/install.bat?token={{ token }}" class="btn btn-info">
-                            <i class="fab fa-windows"></i> Агент для Windows
+                        <a href="/agent/install.ps1?token={{ installer_tokens.powershell|url_encode }}" class="btn btn-info">
+                            <i class="fab fa-windows"></i> PowerShell
+                        </a>
+                        <a href="/agent/install.bat?token={{ installer_tokens.batch|url_encode }}" class="btn btn-outline-info">
+                            <i class="fab fa-windows"></i> BAT
                         </a>
                     </div>
                 </div>
@@ -76,15 +68,4 @@
     </div>
 </div>
 
-<script>
-function copyToClipboard(text) {
-    navigator.clipboard.writeText(text).then(function() {
-        const originalText = event.target.innerHTML;
-        event.target.innerHTML = '<i class="fas fa-check"></i>';
-        setTimeout(() => {
-            event.target.innerHTML = originalText;
-        }, 2000);
-    });
-}
-</script>
 {% endblock %}

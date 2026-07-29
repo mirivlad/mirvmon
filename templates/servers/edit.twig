@@ -129,37 +129,19 @@
                 
                 <div class="mt-4">
                     <h5>Управление агентом мониторинга:</h5>
-                    {% if agent_token %}
-                    <div class="row">
-                        <div class="col-md-4 mb-2">
-                            <a href="/agent/install.sh?token={{ agent_token }}" class="btn btn-outline-primary w-100">
-                                <i class="fab fa-linux"></i> Агент для Linux
-                            </a>
-                        </div>
-                        <div class="col-md-4 mb-2">
-                            <a href="/agent/install.bat?token={{ agent_token }}" class="btn btn-outline-info w-100">
-                                <i class="fab fa-windows"></i> Агент для Windows
-                            </a>
-                        </div>
-                        <div class="col-md-4 mb-2">
-                            <form method="post" action="/servers/{{ server.id }}/regenerate-token">
-                                {% include "partials/csrf.twig" %}
-                                <button type="submit" class="btn btn-outline-warning w-100" onclick="return confirm('Вы уверены, что хотите сгенерировать новый токен? Это сделает недействительным старый скрипт установки.');">
-                                    <i class="fas fa-sync-alt"></i> Сбросить токен
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                    <p class="mt-2">Если вы потеряли доступ к агенту или хотите создать новый токен безопасности, используйте кнопку "Сбросить токен".</p>
-                    {% else %}
-                    <div class="alert alert-warning">
-                        Токен агента не создан.
-                        <form method="post" action="/servers/{{ server.id }}/regenerate-token" class="d-inline">
-                            {% include "partials/csrf.twig" %}
-                            <button type="submit" class="btn btn-link p-0 align-baseline">Создать токен</button>
-                        </form>
-                    </div>
-                    {% endif %}
+                    <p class="text-muted">
+                        Постоянный ключ агента не хранится в обратимо читаемом
+                        виде. Создание новых установщиков немедленно отзовёт
+                        текущий ключ.
+                    </p>
+                    <form method="post" action="/servers/{{ server.id }}/regenerate-token">
+                        {% include "partials/csrf.twig" %}
+                        <button type="submit" class="btn btn-outline-warning"
+                                onclick="return confirm('Текущий агент перестанет приниматься. Продолжить?');">
+                            <i class="fas fa-sync-alt"></i>
+                            {{ has_agent_token ? 'Отозвать ключ и создать установщики' : 'Создать установщики' }}
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>

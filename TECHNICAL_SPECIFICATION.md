@@ -47,16 +47,20 @@ Application/domain code должен оставаться переносимым
 
 Protocol v2 envelope должен содержать:
 
-- protocol version;
-- sample UUID;
-- UTC sample timestamp;
-- agent credential;
-- до 100 конечных числовых метрик;
-- optional bounded process snapshot;
-- service states.
+- `version=2`;
+- `sample_id` — UUID;
+- `sample_time` — UTC timestamp, не старше семи дней и не более чем на пять
+  минут в будущем;
+- `token` — agent credential только в HTTPS body;
+- `metrics` — от 1 до 100 конечных чисел с именами
+  `^[a-z][a-z0-9_]{0,99}$`;
+- optional `process_snapshot` не более 64 KiB, до 20 процессов в каждом top;
+- optional `services` — до 500 изменившихся состояний.
 
 Повторная доставка одного sample не создаёт повторных rows, alerts или
-notifications. Время сервера не заменяет accepted sample timestamp.
+notifications. Запоздалый допустимый sample записывается в историю, но не
+откатывает `current_metric_values`, состояние сервисов или алерты. Время сервера
+не заменяет accepted sample timestamp.
 
 ### Агент
 
@@ -66,7 +70,8 @@ notifications. Время сервера не заменяет accepted sample t
 - отдельный непривилегированный пользователь на Linux;
 - TLS verification включена по умолчанию;
 - proxy environment поддерживается HTTP client;
-- bounded persistent retry queue переживает restart;
+- persistent retry queue ограничена 1000 пакетами, записывается атомарно с
+  режимом `0600` и переживает restart;
 - конфигурация и queue записываются атомарно с ограниченными правами;
 - логи не содержат token, proxy credential или URL query secrets.
 
@@ -76,6 +81,7 @@ notifications. Время сервера не заменяет accepted sample t
   transitions;
 - ingestion записывает событие в transactional outbox;
 - workers выполняют отправку асинхронно с retries и `SKIP LOCKED`;
+- после десяти неудачных попыток outbox row переходит в `dead`;
 - Telegram и SMTP настраиваются в dashboard;
 - Telegram proxy: HTTP, HTTPS, SOCKS4, SOCKS4A, SOCKS5, SOCKS5H;
 - bot/proxy/SMTP secrets шифруются, не отображаются обратно и очищаются только

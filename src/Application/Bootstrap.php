@@ -16,9 +16,16 @@ use App\Controllers\ServerController;
 use App\Controllers\ServerDetailController;
 use App\Controllers\SetupController;
 use App\Database\ConnectionFactory;
+use App\Domain\Metrics\MetricsValidator;
 use App\Repositories\MetricRepository;
+use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\ServerRepository;
+use App\Services\AgentCredentialIssuer;
+use App\Services\AgentInstallerService;
+use App\Services\MetricsIngestionService;
+use App\Services\PublicUrlResolver;
 use App\Services\ServerStatusService;
+use App\Services\ThresholdEvaluator;
 use Config\DatabaseConfig;
 use DateTimeZone;
 use PDO;
@@ -50,6 +57,7 @@ final class Bootstrap
             'session_name' => self::environment('SESSION_NAME', 'mirvmon_session'),
             'session_secure' => self::booleanEnvironment('SESSION_SECURE', false),
             'max_request_bytes' => (int) self::environment('MAX_REQUEST_BYTES', '1048576'),
+            'public_base_url' => self::environment('PUBLIC_BASE_URL'),
             'templates_path' => dirname(__DIR__, 2) . '/templates',
             'twig_cache' => self::environment('APP_ENV', 'production') === 'production'
                 ? dirname(__DIR__, 2) . '/var/cache/twig'
@@ -91,6 +99,43 @@ final class Bootstrap
             ServerStatusService::class,
             static fn (): ServerStatusService => new ServerStatusService()
         );
+        $container->set(
+            MetricsValidator::class,
+            static fn (): MetricsValidator => new MetricsValidator()
+        );
+        $container->set(
+            ThresholdEvaluator::class,
+            static fn (): ThresholdEvaluator => new ThresholdEvaluator()
+        );
+        $container->set(
+            NotificationOutboxRepository::class,
+            static fn (Container $container): NotificationOutboxRepository =>
+                new NotificationOutboxRepository($container->get(PDO::class))
+        );
+        $container->set(
+            MetricsIngestionService::class,
+            static fn (Container $container): MetricsIngestionService =>
+                new MetricsIngestionService(
+                    $container->get(PDO::class),
+                    $container->get(ThresholdEvaluator::class),
+                    $container->get(NotificationOutboxRepository::class)
+                )
+        );
+        $container->set(
+            PublicUrlResolver::class,
+            static fn (): PublicUrlResolver => new PublicUrlResolver(
+                (string) ($settings['public_base_url'] ?? '')
+            )
+        );
+        $container->set(
+            AgentCredentialIssuer::class,
+            static fn (Container $container): AgentCredentialIssuer =>
+                new AgentCredentialIssuer($container->get(PDO::class))
+        );
+        $container->set(
+            AgentInstallerService::class,
+            static fn (): AgentInstallerService => new AgentInstallerService()
+        );
 
         $applicationKey = base64_decode((string) $settings['app_key'], true);
         if ($applicationKey === false || strlen($applicationKey) !== 32) {
@@ -130,7 +175,9 @@ final class Bootstrap
         $container->set(
             ServerController::class,
             static fn (Container $container): ServerController => new ServerController(
-                $container->get(Twig::class)
+                $container->get(PDO::class),
+                $container->get(Twig::class),
+                $container->get(AgentCredentialIssuer::class)
             )
         );
         $container->set(
@@ -153,10 +200,23 @@ final class Bootstrap
                 $container->get(Twig::class)
             )
         );
-        $container->set(AgentController::class, static fn (): AgentController => new AgentController());
+        $container->set(
+            AgentController::class,
+            static fn (Container $container): AgentController => new AgentController(
+                $container->get(PDO::class),
+                $container->get(PublicUrlResolver::class),
+                $container->get(AgentCredentialIssuer::class),
+                $container->get(AgentInstallerService::class),
+                dirname(__DIR__, 2)
+            )
+        );
         $container->set(
             MetricsController::class,
-            static fn (): MetricsController => new MetricsController()
+            static fn (Container $container): MetricsController => new MetricsController(
+                $container->get(PDO::class),
+                $container->get(MetricsValidator::class),
+                $container->get(MetricsIngestionService::class)
+            )
         );
         $container->set(
             MetricsApiController::class,
