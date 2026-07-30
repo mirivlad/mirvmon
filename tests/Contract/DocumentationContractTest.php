@@ -8,6 +8,24 @@ use PHPUnit\Framework\TestCase;
 
 final class DocumentationContractTest extends TestCase
 {
+    public function testRepositoryDeclaresTheMITLicense(): void
+    {
+        $root = dirname(__DIR__, 2);
+        self::assertFileExists($root . '/LICENSE');
+
+        $license = (string) file_get_contents($root . '/LICENSE');
+        $composer = json_decode(
+            (string) file_get_contents($root . '/composer.json'),
+            true,
+            512,
+            JSON_THROW_ON_ERROR
+        );
+
+        self::assertStringContainsString('MIT License', $license);
+        self::assertStringContainsString('Copyright (c) 2026 MirvMon contributors', $license);
+        self::assertSame('MIT', $composer['license']);
+    }
+
     public function testReadmeDescribesTheCurrentRuntimeAndHasNoBootstrapCredentials(): void
     {
         $root = dirname(__DIR__, 2);

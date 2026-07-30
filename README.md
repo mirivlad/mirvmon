@@ -1,5 +1,7 @@
 # MirvMon
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 MirvMon — self-hosted система мониторинга серверов. Агенты сами отправляют
 метрики исходящими HTTPS-запросами, поэтому для наблюдаемых серверов не нужны
 входящие порты и белые IP-адреса.

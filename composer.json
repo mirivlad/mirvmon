@@ -1,7 +1,7 @@
 {
     "name": "mirivlad/monitoring-system",
     "description": "Система мониторинга серверов",
-    "license": "proprietary",
+    "license": "MIT",
     "type": "project",
     "require": {
         "php": "^8.5",
