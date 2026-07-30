@@ -10,7 +10,7 @@ MirvMon — self-hosted система мониторинга серверов. 
 - FrankenPHP в classic mode как основной HTTP runtime;
 - PostgreSQL 17 с TimescaleDB 2.28 для метрик и агрегатов;
 - Python-агент с `psutil`;
-- Bootstrap 5 и Chart.js 4.
+- локальные Bootstrap 5.3.8, Chart.js 4.5.1 и Font Awesome 7.3.1.
 
 Прикладной код использует PSR-интерфейсы и не обращается к API FrankenPHP или
 Caddy. При необходимости HTTP-слой можно запустить через nginx + PHP-FPM без
@@ -191,11 +191,19 @@ composer install
 composer test
 composer analyse
 composer audit
+npm ci
+npm run assets:sync
+npm audit
 PYTHONPATH=agent python3 -m unittest discover -s agent/tests
 ```
 
 Для schema integration tests требуется отдельная TimescaleDB. Переменные
 подключения описаны в тестовой документации и `.env.example`.
+
+Скомпилированные browser assets хранятся в `public/vendor`, поэтому production
+не зависит от npm или внешнего CDN. `package-lock.json` фиксирует build-time
+источник; после изменения frontend-зависимостей выполните `npm ci` и
+`npm run assets:sync`.
 
 ## Дополнительная документация
 

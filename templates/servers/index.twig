@@ -54,7 +54,9 @@
                                     </a>
                                     <form method="post" action="/servers/{{ server.id }}/delete" class="d-inline">
                                         {% include "partials/csrf.twig" %}
-                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Удалить" onclick="return confirm('Вы уверены, что хотите удалить этот сервер?');">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                title="Удалить"
+                                                data-confirm="Вы уверены, что хотите удалить этот сервер?">
                                             <i class="fas fa-trash"></i> <span class="d-none d-sm-inline">Удалить</span>
                                         </button>
                                     </form>

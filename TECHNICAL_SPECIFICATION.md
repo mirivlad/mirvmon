@@ -100,7 +100,13 @@ notifications. Запоздалый допустимый sample записыва
 - responsive layout работает от 390 px без обрезания значений;
 - status выражен текстом, цвет не является единственным сигналом;
 - доступны search/filter/sort и относительное время;
-- frontend не зависит от CDN.
+- frontend не зависит от CDN;
+- frontend-зависимости закреплены в `package-lock.json`, а production bundle
+  обслуживается из `public/vendor`;
+- inline scripts разрешаются только по уникальному CSP nonce; inline event
+  handlers и `script-src 'unsafe-inline'` не используются;
+- при старте нового image persistent Twig cache очищается до запуска web
+  runtime, поэтому redeploy не оставляет старые шаблоны.
 
 ## Хранение данных
 

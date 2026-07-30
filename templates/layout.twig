@@ -3,102 +3,142 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ title }} - Система мониторинга</title>
-    <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome 6 -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Favicon -->
+    <meta name="color-scheme" content="light">
+    <title>{{ title }} · MirvMon</title>
     <link rel="icon" type="image/png" href="/favicon.png">
-
+    <link rel="stylesheet" href="/vendor/bootstrap/bootstrap.min.css">
+    <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css">
+    <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
-    <div class="container-fluid">
-        {% if session.username %}
-        <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-            <div class="container">
-                <a class="navbar-brand" href="/">
-                    <i class="fas fa-server"></i> Система мониторинга
-                </a>
+    {% if session.username %}
+    <nav class="navbar navbar-expand-lg navbar-dark app-navbar">
+        <div class="container-xl">
+            <a class="navbar-brand app-brand" href="/" aria-label="MirvMon — дашборд">
+                <span class="app-brand-mark" aria-hidden="true">
+                    <i class="fas fa-wave-square"></i>
+                </span>
+                <span>MirvMon</span>
+            </a>
 
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
+            <button class="navbar-toggler" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#primaryNavigation"
+                    aria-controls="primaryNavigation" aria-expanded="false"
+                    aria-label="Открыть навигацию">
+                <span class="navbar-toggler-icon"></span>
+            </button>
 
-                <div class="collapse navbar-collapse" id="navbarNav">
-                    <ul class="navbar-nav me-auto">
-                        <li class="nav-item">
-                            <a class="nav-link" href="/"><i class="fas fa-tachometer-alt"></i> Дашборд</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/groups"><i class="fas fa-layer-group"></i> Группы серверов</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/servers"><i class="fas fa-server"></i> Серверы</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/alerts"><i class="fas fa-bell"></i> Аллерты</a>
-                        </li>
-                        {% if session.role == 'admin' %}
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown">
-                                <i class="fas fa-cog"></i> Администрирование
-                            </a>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="/admin/users"><i class="fas fa-users"></i> Пользователи</a></li>
-                                <li><a class="dropdown-item" href="/admin/notifications"><i class="fas fa-bell"></i> Уведомления</a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="/admin/defaults"><i class="fas fa-sliders-h"></i> Дефолтные параметры</a></li>
-                            </ul>
-                        </li>
-                        {% endif %}
-                    </ul>
+            <div class="collapse navbar-collapse" id="primaryNavigation">
+                <ul class="navbar-nav me-auto app-nav-links">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">
+                            <i class="fas fa-table-cells-large" aria-hidden="true"></i>
+                            Обзор
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/groups">
+                            <i class="fas fa-layer-group" aria-hidden="true"></i>
+                            Группы
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/servers">
+                            <i class="fas fa-server" aria-hidden="true"></i>
+                            Серверы
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/alerts">
+                            <i class="fas fa-bell" aria-hidden="true"></i>
+                            Алерты
+                        </a>
+                    </li>
+                    {% if session.role == 'admin' %}
+                    <li class="nav-item dropdown">
+                        <button class="nav-link dropdown-toggle app-nav-button"
+                                type="button" id="adminDropdown"
+                                data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-gear" aria-hidden="true"></i>
+                            Настройки
+                        </button>
+                        <ul class="dropdown-menu" aria-labelledby="adminDropdown">
+                            <li>
+                                <a class="dropdown-item" href="/admin/users">
+                                    <i class="fas fa-users" aria-hidden="true"></i>
+                                    Пользователи
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/admin/notifications">
+                                    <i class="fas fa-paper-plane" aria-hidden="true"></i>
+                                    Уведомления
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item" href="/admin/defaults">
+                                    <i class="fas fa-sliders" aria-hidden="true"></i>
+                                    Параметры
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                    {% endif %}
+                </ul>
 
-                    <ul class="navbar-nav">
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-user-circle"></i> {{ session.username|default('Гость') }}
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li>
-                                    <form method="post" action="/logout">
-                                        {% include "partials/csrf.twig" %}
-                                        <button type="submit" class="dropdown-item">
-                                            <i class="fas fa-sign-out-alt"></i> Выйти
-                                        </button>
-                                    </form>
-                                </li>
-                            </ul>
+                <div class="dropdown">
+                    <button class="btn app-user-button dropdown-toggle" type="button"
+                            data-bs-toggle="dropdown" aria-expanded="false">
+                        <span class="app-user-avatar" aria-hidden="true">
+                            {{ session.username|slice(0, 1)|upper }}
+                        </span>
+                        <span class="app-user-name">{{ session.username }}</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li>
+                            <form method="post" action="/logout">
+                                {% include "partials/csrf.twig" %}
+                                <button type="submit" class="dropdown-item">
+                                    <i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i>
+                                    Выйти
+                                </button>
+                            </form>
                         </li>
                     </ul>
                 </div>
             </div>
-        </nav>
+        </div>
+    </nav>
+    {% endif %}
+
+    <main class="container-xl app-main">
+        {% if session.flash_message is defined and session.flash_message %}
+        <div class="alert alert-{{ session.flash_type == "error" ? "danger" : (session.flash_type == "warning" ? "warning" : "success") }} alert-dismissible fade show mb-4"
+             role="alert">
+            {{ session.flash_message|nl2br }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"
+                    aria-label="Закрыть"></button>
+        </div>
         {% endif %}
 
-        <main class="container mt-4">
-{% if session.flash_message is defined and session.flash_message %}
-<div class="alert alert-{{ session.flash_type == "error" ? "danger" : (session.flash_type == "warning" ? "warning" : "success") }} alert-dismissible fade show mb-3" role="alert">
-    {{ session.flash_message|nl2br }}
-    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-</div>
-{% endif %}
+        {% block content %}{% endblock %}
+    </main>
 
-            {% block content %}{% endblock %}
-        </main>
+    {% if session.username %}
+    <footer class="app-footer">
+        <div class="container-xl">
+            <span>MirvMon</span>
+            <span aria-hidden="true">·</span>
+            <span>{{ 'now'|date('Y') }}</span>
+        </div>
+    </footer>
+    {% endif %}
 
-        {% if session.username %}
-        <footer class="footer mt-5 py-3 bg-light">
-            <div class="container text-center">
-                <span class="text-muted">&copy; {{ 'now'|date('Y') }} Система мониторинга серверов</span>
-            </div>
-        </footer>
-        {% endif %}
-    </div>
-
-    <!-- Bootstrap 5 JS Bundle with Popper -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
-    {% include 'partials/icon-picker-modal.twig' %}
+    <script src="/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="/js/app.js"></script>
+    {% if session.username %}
+        {% include 'partials/icon-picker-modal.twig' %}
+    {% endif %}
 </body>
 </html>

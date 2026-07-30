@@ -73,6 +73,18 @@ final class ComposeContractTest extends TestCase
         );
     }
 
+    public function testPersistentTwigCacheIsInvalidatedOnImageStart(): void
+    {
+        $entrypoint = (string) file_get_contents(
+            dirname(__DIR__, 2) . '/docker/entrypoint.sh'
+        );
+
+        self::assertStringContainsString(
+            'find "$twig_cache_directory" -mindepth 1 -delete',
+            $entrypoint
+        );
+    }
+
     private function serviceBlock(string $service): string
     {
         preg_match(

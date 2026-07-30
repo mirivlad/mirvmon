@@ -33,6 +33,7 @@ use Psr\Http\Message\ServerRequestInterface;
 use Slim\App;
 use Slim\Factory\AppFactory as SlimAppFactory;
 use Slim\Interfaces\RouteCollectorProxyInterface;
+use Slim\Psr7\Factory\StreamFactory;
 use Slim\Views\Twig;
 use Slim\Views\TwigMiddleware;
 
@@ -227,7 +228,7 @@ final class AppFactory
             (bool) $settings['app_debug'],
             ($settings['app_env'] ?? 'production') !== 'test'
         ));
-        $app->add(new SecurityHeadersMiddleware());
+        $app->add(new SecurityHeadersMiddleware(new StreamFactory()));
         $app->add(new RequestIdMiddleware());
         /** @var list<string> $trustedProxies */
         $trustedProxies = $settings['trusted_proxies'];

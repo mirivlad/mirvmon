@@ -53,6 +53,26 @@ final class TemplateSecurityContractTest extends TestCase
         }
     }
 
+    public function testExecutableInlineScriptsAreNoncedAndEventAttributesAreAbsent(): void
+    {
+        foreach (self::templateProvider() as [$path]) {
+            $template = (string) file_get_contents($path);
+            self::assertDoesNotMatchRegularExpression(
+                '/\son(?:click|change|submit|load|error)\s*=/i',
+                $template,
+                $path
+            );
+            preg_match_all('/<script(?![^>]*\bsrc=)([^>]*)>/i', $template, $scripts);
+            foreach ($scripts[1] as $attributes) {
+                self::assertStringContainsString(
+                    'nonce="__MIRVMON_CSP_NONCE__"',
+                    $attributes,
+                    $path
+                );
+            }
+        }
+    }
+
     /** @return iterable<string, array{string}> */
     public static function templateProvider(): iterable
     {

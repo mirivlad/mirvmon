@@ -87,4 +87,9 @@ done
 
 php /app/bin/migrate
 
+# The cache volume survives image upgrades. Compiled Twig templates must not.
+twig_cache_directory=/app/var/cache/twig
+mkdir -p "$twig_cache_directory"
+find "$twig_cache_directory" -mindepth 1 -delete
+
 exec "$@"

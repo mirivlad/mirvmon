@@ -55,6 +55,8 @@ public/index.php
 
 - HTML-ошибки и API-ошибки имеют стабильные форматы, детали исключений скрыты;
 - каждый ответ получает `X-Request-ID` и security headers;
+- executable inline scripts используют уникальный CSP nonce на каждый ответ;
+  event-handler attributes и `script-src 'unsafe-inline'` запрещены;
 - forwarded host/scheme принимаются только от доверенной сети;
 - session ID меняется после входа и первоначальной настройки;
 - cookies имеют `HttpOnly`, `SameSite=Lax`, а через HTTPS также `Secure`;
@@ -154,6 +156,12 @@ worker, что production-события.
   aggregate, более длинные — из daily aggregate;
 - ingestion и notification delivery разделены;
 - один `app` контейнер содержит web runtime и управляемые supervisor workers.
+
+Bootstrap, Font Awesome, Chart.js, Hammer.js и chart zoom plugin фиксируются
+через npm lockfile, но готовые bundles входят в image и обслуживаются самим
+приложением. Production-контейнер не содержит Node.js и не зависит от CDN.
+Persistent `/app/var` используется для runtime-state; Twig cache очищается
+entrypoint при старте нового контейнера, чтобы не переживать обновление image.
 
 `bin/benchmark-dashboard` воспроизводимо проверяет set-based query на 50 и
 1000 синтетических серверах. Все benchmark fixtures создаются в транзакции и

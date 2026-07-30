@@ -139,6 +139,10 @@ final class ServerStatusServiceTest extends TestCase
             'alerts_count' => 3,
             'warnings' => 2,
             'criticals' => 1,
+            'online_servers' => 1,
+            'warning_servers' => 0,
+            'critical_servers' => 1,
+            'offline_servers' => 1,
         ], $this->service->summary($servers, 4));
     }
 }

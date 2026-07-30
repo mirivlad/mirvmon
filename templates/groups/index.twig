@@ -46,7 +46,8 @@
                                     </a>
                                     <form method="post" action="/groups/{{ group.id }}/delete" class="d-inline">
                                         {% include "partials/csrf.twig" %}
-                                        <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Вы уверены, что хотите удалить эту группу?');">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                data-confirm="Вы уверены, что хотите удалить эту группу?">
                                             <i class="fas fa-trash"></i> <span class="d-none d-sm-inline">Удалить</span>
                                         </button>
                                     </form>

@@ -1,359 +1,247 @@
 {% extends "layout.twig" %}
 
+{% set status_labels = {
+    'online': 'В норме',
+    'warning': 'Внимание',
+    'critical': 'Критично',
+    'offline': 'Нет данных'
+} %}
+{% set status_icons = {
+    'online': 'fa-circle-check',
+    'warning': 'fa-triangle-exclamation',
+    'critical': 'fa-circle-exclamation',
+    'offline': 'fa-circle-xmark'
+} %}
+
 {% block content %}
-<div class="row mb-3">
-    <div class="col-12 d-flex justify-content-between align-items-center">
-        <h2 class="mb-0"><i class="fas fa-tachometer-alt"></i> Дашборд</h2>
-        <a href="/servers/create" class="btn btn-primary btn-sm">
-            <i class="fas fa-plus"></i> Добавить
-        </a>
+<header class="dashboard-heading">
+    <div>
+        <p class="page-eyebrow">Обзор инфраструктуры</p>
+        <h1>Состояние систем</h1>
+        <p class="page-subtitle">
+            Актуальные метрики, доступность и активные алерты в одном представлении.
+        </p>
     </div>
-</div>
+    <a href="/servers/create" class="btn btn-primary dashboard-add-button">
+        <i class="fas fa-plus" aria-hidden="true"></i>
+        Добавить сервер
+    </a>
+</header>
 
-<!-- Компактная статистика -->
-<div class="row mb-3">
-    <div class="col-6 col-md-3 mb-2">
-        <div class="card border-0 shadow-sm bg-primary text-white">
-            <div class="card-body py-2 px-3">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <small>Серверов</small>
-                        <h4 class="mb-0">{{ stats.total_servers }}</h4>
-                    </div>
-                    <i class="fas fa-server fa-2x opacity-50"></i>
-                </div>
-            </div>
+<section class="summary-grid" aria-label="Сводка состояния">
+    <article class="summary-card summary-card-total">
+        <span class="summary-icon" aria-hidden="true"><i class="fas fa-server"></i></span>
+        <div>
+            <span class="summary-label">Всего серверов</span>
+            <strong class="summary-value" data-summary="total">{{ stats.total_servers }}</strong>
         </div>
-    </div>
-    <div class="col-6 col-md-3 mb-2">
-        <div class="card border-0 shadow-sm bg-success text-white">
-            <div class="card-body py-2 px-3">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <small>Онлайн</small>
-                        <h4 class="mb-0">{{ stats.servers_with_metrics }}</h4>
-                    </div>
-                    <i class="fas fa-check-circle fa-2x opacity-50"></i>
-                </div>
-            </div>
+    </article>
+    <article class="summary-card summary-card-online">
+        <span class="summary-icon" aria-hidden="true"><i class="fas fa-circle-check"></i></span>
+        <div>
+            <span class="summary-label">В норме</span>
+            <strong class="summary-value" data-summary="online">{{ stats.online_servers }}</strong>
         </div>
-    </div>
-    <div class="col-6 col-md-3 mb-2">
-        <div class="card border-0 shadow-sm bg-warning text-dark">
-            <div class="card-body py-2 px-3">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <small>Предупреждения</small>
-                        <h4 class="mb-0">{{ stats.warnings }}</h4>
-                    </div>
-                    <i class="fas fa-exclamation-triangle fa-2x opacity-50"></i>
-                </div>
-            </div>
+    </article>
+    <article class="summary-card summary-card-warning">
+        <span class="summary-icon" aria-hidden="true"><i class="fas fa-triangle-exclamation"></i></span>
+        <div>
+            <span class="summary-label">Внимание</span>
+            <strong class="summary-value" data-summary="warning">{{ stats.warning_servers }}</strong>
         </div>
-    </div>
-    <div class="col-6 col-md-3 mb-2">
-        <div class="card border-0 shadow-sm bg-danger text-white">
-            <div class="card-body py-2 px-3">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <small>Критические</small>
-                        <h4 class="mb-0">{{ stats.criticals }}</h4>
-                    </div>
-                    <i class="fas fa-radiation fa-2x opacity-50"></i>
-                </div>
-            </div>
+    </article>
+    <article class="summary-card summary-card-critical">
+        <span class="summary-icon" aria-hidden="true"><i class="fas fa-circle-exclamation"></i></span>
+        <div>
+            <span class="summary-label">Критично</span>
+            <strong class="summary-value" data-summary="critical">{{ stats.critical_servers }}</strong>
         </div>
-    </div>
-</div>
+    </article>
+    <article class="summary-card summary-card-offline">
+        <span class="summary-icon" aria-hidden="true"><i class="fas fa-plug-circle-xmark"></i></span>
+        <div>
+            <span class="summary-label">Нет данных</span>
+            <strong class="summary-value" data-summary="offline">{{ stats.offline_servers }}</strong>
+        </div>
+    </article>
+</section>
 
-<!-- Серверы по группам -->
 {% if groups|length == 0 %}
-<div class="card">
-    <div class="card-body text-center py-5">
-        <i class="fas fa-server fa-4x text-muted mb-3"></i>
-        <h4>Серверы пока не добавлены</h4>
-        <a href="/servers/create" class="btn btn-primary">
-            <i class="fas fa-plus"></i> Добавить сервер
-        </a>
-    </div>
-</div>
+<section class="empty-state">
+    <span class="empty-state-icon" aria-hidden="true">
+        <i class="fas fa-server"></i>
+    </span>
+    <h2>Добавьте первый сервер</h2>
+    <p>MirvMon покажет состояние сразу после первого пакета метрик от агента.</p>
+    <a href="/servers/create" class="btn btn-primary">
+        <i class="fas fa-plus" aria-hidden="true"></i>
+        Добавить сервер
+    </a>
+</section>
 {% else %}
-{% for groupKey, group in groups %}
-{% set groupSlug = groupKey %}
-<div class="card mb-3 border-0 shadow-sm">
-    <div class="card-header text-white py-2 accordion-header" 
-         data-group="{{ groupSlug }}"
-         data-target="#group-{{ loop.index }}"
-         style="cursor: pointer; background-color: {{ group.color|default('#6c757d') }};">
-        <div class="d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">
-                <i class="fas {{ group.icon|default('fa-server')|replace({'fas ': ''}) }}"></i>
-                {{ group.name }}
-                <span class="badge bg-light text-dark ms-2">{{ group.servers|length }}</span>
-            </h5>
-            <i class="fas accordion-icon"></i>
-        </div>
+<section class="dashboard-toolbar" aria-label="Фильтры серверов">
+    <div class="dashboard-search">
+        <label class="visually-hidden" for="dashboard-search">Поиск сервера</label>
+        <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+        <input id="dashboard-search" type="search" class="form-control"
+               placeholder="Найти сервер…" autocomplete="off">
     </div>
-    <div id="group-{{ loop.index }}" class="collapse" data-group="{{ groupSlug }}">
-        <div class="card-body p-2">
-            <div class="row g-2">
+    <div>
+        <label class="visually-hidden" for="dashboard-status-filter">Статус</label>
+        <select id="dashboard-status-filter" class="form-select">
+            <option value="all">Все статусы</option>
+            <option value="online">В норме</option>
+            <option value="warning">Внимание</option>
+            <option value="critical">Критично</option>
+            <option value="offline">Нет данных</option>
+        </select>
+    </div>
+    <div>
+        <label class="visually-hidden" for="dashboard-sort">Сортировка</label>
+        <select id="dashboard-sort" class="form-select">
+            <option value="name">По имени</option>
+            <option value="status">По статусу</option>
+            <option value="updated">По обновлению</option>
+        </select>
+    </div>
+    <span class="dashboard-result-count" id="dashboard-result-count">
+        Показано: {{ stats.total_servers }}
+    </span>
+</section>
+
+<div id="dashboard-groups">
+    {% for groupKey, group in groups %}
+    {% set panelId = 'dashboard-group-' ~ loop.index %}
+    <section class="dashboard-group" data-dashboard-group>
+        <button type="button" class="dashboard-group-header"
+                data-group-toggle="{{ groupKey }}"
+                aria-expanded="true" aria-controls="{{ panelId }}">
+            <span class="dashboard-group-title">
+                <span class="dashboard-group-icon" aria-hidden="true">
+                    <i class="fas {{ group.icon|default('fa-server')|replace({'fas ': ''}) }}"></i>
+                </span>
+                <span>{{ group.name }}</span>
+            </span>
+            <span class="dashboard-group-meta">
+                <span class="dashboard-group-count" data-group-count>
+                    {{ group.servers|length }}
+                </span>
+                <i class="fas fa-chevron-up dashboard-group-chevron" aria-hidden="true"></i>
+            </span>
+        </button>
+
+        <div id="{{ panelId }}" class="dashboard-group-panel">
+            <div class="server-grid" data-server-grid>
                 {% for server in group.servers %}
-                <div class="col-6 col-lg-4 col-xl-3">
-                    <a href="/servers/{{ server.id }}" class="text-decoration-none">
-                        <div id="server-card-{{ server.id }}" class="server-card compact p-2 rounded
-                            {% if server.status == 'offline' or server.status == 'critical' %}border-danger{% elseif server.status == 'warning' %}border-warning{% else %}border-success{% endif %}">
-                            <div class="d-flex justify-content-between align-items-start mb-1">
-                                <div class="d-flex align-items-center">
-                                    {% if server.status == 'online' %}
-                                        <span id="status-dot-{{ server.id }}" class="status-dot bg-success me-2"></span>
-                                    {% elseif server.status == 'warning' %}
-                                        <span id="status-dot-{{ server.id }}" class="status-dot bg-warning me-2"></span>
-                                    {% elseif server.status == 'critical' %}
-                                        <span id="status-dot-{{ server.id }}" class="status-dot bg-danger me-2"></span>
-                                    {% else %}
-                                        <span id="status-dot-{{ server.id }}" class="status-dot bg-danger me-2"></span>
-                                    {% endif %}
-                                    <strong class="server-name">{{ server.name }}</strong>
+                {% set disk_metric = server.latest_metrics['disk_used_root'] ?? server.latest_metrics['disk_used'] ?? null %}
+                <article class="server-grid-item"
+                         data-server-item
+                         data-server-id="{{ server.id }}"
+                         data-server-name="{{ server.name|lower }}"
+                         data-server-status="{{ server.status }}"
+                         data-last-update="{{ server.last_metrics_at ? server.last_metrics_at|date('U') : 0 }}">
+                    <a href="/servers/{{ server.id }}"
+                       class="server-card server-status-{{ server.status }}"
+                       id="server-card-{{ server.id }}">
+                        <div class="server-card-header">
+                            <div class="server-identity">
+                                <span class="server-status-icon" aria-hidden="true">
+                                    <i id="status-icon-{{ server.id }}"
+                                       class="fas {{ status_icons[server.status] }}"></i>
+                                </span>
+                                <div class="server-title-wrap">
+                                    <h3 class="server-name" title="{{ server.name }}">
+                                        {{ server.name }}
+                                    </h3>
+                                    <span class="server-status-label"
+                                          id="status-label-{{ server.id }}">
+                                        {{ status_labels[server.status] }}
+                                    </span>
                                 </div>
-                                <span id="alert-count-{{ server.id }}" class="badge bg-danger badge-sm{% if server.active_alerts == 0 %} d-none{% endif %}">{{ server.active_alerts }}</span>
                             </div>
+                            <span id="alert-count-{{ server.id }}"
+                                  class="server-alert-count{% if server.active_alerts == 0 %} d-none{% endif %}">
+                                <i class="fas fa-bell" aria-hidden="true"></i>
+                                <span>{{ server.active_alerts }}</span>
+                                <span class="visually-hidden">активных алертов</span>
+                            </span>
+                        </div>
 
-                            <!-- Метрики с иконками -->
-                            <div class="compact-metrics">
-                                {% if server.latest_metrics['cpu_load'] is defined %}
-                                {% set cpu_val = server.latest_metrics['cpu_load'].value %}
-                                {% set cpu_t = server.thresholds['cpu_load']|default(null) %}
-                                {% if cpu_t %}
-                                    {% set cpu_color_icon = cpu_val >= cpu_t.critical ? 'text-danger' : (cpu_val >= cpu_t.warning ? 'text-warning' : 'text-success') %}
-                                {% else %}
-                                    {% set cpu_color_icon = cpu_val > 80 ? 'text-danger' : (cpu_val > 60 ? 'text-warning' : 'text-success') %}
-                                {% endif %}
-                                <span id="cpu-icon-{{ server.id }}" class="metric-icon {{ cpu_color_icon }}" title="CPU">
-                                    <i class="fas fa-microchip"></i>
-                                </span>
-                                <span id="cpu-val-{{ server.id }}" class="metric-val {{ cpu_color_icon }}">{{ cpu_val }}%</span>
-                                {% endif %}
-
-                                {% if server.latest_metrics['ram_used'] is defined %}
-                                {% set ram_val = server.latest_metrics['ram_used'].value %}
-                                {% set ram_t = server.thresholds['ram_used']|default(null) %}
-                                {% if ram_t %}
-                                    {% set ram_color_icon = ram_val >= ram_t.critical ? 'text-danger' : (ram_val >= ram_t.warning ? 'text-warning' : 'text-success') %}
-                                {% else %}
-                                    {% set ram_color_icon = ram_val > 80 ? 'text-danger' : (ram_val > 60 ? 'text-warning' : 'text-success') %}
-                                {% endif %}
-                                <span id="ram-icon-{{ server.id }}" class="metric-icon {{ ram_color_icon }}" title="RAM">
-                                    <i class="fas fa-memory"></i>
-                                </span>
-                                <span id="ram-val-{{ server.id }}" class="metric-val {{ ram_color_icon }}">{{ ram_val }}%</span>
-                                {% endif %}
-
-                                {% set disk_metric = server.latest_metrics['disk_used_root'] ?? server.latest_metrics['disk_used'] ?? null %}
-                                {% if disk_metric is not null %}
-                                {% set disk_val = disk_metric.value %}
-                                {% set disk_t = server.thresholds['disk_used_root']|default(null) %}
-                                {% if disk_t %}
-                                    {% set disk_color_icon = disk_val >= disk_t.critical ? 'text-danger' : (disk_val >= disk_t.warning ? 'text-warning' : 'text-success') %}
-                                {% else %}
-                                    {% set disk_color_icon = disk_val > 90 ? 'text-danger' : (disk_val > 75 ? 'text-warning' : 'text-success') %}
-                                {% endif %}
-                                <span id="disk-icon-{{ server.id }}" class="metric-icon {{ disk_color_icon }}" title="Disk">
-                                    <i class="fas fa-hdd"></i>
-                                </span>
-                                <span id="disk-val-{{ server.id }}" class="metric-val {{ disk_color_icon }}">{{ disk_val }}%</span>
-                                {% endif %}
+                        <dl class="server-metrics">
+                            <div class="server-metric">
+                                <dt>CPU</dt>
+                                <dd id="cpu-val-{{ server.id }}">
+                                    {% if server.latest_metrics['cpu_load'] is defined %}
+                                        {{ server.latest_metrics['cpu_load'].value|round(1) }}%
+                                    {% else %}—{% endif %}
+                                </dd>
                             </div>
+                            <div class="server-metric">
+                                <dt>RAM</dt>
+                                <dd id="ram-val-{{ server.id }}">
+                                    {% if server.latest_metrics['ram_used'] is defined %}
+                                        {{ server.latest_metrics['ram_used'].value|round(1) }}%
+                                    {% else %}—{% endif %}
+                                </dd>
+                            </div>
+                            <div class="server-metric">
+                                <dt>Диск</dt>
+                                <dd id="disk-val-{{ server.id }}">
+                                    {% if disk_metric is not null %}
+                                        {{ disk_metric.value|round(1) }}%
+                                    {% else %}—{% endif %}
+                                </dd>
+                            </div>
+                        </dl>
 
+                        <div class="server-card-footer">
                             {% if server.latest_metrics['uptime'] is defined %}
-                            <div class="uptime-mini text-muted small mt-1">
-                                <i class="fas fa-clock"></i>
+                            <span class="server-uptime">
+                                <i class="fas fa-clock" aria-hidden="true"></i>
                                 {% set uptime_sec = server.latest_metrics['uptime'].value %}
                                 {% if uptime_sec >= 86400 %}
-                                    {{ (uptime_sec / 86400)|round(0, 'floor') }}д {{ ((uptime_sec % 86400) / 3600)|round(0, 'floor') }}ч
+                                    {{ (uptime_sec / 86400)|round(0, 'floor') }} д
+                                    {{ ((uptime_sec % 86400) / 3600)|round(0, 'floor') }} ч
                                 {% elseif uptime_sec >= 3600 %}
-                                    {{ (uptime_sec / 3600)|round(0, 'floor') }}ч {{ ((uptime_sec % 3600) / 60)|round(0, 'floor') }}м
+                                    {{ (uptime_sec / 3600)|round(0, 'floor') }} ч
+                                    {{ ((uptime_sec % 3600) / 60)|round(0, 'floor') }} мин
                                 {% else %}
-                                    {{ (uptime_sec / 60)|round(0, 'floor') }}м
+                                    {{ (uptime_sec / 60)|round(0, 'floor') }} мин
                                 {% endif %}
-                            </div>
+                            </span>
+                            {% else %}
+                            <span class="server-uptime">Uptime: —</span>
                             {% endif %}
-
-                            <!-- Время обновления (для AJAX) -->
-                            <div class="text-muted small updated-at" id="updated-at-{{ server.id }}">
-                                {% if server.last_metrics_at %}
-                                    {{ server.last_metrics_at|date('H:i') }}
+                            <time class="server-updated-at"
+                                  id="updated-at-{{ server.id }}"
+                                  {% if server.last_metrics_at %}
+                                  datetime="{{ server.last_metrics_at|date('c') }}"
+                                  {% endif %}>
+                                {% if server.seconds_since_update is not null %}
+                                    {{ server.seconds_since_update }} сек. назад
                                 {% else %}
-                                    —
+                                    обновлений нет
                                 {% endif %}
-                            </div>
+                            </time>
                         </div>
                     </a>
-                </div>
+                </article>
                 {% endfor %}
             </div>
         </div>
-    </div>
+    </section>
+    {% endfor %}
 </div>
-{% endfor %}
+
+<section id="dashboard-no-results" class="empty-state empty-state-compact" hidden>
+    <span class="empty-state-icon" aria-hidden="true">
+        <i class="fas fa-magnifying-glass"></i>
+    </span>
+    <h2>Серверы не найдены</h2>
+    <p>Измените строку поиска или фильтр статуса.</p>
+</section>
+
+<p class="visually-hidden" id="dashboard-live-region" aria-live="polite"></p>
+<script src="/js/dashboard.js" defer></script>
 {% endif %}
-
-<!-- AJAX автообновление + Accordion состояние -->
-<script>
-(function() {
-    const COOKIE_NAME = 'dashboard_accordion';
-
-    function getState() {
-        try {
-            const match = document.cookie.match(new RegExp('(^| )' + COOKIE_NAME + '=([^;]+)'));
-            return match ? JSON.parse(decodeURIComponent(match[2])) : {};
-        } catch(e) { return {}; }
-    }
-
-    function setState(state) {
-        document.cookie = COOKIE_NAME + '=' + encodeURIComponent(JSON.stringify(state)) + '; path=/; max-age=' + (30*24*60*60);
-    }
-
-    function toggleAccordion(header, target, icon) {
-        const groupId = header.dataset.group;
-        const isOpen = target.classList.contains('show');
-        
-        if (isOpen) {
-            target.classList.remove('show');
-            icon.className = 'fas fa-chevron-down';
-            var state = getState();
-            state[groupId] = 'collapsed';
-            setState(state);
-        } else {
-            target.classList.add('show');
-            icon.className = 'fas fa-chevron-up';
-            var state = getState();
-            state[groupId] = 'expanded';
-            setState(state);
-        }
-    }
-
-    document.addEventListener('DOMContentLoaded', function() {
-        var savedState = getState();
-
-        document.querySelectorAll('.accordion-header').forEach(function(header) {
-            var icon = header.querySelector('.accordion-icon');
-            var targetId = header.dataset.target;
-            var target = document.querySelector(targetId);
-            var groupId = header.dataset.group;
-
-            if (target && icon) {
-                var isCollapsed = savedState[groupId] === 'collapsed';
-                
-                if (isCollapsed) {
-                    target.classList.remove('show');
-                    icon.className = 'fas fa-chevron-down';
-                } else {
-                    target.classList.add('show');
-                    icon.className = 'fas fa-chevron-up';
-                }
-
-                header.addEventListener('click', function() {
-                    toggleAccordion(header, target, icon);
-                });
-            }
-        });
-
-        // AJAX
-        function updateDashboard() {
-            fetch('/api/dashboard/stats')
-                .then(function(r) { return r.json(); })
-                .then(function(data) {
-                    data.forEach(function(server) {
-                        var cpuVal = document.getElementById('cpu-val-' + server.id);
-                        if (cpuVal && server.metrics.cpu_load) cpuVal.textContent = server.metrics.cpu_load.value + '%';
-                        var ramVal = document.getElementById('ram-val-' + server.id);
-                        if (ramVal && server.metrics.ram_used) ramVal.textContent = server.metrics.ram_used.value + '%';
-                        var diskVal = document.getElementById('disk-val-' + server.id);
-                        if (diskVal && server.metrics.disk) diskVal.textContent = server.metrics.disk.value + '%';
-                        var updatedAt = document.getElementById('updated-at-' + server.id);
-                        if (updatedAt && server.last_metrics_at) {
-                            updatedAt.textContent = new Date(server.last_metrics_at).toLocaleTimeString([], {
-                                hour: '2-digit',
-                                minute: '2-digit'
-                            });
-                        }
-                        var card = document.getElementById('server-card-' + server.id);
-                        var statusDot = document.getElementById('status-dot-' + server.id);
-                        var danger = server.status === 'offline' || server.status === 'critical';
-                        if (card) {
-                            card.classList.remove('border-success', 'border-warning', 'border-danger');
-                            card.classList.add(danger ? 'border-danger' : (server.status === 'warning' ? 'border-warning' : 'border-success'));
-                        }
-                        if (statusDot) {
-                            statusDot.classList.remove('bg-success', 'bg-warning', 'bg-danger');
-                            statusDot.classList.add(danger ? 'bg-danger' : (server.status === 'warning' ? 'bg-warning' : 'bg-success'));
-                        }
-                        var alertCount = document.getElementById('alert-count-' + server.id);
-                        if (alertCount) {
-                            alertCount.textContent = server.active_alerts;
-                            alertCount.classList.toggle('d-none', server.active_alerts === 0);
-                        }
-                    });
-                });
-        }
-
-        setInterval(updateDashboard, 30000);
-    });
-})();
-</script>
-
-<style>
-    .status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        display: inline-block;
-    }
-    .server-card.compact {
-        background: #f8f9fa;
-        border-left: 4px solid #28a745;
-        transition: all 0.2s;
-    }
-    .server-card.compact:hover {
-        background: #e9ecef;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-    .server-card.border-warning { border-left-color: #ffc107 !important; }
-    .server-card.border-danger { border-left-color: #dc3545 !important; }
-    .server-name {
-        font-size: 0.9rem;
-        max-width: 120px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .compact-metrics {
-        display: flex;
-        gap: 6px;
-        font-size: 0.8rem;
-        align-items: center;
-    }
-    .metric-icon {
-        font-size: 0.9rem;
-    }
-    .metric-val {
-        font-weight: 600;
-        min-width: 35px;
-    }
-    .metric-icon.text-danger, .metric-val.text-danger { color: #dc3545 !important; }
-    .metric-icon.text-warning, .metric-val.text-warning { color: #ffc107 !important; }
-    .metric-icon.text-success, .metric-val.text-success { color: #28a745 !important; }
-    .badge-sm {
-        font-size: 0.65rem;
-        padding: 0.15em 0.4em;
-    }
-    .uptime-mini i {
-        font-size: 0.7rem;
-    }
-    .updated-at {
-        font-size: 0.65rem;
-        margin-top: 2px;
-    }
-</style>
 {% endblock %}

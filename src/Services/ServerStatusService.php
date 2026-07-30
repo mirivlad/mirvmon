@@ -69,7 +69,11 @@ final class ServerStatusService
      *     total_groups: int,
      *     alerts_count: int,
      *     warnings: int,
-     *     criticals: int
+     *     criticals: int,
+     *     online_servers: int,
+     *     warning_servers: int,
+     *     critical_servers: int,
+     *     offline_servers: int
      * }
      */
     public function summary(array $servers, int $totalGroups): array
@@ -78,10 +82,20 @@ final class ServerStatusService
         $alerts = 0;
         $warnings = 0;
         $criticals = 0;
+        $statusCounts = [
+            'online' => 0,
+            'warning' => 0,
+            'critical' => 0,
+            'offline' => 0,
+        ];
 
         foreach ($servers as $server) {
-            if (($server['status'] ?? 'offline') !== 'offline') {
+            $serverStatus = (string) ($server['status'] ?? 'offline');
+            if ($serverStatus !== 'offline') {
                 $online++;
+            }
+            if (isset($statusCounts[$serverStatus])) {
+                $statusCounts[$serverStatus]++;
             }
             $alerts += (int) ($server['active_alerts'] ?? 0);
             $warnings += (int) ($server['warning_alerts'] ?? 0);
@@ -95,6 +109,10 @@ final class ServerStatusService
             'alerts_count' => $alerts,
             'warnings' => $warnings,
             'criticals' => $criticals,
+            'online_servers' => $statusCounts['online'],
+            'warning_servers' => $statusCounts['warning'],
+            'critical_servers' => $statusCounts['critical'],
+            'offline_servers' => $statusCounts['offline'],
         ];
     }
 

@@ -5,7 +5,8 @@
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h2><i class="fas fa-users-cog"></i> Управление пользователями</h2>
-            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#userModal" onclick="openCreateModal()">
+            <button class="btn btn-primary" data-bs-toggle="modal"
+                    data-bs-target="#userModal" data-user-create>
                 <i class="fas fa-plus"></i> Добавить пользователя
             </button>
         </div>
@@ -51,15 +52,21 @@
                                 <td>{{ user.email_for_alerts|default('-') }}</td>
                                 <td>{{ user.created_at|date('d.m.Y H:i') }}</td>
                                 <td>
-                                    <button class="btn btn-sm btn-outline-primary" 
+                                    <button class="btn btn-sm btn-outline-primary"
                                             data-bs-toggle="modal" data-bs-target="#userModal"
-                                            onclick="openEditModal({{ user.id }}, '{{ user.username }}', '{{ user.email }}', '{{ user.role }}', '{{ user.telegram_chat_id }}', '{{ user.email_for_alerts }}')">
+                                            data-user-edit
+                                            data-user-id="{{ user.id }}"
+                                            data-username="{{ user.username }}"
+                                            data-email="{{ user.email|default('') }}"
+                                            data-role="{{ user.role }}"
+                                            data-telegram-chat-id="{{ user.telegram_chat_id|default('') }}"
+                                            data-email-for-alerts="{{ user.email_for_alerts|default('') }}">
                                         <i class="fas fa-edit"></i>
                                     </button>
                                     <form method="post" action="/admin/users/{{ user.id }}/delete" class="d-inline">
                                         {% include "partials/csrf.twig" %}
                                         <button type="submit" class="btn btn-sm btn-outline-danger"
-                                                onclick="return confirm('Удалить пользователя {{ user.username }}?')">
+                                                data-confirm="Удалить пользователя {{ user.username }}?">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </form>
@@ -143,7 +150,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="__MIRVMON_CSP_NONCE__">
 function openCreateModal() {
     document.getElementById('modalTitle').textContent = 'Добавить пользователя';
     document.getElementById('user_id').value = '';
@@ -172,6 +179,23 @@ function openEditModal(id, username, email, role, telegramChatId, emailForAlerts
     document.getElementById('email_for_alerts').value = emailForAlerts === '' ? '' : emailForAlerts;
     document.getElementById('userForm').action = '/admin/users/save';
 }
+
+const createUserButton = document.querySelector('[data-user-create]');
+if (createUserButton) {
+    createUserButton.addEventListener('click', openCreateModal);
+}
+document.querySelectorAll('[data-user-edit]').forEach(function(button) {
+    button.addEventListener('click', function() {
+        openEditModal(
+            button.dataset.userId,
+            button.dataset.username,
+            button.dataset.email,
+            button.dataset.role,
+            button.dataset.telegramChatId,
+            button.dataset.emailForAlerts
+        );
+    });
+});
 </script>
 
 {% endblock %}

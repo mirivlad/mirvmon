@@ -72,7 +72,8 @@
                                             <button type="submit" class="btn btn-sm btn-outline-secondary">Применить</button>
                                         </div>
                                         <div class="col-auto">
-                                            <button type="button" class="btn btn-sm btn-outline-dark" onclick="resetAllZoom()">Сбросить зум</button>
+                                            <button type="button" class="btn btn-sm btn-outline-dark"
+                                                    id="reset-all-zoom">Сбросить зум</button>
                                         </div>
                                     </form>
                                 </div>
@@ -351,7 +352,8 @@
                                                         </div>
                                                     </div>
                                                     <div class="col-12 text-center mt-3">
-                                                        <button type="button" class="btn btn-outline-primary" onclick="requestServices()">
+                                                        <button type="button" class="btn btn-outline-primary"
+                                                                id="request-services">
                                                             <i class="fas fa-download"></i> Запросить список сервисов
                                                         </button>
                                                     </div>
@@ -452,10 +454,10 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
-<script src="/chartjs-plugin-zoom.min.js"></script>
-<script>
+<script src="/vendor/chart.js/chart.umd.js"></script>
+<script src="/vendor/hammerjs/hammer.min.js"></script>
+<script src="/vendor/chartjs-plugin-zoom/chartjs-plugin-zoom.min.js"></script>
+<script nonce="__MIRVMON_CSP_NONCE__">
 const managedCharts = [];
 
 function requestServices() {
@@ -757,6 +759,15 @@ function resetAllZoom() {
             chart.resetZoom();
         }
     });
+}
+
+const resetZoomButton = document.getElementById('reset-all-zoom');
+if (resetZoomButton) {
+    resetZoomButton.addEventListener('click', resetAllZoom);
+}
+const requestServicesButton = document.getElementById('request-services');
+if (requestServicesButton) {
+    requestServicesButton.addEventListener('click', requestServices);
 }
 </script>
 {% endblock %}

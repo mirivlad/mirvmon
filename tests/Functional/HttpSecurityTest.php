@@ -84,6 +84,49 @@ final class HttpSecurityTest extends TestCase
         self::assertStringNotContainsString('RuntimeException', (string) $response->getBody());
     }
 
+    public function testInlineScriptsUsePerResponseCspNonce(): void
+    {
+        $this->app->get('/_nonce-test', static function (
+            \Psr\Http\Message\ServerRequestInterface $request,
+            \Psr\Http\Message\ResponseInterface $response
+        ): \Psr\Http\Message\ResponseInterface {
+            $response->getBody()->write(
+                '<script nonce="__MIRVMON_CSP_NONCE__">window.test = true;</script>'
+            );
+
+            return $response;
+        });
+
+        $response = $this->app->handle($this->request('GET', '/_nonce-test'));
+        $policy = $response->getHeaderLine('Content-Security-Policy');
+        $body = (string) $response->getBody();
+
+        self::assertMatchesRegularExpression(
+            "/script-src 'self' 'nonce-[A-Za-z0-9+\\/=]+'/",
+            $policy
+        );
+        self::assertStringNotContainsString(
+            "script-src 'self' 'unsafe-inline'",
+            $policy
+        );
+        self::assertStringNotContainsString('__MIRVMON_CSP_NONCE__', $body);
+        self::assertMatchesRegularExpression(
+            '/<script nonce="[A-Za-z0-9+\\/=]+">/',
+            $body
+        );
+
+        $secondResponse = $this->app->handle($this->request('GET', '/_nonce-test'));
+        preg_match("/script-src 'self' 'nonce-([^']+)'/", $policy, $firstNonce);
+        preg_match(
+            "/script-src 'self' 'nonce-([^']+)'/",
+            $secondResponse->getHeaderLine('Content-Security-Policy'),
+            $secondNonce
+        );
+        self::assertArrayHasKey(1, $firstNonce);
+        self::assertArrayHasKey(1, $secondNonce);
+        self::assertNotSame($firstNonce[1], $secondNonce[1]);
+    }
+
     public function testFirstRunRedirectsToTokenProtectedSetup(): void
     {
         $login = $this->app->handle($this->request('GET', '/login'));

@@ -118,7 +118,10 @@ final class DashboardReadModelTest extends TestCase
         $dashboardHtml = (string) $dashboard->getBody();
 
         self::assertStringContainsString('read-model-server', $dashboardHtml);
-        self::assertStringContainsString('>40%</span>', $dashboardHtml);
+        self::assertMatchesRegularExpression(
+            '/id="cpu-val-\d+">\s*40%\s*<\/dd>/',
+            $dashboardHtml
+        );
 
         $detail = (new ServerDetailController($twig, $servers, $metrics))->show(
             $requestFactory->createServerRequest(

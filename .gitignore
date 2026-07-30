@@ -1,4 +1,4 @@
-vendor/
+/vendor/
 node_modules/
 *.log
 .env
@@ -8,3 +8,6 @@ var/phpstan/
 coverage/
 __pycache__/
 *.py[cod]
+.playwright-mcp/
+playwright-report/
+test-results/
