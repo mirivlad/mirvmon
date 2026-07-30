@@ -26,6 +26,29 @@ final class DocumentationContractTest extends TestCase
         self::assertSame('MIT', $composer['license']);
     }
 
+    public function testReadmeReferencesCompleteLocalScreenshotGallery(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $readme = (string) file_get_contents($root . '/README.md');
+
+        self::assertMatchesRegularExpression('/## Интерфейс\n\n.*?(?=\n## |\z)/s', $readme);
+
+        foreach (['dashboard', 'server-detail', 'groups', 'notification-settings'] as $name) {
+            $relativePath = 'docs/screenshots/' . $name . '.webp';
+            $imagePath = $root . '/' . $relativePath;
+
+            self::assertFileExists($imagePath);
+
+            $image = getimagesize($imagePath);
+            self::assertNotFalse($image);
+            self::assertSame(IMAGETYPE_WEBP, $image[2]);
+            self::assertGreaterThan(0, $image[0]);
+            self::assertGreaterThan(0, $image[1]);
+            self::assertStringContainsString('href="' . $relativePath . '"', $readme);
+            self::assertStringContainsString('src="' . $relativePath . '"', $readme);
+        }
+    }
+
     public function testReadmeDescribesTheCurrentRuntimeAndHasNoBootstrapCredentials(): void
     {
         $root = dirname(__DIR__, 2);

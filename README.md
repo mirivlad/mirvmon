@@ -38,6 +38,17 @@ Production stack состоит ровно из двух контейнеров:
 Dashboard читает отдельный компактный `current_metric_values`, поэтому его
 время ответа не растёт вместе с 60-дневной raw-историей.
 
+## Интерфейс
+
+<p align="center">
+  <a href="docs/screenshots/dashboard.webp"><img src="docs/screenshots/dashboard.webp" alt="Дашборд MirvMon с состоянием серверов" width="49%"></a>
+  <a href="docs/screenshots/server-detail.webp"><img src="docs/screenshots/server-detail.webp" alt="Карточка сервера с графиками метрик" width="49%"></a>
+</p>
+<p align="center">
+  <a href="docs/screenshots/groups.webp"><img src="docs/screenshots/groups.webp" alt="Управление группами серверов" width="49%"></a>
+  <a href="docs/screenshots/notification-settings.webp"><img src="docs/screenshots/notification-settings.webp" alt="Настройки SMTP, Telegram и proxy" width="49%"></a>
+</p>
+
 ## Запуск через Portainer
 
 1. Создайте Docker Standalone stack из Git-репозитория.
