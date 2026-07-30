@@ -19,11 +19,10 @@
 3. reference: release tag для production;
 4. environment variables: значения из `docker/.env.example`.
 
-Релизный Git tag `vX.Y.Z` публикует image
-`ghcr.io/mirivlad/mirvmon:X.Y.Z`. Для Portainer используйте один и тот же
-immutable release tag в reference репозитория и `MIRVMON_IMAGE`. После первой
-публикации сделайте GHCR package публичным либо настройте registry credentials
-в Portainer.
+Git tag `vX.Y.Z` соответствует Docker image tag `X.Y.Z`.
+Например, repository reference `v0.1.0` использует
+`MIRVMON_IMAGE=ghcr.io/mirivlad/mirvmon:0.1.0`. После первой публикации
+сделайте GHCR package публичным либо настройте registry credentials в Portainer.
 
 Сгенерируйте независимые секреты:
 

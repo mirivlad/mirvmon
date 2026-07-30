@@ -77,4 +77,24 @@ final class DocumentationContractTest extends TestCase
         self::assertStringNotContainsString('vendor/bin/phinx', $readme);
         self::assertStringNotContainsString('mysqldump', $readme);
     }
+
+    public function testReleaseDocumentationMapsGitAndDockerTagsExplicitly(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $install = (string) file_get_contents($root . '/INSTALL.md');
+        $dockerReadme = (string) file_get_contents($root . '/docker/README.md');
+
+        self::assertStringContainsString(
+            'Git tag `vX.Y.Z` соответствует Docker image tag `X.Y.Z`.',
+            $install
+        );
+        self::assertStringContainsString(
+            '`v0.1.0` requires `MIRVMON_IMAGE=ghcr.io/mirivlad/mirvmon:0.1.0`.',
+            $dockerReadme
+        );
+        self::assertStringNotContainsString(
+            'same immutable release tag as the repository reference',
+            $dockerReadme
+        );
+    }
 }

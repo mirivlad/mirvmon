@@ -31,9 +31,10 @@ After the first start, open `/setup`, enter `SETUP_TOKEN`, and create the first
 administrator. MirvMon never seeds a default account or password. Once any user
 exists, `/setup` no longer permits account creation.
 
-For production, set `MIRVMON_IMAGE` to the same immutable release tag as the
-repository reference. Keep the named volumes when redeploying. Do not enable a
-published database port.
+For production, Git reference `vX.Y.Z` maps to Docker image tag `X.Y.Z`.
+For example, `v0.1.0` requires `MIRVMON_IMAGE=ghcr.io/mirivlad/mirvmon:0.1.0`.
+Keep the named volumes when redeploying. Do not enable a published database
+port.
 
 Pushing a `vX.Y.Z` Git tag publishes `linux/amd64` and `linux/arm64` images to
 GHCR with semver tags, SBOM, and provenance. Prerelease tags do not move

@@ -76,7 +76,8 @@ Production Compose загружает готовый образ из `MIRVMON_IM
 
 Tag `vX.Y.Z` запускает `.github/workflows/release-image.yml`: он публикует
 `linux/amd64` и `linux/arm64` image в GHCR с semver-тегами, SBOM и provenance.
-Prerelease tag не перезаписывает `latest`.
+Docker image tag не содержит начальную `v`: Git tag `v0.1.0` публикует
+`ghcr.io/mirivlad/mirvmon:0.1.0`. Prerelease tag не перезаписывает `latest`.
 
 Подробности: [docker/README.md](docker/README.md).
 
