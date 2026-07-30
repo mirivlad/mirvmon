@@ -86,6 +86,11 @@ notifications. Запоздалый допустимый sample записыва
 - Telegram proxy: HTTP, HTTPS, SOCKS4, SOCKS4A, SOCKS5, SOCKS5H;
 - bot/proxy/SMTP secrets шифруются, не отображаются обратно и очищаются только
   явным действием.
+- соединения проверяют TLS certificate и имеют connect/request timeouts;
+- тест из dashboard сохраняет форму и создаёт обычные outbox jobs без
+  синхронного сетевого вызова;
+- `NOTIFICATION_POLL_INTERVAL` и `NOTIFICATION_BATCH_SIZE` ограничены и
+  валидируются worker при старте.
 
 ### Dashboard
 

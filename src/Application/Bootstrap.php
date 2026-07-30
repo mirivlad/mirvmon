@@ -19,7 +19,9 @@ use App\Database\ConnectionFactory;
 use App\Domain\Metrics\MetricsValidator;
 use App\Repositories\MetricRepository;
 use App\Repositories\NotificationOutboxRepository;
+use App\Repositories\NotificationSettingsRepository;
 use App\Repositories\ServerRepository;
+use App\Security\SecretCipher;
 use App\Services\AgentCredentialIssuer;
 use App\Services\AgentInstallerService;
 use App\Services\MetricsIngestionService;
@@ -141,6 +143,18 @@ final class Bootstrap
         if ($applicationKey === false || strlen($applicationKey) !== 32) {
             throw new RuntimeException('APP_KEY must be a base64-encoded 32-byte key.');
         }
+        $container->set(
+            SecretCipher::class,
+            static fn (): SecretCipher => new SecretCipher($applicationKey)
+        );
+        $container->set(
+            NotificationSettingsRepository::class,
+            static fn (Container $container): NotificationSettingsRepository =>
+                new NotificationSettingsRepository(
+                    $container->get(PDO::class),
+                    $container->get(SecretCipher::class)
+                )
+        );
 
         $container->set(
             AuthController::class,
@@ -197,7 +211,9 @@ final class Bootstrap
         $container->set(
             AdminController::class,
             static fn (Container $container): AdminController => new AdminController(
-                $container->get(Twig::class)
+                $container->get(Twig::class),
+                $container->get(NotificationSettingsRepository::class),
+                $container->get(NotificationOutboxRepository::class)
             )
         );
         $container->set(

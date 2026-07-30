@@ -140,7 +140,10 @@ state разделены между `Program Files` и `ProgramData`.
 Telegram и SMTP являются независимыми transports. Telegram proxy применяется
 только к Telegram channel и поддерживает `http`, `https`, `socks4`, `socks4a`,
 `socks5`, `socks5h`. Bot token и proxy password шифруются с использованием
-`APP_KEY`; UI не возвращает сохранённые секреты открытым текстом.
+`APP_KEY`; тем же ключом защищён SMTP password. UI не возвращает сохранённые
+секреты открытым текстом. SMTP и Telegram используют проверку TLS и ограниченные
+connect/request timeouts. Тестовая отправка проходит через тот же outbox и
+worker, что production-события.
 
 ## Масштабирование
 

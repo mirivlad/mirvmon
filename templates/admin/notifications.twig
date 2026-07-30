@@ -4,7 +4,10 @@
 <div class="row mb-4">
     <div class="col-12">
         <h2><i class="fas fa-bell"></i> Настройки уведомлений</h2>
-        <p class="text-muted">Настройте отправку уведомлений через Email и Telegram</p>
+        <p class="text-muted">
+            Доставка выполняется фоновым worker. Секреты хранятся в зашифрованном виде
+            и никогда не выводятся обратно в браузер.
+        </p>
     </div>
 </div>
 
@@ -19,114 +22,206 @@
     {% include "partials/csrf.twig" %}
 
     <div class="row">
-        <!-- Email настройки -->
-        <div class="col-md-6 mb-4">
+        <div class="col-lg-6 mb-4">
             <div class="card h-100">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0"><i class="fas fa-envelope"></i> Email (SMTP)</h5>
                 </div>
                 <div class="card-body">
                     <div class="form-check form-switch mb-3">
-                        <input class="form-check-input" type="checkbox" name="email_enabled" id="email_enabled"
-                               {% if settings.email_enabled %}checked{% endif %}
-                               onchange="toggleSection('email_settings', this.checked)">
+                        <input class="form-check-input" type="checkbox"
+                               name="email_enabled" id="email_enabled"
+                               {% if settings.email_enabled %}checked{% endif %}>
                         <label class="form-check-label" for="email_enabled">
-                            Включить Email уведомления
+                            Включить Email-уведомления
                         </label>
                     </div>
 
-                    <div id="email_settings" style="{% if not settings.email_enabled %}display:none{% endif %}">
-                        <div class="mb-3">
-                            <label for="smtp_host" class="form-label">SMTP сервер</label>
-                            <input type="text" class="form-control" id="smtp_host" name="smtp_host"
-                                   value="{{ settings.smtp_host }}" placeholder="smtp.gmail.com">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label for="smtp_host" class="form-label">SMTP-сервер</label>
+                            <input type="text" class="form-control" id="smtp_host"
+                                   name="smtp_host" value="{{ settings.smtp_host|default('') }}"
+                                   placeholder="smtp.example.net" maxlength="255">
                         </div>
-
-                        <div class="mb-3">
-                            <label for="smtp_port" class="form-label">Порт SMTP</label>
-                            <input type="number" class="form-control" id="smtp_port" name="smtp_port"
-                                   value="{{ settings.smtp_port }}" placeholder="587">
+                        <div class="col-md-4">
+                            <label for="smtp_port" class="form-label">Порт</label>
+                            <input type="number" class="form-control" id="smtp_port"
+                                   name="smtp_port" value="{{ settings.smtp_port|default(587) }}"
+                                   min="1" max="65535">
                         </div>
-
-                        <div class="mb-3">
-                            <label for="smtp_username" class="form-label">Логин SMTP</label>
-                            <input type="text" class="form-control" id="smtp_username" name="smtp_username"
-                                   value="{{ settings.smtp_username }}" placeholder="your@email.com">
+                        <div class="col-12">
+                            <label for="smtp_username" class="form-label">Логин</label>
+                            <input type="text" class="form-control" id="smtp_username"
+                                   name="smtp_username"
+                                   value="{{ settings.smtp_username|default('') }}"
+                                   autocomplete="username" maxlength="255">
                         </div>
-
-                        <div class="mb-3">
-                            <label for="smtp_password" class="form-label">Пароль SMTP</label>
-                            <input type="password" class="form-control" id="smtp_password" name="smtp_password"
-                                   value="{{ settings.smtp_password }}" placeholder="Пароль приложения">
+                        <div class="col-12">
+                            <label for="smtp_password" class="form-label">
+                                Пароль
+                                {% if settings.has_smtp_password %}
+                                    <span class="badge bg-success">сохранён</span>
+                                {% endif %}
+                            </label>
+                            <input type="password" class="form-control" id="smtp_password"
+                                   name="smtp_password" value="" autocomplete="new-password"
+                                   placeholder="{{ settings.has_smtp_password ? 'Оставьте пустым, чтобы не менять' : 'Пароль SMTP' }}">
+                            {% if settings.has_smtp_password %}
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox"
+                                       name="clear_smtp_password" id="clear_smtp_password">
+                                <label class="form-check-label" for="clear_smtp_password">
+                                    Удалить сохранённый пароль
+                                </label>
+                            </div>
+                            {% endif %}
                         </div>
-
-                        <div class="mb-3">
+                        <div class="col-md-4">
                             <label for="smtp_encryption" class="form-label">Шифрование</label>
                             <select class="form-select" id="smtp_encryption" name="smtp_encryption">
-                                <option value="tls" {% if settings.smtp_encryption == 'tls' %}selected{% endif %}>TLS</option>
-                                <option value="ssl" {% if settings.smtp_encryption == 'ssl' %}selected{% endif %}>SSL</option>
-                                <option value="none" {% if settings.smtp_encryption == 'none' %}selected{% endif %}>Без шифрования</option>
+                                <option value="tls" {% if settings.smtp_encryption == 'tls' %}selected{% endif %}>
+                                    STARTTLS
+                                </option>
+                                <option value="ssl" {% if settings.smtp_encryption == 'ssl' %}selected{% endif %}>
+                                    Implicit TLS
+                                </option>
+                                <option value="none" {% if settings.smtp_encryption == 'none' %}selected{% endif %}>
+                                    Без TLS
+                                </option>
                             </select>
                         </div>
-
-                        <div class="mb-3">
-                            <label for="smtp_from_email" class="form-label">Email отправителя</label>
-                            <input type="email" class="form-control" id="smtp_from_email" name="smtp_from_email"
-                                   value="{{ settings.smtp_from_email }}" placeholder="monitor@mirv.top">
+                        <div class="col-md-8">
+                            <label for="smtp_from_email" class="form-label">Адрес отправителя</label>
+                            <input type="email" class="form-control" id="smtp_from_email"
+                                   name="smtp_from_email"
+                                   value="{{ settings.smtp_from_email|default('') }}"
+                                   placeholder="monitor@example.net" maxlength="254">
+                        </div>
+                        <div class="col-12">
+                            <label for="smtp_recipient_email" class="form-label">Адрес получателя</label>
+                            <input type="email" class="form-control" id="smtp_recipient_email"
+                                   name="smtp_recipient_email"
+                                   value="{{ settings.smtp_recipient_email|default('') }}"
+                                   placeholder="ops@example.net" maxlength="254">
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Telegram настройки -->
-        <div class="col-md-6 mb-4">
+        <div class="col-lg-6 mb-4">
             <div class="card h-100">
                 <div class="card-header bg-info text-white">
                     <h5 class="mb-0"><i class="fab fa-telegram-plane"></i> Telegram Bot</h5>
                 </div>
                 <div class="card-body">
                     <div class="form-check form-switch mb-3">
-                        <input class="form-check-input" type="checkbox" name="telegram_enabled" id="telegram_enabled"
-                               {% if settings.telegram_enabled %}checked{% endif %}
-                               onchange="toggleSection('telegram_settings', this.checked)">
+                        <input class="form-check-input" type="checkbox"
+                               name="telegram_enabled" id="telegram_enabled"
+                               {% if settings.telegram_enabled %}checked{% endif %}>
                         <label class="form-check-label" for="telegram_enabled">
-                            Включить Telegram уведомления
+                            Включить Telegram-уведомления
                         </label>
                     </div>
 
-                    <div id="telegram_settings" style="{% if not settings.telegram_enabled %}display:none{% endif %}">
-                        <div class="mb-3">
-                            <label for="telegram_bot_token" class="form-label">Токен бота</label>
-                            <input type="text" class="form-control" id="telegram_bot_token" name="telegram_bot_token"
-                                   value="{{ settings.telegram_bot_token }}" placeholder="123456:ABC-DEF...">
-                            <div class="form-text">Получите у @BotFather в Telegram</div>
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label for="telegram_bot_token" class="form-label">
+                                Токен бота
+                                {% if settings.has_telegram_bot_token %}
+                                    <span class="badge bg-success">сохранён</span>
+                                {% endif %}
+                            </label>
+                            <input type="password" class="form-control"
+                                   id="telegram_bot_token" name="telegram_bot_token"
+                                   value="" autocomplete="new-password"
+                                   placeholder="{{ settings.has_telegram_bot_token ? 'Оставьте пустым, чтобы не менять' : '123456:ABC-DEF…' }}">
+                            {% if settings.has_telegram_bot_token %}
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox"
+                                       name="clear_telegram_bot_token"
+                                       id="clear_telegram_bot_token">
+                                <label class="form-check-label" for="clear_telegram_bot_token">
+                                    Удалить сохранённый токен
+                                </label>
+                            </div>
+                            {% endif %}
                         </div>
-
-                        <div class="mb-3">
+                        <div class="col-12">
                             <label for="telegram_chat_id" class="form-label">Chat ID</label>
-                            <input type="text" class="form-control" id="telegram_chat_id" name="telegram_chat_id"
-                                   value="{{ settings.telegram_chat_id }}" placeholder="-1001234567890">
-                            <div class="form-text">ID чата или группы (отрицательное число для групп)</div>
+                            <input type="text" class="form-control" id="telegram_chat_id"
+                                   name="telegram_chat_id"
+                                   value="{{ settings.telegram_chat_id|default('') }}"
+                                   placeholder="-1001234567890" maxlength="100">
                         </div>
+                    </div>
 
-                        <div class="mb-3">
-                            <label for="telegram_proxy" class="form-label">Прокси для Telegram</label>
-                            <input type="text" class="form-control" id="telegram_proxy" name="telegram_proxy"
-                                   value="{{ settings.telegram_proxy|default('http://127.0.0.1:1081') }}"
-                                   placeholder="http://127.0.0.1:1081">
-                            <div class="form-text">Оставьте пустым, если прокси не нужен</div>
+                    <hr class="my-4">
+                    <h6>Прокси только для Telegram</h6>
+                    <p class="text-muted small">
+                        Выберите «Без прокси» для прямого соединения. SOCKS5H
+                        разрешает DNS через прокси.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="telegram_proxy_type" class="form-label">Тип</label>
+                            <select class="form-select" id="telegram_proxy_type"
+                                    name="telegram_proxy_type">
+                                <option value="">Без прокси</option>
+                                {% for type in ['http', 'https', 'socks4', 'socks4a', 'socks5', 'socks5h'] %}
+                                <option value="{{ type }}"
+                                        {% if settings.telegram_proxy_type == type %}selected{% endif %}>
+                                    {{ type|upper }}
+                                </option>
+                                {% endfor %}
+                            </select>
                         </div>
-
-                        <div class="alert alert-info small">
-                            <i class="fas fa-info-circle"></i>
-                            <strong>Как настроить:</strong>
-                            <ol class="mb-0 ps-3">
-                                <li>Создайте бота через @BotFather</li>
-                                <li>Добавьте бота в чат/группу</li>
-                                <li>Отправьте сообщение в чат</li>
-                                <li>Узнайте Chat ID через https://api.telegram.org/bot[TOKEN]/getUpdates</li>
-                            </ol>
+                        <div class="col-md-5">
+                            <label for="telegram_proxy_host" class="form-label">Хост</label>
+                            <input type="text" class="form-control"
+                                   id="telegram_proxy_host" name="telegram_proxy_host"
+                                   value="{{ settings.telegram_proxy_host|default('') }}"
+                                   placeholder="proxy.internal" maxlength="255">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="telegram_proxy_port" class="form-label">Порт</label>
+                            <input type="number" class="form-control"
+                                   id="telegram_proxy_port" name="telegram_proxy_port"
+                                   value="{{ settings.telegram_proxy_port|default('') }}"
+                                   min="1" max="65535" placeholder="1080">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="telegram_proxy_username" class="form-label">Логин прокси</label>
+                            <input type="text" class="form-control"
+                                   id="telegram_proxy_username"
+                                   name="telegram_proxy_username"
+                                   value="{{ settings.telegram_proxy_username|default('') }}"
+                                   autocomplete="username" maxlength="255">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="telegram_proxy_password" class="form-label">
+                                Пароль прокси
+                                {% if settings.has_telegram_proxy_password %}
+                                    <span class="badge bg-success">сохранён</span>
+                                {% endif %}
+                            </label>
+                            <input type="password" class="form-control"
+                                   id="telegram_proxy_password"
+                                   name="telegram_proxy_password" value=""
+                                   autocomplete="new-password"
+                                   placeholder="{{ settings.has_telegram_proxy_password ? 'Оставьте пустым, чтобы не менять' : '' }}">
+                            {% if settings.has_telegram_proxy_password %}
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox"
+                                       name="clear_telegram_proxy_password"
+                                       id="clear_telegram_proxy_password">
+                                <label class="form-check-label"
+                                       for="clear_telegram_proxy_password">
+                                    Удалить пароль прокси
+                                </label>
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -134,64 +229,38 @@
         </div>
     </div>
 
-    <!-- Типы уведомлений -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header bg-warning text-dark">
-                    <h5 class="mb-0"><i class="fas fa-sliders-h"></i> Когда отправлять уведомления</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" name="notify_on_warning" id="notify_on_warning"
-                                       {% if settings.notify_on_warning %}checked{% endif %}>
-                                <label class="form-check-label" for="notify_on_warning">
-                                    <i class="fas fa-exclamation-triangle text-warning"></i>
-                                    При предупреждениях (warning)
-                                </label>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" name="notify_on_critical" id="notify_on_critical"
-                                       {% if settings.notify_on_critical %}checked{% endif %}>
-                                <label class="form-check-label" for="notify_on_critical">
-                                    <i class="fas fa-radiation text-danger"></i>
-                                    При критических ошибках (critical)
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-sliders-h"></i> Уровни событий</h5>
+        </div>
+        <div class="card-body d-flex flex-wrap gap-4">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox"
+                       name="notify_on_warning" id="notify_on_warning"
+                       {% if settings.notify_on_warning %}checked{% endif %}>
+                <label class="form-check-label" for="notify_on_warning">
+                    Предупреждения
+                </label>
+            </div>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox"
+                       name="notify_on_critical" id="notify_on_critical"
+                       {% if settings.notify_on_critical %}checked{% endif %}>
+                <label class="form-check-label" for="notify_on_critical">
+                    Критические события
+                </label>
             </div>
         </div>
     </div>
 
-    <!-- Кнопки -->
-    <div class="row mb-4">
-        <div class="col-12 d-flex justify-content-between">
-            <div>
-                <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-save"></i> Сохранить настройки
-                </button>
-            </div>
-            <div>
-                <button type="submit" formaction="/admin/notifications/test"
-                        class="btn btn-outline-success"
-                        onclick="return confirm('Отправить тестовое уведомление?')">
-                    <i class="fas fa-paper-plane"></i> Тест уведомлений
-                </button>
-            </div>
-        </div>
+    <div class="d-flex flex-wrap justify-content-between gap-2 mb-4">
+        <button type="submit" class="btn btn-primary">
+            <i class="fas fa-save"></i> Сохранить настройки
+        </button>
+        <button type="submit" formaction="/admin/notifications/test"
+                class="btn btn-outline-success">
+            <i class="fas fa-paper-plane"></i> Сохранить и отправить тест
+        </button>
     </div>
 </form>
-
-<script>
-function toggleSection(id, show) {
-    document.getElementById(id).style.display = show ? 'block' : 'none';
-}
-</script>
-
 {% endblock %}

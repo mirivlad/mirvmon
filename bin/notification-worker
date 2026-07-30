@@ -1,0 +1,91 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use App\Database\ConnectionFactory;
+use App\Notifications\NotificationDeliveryService;
+use App\Notifications\NotificationMessageFormatter;
+use App\Notifications\SmtpTransport;
+use App\Notifications\TelegramTransport;
+use App\Repositories\NotificationOutboxRepository;
+use App\Repositories\NotificationSettingsRepository;
+use App\Security\SecretCipher;
+use App\Workers\NotificationWorker;
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+$interval = filter_var(
+    getenv('NOTIFICATION_POLL_INTERVAL') ?: 2,
+    FILTER_VALIDATE_INT,
+    ['options' => ['min_range' => 1, 'max_range' => 60]]
+);
+$batchSize = filter_var(
+    getenv('NOTIFICATION_BATCH_SIZE') ?: 20,
+    FILTER_VALIDATE_INT,
+    ['options' => ['min_range' => 1, 'max_range' => 100]]
+);
+if ($interval === false || $batchSize === false) {
+    fwrite(
+        STDERR,
+        "NOTIFICATION_POLL_INTERVAL must be 1-60 and "
+        . "NOTIFICATION_BATCH_SIZE must be 1-100.\n"
+    );
+    exit(1);
+}
+
+$applicationKey = base64_decode((string) getenv('APP_KEY'), true);
+if ($applicationKey === false || strlen($applicationKey) !== 32) {
+    fwrite(STDERR, "APP_KEY must be a base64-encoded 32-byte key.\n");
+    exit(1);
+}
+
+$once = in_array('--once', $argv, true);
+$running = true;
+if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
+    pcntl_async_signals(true);
+    pcntl_signal(SIGTERM, static function () use (&$running): void {
+        $running = false;
+    });
+    pcntl_signal(SIGINT, static function () use (&$running): void {
+        $running = false;
+    });
+}
+
+$pdo = ConnectionFactory::fromEnvironment();
+$settings = new NotificationSettingsRepository(
+    $pdo,
+    new SecretCipher($applicationKey)
+);
+$delivery = new NotificationDeliveryService(
+    $settings,
+    new NotificationMessageFormatter(),
+    new TelegramTransport(),
+    new SmtpTransport()
+);
+$worker = new NotificationWorker(
+    new NotificationOutboxRepository($pdo),
+    $delivery->deliver(...)
+);
+
+do {
+    try {
+        $processed = $worker->runOnce($batchSize);
+    } catch (Throwable $exception) {
+        fwrite(
+            STDERR,
+            'notification_worker_failed:' . $exception::class . PHP_EOL
+        );
+        $processed = 0;
+    }
+
+    if ($once) {
+        break;
+    }
+    if ($processed > 0) {
+        continue;
+    }
+    for ($second = 0; $second < $interval && $running; $second++) {
+        sleep(1);
+    }
+} while ($running);

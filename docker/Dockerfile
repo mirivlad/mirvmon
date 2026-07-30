@@ -57,7 +57,11 @@ COPY docker/Caddyfile /etc/frankenphp/Caddyfile
 COPY docker/php.ini /usr/local/etc/php/conf.d/zz-mirvmon.ini
 COPY docker/supervisord.conf /etc/supervisor/conf.d/mirvmon.conf
 
-RUN chmod 0555 /app/docker/entrypoint.sh /app/bin/migrate /app/bin/offline-worker \
+RUN chmod 0555 \
+        /app/docker/entrypoint.sh \
+        /app/bin/migrate \
+        /app/bin/offline-worker \
+        /app/bin/notification-worker \
     && chown -R app:app /app/var \
     && composer check-platform-reqs --no-dev
 

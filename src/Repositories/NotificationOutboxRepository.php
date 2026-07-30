@@ -91,6 +91,60 @@ final class NotificationOutboxRepository
         return $inserted;
     }
 
+    /** @param array<string, mixed> $payload */
+    public function enqueueTest(array $payload): int
+    {
+        $settings = $this->pdo->query(
+            'SELECT email_enabled, telegram_enabled
+             FROM notification_settings
+             WHERE id = 1'
+        )?->fetch();
+        if (!is_array($settings)) {
+            return 0;
+        }
+
+        $channels = [];
+        if ($this->toBool($settings['email_enabled'])) {
+            $channels[] = 'email';
+        }
+        if ($this->toBool($settings['telegram_enabled'])) {
+            $channels[] = 'telegram';
+        }
+        if ($channels === []) {
+            return 0;
+        }
+
+        try {
+            $encodedPayload = json_encode($payload, JSON_THROW_ON_ERROR);
+        } catch (JsonException $exception) {
+            throw new RuntimeException('Cannot encode notification payload.', 0, $exception);
+        }
+
+        $statement = $this->pdo->prepare(
+            "INSERT INTO notification_outbox (
+                channel,
+                event_type,
+                payload,
+                deduplication_key
+             ) VALUES (
+                :channel,
+                'test',
+                CAST(:payload AS jsonb),
+                :deduplication_key
+             )"
+        );
+        $batchKey = 'test:' . bin2hex(random_bytes(16));
+        foreach ($channels as $channel) {
+            $statement->execute([
+                'channel' => $channel,
+                'payload' => $encodedPayload,
+                'deduplication_key' => $batchKey . ':' . $channel,
+            ]);
+        }
+
+        return count($channels);
+    }
+
     /**
      * Atomically claim jobs. A stale processing lease becomes eligible again
      * after five minutes, so a killed worker cannot strand a notification.

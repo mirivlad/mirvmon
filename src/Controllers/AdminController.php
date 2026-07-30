@@ -4,22 +4,25 @@
 namespace App\Controllers;
 
 use App\Models\Model;
-use App\Services\NotificationService;
+use App\Repositories\NotificationOutboxRepository;
+use App\Repositories\NotificationSettingsRepository;
+use DateTimeImmutable;
+use InvalidArgumentException;
 use PDO;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Views\Twig;
+use Throwable;
 
 class AdminController extends Model
 {
-    private $twig;
-    private $notificationService;
-
-    public function __construct(Twig $twig)
+    public function __construct(
+        private readonly Twig $twig,
+        private readonly NotificationSettingsRepository $notificationSettings,
+        private readonly NotificationOutboxRepository $notificationOutbox
+    )
     {
         parent::__construct();
-        $this->twig = $twig;
-        $this->notificationService = new NotificationService();
     }
 
     // ==================== ПОЛЬЗОВАТЕЛИ ====================
@@ -217,7 +220,7 @@ class AdminController extends Model
             return $response->withHeader('Location', '/')->withStatus(302);
         }
 
-        $settings = $this->notificationService->getSettings();
+        $settings = $this->notificationSettings->getPublic();
 
         return $this->twig->render($response, 'admin/notifications.twig', [
             'title' => 'Настройки уведомлений',
@@ -232,10 +235,18 @@ class AdminController extends Model
         }
 
         $data = $request->getParsedBody();
-        $this->notificationService->saveSettings($data);
-
-        $_SESSION['flash_message'] = 'Настройки уведомлений сохранены';
-        $_SESSION['flash_type'] = 'success';
+        try {
+            $this->notificationSettings->save(is_array($data) ? $data : []);
+            $_SESSION['flash_message'] = 'Настройки уведомлений сохранены';
+            $_SESSION['flash_type'] = 'success';
+        } catch (InvalidArgumentException $exception) {
+            $_SESSION['flash_message'] = 'Настройки не сохранены: '
+                . $exception->getMessage();
+            $_SESSION['flash_type'] = 'error';
+        } catch (Throwable) {
+            $_SESSION['flash_message'] = 'Не удалось сохранить настройки уведомлений';
+            $_SESSION['flash_type'] = 'error';
+        }
 
         return $response->withHeader('Location', '/admin/notifications')->withStatus(302);
     }
@@ -246,25 +257,33 @@ class AdminController extends Model
             return $response->withHeader('Location', '/')->withStatus(302);
         }
 
-        $settings = $this->notificationService->getSettings();
-        $results = $this->notificationService->sendTestNotification(
-            $settings['smtp_from_email'],
-            $settings['telegram_chat_id']
-        );
-
-        $status = 'success';
-        $messages = [];
-        foreach ($results as $channel => $result) {
-            if ($result['success']) {
-                $messages[] = "{$channel}: ✅ " . $result['message'];
-            } else {
-                $messages[] = "{$channel}: ❌ " . $result['error'];
-                $status = 'error';
+        $data = $request->getParsedBody();
+        try {
+            $this->notificationSettings->save(is_array($data) ? $data : []);
+            $queued = $this->notificationOutbox->enqueueTest([
+                'type' => 'test',
+                'event' => 'test',
+                'event_time' => (new DateTimeImmutable())->format(DATE_ATOM),
+            ]);
+            if ($queued === 0) {
+                throw new InvalidArgumentException(
+                    'Включите хотя бы один канал уведомлений.'
+                );
             }
+            $_SESSION['flash_message'] = sprintf(
+                'Тест поставлен в очередь для каналов: %d',
+                $queued
+            );
+            $_SESSION['flash_type'] = 'success';
+        } catch (InvalidArgumentException $exception) {
+            $_SESSION['flash_message'] = 'Тест не поставлен в очередь: '
+                . $exception->getMessage();
+            $_SESSION['flash_type'] = 'error';
+        } catch (Throwable) {
+            $_SESSION['flash_message'] =
+                'Не удалось поставить тестовое уведомление в очередь';
+            $_SESSION['flash_type'] = 'error';
         }
-
-        $_SESSION['flash_message'] = implode("\n", $messages);
-        $_SESSION['flash_type'] = $status;
 
         return $response->withHeader('Location', '/admin/notifications')->withStatus(302);
     }
