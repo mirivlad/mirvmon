@@ -14,7 +14,6 @@ RUN composer install \
     --prefer-dist
 
 COPY src ./src
-COPY config ./config
 
 RUN composer dump-autoload \
     --no-dev \

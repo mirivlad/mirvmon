@@ -21,6 +21,7 @@ final class ServerController
     ) {
     }
 
+    /** @param array<string, string> $args */
     public function index(
         Request $request,
         Response $response,
@@ -39,6 +40,7 @@ final class ServerController
         ]);
     }
 
+    /** @param array<string, string> $args */
     public function create(
         Request $request,
         Response $response,
@@ -50,6 +52,7 @@ final class ServerController
         ]);
     }
 
+    /** @param array<string, string> $args */
     public function store(
         Request $request,
         Response $response,
@@ -113,6 +116,7 @@ final class ServerController
         }
     }
 
+    /** @param array<string, string> $args */
     public function edit(
         Request $request,
         Response $response,
@@ -160,6 +164,7 @@ final class ServerController
         ]);
     }
 
+    /** @param array<string, string> $args */
     public function update(
         Request $request,
         Response $response,
@@ -218,6 +223,7 @@ final class ServerController
         return $this->redirect($response, '/servers');
     }
 
+    /** @param array<string, string> $args */
     public function delete(
         Request $request,
         Response $response,
@@ -234,6 +240,7 @@ final class ServerController
         return $this->redirect($response, '/servers');
     }
 
+    /** @param array<string, string> $args */
     public function regenerateToken(
         Request $request,
         Response $response,

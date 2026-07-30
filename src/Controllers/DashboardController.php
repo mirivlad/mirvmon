@@ -21,6 +21,7 @@ final class DashboardController
     ) {
     }
 
+    /** @param array<string, string> $args */
     public function index(Request $request, Response $response, array $args): Response
     {
         $servers = $this->status->enrich($this->servers->dashboardServers());
@@ -50,6 +51,7 @@ final class DashboardController
     }
 
     /**
+     * @param array<string, string> $args
      * @throws JsonException
      */
     public function getDashboardData(

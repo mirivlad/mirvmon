@@ -15,6 +15,7 @@ services:
       APP_TIMEZONE: "${APP_TIMEZONE:-UTC}"
       PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-}"
       TRUSTED_PROXIES: "${TRUSTED_PROXIES:-private_ranges}"
+      SESSION_SECURE: "${SESSION_SECURE:-1}"
       SERVER_NAME: ":8080"
       DB_HOST: db
       DB_PORT: "5432"
@@ -78,7 +79,11 @@ services:
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      test:
+        - CMD-SHELL
+        - >-
+          head -1 /var/lib/postgresql/data/postmaster.pid | grep -qx 1 &&
+          pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
       start_period: 15s
       interval: 10s
       timeout: 5s

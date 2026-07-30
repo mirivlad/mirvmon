@@ -15,7 +15,7 @@
 	root * /app/public
 
 	route {
-		respond /livez "OK" 200
+		respond /livez "alive" 200
 		php_server
 	}
 
@@ -27,8 +27,8 @@
 		Referrer-Policy "strict-origin-when-cross-origin"
 	}
 
-	@static path /css/* /js/* /images/* /fonts/*
-	header @static Cache-Control "public, max-age=604800"
+	@static path /css/* /js/* /vendor/* /images/* /fonts/* /favicon.png
+	header @static Cache-Control "public, max-age=3600"
 
 	log {
 		output stdout

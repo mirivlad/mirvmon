@@ -13,7 +13,14 @@ final class DocumentationContractTest extends TestCase
         $root = dirname(__DIR__, 2);
         $readme = implode("\n", array_map(
             static fn (string $file): string => (string) file_get_contents($root . '/' . $file),
-            ['README.md', 'INSTALL.md', 'ARCHITECTURE.md', 'TECHNICAL_SPECIFICATION.md']
+            [
+                'README.md',
+                'INSTALL.md',
+                'ARCHITECTURE.md',
+                'TECHNICAL_SPECIFICATION.md',
+                'AGENTS.md',
+                'docker/README.md',
+            ]
         ));
 
         self::assertStringContainsString('PHP 8.5', $readme);
@@ -25,5 +32,8 @@ final class DocumentationContractTest extends TestCase
         self::assertStringNotContainsString('mirvmon2026', $readme);
         self::assertStringNotContainsString('mon.mirv.top', $readme);
         self::assertStringNotContainsString('php8.3', $readme);
+        self::assertStringNotContainsString('DATABASE_URL', $readme);
+        self::assertStringNotContainsString('vendor/bin/phinx', $readme);
+        self::assertStringNotContainsString('mysqldump', $readme);
     }
 }

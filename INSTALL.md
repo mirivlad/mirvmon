@@ -19,6 +19,12 @@
 3. reference: release tag для production;
 4. environment variables: значения из `docker/.env.example`.
 
+Релизный Git tag `vX.Y.Z` публикует image
+`ghcr.io/mirivlad/mirvmon:X.Y.Z`. Для Portainer используйте один и тот же
+immutable release tag в reference репозитория и `MIRVMON_IMAGE`. После первой
+публикации сделайте GHCR package публичным либо настройте registry credentials
+в Portainer.
+
 Сгенерируйте независимые секреты:
 
 ```bash
@@ -90,6 +96,8 @@ PUBLIC_BASE_URL=https://monitoring.example.com
 
 При пустом `PUBLIC_BASE_URL` MirvMon использует host и scheme запроса только от
 сетей из `TRUSTED_PROXIES`. Не доверяйте произвольным внешним адресам.
+Оставьте `SESSION_SECURE=1`, когда пользовательский трафик приходит через
+HTTPS; иначе браузерная сессия намеренно не будет работать по открытому HTTP.
 
 ## Первый запуск
 

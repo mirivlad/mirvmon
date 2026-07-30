@@ -61,6 +61,10 @@ Production Compose загружает готовый образ из `MIRVMON_IM
 поддержки Docker build со стороны Portainer. Для production рекомендуется
 зафиксировать release tag образа вместо `latest`.
 
+Tag `vX.Y.Z` запускает `.github/workflows/release-image.yml`: он публикует
+`linux/amd64` и `linux/arm64` image в GHCR с semver-тегами, SBOM и provenance.
+Prerelease tag не перезаписывает `latest`.
+
 Подробности: [docker/README.md](docker/README.md).
 
 ## Локальная сборка
@@ -102,6 +106,10 @@ location / {
 `PUBLIC_BASE_URL=https://monitoring.example.com` задаёт канонический публичный
 URL. Если переменная пуста, приложение использует scheme и host текущего
 запроса только после проверки доверенного reverse proxy.
+
+`SESSION_SECURE=1` включён в production по умолчанию: браузер передаёт
+session cookie только через HTTPS. Значение `0` допустимо лишь для изолированной
+локальной разработки с прямым HTTP-доступом.
 
 ## Проверка состояния и логи
 
@@ -198,12 +206,20 @@ PYTHONPATH=agent python3 -m unittest discover -s agent/tests
 ```
 
 Для schema integration tests требуется отдельная TimescaleDB. Переменные
-подключения описаны в тестовой документации и `.env.example`.
+`TEST_DB_HOST`, `TEST_DB_PORT`, `TEST_DB_NAME`, `TEST_DB_USERNAME`,
+`TEST_DB_PASSWORD` и `TEST_DB_SSLMODE` должны указывать на изолированную
+тестовую БД. Без них PHPUnit явно помечает DB-набор как skipped, поэтому release
+проверяется только с заданными переменными.
 
 Скомпилированные browser assets хранятся в `public/vendor`, поэтому production
 не зависит от npm или внешнего CDN. `package-lock.json` фиксирует build-time
 источник; после изменения frontend-зависимостей выполните `npm ci` и
 `npm run assets:sync`.
+
+CI в `.github/workflows/ci.yml` проверяет PHP 8.5 на TimescaleDB, PHPStan
+level 6, воспроизводимость frontend assets, Python 3.11/3.14 и production
+Docker image. Release workflow публикует multi-arch image в GHCR, а Dependabot
+следит за Composer, npm, Docker и GitHub Actions.
 
 ## Дополнительная документация
 

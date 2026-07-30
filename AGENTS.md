@@ -1,128 +1,173 @@
-# AGENTS.md - Инструкции для агентов по работе с проектом мониторинга
+# AGENTS.md — правила работы с MirvMon
 
-## О проекте
+## Назначение и границы
 
-**Название:** Система мониторинга серверов
-**URL:** https://mon.mirv.top
-**Расположение:** /var/www/mon
-**Технологии:** PHP 8.3+, Slim Framework 4, Twig, MySQL/MariaDB
+MirvMon — self-hosted система push-мониторинга серверов. Проект находится в
+активной разработке, production-пользователей и совместимых legacy-инсталляций
+нет. Не сохраняйте устаревшую схему или API ценой усложнения новой архитектуры,
+но обновляйте документацию и тесты вместе с каждым изменением поведения.
 
-## Структура проекта
+Публичный домен не задан в исходниках. Канонический URL берётся из
+`PUBLIC_BASE_URL`, а при пустом значении — из origin доверенного HTTP-запроса.
+Никогда не добавляйте в код, тестовые данные или документацию реальный домен
+развёртывания.
 
+## Поддерживаемая архитектура
+
+- PHP 8.5, Slim Framework 4, Twig 3;
+- PostgreSQL 17 + TimescaleDB 2.28;
+- FrankenPHP в classic mode как основной HTTP adapter;
+- внешний nginx завершает TLS;
+- Python 3.11+ для агента;
+- production Compose содержит ровно два сервиса: `app` и `db`.
+
+FrankenPHP — только способ запуска. Прикладной код должен использовать
+PSR/PDO-границы и оставаться переносимым на nginx + PHP-FPM. Не используйте
+Caddy API, FrankenPHP API, worker mode или долгоживущее глобальное состояние в
+контроллерах и сервисах.
+
+Агент работает за NAT и только сам инициирует HTTPS-запросы. Не добавляйте
+обратный polling или требование входящего порта агента.
+
+## Основные каталоги
+
+```text
+agent/          Python-агент и его тесты
+bin/            миграции, workers и benchmark
+docker/         production Compose, image и Portainer-инструкции
+migrations/     checksum-protected PostgreSQL/TimescaleDB migrations
+public/         front controller и self-hosted browser assets
+src/            HTTP, domain, repositories, services и workers
+templates/      Twig UI
+tests/          unit, integration, functional и contract tests
 ```
-/var/www/mon/
-├── composer.json          # Зависимости проекта
-├── composer.lock         # Зафиксированные версии зависимостей
-├── .env                  # Конфигурация окружения
-├── public/
-│   ├── index.php         # Точка входа
-│   ├── css/              # Стили
-│   └── js/               # JavaScript
-├── src/
-│   ├── Controllers/      # Контроллеры
-│   ├── Middleware/       # Промежуточное ПО
-│   ├── Models/           # Модели данных
-│   └── Services/         # Бизнес-логика
-├── templates/            # Шаблоны Twig
-├── migrations/           # Миграции базы данных
-└── tests/                # Тесты
-```
 
-## Зависимости
+## Данные и фоновые задачи
 
-- PHP 8.1+
-- Slim Framework 4
-- Twig template engine
-- MySQL/MariaDB
-- Composer для управления зависимостями
+- `metric_samples` и `process_snapshots` — hypertables;
+- `current_metric_values` — компактный read model для текущего состояния;
+- `metric_samples_hourly` и `metric_samples_daily` — continuous aggregates;
+- `notification_outbox` отделяет приём метрик от Telegram/SMTP;
+- `bin/offline-worker` вычисляет offline transitions;
+- `bin/notification-worker` доставляет outbox jobs;
+- SQL применяет `bin/migrate` под PostgreSQL advisory lock.
+
+Не создавайте параллельные schema dumps и не редактируйте уже применённую
+миграцию. Новое изменение схемы оформляется новым SQL-файлом. Так как проект
+ещё не выпущен, согласованное схлопывание миграций допустимо только отдельной
+задачей с обновлением тестов и документации.
 
 ## Конфигурация
 
-Файл `.env` содержит:
-- DATABASE_URL - строка подключения к базе данных
-- JWT_SECRET - секрет для JWT токенов
-- SMTP настройки - для отправки уведомлений
-- API токены для агентов мониторинга
+Production-переменные перечислены в `.env.example` и `docker/.env.example`.
+Обязательные секреты:
 
-## API endpoints
+- `APP_KEY` — base64 от 32 случайных байт;
+- `SETUP_TOKEN` — случайная строка не короче 32 символов;
+- `DB_PASSWORD` — случайная строка не короче 16 символов.
 
-### Публичные (без авторизации)
-- `POST /api/v1/metrics` - получение метрик от агента
-- `GET /get-agent?token=` - скачать Python-агента
-- `GET /agent/install.sh?token=` - скачать установочный скрипт (Linux)
-- `GET /agent/install.bat?token=` - скачать установочный скрипт (Windows)
+Подключение к БД задаётся `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`,
+`DB_PASSWORD`, `DB_SSLMODE`. Секреты не имеют значений по умолчанию и не
+фиксируются в Git. Для штатного HTTPS deployment сохраняйте
+`SESSION_SECURE=1`; отключать его можно только в изолированной прямой
+HTTP-разработке.
 
-### Защищённые (требуется авторизация)
-- `GET /csrf-token` - получение CSRF токена для форм
-- `GET /` - дашборд
-- `GET /servers` - список серверов
-- `GET /servers/{id}` - детали сервера
-- `GET /alerts` - список алертов
+Telegram и SMTP настраиваются в `/admin/notifications`. Telegram proxy
+поддерживает HTTP, HTTPS, SOCKS4, SOCKS4A, SOCKS5 и SOCKS5H и применяется
+только к Telegram transport. Bot token, SMTP password и proxy password
+хранятся зашифрованно с `APP_KEY`.
 
-## Агентские задачи
+## Публичные HTTP endpoints
 
-### 1. Добавление нового сервера для мониторинга
+- `POST /api/v1/metrics` — идемпотентный приём envelope v2;
+- `GET /api/v1/agent/config` — конфигурация по Bearer credential;
+- `GET /get-agent?token=...` — legacy-compatible Python download;
+- `GET /agent/install.sh?token=...` — одноразовый Linux installer;
+- `GET /agent/install.ps1?token=...` — одноразовый PowerShell installer;
+- `GET /agent/install.bat?token=...` — одноразовый BAT installer;
+- `GET /livez` — только HTTP runtime;
+- `GET /readyz` — приложение и БД.
 
-1. Использовать форму в `/servers/create`
-2. Убедиться, что CSRF токен добавлен к форме (через `/csrf-token`)
-3. Заполнить поля: название, IP-адрес, порт, токен агента
-4. Проверить, что сервер отвечает на запросы
+Остальные UI/API endpoints требуют пользовательской сессии; administrative
+routes дополнительно требуют роли `admin`. Все изменяющие browser-запросы
+защищены CSRF и не должны переводиться на GET.
 
-### 2. Обновление конфигурации уведомлений
-
-1. Перейти в настройки уведомлений
-2. Обновить email или webhook URL
-3. Проверить доставку уведомлений
-
-### 3. Управление группами серверов
-
-1. Использовать `/groups` для создания/редактирования групп
-2. Назначать серверы в группы
-3. Устанавливать правила уведомлений на уровне групп
-
-### 4. Обновление системы
-
-1. Сделать резервную копию базы данных
-2. Обновить зависимости через composer
-3. Выполнить миграции базы данных
-4. Обновить конфигурацию nginx при необходимости
-
-## Безопасность
-
-- Все формы требуют CSRF токены
-- Аутентификация через сессии
-- Валидация входных данных
-- Санитизация вывода в шаблонах
-
-## Инструменты для агентов
-
-- Использовать `composer` для управления зависимостями
-- Запускать миграции через `php vendor/bin/phinx`
-- Тестировать через `phpunit` при наличии
-
-## Часто используемые команды
+## Локальная разработка
 
 ```bash
-# Установка зависимостей
 composer install
+npm ci
+npm run assets:sync
 
-# Обновление зависимостей
-composer update
-
-# Выполнение миграций
-php vendor/bin/phinx migrate
-
-# Запуск тестов
-php vendor/bin/phpunit
-
-# Резервное копирование БД
-mysqldump -u username -p database_name > backup.sql
+cp .env.example .env
+# Заполнить APP_KEY, SETUP_TOKEN и DB_PASSWORD.
+docker compose --env-file .env \
+  -f docker/docker-compose.yml \
+  -f docker/docker-compose.build.yml \
+  up -d --build
 ```
 
-## Особенности архитектуры
+Production Compose использует готовый `MIRVMON_IMAGE`; build overlay нужен
+только для исходников. БД не публикует порт, а приложение по умолчанию
+привязано к `127.0.0.1`.
 
-- MVC паттерн с использованием Slim Framework
-- Аутентификация через сессии
-- Middleware для защиты маршрутов
-- Twig для безопасного рендеринга шаблонов
-- Поддержка агентов мониторинга через API
+Release image публикует `.github/workflows/release-image.yml` только по
+semver-тегам `vX.Y.Z`/prerelease. Не публикуйте floating production release без
+успешного полного CI.
+
+## Обязательные проверки
+
+Для изменения PHP:
+
+```bash
+composer test
+composer analyse
+composer validate --strict
+composer audit
+```
+
+Для агента:
+
+```bash
+python3 -m pip install -r agent/requirements.txt
+PYTHONPATH=agent python3 -m unittest discover -s agent/tests
+python3 -m compileall -q agent
+```
+
+Для frontend и deployment:
+
+```bash
+npm ci
+npm run assets:sync
+git diff --exit-code -- public/vendor
+npm audit --audit-level=high
+shellcheck docker/*.sh
+docker compose --env-file .env -f docker/docker-compose.yml config --quiet
+docker build -f docker/Dockerfile .
+```
+
+Integration suite требует чистую TimescaleDB и переменные `TEST_DB_HOST`,
+`TEST_DB_PORT`, `TEST_DB_NAME`, `TEST_DB_USERNAME`, `TEST_DB_PASSWORD`,
+`TEST_DB_SSLMODE`. Не называйте интеграционный прогон полным, если эти тесты
+были пропущены.
+
+Перед завершением архитектурной или UI-задачи также выполните:
+
+- browser smoke test desktop и viewport 390 px без console errors;
+- `bin/benchmark-dashboard` для 50 и 1000 серверов при изменении dashboard
+  query;
+- clean двухконтейнерный старт и проверки `/livez`, `/readyz`.
+
+## Безопасность изменений
+
+- не логируйте agent token, installer token, proxy credentials и ключи;
+- permanent agent token хранится только как SHA-256 hash и не передаётся в URL;
+- installer credential одноразовый и ограничен по времени;
+- не возвращайте SQL/exception details в production responses;
+- не ослабляйте CSP, CSRF, session rotation, trusted-proxy checks или TLS
+  verification ради удобства;
+- не добавляйте CDN-зависимости: production assets находятся в
+  `public/vendor`.
+
+Главные документы: `README.md`, `ARCHITECTURE.md`,
+`TECHNICAL_SPECIFICATION.md`, `INSTALL.md`, `docker/README.md`.

@@ -11,13 +11,6 @@
             </button>
         </div>
 
-        {% if session.flash_message is defined and session.flash_message %}
-        <div class="alert alert-{{ session.flash_type == 'error' ? 'danger' : 'success' }} alert-dismissible fade show">
-            {{ session.flash_message|nl2br }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-        {% endif %}
-
         <div class="card">
             <div class="card-body">
                 {% if users|length > 0 %}
@@ -102,17 +95,23 @@
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="username" class="form-label">Имя пользователя *</label>
-                        <input type="text" class="form-control" id="username" name="username" required>
+                        <input type="text" class="form-control" id="username"
+                               name="username" minlength="3" maxlength="80"
+                               autocomplete="username" required>
                     </div>
 
                     <div class="mb-3">
                         <label for="email" class="form-label">Email</label>
-                        <input type="email" class="form-control" id="email" name="email">
+                        <input type="email" class="form-control" id="email"
+                               name="email" maxlength="254"
+                               autocomplete="email">
                     </div>
 
                     <div class="mb-3">
                         <label for="password" class="form-label">Пароль <span id="password_hint" class="text-muted small">(оставьте пустым чтобы не менять)</span></label>
-                        <input type="password" class="form-control" id="password" name="password">
+                        <input type="password" class="form-control" id="password"
+                               name="password" minlength="12"
+                               autocomplete="new-password">
                     </div>
 
                     <div class="mb-3">
@@ -129,14 +128,15 @@
                     <div class="mb-3">
                         <label for="telegram_chat_id" class="form-label">Telegram Chat ID</label>
                         <input type="text" class="form-control" id="telegram_chat_id" name="telegram_chat_id"
-                               placeholder="1150922 или -1001234567890">
+                               placeholder="1150922 или -1001234567890"
+                               maxlength="100">
                         <div class="form-text small">ID личного чата или группы для уведомлений</div>
                     </div>
 
                     <div class="mb-3">
                         <label for="email_for_alerts" class="form-label">Email для алертов</label>
                         <input type="email" class="form-control" id="email_for_alerts" name="email_for_alerts"
-                               placeholder="user@example.com">
+                               placeholder="user@example.com" maxlength="254">
                     </div>
                 </div>
                 <div class="modal-footer">

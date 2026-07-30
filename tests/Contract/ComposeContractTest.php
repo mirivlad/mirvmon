@@ -10,12 +10,14 @@ final class ComposeContractTest extends TestCase
 {
     private string $compose;
     private string $dockerfile;
+    private string $caddyfile;
 
     protected function setUp(): void
     {
         $root = dirname(__DIR__, 2);
         $this->compose = (string) file_get_contents($root . '/docker/docker-compose.yml');
         $this->dockerfile = (string) file_get_contents($root . '/docker/Dockerfile');
+        $this->caddyfile = (string) file_get_contents($root . '/docker/Caddyfile');
     }
 
     public function testProductionStackContainsExactlyAppAndDatabase(): void
@@ -36,6 +38,11 @@ final class ComposeContractTest extends TestCase
             $database
         );
         self::assertStringContainsString('healthcheck:', $database);
+        self::assertStringContainsString(
+            'head -1 /var/lib/postgresql/data/postmaster.pid | grep -qx 1',
+            $database
+        );
+        self::assertStringContainsString('pg_isready', $database);
         self::assertStringContainsString('db_data:/var/lib/postgresql/data', $database);
         self::assertStringNotContainsString("\n    ports:", $database);
     }
@@ -52,6 +59,10 @@ final class ComposeContractTest extends TestCase
         self::assertStringContainsString('read_only: true', $application);
         self::assertStringContainsString('no-new-privileges:true', $application);
         self::assertStringContainsString('SERVER_NAME: ":8080"', $application);
+        self::assertStringContainsString(
+            'SESSION_SECURE: "${SESSION_SECURE:-1}"',
+            $application
+        );
         self::assertStringContainsString('mem_limit:', $application);
         self::assertStringContainsString('cpus:', $application);
         self::assertStringContainsString('USER app', $this->dockerfile);
@@ -82,6 +93,16 @@ final class ComposeContractTest extends TestCase
         self::assertStringContainsString(
             'find "$twig_cache_directory" -mindepth 1 -delete',
             $entrypoint
+        );
+    }
+
+    public function testSelfHostedBrowserAssetsReceiveExplicitCachePolicy(): void
+    {
+        self::assertStringContainsString('/vendor/*', $this->caddyfile);
+        self::assertStringContainsString('/favicon.png', $this->caddyfile);
+        self::assertStringContainsString(
+            'Cache-Control "public, max-age=3600"',
+            $this->caddyfile
         );
     }
 

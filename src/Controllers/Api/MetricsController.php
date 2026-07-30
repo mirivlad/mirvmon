@@ -24,6 +24,7 @@ final class MetricsController
     ) {
     }
 
+    /** @param array<string, string> $args */
     public function collectMetrics(
         Request $request,
         Response $response,
@@ -66,6 +67,7 @@ final class MetricsController
         );
     }
 
+    /** @param array<string, string> $args */
     public function getServices(
         Request $request,
         Response $response,
@@ -93,6 +95,7 @@ final class MetricsController
         return $this->json($response, ['services' => $statement->fetchAll()]);
     }
 
+    /** @param array<string, string> $args */
     public function getProcesses(
         Request $request,
         Response $response,

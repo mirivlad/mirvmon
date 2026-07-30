@@ -35,6 +35,11 @@ For production, set `MIRVMON_IMAGE` to the same immutable release tag as the
 repository reference. Keep the named volumes when redeploying. Do not enable a
 published database port.
 
+Pushing a `vX.Y.Z` Git tag publishes `linux/amd64` and `linux/arm64` images to
+GHCR with semver tags, SBOM, and provenance. Prerelease tags do not move
+`latest`. Make the GHCR package public after its first publication, or
+configure registry credentials in Portainer.
+
 The production Compose file pulls a published image and contains no `build`
 step. This works with local and remote Portainer Docker environments.
 
@@ -77,7 +82,8 @@ an inbound port and therefore work behind NAT.
 Set `PUBLIC_BASE_URL=https://monitoring.example.com` when the canonical URL is
 known. If it is empty, MirvMon derives installer URLs from trusted reverse-proxy
 headers. Never expose port 8080 to an untrusted network while accepting proxy
-headers.
+headers. Keep `SESSION_SECURE=1` for the HTTPS deployment; use `0` only for
+isolated direct-HTTP development.
 
 Installer links are one-time credentials valid for one hour. Downloading an
 installer exchanges its credential for an agent token; the permanent token is
@@ -120,3 +126,5 @@ docker compose -f docker/docker-compose.yml exec -T db \
 
 Database migrations run under an advisory lock whenever the app container
 starts. Applied files are checksum-protected in `schema_migrations`.
+The database health check waits for the final PID 1 postmaster rather than the
+temporary server used by the TimescaleDB initialization and tuning scripts.

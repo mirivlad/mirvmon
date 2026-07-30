@@ -98,6 +98,9 @@ Raw samples и process snapshots хранятся 60 дней, hourly aggregates
 
 SQL-миграции в `migrations/` применяет `bin/migrate`. Runner удерживает
 PostgreSQL advisory lock, выполняет файл транзакционно и сохраняет checksum.
+Healthcheck БД отличает временный postmaster этапа `initdb/tune` от основного
+процесса PID 1, поэтому приложение не стартует в коротком окне перезапуска
+TimescaleDB.
 
 ## Агентский поток
 
@@ -117,7 +120,10 @@ credential в HTTPS body на публичный `POST /api/v1/metrics`.
 7. завершить HTTP без ожидания Telegram/SMTP.
 
 Фоновые процессы выбирают outbox через `FOR UPDATE SKIP LOCKED`, выполняют
-доставку с ограниченными retry и обрабатывают offline transitions.
+доставку с ограниченными retry и обрабатывают offline transitions. При разрыве
+соединения с БД worker отбрасывает весь PDO-dependent object graph и создаёт
+новое соединение после паузы; неизвестная программная ошибка завершает процесс
+для контролируемого restart через supervisor.
 
 ## URL и установщики
 

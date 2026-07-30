@@ -305,6 +305,15 @@ final class HttpSecurityTest extends TestCase
         self::assertSame('', $response->getHeaderLine('Set-Cookie'));
     }
 
+    public function testLivenessEndpointIsAvailableWithoutFrankenPhp(): void
+    {
+        $response = $this->app->handle($this->request('GET', '/livez'));
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame('alive', (string) $response->getBody());
+        self::assertSame('', $response->getHeaderLine('Set-Cookie'));
+    }
+
     public function testPublicAgentFilesAndConfigEndpointDoNotCreateSessions(): void
     {
         $source = $this->app->handle(

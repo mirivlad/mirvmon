@@ -28,6 +28,7 @@ final class MetricsApiController
     }
 
     /**
+     * @param array<string, string> $args
      * @throws JsonException
      */
     public function getServerMetrics(

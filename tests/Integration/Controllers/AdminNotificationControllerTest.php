@@ -10,7 +10,6 @@ use App\Database\Migrator;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\NotificationSettingsRepository;
 use App\Security\SecretCipher;
-use Config\DatabaseConfig;
 use PDO;
 use PHPUnit\Framework\TestCase;
 use Slim\Psr7\Factory\ResponseFactory;
@@ -43,7 +42,6 @@ final class AdminNotificationControllerTest extends TestCase
     protected function setUp(): void
     {
         self::$pdo?->beginTransaction();
-        DatabaseConfig::setInstance(self::$pdo);
         $_SESSION = ['role' => 'admin'];
         $this->twig = Twig::create(
             dirname(__DIR__, 3) . '/templates',
@@ -55,6 +53,7 @@ final class AdminNotificationControllerTest extends TestCase
             new SecretCipher(str_repeat('a', 32))
         );
         $this->controller = new AdminController(
+            self::$pdo,
             $this->twig,
             $settings,
             new NotificationOutboxRepository(self::$pdo)

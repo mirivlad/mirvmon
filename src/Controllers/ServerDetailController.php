@@ -12,6 +12,12 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Views\Twig;
 use Throwable;
 
+/**
+ * @phpstan-type MetricPoint array<string, mixed>
+ * @phpstan-type GroupedMetrics array<string, list<MetricPoint>>
+ * @phpstan-type CurrentMetrics array<string, MetricPoint>
+ * @phpstan-type Chart array<string, mixed>
+ */
 final class ServerDetailController
 {
     private const PERIODS = [
@@ -29,6 +35,7 @@ final class ServerDetailController
     ) {
     }
 
+    /** @param array<string, string> $args */
     public function show(Request $request, Response $response, array $args): Response
     {
         $serverId = $this->serverId($args);
@@ -200,6 +207,10 @@ final class ServerDetailController
         return $grouped;
     }
 
+    /**
+     * @param list<string> $displayMetrics
+     * @return list<string>
+     */
     private function expandDisplayMetrics(array $displayMetrics): array
     {
         $expanded = [];
@@ -224,6 +235,13 @@ final class ServerDetailController
         return array_values($expanded);
     }
 
+    /**
+     * @param GroupedMetrics $groupedMetrics
+     * @param list<string>|null $displayMetrics
+     * @param array<string, mixed> $existingThresholds
+     * @param CurrentMetrics $currentMetrics
+     * @return list<Chart>
+     */
     private function buildSimpleMetricCharts(
         array $groupedMetrics,
         ?array $displayMetrics,
@@ -266,7 +284,15 @@ final class ServerDetailController
         return $charts;
     }
 
-    private function buildNetworkCharts(array $groupedMetrics, ?array $displayMetrics): array
+    /**
+     * @param GroupedMetrics $groupedMetrics
+     * @param list<string>|null $displayMetrics
+     * @return list<Chart>
+     */
+    private function buildNetworkCharts(
+        array $groupedMetrics,
+        ?array $displayMetrics
+    ): array
     {
         $interfaces = [];
 
@@ -324,7 +350,15 @@ final class ServerDetailController
         return $charts;
     }
 
-    private function buildTemperatureChart(array $groupedMetrics, ?array $displayMetrics): array
+    /**
+     * @param GroupedMetrics $groupedMetrics
+     * @param list<string>|null $displayMetrics
+     * @return Chart
+     */
+    private function buildTemperatureChart(
+        array $groupedMetrics,
+        ?array $displayMetrics
+    ): array
     {
         $datasets = [];
         $labels = [];
@@ -371,6 +405,12 @@ final class ServerDetailController
         ];
     }
 
+    /**
+     * @param GroupedMetrics $groupedMetrics
+     * @param list<string>|null $displayMetrics
+     * @param CurrentMetrics $currentMetrics
+     * @return list<Chart>
+     */
     private function buildDiskCharts(
         array $groupedMetrics,
         ?array $displayMetrics,
@@ -415,6 +455,15 @@ final class ServerDetailController
         return $charts;
     }
 
+    /**
+     * @param GroupedMetrics $groupedMetrics
+     * @param list<string>|null $displayMetrics
+     * @param Chart $temperatureChart
+     * @param list<Chart> $diskCharts
+     * @param list<Chart> $networkCharts
+     * @param CurrentMetrics $currentMetrics
+     * @return list<Chart>
+     */
     private function buildSummaryCards(
         array $groupedMetrics,
         ?array $displayMetrics,
@@ -498,18 +547,21 @@ final class ServerDetailController
                     $topNetwork = ['label' => $chart['title'], 'value' => round($peak, 2), 'unit' => $chart['unit'] ?? ''];
                 }
             }
-            if ($topNetwork) {
-                $cards[] = [
-                    'title' => 'Самый активный интерфейс',
-                    'value' => $topNetwork['value'] . $topNetwork['unit'],
-                    'subtitle' => $topNetwork['label'],
-                ];
-            }
+            $cards[] = [
+                'title' => 'Самый активный интерфейс',
+                'value' => $topNetwork['value'] . $topNetwork['unit'],
+                'subtitle' => $topNetwork['label'],
+            ];
         }
 
         return $cards;
     }
 
+    /**
+     * @param GroupedMetrics $groupedMetrics
+     * @param CurrentMetrics $currentMetrics
+     * @return array{totalGb: float, usedGb: float, freeGb: float}|null
+     */
     private function buildRamDetails(
         array $groupedMetrics,
         array $currentMetrics = []
@@ -539,11 +591,19 @@ final class ServerDetailController
         ];
     }
 
-    private function isMetricSelected(string $metricName, ?array $displayMetrics): bool
+    /** @param list<string>|null $displayMetrics */
+    private function isMetricSelected(
+        string $metricName,
+        ?array $displayMetrics
+    ): bool
     {
         return is_array($displayMetrics) && in_array($metricName, $displayMetrics, true);
     }
 
+    /**
+     * @param list<MetricPoint> $points
+     * @return list<string>
+     */
     private function extractLabels(array $points): array
     {
         $labels = [];
@@ -555,6 +615,10 @@ final class ServerDetailController
         return $labels;
     }
 
+    /**
+     * @param list<MetricPoint> $points
+     * @return list<float>
+     */
     private function extractValues(array $points): array
     {
         $values = [];
@@ -566,6 +630,10 @@ final class ServerDetailController
         return $values;
     }
 
+    /**
+     * @param list<MetricPoint> $points
+     * @return list<mixed>
+     */
     private function extractTimestamps(array $points): array
     {
         $timestamps = [];
@@ -580,7 +648,11 @@ final class ServerDetailController
         return $timestamps;
     }
 
-    private function formatPointTime(array $point, string $format = 'd.m.Y H:i:s'): string
+    /** @param MetricPoint $point */
+    private function formatPointTime(
+        array $point,
+        string $format = 'd.m.Y H:i:s'
+    ): string
     {
         $raw = $point['time_bucket']
             ?? $point['sample_time']
@@ -593,7 +665,10 @@ final class ServerDetailController
         return (new DateTimeImmutable((string) $raw))->format($format);
     }
 
-    /** @param list<array<string, mixed>> $points */
+    /**
+     * @param list<MetricPoint> $points
+     * @return MetricPoint
+     */
     private function latestPoint(array $points): array
     {
         if ($points === []) {
@@ -631,7 +706,7 @@ final class ServerDetailController
         };
     }
 
-    private function formatUptime($value): ?string
+    private function formatUptime(mixed $value): ?string
     {
         if ($value === null || $value === '') {
             return null;
@@ -660,6 +735,7 @@ final class ServerDetailController
         return implode(' ', $parts);
     }
 
+    /** @param array<string, string> $args */
     public function saveThresholds(
         Request $request,
         Response $response,
@@ -754,6 +830,7 @@ final class ServerDetailController
             ->withStatus(302);
     }
 
+    /** @param array<string, string> $args */
     public function saveServices(
         Request $request,
         Response $response,

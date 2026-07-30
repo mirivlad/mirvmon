@@ -11,13 +11,6 @@
     </div>
 </div>
 
-{% if session.flash_message is defined and session.flash_message %}
-<div class="alert alert-{{ session.flash_type == 'error' ? 'danger' : 'success' }} alert-dismissible fade show">
-    {{ session.flash_message|nl2br }}
-    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-</div>
-{% endif %}
-
 <form method="post" action="/admin/notifications/save">
     {% include "partials/csrf.twig" %}
 

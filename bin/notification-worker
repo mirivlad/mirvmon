@@ -52,31 +52,25 @@ if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
     });
 }
 
-$pdo = ConnectionFactory::fromEnvironment();
-$settings = new NotificationSettingsRepository(
-    $pdo,
-    new SecretCipher($applicationKey)
-);
-$delivery = new NotificationDeliveryService(
-    $settings,
-    new NotificationMessageFormatter(),
-    new TelegramTransport(),
-    new SmtpTransport()
-);
-$worker = new NotificationWorker(
-    new NotificationOutboxRepository($pdo),
-    $delivery->deliver(...)
-);
+$worker = null;
 
 do {
     try {
+        $worker ??= createNotificationWorker($applicationKey);
         $processed = $worker->runOnce($batchSize);
+    } catch (PDOException) {
+        fwrite(STDERR, "notification_worker_database_unavailable\n");
+        $worker = null;
+        $processed = 0;
+        if ($once) {
+            exit(1);
+        }
     } catch (Throwable $exception) {
         fwrite(
             STDERR,
             'notification_worker_failed:' . $exception::class . PHP_EOL
         );
-        $processed = 0;
+        exit(1);
     }
 
     if ($once) {
@@ -89,3 +83,23 @@ do {
         sleep(1);
     }
 } while ($running);
+
+function createNotificationWorker(string $applicationKey): NotificationWorker
+{
+    $pdo = ConnectionFactory::fromEnvironment();
+    $settings = new NotificationSettingsRepository(
+        $pdo,
+        new SecretCipher($applicationKey)
+    );
+    $delivery = new NotificationDeliveryService(
+        $settings,
+        new NotificationMessageFormatter(),
+        new TelegramTransport(),
+        new SmtpTransport()
+    );
+
+    return new NotificationWorker(
+        new NotificationOutboxRepository($pdo),
+        $delivery->deliver(...)
+    );
+}

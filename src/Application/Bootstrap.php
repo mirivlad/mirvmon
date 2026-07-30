@@ -28,7 +28,6 @@ use App\Services\MetricsIngestionService;
 use App\Services\PublicUrlResolver;
 use App\Services\ServerStatusService;
 use App\Services\ThresholdEvaluator;
-use Config\DatabaseConfig;
 use DateTimeZone;
 use PDO;
 use RuntimeException;
@@ -74,7 +73,6 @@ final class Bootstrap
     {
         $container = new Container();
         $pdo ??= ConnectionFactory::fromEnvironment();
-        DatabaseConfig::setInstance($pdo);
 
         $twig = Twig::create((string) $settings['templates_path'], [
             'cache' => $settings['twig_cache'],
@@ -183,7 +181,9 @@ final class Bootstrap
         $container->set(
             GroupController::class,
             static fn (Container $container): GroupController => new GroupController(
-                $container->get(Twig::class)
+                $container->get(PDO::class),
+                $container->get(Twig::class),
+                $container->get(ServerStatusService::class)
             )
         );
         $container->set(
@@ -205,12 +205,14 @@ final class Bootstrap
         $container->set(
             AlertController::class,
             static fn (Container $container): AlertController => new AlertController(
+                $container->get(PDO::class),
                 $container->get(Twig::class)
             )
         );
         $container->set(
             AdminController::class,
             static fn (Container $container): AdminController => new AdminController(
+                $container->get(PDO::class),
                 $container->get(Twig::class),
                 $container->get(NotificationSettingsRepository::class),
                 $container->get(NotificationOutboxRepository::class)
@@ -244,6 +246,7 @@ final class Bootstrap
         return $container;
     }
 
+    /** @return App<*> */
     public function app(): App
     {
         return AppFactory::create($this->container);

@@ -72,7 +72,7 @@ final class Migrator
 
         sort($files, SORT_STRING);
 
-        return array_values($files);
+        return $files;
     }
 
     /**

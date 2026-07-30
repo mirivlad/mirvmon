@@ -13,12 +13,16 @@
                     
                     <div class="mb-3">
                         <label for="name" class="form-label">Название группы *</label>
-                        <input type="text" class="form-control" id="name" name="name" value="{{ group.name }}" required>
+                        <input type="text" class="form-control" id="name"
+                               name="name" value="{{ group.name }}"
+                               maxlength="100" required>
                     </div>
                     
                     <div class="mb-3">
                         <label for="description" class="form-label">Описание</label>
-                        <textarea class="form-control" id="description" name="description" rows="3">{{ group.description|default('') }}</textarea>
+                        <textarea class="form-control" id="description"
+                                  name="description" rows="3"
+                                  maxlength="5000">{{ group.description|default('') }}</textarea>
                     </div>
                     
                     <div class="row">
@@ -26,7 +30,11 @@
                             <div class="mb-3">
                                 <label for="icon" class="form-label">Иконка (Font Awesome)</label>
                                 <div class="input-group">
-                                    <input type="text" class="form-control" id="icon" name="icon" value="{{ group.icon|default('fa-server') }}" placeholder="fa-server">
+                                    <input type="text" class="form-control"
+                                           id="icon" name="icon"
+                                           value="{{ group.icon|default('fa-server') }}"
+                                           placeholder="fa-server"
+                                           maxlength="50">
                                     <span class="input-group-text"><i class="fas {{ group.icon|default('fa-server') }}" id="iconPreview"></i></span>
                                     <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#iconPickerModal" data-icon-picker data-icon-input="icon">
                                         <i class="fas fa-icons"></i>

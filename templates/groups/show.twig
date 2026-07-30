@@ -65,10 +65,14 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% if server.last_metrics_at %}
-                                        <span class="badge bg-success">Активен</span>
+                                    {% if server.status == 'online' %}
+                                        <span class="badge bg-success">В норме</span>
+                                    {% elseif server.status == 'warning' %}
+                                        <span class="badge bg-warning text-dark">Внимание</span>
+                                    {% elseif server.status == 'critical' %}
+                                        <span class="badge bg-danger">Критично</span>
                                     {% else %}
-                                        <span class="badge bg-warning">Нет метрик</span>
+                                        <span class="badge bg-secondary">Нет данных</span>
                                     {% endif %}
                                 </td>
                                 <td>

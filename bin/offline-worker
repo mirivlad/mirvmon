@@ -31,20 +31,24 @@ if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
     });
 }
 
-$pdo = ConnectionFactory::fromEnvironment();
-$worker = new OfflineStatusWorker(
-    $pdo,
-    new NotificationOutboxRepository($pdo)
-);
+$worker = null;
 
 do {
     try {
+        $worker ??= createOfflineWorker();
         $worker->runOnce();
+    } catch (PDOException) {
+        fwrite(STDERR, "offline_worker_database_unavailable\n");
+        $worker = null;
+        if ($once) {
+            exit(1);
+        }
     } catch (Throwable $exception) {
         fwrite(
             STDERR,
             'offline_worker_failed:' . $exception::class . PHP_EOL
         );
+        exit(1);
     }
 
     if ($once) {
@@ -54,3 +58,13 @@ do {
         sleep(1);
     }
 } while ($running);
+
+function createOfflineWorker(): OfflineStatusWorker
+{
+    $pdo = ConnectionFactory::fromEnvironment();
+
+    return new OfflineStatusWorker(
+        $pdo,
+        new NotificationOutboxRepository($pdo)
+    );
+}

@@ -81,6 +81,8 @@ notifications. Запоздалый допустимый sample записыва
   transitions;
 - ingestion записывает событие в transactional outbox;
 - workers выполняют отправку асинхронно с retries и `SKIP LOCKED`;
+- после restart/недоступности БД workers пересоздают PDO-зависимости, не
+  зацикливаются на разорванном соединении;
 - после десяти неудачных попыток outbox row переходит в `dead`;
 - Telegram и SMTP настраиваются в dashboard;
 - Telegram proxy: HTTP, HTTPS, SOCKS4, SOCKS4A, SOCKS5, SOCKS5H;
@@ -128,6 +130,7 @@ Production Compose:
 - не публикует PostgreSQL port;
 - запускает `app` rootless с read-only filesystem, dropped capabilities и
   resource limits;
+- по умолчанию устанавливает `SESSION_SECURE=1` для TLS на внешнем nginx;
 - хранит persistent данные в volumes;
 - требует `APP_KEY`, `SETUP_TOKEN`, `DB_PASSWORD`;
 - использует pinned base/database images;
@@ -150,6 +153,13 @@ shellcheck docker/*.sh
 docker compose config
 docker build -f docker/Dockerfile .
 ```
+
+PHPStan выполняется на уровне 6 без baseline и suppressions. GitHub Actions
+повторяет PHP/TimescaleDB, frontend, agent и container checks; используемые
+actions закреплены полными commit SHA.
+
+Release tags `vX.Y.Z` публикуют multi-arch image в GHCR с SBOM и provenance.
+Prerelease tags не обновляют `latest`.
 
 Schema integration tests выполняются на чистой TimescaleDB и повторно после
 всех миграций. Agent tests выполняются поддерживаемыми версиями Python.

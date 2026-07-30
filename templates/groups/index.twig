@@ -19,6 +19,7 @@
                             <tr>
                                 <th>Название</th>
                                 <th>Описание</th>
+                                <th>Серверов</th>
                                 <th>Цвет</th>
                                 <th>Действия</th>
                             </tr>
@@ -30,6 +31,7 @@
                                     <i class="fas {{ group.icon|default('fa-box') }}" {% if group.color %}style="color: {{ group.color }}"{% endif %}></i> {{ group.name }}
                                 </td>
                                 <td>{{ group.description|default('') }}</td>
+                                <td>{{ group.server_count }}</td>
                                 <td>
                                     {% if group.color %}
                                     <span class="badge" style="background-color: {{ group.color }}">{{ group.color }}</span>

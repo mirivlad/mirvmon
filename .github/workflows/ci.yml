@@ -1,0 +1,141 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  php:
+    name: PHP 8.5 and TimescaleDB
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      timescaledb:
+        image: timescale/timescaledb:2.28.3-pg17@sha256:9372c578c11ea83c56e4a8f7af6ec4156646722d270f5ade79559ccb101161a9
+        env:
+          POSTGRES_DB: mirvmon_test
+          POSTGRES_USER: mirvmon
+          POSTGRES_PASSWORD: integration-only-ci
+          TIMESCALEDB_TELEMETRY: "off"
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "head -1 /var/lib/postgresql/data/postmaster.pid | grep -qx 1 && pg_isready -U mirvmon -d mirvmon_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_DB_HOST: 127.0.0.1
+      TEST_DB_PORT: "5432"
+      TEST_DB_NAME: mirvmon_test
+      TEST_DB_USERNAME: mirvmon
+      TEST_DB_PASSWORD: integration-only-ci
+      TEST_DB_SSLMODE: disable
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install PHP
+        uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
+        with:
+          php-version: "8.5"
+          extensions: curl, intl, pdo_pgsql, sodium
+          coverage: none
+          tools: composer:2.10.1
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Validate dependency metadata
+        run: |
+          composer validate --strict
+          composer audit
+
+      - name: Static analysis
+        run: composer analyse
+
+      - name: Test with TimescaleDB
+        run: composer test
+
+  frontend:
+    name: Frontend assets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Reproduce self-hosted assets
+        run: |
+          npm ci
+          npm run assets:sync
+          git diff --exit-code -- public/vendor
+
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=high
+
+  agent:
+    name: Agent / Python ${{ matrix.python }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.14"]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: agent/requirements.txt
+
+      - name: Install agent dependencies
+        run: python -m pip install --disable-pip-version-check -r agent/requirements.txt
+
+      - name: Test and compile agent
+        run: |
+          PYTHONPATH=agent python -m unittest discover -s agent/tests
+          python -m compileall -q agent
+
+  container:
+    name: Container and Compose
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      MIRVMON_IMAGE: mirvmon:test
+      APP_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      SETUP_TOKEN: 0000000000000000000000000000000000000000000000000000000000000000
+      DB_PASSWORD: integration-only-container
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate shell and Compose
+        run: |
+          shellcheck docker/*.sh
+          docker compose -f docker/docker-compose.yml config --quiet
+          docker compose \
+            -f docker/docker-compose.yml \
+            -f docker/docker-compose.build.yml \
+            config --quiet
+
+      - name: Build production image
+        run: docker build --tag mirvmon:test --file docker/Dockerfile .

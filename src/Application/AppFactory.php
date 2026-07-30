@@ -39,6 +39,7 @@ use Slim\Views\TwigMiddleware;
 
 final class AppFactory
 {
+    /** @return App<*> */
     public static function create(ContainerInterface $container): App
     {
         $app = SlimAppFactory::create();
@@ -193,6 +194,17 @@ final class AppFactory
             '/api/v1/agent/config',
             self::controller($container, AgentController::class, 'getAgentConfig')
         );
+        $app->get('/livez', static function (
+            ServerRequestInterface $request,
+            ResponseInterface $response
+        ): ResponseInterface {
+            $response->getBody()->write('alive');
+
+            return $response->withHeader(
+                'Content-Type',
+                'text/plain; charset=utf-8'
+            );
+        });
         $app->get('/readyz', static function (
             ServerRequestInterface $request,
             ResponseInterface $response
@@ -210,6 +222,7 @@ final class AppFactory
             (string) $settings['session_name'],
             (bool) $settings['session_secure'],
             statelessPaths: [
+                '/livez',
                 '/readyz',
                 '/api/v1/metrics',
                 '/get-agent',

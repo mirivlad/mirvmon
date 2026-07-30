@@ -26,6 +26,7 @@ final class AgentController
     ) {
     }
 
+    /** @param array<string, string> $args */
     public function generateInstallScript(
         Request $request,
         Response $response,
@@ -54,6 +55,7 @@ final class AgentController
         );
     }
 
+    /** @param array<string, string> $args */
     public function generateWindowsInstallScript(
         Request $request,
         Response $response,
@@ -82,6 +84,7 @@ final class AgentController
         );
     }
 
+    /** @param array<string, string> $args */
     public function generateWindowsBatScript(
         Request $request,
         Response $response,
@@ -110,6 +113,7 @@ final class AgentController
         );
     }
 
+    /** @param array<string, string> $args */
     public function downloadAgent(
         Request $request,
         Response $response,
@@ -122,6 +126,7 @@ final class AgentController
         );
     }
 
+    /** @param array<string, string> $args */
     public function downloadAgentFile(
         Request $request,
         Response $response,
@@ -142,6 +147,7 @@ final class AgentController
         );
     }
 
+    /** @param array<string, string> $args */
     public function getAgentConfig(
         Request $request,
         Response $response,
@@ -191,6 +197,7 @@ final class AgentController
         ]);
     }
 
+    /** @param array<string, string> $args */
     public function getConfig(
         Request $request,
         Response $response,
@@ -225,6 +232,7 @@ final class AgentController
         ]);
     }
 
+    /** @param array<string, string> $args */
     public function updateConfig(
         Request $request,
         Response $response,
@@ -300,6 +308,7 @@ final class AgentController
         return $this->json($response, ['saved' => true]);
     }
 
+    /** @param array<string, string> $args */
     public function getStatus(
         Request $request,
         Response $response,

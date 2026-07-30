@@ -10,8 +10,16 @@ var
 !composer.lock
 !migrations/*.sql
 tests
+.github
+.playwright-mcp
+.phpunit.cache
+docs
+package.json
+package-lock.json
+phpunit.xml
+phpstan.neon
+scripts
 .env
-monitoring_system_dump.sql
 *fixes*
 *.svg
 *.pyc

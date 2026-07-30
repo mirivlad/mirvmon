@@ -1,189 +1,310 @@
 <?php
-// src/Controllers/GroupController.php
+
+declare(strict_types=1);
 
 namespace App\Controllers;
 
-use App\Models\Model;
+use App\Services\ServerStatusService;
+use InvalidArgumentException;
+use PDO;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Views\Twig;
+use Throwable;
 
-class GroupController extends Model
+final class GroupController
 {
-    private $twig;
-
-    public function __construct(Twig $twig)
-    {
-        parent::__construct();
-        $this->twig = $twig;
+    public function __construct(
+        private readonly PDO $pdo,
+        private readonly Twig $twig,
+        private readonly ServerStatusService $status
+    ) {
     }
 
-    public function index(Request $request, Response $response, $args)
-    {
-        $stmt = $this->pdo->prepare("SELECT * FROM server_groups ORDER BY name");
-        $stmt->execute();
-        $groups = $stmt->fetchAll();
+    /** @param array<string, string> $args */
+    public function index(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        $groups = $this->pdo->query(
+            <<<'SQL'
+            SELECT
+                groups.*,
+                count(servers.id) AS server_count
+            FROM server_groups AS groups
+            LEFT JOIN servers ON servers.group_id = groups.id
+            GROUP BY groups.id
+            ORDER BY groups.sort_order, groups.name, groups.id
+            SQL
+        )?->fetchAll() ?? [];
 
-        $templateData = [
+        return $this->twig->render($response, 'groups/index.twig', [
             'title' => 'Группы серверов',
-            'groups' => $groups
-        ];
-
-        return $this->twig->render($response, 'groups/index.twig', $templateData);
-    }
-
-    public function create(Request $request, Response $response, $args)
-    {
-        $templateData = [
-            'title' => 'Создать группу'
-        ];
-
-        return $this->twig->render($response, 'groups/create.twig', $templateData);
-    }
-
-    public function store(Request $request, Response $response, $args)
-    {
-        $params = $request->getParsedBody();
-
-        $stmt = $this->pdo->prepare("
-            INSERT INTO server_groups (name, description, icon, color)
-            VALUES (:name, :description, :icon, :color)
-        ");
-
-        $result = $stmt->execute([
-            ':name' => $params['name'],
-            ':description' => $params['description'] ?? '',
-            ':icon' => $params['icon'] ?? '',
-            ':color' => $params['color'] ?? ''
+            'groups' => $groups,
         ]);
-
-        if ($result) {
-            return $response->withHeader('Location', '/groups')->withStatus(302);
-        } else {
-            // TODO: Обработка ошибки
-            return $response->withHeader('Location', '/groups/create')->withStatus(302);
-        }
     }
 
-    public function edit(Request $request, Response $response, $args)
-    {
-        $id = $args['id'];
+    /** @param array<string, string> $args */
+    public function create(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        return $this->twig->render($response, 'groups/create.twig', [
+            'title' => 'Создать группу',
+        ]);
+    }
 
-        $stmt = $this->pdo->prepare("SELECT * FROM server_groups WHERE id = :id");
-        $stmt->execute([':id' => $id]);
-        $group = $stmt->fetch();
+    /** @param array<string, string> $args */
+    public function store(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        try {
+            $group = $this->validatedGroup($request->getParsedBody());
+            $statement = $this->pdo->prepare(
+                <<<'SQL'
+                INSERT INTO server_groups (name, description, icon, color)
+                VALUES (:name, :description, :icon, :color)
+                SQL
+            );
+            $statement->execute($group);
+            $this->flash('Группа создана', 'success');
 
-        if (!$group) {
-            return $response->withHeader('Location', '/groups')->withStatus(302);
+            return $this->redirect($response, '/groups');
+        } catch (InvalidArgumentException $exception) {
+            $this->flash($exception->getMessage(), 'error');
+        } catch (Throwable) {
+            $this->flash('Не удалось создать группу', 'error');
         }
 
-        $templateData = [
+        return $this->redirect($response, '/groups/create');
+    }
+
+    /** @param array<string, string> $args */
+    public function edit(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        $group = $this->find($this->groupId($args));
+        if ($group === null) {
+            $this->flash('Группа не найдена', 'error');
+
+            return $this->redirect($response, '/groups');
+        }
+
+        return $this->twig->render($response, 'groups/edit.twig', [
             'title' => 'Редактировать группу',
-            'group' => $group
-        ];
-
-        return $this->twig->render($response, 'groups/edit.twig', $templateData);
-    }
-
-    public function update(Request $request, Response $response, $args)
-    {
-        $id = $args['id'];
-        $params = $request->getParsedBody();
-
-        $stmt = $this->pdo->prepare("
-            UPDATE server_groups
-            SET name = :name, description = :description, icon = :icon, color = :color
-            WHERE id = :id
-        ");
-
-        $result = $stmt->execute([
-            ':id' => $id,
-            ':name' => $params['name'],
-            ':description' => $params['description'] ?? '',
-            ':icon' => $params['icon'] ?? '',
-            ':color' => $params['color'] ?? ''
+            'group' => $group,
         ]);
-
-        if ($result) {
-            return $response->withHeader('Location', '/groups')->withStatus(302);
-        } else {
-            // TODO: Обработка ошибки
-            return $response->withHeader('Location', '/groups/' . $id . '/edit')->withStatus(302);
-        }
     }
 
-    public function delete(Request $request, Response $response, $args)
-    {
-        $id = $args['id'];
+    /** @param array<string, string> $args */
+    public function update(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        $groupId = $this->groupId($args);
+        if ($groupId === null || $this->find($groupId) === null) {
+            $this->flash('Группа не найдена', 'error');
 
-        $stmt = $this->pdo->prepare("DELETE FROM server_groups WHERE id = :id");
-        $result = $stmt->execute([':id' => $id]);
-
-        if ($result) {
-            return $response->withHeader('Location', '/groups')->withStatus(302);
-        } else {
-            // TODO: Обработка ошибки
-            return $response->withHeader('Location', '/groups')->withStatus(302);
+            return $this->redirect($response, '/groups');
         }
+
+        try {
+            $group = $this->validatedGroup($request->getParsedBody());
+            $statement = $this->pdo->prepare(
+                <<<'SQL'
+                UPDATE server_groups
+                SET
+                    name = :name,
+                    description = :description,
+                    icon = :icon,
+                    color = :color
+                WHERE id = :id
+                SQL
+            );
+            $statement->execute(['id' => $groupId, ...$group]);
+            $this->flash('Группа обновлена', 'success');
+
+            return $this->redirect($response, '/groups');
+        } catch (InvalidArgumentException $exception) {
+            $this->flash($exception->getMessage(), 'error');
+        } catch (Throwable) {
+            $this->flash('Не удалось обновить группу', 'error');
+        }
+
+        return $this->redirect($response, '/groups/' . $groupId . '/edit');
     }
 
-    public function show(Request $request, Response $response, $args)
-    {
-        $id = $args['id'];
+    /** @param array<string, string> $args */
+    public function delete(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        $groupId = $this->groupId($args);
+        if ($groupId === null) {
+            $this->flash('Группа не найдена', 'error');
 
-        // Получаем информацию о группе
-        $stmt = $this->pdo->prepare("SELECT * FROM server_groups WHERE id = :id");
-        $stmt->execute([':id' => $id]);
-        $group = $stmt->fetch();
-
-        if (!$group) {
-            return $response->withHeader('Location', '/groups')->withStatus(302);
+            return $this->redirect($response, '/groups');
         }
 
-        // Получаем серверы в этой группе
-        $stmt = $this->pdo->prepare("
-            SELECT s.*,
-                   (SELECT created_at FROM server_metrics sm WHERE sm.server_id = s.id ORDER BY sm.created_at DESC LIMIT 1) as last_metrics_at
-            FROM servers s
-            WHERE s.group_id = :group_id
-            ORDER BY s.name
-        ");
-        $stmt->execute([':group_id' => $id]);
-        $servers = $stmt->fetchAll();
-
-        // Получаем статистику для каждого сервера
-        $serverStats = [];
-        foreach ($servers as $server) {
-            $stmt = $this->pdo->prepare("
-                SELECT mn.name, sm.value, mn.unit
-                FROM server_metrics sm
-                JOIN metric_names mn ON sm.metric_name_id = mn.id
-                WHERE sm.server_id = :server_id
-                ORDER BY sm.created_at DESC
-                LIMIT 5
-            ");
-            $stmt->execute([':server_id' => $server['id']]);
-
-            $metrics = [];
-            while ($row = $stmt->fetch()) {
-                if (!isset($metrics[$row['name']])) {
-                    $metrics[$row['name']] = [
-                        'value' => $row['value'],
-                        'unit' => $row['unit']
-                    ];
-                }
-            }
-
-            $serverStats[$server['id']] = $metrics;
+        try {
+            $statement = $this->pdo->prepare(
+                'DELETE FROM server_groups WHERE id = :id'
+            );
+            $statement->execute(['id' => $groupId]);
+            $this->flash(
+                $statement->rowCount() === 1
+                    ? 'Группа удалена; серверы оставлены без группы'
+                    : 'Группа не найдена',
+                $statement->rowCount() === 1 ? 'success' : 'error'
+            );
+        } catch (Throwable) {
+            $this->flash('Не удалось удалить группу', 'error');
         }
 
-        $templateData = [
+        return $this->redirect($response, '/groups');
+    }
+
+    /** @param array<string, string> $args */
+    public function show(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        $group = $this->find($this->groupId($args));
+        if ($group === null) {
+            $this->flash('Группа не найдена', 'error');
+
+            return $this->redirect($response, '/groups');
+        }
+
+        $statement = $this->pdo->prepare(
+            <<<'SQL'
+            SELECT
+                servers.id,
+                servers.name,
+                servers.address,
+                servers.description,
+                servers.is_active,
+                servers.last_metrics_at,
+                servers.offline_timeout_seconds,
+                count(alerts.id) FILTER (
+                    WHERE alerts.severity = 'warning'
+                ) AS warning_alerts,
+                count(alerts.id) FILTER (
+                    WHERE alerts.severity = 'critical'
+                ) AS critical_alerts
+            FROM servers
+            LEFT JOIN alerts
+              ON alerts.server_id = servers.id
+             AND alerts.resolved = FALSE
+            WHERE servers.group_id = :group_id
+            GROUP BY servers.id
+            ORDER BY servers.name, servers.id
+            SQL
+        );
+        $statement->execute(['group_id' => $group['id']]);
+        $servers = $this->status->enrich($statement->fetchAll());
+
+        return $this->twig->render($response, 'groups/show.twig', [
             'title' => 'Группа: ' . $group['name'],
             'group' => $group,
             'servers' => $servers,
-            'serverStats' => $serverStats
-        ];
+        ]);
+    }
 
-        return $this->twig->render($response, 'groups/show.twig', $templateData);
+    /** @param array<string, string> $args */
+    private function groupId(array $args): ?int
+    {
+        $id = filter_var(
+            $args['id'] ?? null,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1]]
+        );
+
+        return $id === false ? null : $id;
+    }
+
+    /** @return array<string, mixed>|null */
+    private function find(?int $groupId): ?array
+    {
+        if ($groupId === null) {
+            return null;
+        }
+
+        $statement = $this->pdo->prepare(
+            'SELECT * FROM server_groups WHERE id = :id'
+        );
+        $statement->execute(['id' => $groupId]);
+        $group = $statement->fetch();
+
+        return is_array($group) ? $group : null;
+    }
+
+    /**
+     * @return array{
+     *     name: string,
+     *     description: ?string,
+     *     icon: string,
+     *     color: string
+     * }
+     */
+    private function validatedGroup(mixed $body): array
+    {
+        $body = is_array($body) ? $body : [];
+        $name = trim((string) ($body['name'] ?? ''));
+        if (
+            preg_match('/^.{1,100}$/us', $name) !== 1
+            || preg_match('/\S/u', $name) !== 1
+        ) {
+            throw new InvalidArgumentException(
+                'Название группы должно содержать от 1 до 100 символов'
+            );
+        }
+
+        $description = trim((string) ($body['description'] ?? ''));
+        if (preg_match('/^.{0,5000}$/us', $description) !== 1) {
+            throw new InvalidArgumentException(
+                'Описание группы не должно превышать 5000 символов'
+            );
+        }
+
+        $icon = trim((string) ($body['icon'] ?? 'fa-server'));
+        if (preg_match('/^fa-[a-z0-9-]{1,47}$/', $icon) !== 1) {
+            throw new InvalidArgumentException('Выберите допустимую иконку');
+        }
+
+        $color = trim((string) ($body['color'] ?? '#3157d5'));
+        if ($color === '') {
+            $color = '#3157d5';
+        }
+        if (preg_match('/^#[0-9a-f]{6}$/i', $color) !== 1) {
+            throw new InvalidArgumentException('Выберите допустимый цвет');
+        }
+
+        return [
+            'name' => $name,
+            'description' => $description === '' ? null : $description,
+            'icon' => $icon,
+            'color' => strtolower($color),
+        ];
+    }
+
+    private function flash(string $message, string $type): void
+    {
+        $_SESSION['flash_message'] = $message;
+        $_SESSION['flash_type'] = $type;
+    }
+
+    private function redirect(Response $response, string $location): Response
+    {
+        return $response->withHeader('Location', $location)->withStatus(302);
     }
 }
