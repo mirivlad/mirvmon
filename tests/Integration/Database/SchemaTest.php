@@ -187,6 +187,6 @@ final class SchemaTest extends TestCase
         self::assertSame([], $migrator->migrate());
 
         $count = self::$pdo?->query('SELECT count(*) FROM schema_migrations')->fetchColumn();
-        self::assertSame('11', (string) $count);
+        self::assertSame('12', (string) $count);
     }
 }

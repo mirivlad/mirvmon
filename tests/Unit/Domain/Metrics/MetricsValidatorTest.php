@@ -183,4 +183,26 @@ final class MetricsValidatorTest extends TestCase
             ],
         ];
     }
+
+    public function testAgentVersionIsOptionalAndBounded(): void
+    {
+        $validator = new MetricsValidator();
+        $payload = [
+            'version' => 2,
+            'sample_id' => '20000000-0000-4000-8000-000000000001',
+            'sample_time' => (new DateTimeImmutable())->format('Y-m-d\\TH:i:s\\Z'),
+            'token' => str_repeat('t', 64),
+            'metrics' => ['cpu_load' => 1.0],
+        ];
+
+        // An agent released before this field keeps being accepted.
+        self::assertNull($validator->validate($payload)->agentVersion);
+
+        $payload['agent_version'] = '2.0.0';
+        self::assertSame('2.0.0', $validator->validate($payload)->agentVersion);
+
+        $payload['agent_version'] = "2.0.0\nrm -rf";
+        $this->expectException(MetricsValidationException::class);
+        $validator->validate($payload);
+    }
 }

@@ -105,6 +105,7 @@ final class AgentInstallerServiceTest extends TestCase
             $script
         );
         self::assertStringContainsString('"version":2,', $script);
+        self::assertStringContainsString('"agent_version":"legacy-1.0",', $script);
         self::assertStringContainsString("'yyyy-MM-ddTHH:mm:ss') + 'Z'", $script);
         foreach (['cpu_load', 'ram_used', 'ram_total_gb', 'uptime', 'disk_used'] as $metric) {
             self::assertStringContainsString($metric, $script);

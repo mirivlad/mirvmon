@@ -316,12 +316,16 @@ final class MetricsIngestionServiceTest extends TestCase
                     'value' => 1.0,
                 ]],
                 'top_memory' => [],
-            ]
+            ],
+            '2.0.0'
         );
 
         $this->ingestion->ingest($envelope);
 
         self::assertSame(1, $this->tableCount('process_snapshots'));
+        self::assertSame('2.0.0', (string) self::$pdo?->query(
+            'SELECT agent_version FROM servers WHERE id = ' . $this->serverId
+        )->fetchColumn());
         self::assertSame(1, $this->tableCount('metric_samples'));
         self::assertStringContainsString(
             '"top_cpu"',

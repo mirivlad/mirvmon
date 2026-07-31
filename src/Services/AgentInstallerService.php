@@ -384,6 +384,7 @@ function Build-Envelope {
     $sampleTime = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss') + 'Z'
     return '{' `
         + '"version":2,' `
+        + '"agent_version":"legacy-1.0",' `
         + '"sample_id":' + (Format-JsonText ([guid]::NewGuid().ToString())) + ',' `
         + '"sample_time":' + (Format-JsonText $sampleTime) + ',' `
         + '"token":' + (Format-JsonText $Token) + ',' `

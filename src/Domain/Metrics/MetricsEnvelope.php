@@ -29,7 +29,8 @@ final readonly class MetricsEnvelope
         public string $token,
         public array $metrics,
         public array $services,
-        public ?array $processSnapshot
+        public ?array $processSnapshot,
+        public ?string $agentVersion = null
     ) {
     }
 }

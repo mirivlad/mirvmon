@@ -18,6 +18,7 @@ final class MetricsValidator
         'metrics',
         'services',
         'process_snapshot',
+        'agent_version',
     ];
     private const SERVICE_FIELDS = [
         'name',
@@ -89,6 +90,7 @@ final class MetricsValidator
             throw new MetricsValidationException('invalid_token');
         }
 
+        $agentVersion = $this->agentVersion($payload['agent_version'] ?? null);
         $metrics = $this->metrics($payload['metrics'] ?? null);
         $services = $this->services($payload['services'] ?? []);
         $snapshot = $this->processSnapshot($payload['process_snapshot'] ?? null);
@@ -100,8 +102,27 @@ final class MetricsValidator
             $token,
             $metrics,
             $services,
-            $snapshot
+            $snapshot,
+            $agentVersion
         );
+    }
+
+    /**
+     * Optional so an agent released before this field keeps being accepted.
+     */
+    private function agentVersion(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        if (
+            !is_string($value)
+            || preg_match('/^[A-Za-z0-9][A-Za-z0-9._+-]{0,31}$/', $value) !== 1
+        ) {
+            throw new MetricsValidationException('invalid_agent_version');
+        }
+
+        return $value;
     }
 
     /** @return array<string, float> */
