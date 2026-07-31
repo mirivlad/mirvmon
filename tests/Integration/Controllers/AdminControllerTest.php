@@ -159,6 +159,7 @@ final class AdminControllerTest extends TestCase
                 'default_warning_threshold' => '65.5',
                 'default_critical_threshold' => '91',
                 'default_duration_seconds' => '120',
+                'default_recovery_duration_seconds' => '600',
             ]);
         $this->controller->saveDefaultSettings(
             $request,
@@ -176,6 +177,7 @@ final class AdminControllerTest extends TestCase
         self::assertSame('65.5', $rows['default_warning_threshold']);
         self::assertSame('91', $rows['default_critical_threshold']);
         self::assertSame('120', $rows['default_duration_seconds']);
+        self::assertSame('600', $rows['default_recovery_duration_seconds']);
 
         $page = $this->controller->defaultSettings(
             (new ServerRequestFactory())->createServerRequest('GET', '/admin/defaults'),

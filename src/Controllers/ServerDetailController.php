@@ -761,6 +761,7 @@ final class ServerDetailController
             $warning = $params[$metricType['name'] . '_warning'] ?? '';
             $critical = $params[$metricType['name'] . '_critical'] ?? '';
             $duration = $params[$metricType['name'] . '_duration'] ?? '';
+            $recovery = $params[$metricType['name'] . '_recovery'] ?? '';
 
             if ($warning === '' && $critical === '') {
                 continue;
@@ -773,11 +774,17 @@ final class ServerDetailController
                 FILTER_VALIDATE_INT,
                 ['options' => ['min_range' => 0, 'max_range' => 86400]]
             );
+            $recoveryValue = $recovery === '' ? $defaults['recovery'] : filter_var(
+                $recovery,
+                FILTER_VALIDATE_INT,
+                ['options' => ['min_range' => 0, 'max_range' => 86400]]
+            );
 
             if (
                 $warningValue === null
                 || $criticalValue === null
                 || $durationValue === false
+                || $recoveryValue === false
                 || $criticalValue < $warningValue
             ) {
                 $_SESSION['flash_message'] = 'Проверьте пороги: critical должен быть не ниже warning, длительность — от 0 до 86400 секунд.';
@@ -793,6 +800,7 @@ final class ServerDetailController
                 'warning' => $warningValue,
                 'critical' => $criticalValue,
                 'duration' => (int) $durationValue,
+                'recovery' => (int) $recoveryValue,
             ];
 
             $used = [];
@@ -804,6 +812,9 @@ final class ServerDetailController
             }
             if ($duration === '') {
                 $used[] = 'duration=' . $defaults['duration'];
+            }
+            if ($recovery === '') {
+                $used[] = 'recovery=' . $defaults['recovery'];
             }
 
             if ($used !== []) {

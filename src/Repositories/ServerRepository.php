@@ -154,7 +154,14 @@ final class ServerRepository
         return $server;
     }
 
-    /** @return array<string, array{warning: ?float, critical: ?float, duration: int}> */
+    /**
+     * @return array<string, array{
+     *     warning: ?float,
+     *     critical: ?float,
+     *     duration: int,
+     *     recovery: int
+     * }>
+     */
     public function thresholds(int $serverId): array
     {
         $statement = $this->pdo->prepare(
@@ -163,7 +170,8 @@ final class ServerRepository
                 names.name,
                 thresholds.warning_threshold,
                 thresholds.critical_threshold,
-                thresholds.duration_seconds
+                thresholds.duration_seconds,
+                thresholds.recovery_duration_seconds
             FROM metric_thresholds AS thresholds
             INNER JOIN metric_names AS names ON names.id = thresholds.metric_id
             WHERE thresholds.server_id = :server_id
@@ -182,6 +190,7 @@ final class ServerRepository
                     ? null
                     : (float) $row['critical_threshold'],
                 'duration' => (int) $row['duration_seconds'],
+                'recovery' => (int) $row['recovery_duration_seconds'],
             ];
         }
 
@@ -216,7 +225,7 @@ final class ServerRepository
         return $value === false ? [] : $this->decodeList($value);
     }
 
-    /** @return array{warning: float, critical: float, duration: int} */
+    /** @return array{warning: float, critical: float, duration: int, recovery: int} */
     public function thresholdDefaults(): array
     {
         $statement = $this->pdo->query(
@@ -226,7 +235,8 @@ final class ServerRepository
             WHERE setting_key IN (
                 'default_warning_threshold',
                 'default_critical_threshold',
-                'default_duration_seconds'
+                'default_duration_seconds',
+                'default_recovery_duration_seconds'
             )
             SQL
         );
@@ -245,6 +255,7 @@ final class ServerRepository
             'warning' => (float) ($values['default_warning_threshold'] ?? 70),
             'critical' => (float) ($values['default_critical_threshold'] ?? 90),
             'duration' => (int) ($values['default_duration_seconds'] ?? 0),
+            'recovery' => (int) ($values['default_recovery_duration_seconds'] ?? 300),
         ];
     }
 
@@ -253,7 +264,8 @@ final class ServerRepository
      *     metric_id: int,
      *     warning: float,
      *     critical: float,
-     *     duration: int
+     *     duration: int,
+     *     recovery: int
      * }> $thresholds
      */
     public function replaceThresholds(int $serverId, array $thresholds): void
@@ -276,14 +288,16 @@ final class ServerRepository
                     metric_id,
                     warning_threshold,
                     critical_threshold,
-                    duration_seconds
+                    duration_seconds,
+                    recovery_duration_seconds
                 )
                 VALUES (
                     :server_id,
                     :metric_id,
                     :warning_threshold,
                     :critical_threshold,
-                    :duration_seconds
+                    :duration_seconds,
+                    :recovery_duration_seconds
                 )
                 SQL
             );
@@ -294,6 +308,7 @@ final class ServerRepository
                     'warning_threshold' => $threshold['warning'],
                     'critical_threshold' => $threshold['critical'],
                     'duration_seconds' => $threshold['duration'],
+                    'recovery_duration_seconds' => $threshold['recovery'],
                 ]);
             }
 

@@ -152,12 +152,14 @@ final class ServerRepositoryTest extends TestCase
             'warning' => 65,
             'critical' => 85,
             'duration' => 120,
+            'recovery' => 240,
         ]]);
         $repository->saveMonitoredServices($serverId, ['postgresql.service']);
         $repository->saveMonitoredServices($serverId, ['caddy.service']);
 
         self::assertSame(65.0, $repository->thresholds($serverId)['cpu_load']['warning']);
         self::assertSame(120, $repository->thresholds($serverId)['cpu_load']['duration']);
+        self::assertSame(240, $repository->thresholds($serverId)['cpu_load']['recovery']);
         self::assertSame(['caddy.service'], $repository->monitoredServices($serverId));
         self::assertSame('detail-server', $repository->find($serverId)['name'] ?? null);
     }
