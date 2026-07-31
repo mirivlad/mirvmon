@@ -85,6 +85,9 @@ Telegram и SMTP настраиваются в `/admin/notifications`. Telegram 
 - `GET /agent/install.sh?token=...` — одноразовый Linux installer;
 - `GET /agent/install.ps1?token=...` — одноразовый PowerShell installer;
 - `GET /agent/install.bat?token=...` — одноразовый BAT installer;
+- `GET /agent/install-legacy.ps1?token=...` — установщик для Windows 7 и
+  Server 2008 R2, разворачивает сборщик на PowerShell 2.0 без Python;
+- `GET /agent/install-legacy.bat?token=...` — то же одноразовым BAT;
 - `GET /livez` — только HTTP runtime;
 - `GET /readyz` — приложение и БД.
 

@@ -114,6 +114,64 @@ final class AgentController
     }
 
     /** @param array<string, string> $args */
+    public function generateLegacyWindowsInstallScript(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        $credential = $this->exchangeInstallerCredential($request);
+        if ($credential === null) {
+            return $this->plainError($response, 403, 'Invalid or expired installer token.');
+        }
+
+        try {
+            $script = $this->installers->windowsLegacyPowerShell(
+                $this->urlResolver->resolve($request),
+                $credential->token
+            );
+        } catch (Throwable) {
+            return $this->plainError($response, 400, 'Invalid public service URL.');
+        }
+
+        return $this->download(
+            $response,
+            $script,
+            'text/plain; charset=UTF-8',
+            'mirvmon-install-legacy.ps1',
+            secret: true
+        );
+    }
+
+    /** @param array<string, string> $args */
+    public function generateLegacyWindowsBatScript(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        $credential = $this->exchangeInstallerCredential($request);
+        if ($credential === null) {
+            return $this->plainError($response, 403, 'Invalid or expired installer token.');
+        }
+
+        try {
+            $script = $this->installers->windowsLegacyBatch(
+                $this->urlResolver->resolve($request),
+                $credential->token
+            );
+        } catch (Throwable) {
+            return $this->plainError($response, 400, 'Invalid public service URL.');
+        }
+
+        return $this->download(
+            $response,
+            $script,
+            'application/x-msdos-program',
+            'mirvmon-install-legacy.bat',
+            secret: true
+        );
+    }
+
+    /** @param array<string, string> $args */
     public function downloadAgent(
         Request $request,
         Response $response,
