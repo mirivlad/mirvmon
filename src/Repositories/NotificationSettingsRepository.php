@@ -97,7 +97,16 @@ final class NotificationSettingsRepository
                 updated_at = CURRENT_TIMESTAMP
              WHERE id = 1'
         );
-        $statement->execute($normalized);
+        foreach ($normalized as $column => $value) {
+            // PDOStatement::execute() would bind booleans as strings, and
+            // PostgreSQL rejects the empty string false becomes.
+            $statement->bindValue(
+                $column,
+                $value,
+                is_bool($value) ? PDO::PARAM_BOOL : PDO::PARAM_STR
+            );
+        }
+        $statement->execute();
     }
 
     /**
