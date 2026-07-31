@@ -110,7 +110,17 @@ curl --fail http://127.0.0.1:8080/readyz
 ```
 
 `/livez` checks the HTTP runtime; `/readyz` additionally checks database
-connectivity and is used by the container health check.
+connectivity and is used by the container health check, both in the image and
+in the Compose service. A container reported unhealthy with
+`Failed to connect to localhost port 2019` runs a MirvMon image older than
+0.1.3 under a Compose file without the `healthcheck:` block: that probe belongs
+to the FrankenPHP base image and targets the Caddy admin API, which the
+Caddyfile disables. Confirm which probe a container uses with
+`docker inspect <container> --format '{{json .Config.Healthcheck}}'`.
+
+A Telegram proxy running on the Docker host itself is reachable from the app
+container as `host.docker.internal`; the Compose service publishes that name
+through `host-gateway`. Inside the container `127.0.0.1` is the container.
 
 Logs:
 

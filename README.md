@@ -197,7 +197,10 @@ SMTP и Telegram настраиваются в `/admin/notifications`. Дост�
 
 Для Telegram можно выбрать прямое соединение либо HTTP, HTTPS, SOCKS4, SOCKS4A,
 SOCKS5 или SOCKS5H proxy. Хост, порт, логин и пароль задаются отдельными полями;
-прокси применяется только к Telegram. Bot token, SMTP password и proxy password
+прокси применяется только к Telegram. Прокси, который слушает на самом хосте
+Docker, указывается как `host.docker.internal` — production Compose объявляет
+это имя через `host-gateway`. Адрес `127.0.0.1` в этом поле указывает на сам
+контейнер и работать не будет. Bot token, SMTP password и proxy password
 шифруются authenticated encryption с `APP_KEY`. Веб-интерфейс показывает только
 факт наличия секрета: пустое поле сохраняет прежнее значение, а удаление требует
 отдельного checkbox.
