@@ -42,6 +42,7 @@ final class NotificationSettingsRepository
             $settings['telegram_proxy_password_encrypted']
         );
         $this->normalizeBooleans($settings);
+        $this->decodeRecipients($settings);
 
         return $settings;
     }
@@ -65,6 +66,7 @@ final class NotificationSettingsRepository
             $settings['telegram_proxy_password_encrypted']
         );
         $this->normalizeBooleans($settings);
+        $this->decodeRecipients($settings);
 
         return $settings;
     }
@@ -81,7 +83,7 @@ final class NotificationSettingsRepository
                 smtp_password_encrypted = :smtp_password_encrypted,
                 smtp_encryption = :smtp_encryption,
                 smtp_from_email = :smtp_from_email,
-                smtp_recipient_email = :smtp_recipient_email,
+                smtp_recipients = CAST(:smtp_recipients AS jsonb),
                 email_enabled = :email_enabled,
                 telegram_bot_token_encrypted = :telegram_bot_token_encrypted,
                 telegram_chat_id = :telegram_chat_id,
@@ -123,9 +125,7 @@ final class NotificationSettingsRepository
         $smtpUsername = $this->nullableTrimmed($input['smtp_username'] ?? null);
         $smtpEncryption = (string) ($input['smtp_encryption'] ?? 'tls');
         $smtpFrom = $this->nullableTrimmed($input['smtp_from_email'] ?? null);
-        $smtpRecipient = $this->nullableTrimmed(
-            $input['smtp_recipient_email'] ?? null
-        );
+        $smtpRecipients = $this->emailList($input['smtp_recipients'] ?? null);
         if (!in_array($smtpEncryption, ['tls', 'ssl', 'none'], true)) {
             throw new InvalidArgumentException('Unsupported SMTP encryption.');
         }
@@ -135,13 +135,7 @@ final class NotificationSettingsRepository
         if ($smtpFrom !== null && filter_var($smtpFrom, FILTER_VALIDATE_EMAIL) === false) {
             throw new InvalidArgumentException('Invalid SMTP sender email.');
         }
-        if (
-            $smtpRecipient !== null
-            && filter_var($smtpRecipient, FILTER_VALIDATE_EMAIL) === false
-        ) {
-            throw new InvalidArgumentException('Invalid SMTP recipient email.');
-        }
-        if ($emailEnabled && ($smtpHost === null || $smtpFrom === null || $smtpRecipient === null)) {
+        if ($emailEnabled && ($smtpHost === null || $smtpFrom === null || $smtpRecipients === [])) {
             throw new InvalidArgumentException(
                 'Enabled email notifications require SMTP host, sender and recipient.'
             );
@@ -208,7 +202,7 @@ final class NotificationSettingsRepository
             'smtp_password_encrypted' => $smtpPassword,
             'smtp_encryption' => $smtpEncryption,
             'smtp_from_email' => $smtpFrom,
-            'smtp_recipient_email' => $smtpRecipient,
+            'smtp_recipients' => json_encode($smtpRecipients, JSON_THROW_ON_ERROR),
             'email_enabled' => $emailEnabled,
             'telegram_bot_token_encrypted' => $telegramToken,
             'telegram_chat_id' => $telegramChatId,
@@ -225,6 +219,39 @@ final class NotificationSettingsRepository
                 $input['notify_on_critical'] ?? false
             ),
         ];
+    }
+
+    /**
+     * Accepts the comma or newline separated list the form submits.
+     *
+     * @return list<string>
+     */
+    private function emailList(mixed $value): array
+    {
+        if (is_array($value)) {
+            $parts = $value;
+        } else {
+            $parts = preg_split('/[,;\r\n]+/', (string) ($value ?? '')) ?: [];
+        }
+
+        $emails = [];
+        foreach ($parts as $part) {
+            $email = trim((string) $part);
+            if ($email === '') {
+                continue;
+            }
+            if (filter_var($email, FILTER_VALIDATE_EMAIL) === false || strlen($email) > 254) {
+                throw new InvalidArgumentException('Invalid SMTP recipient email.');
+            }
+            if (!in_array($email, $emails, true)) {
+                $emails[] = $email;
+            }
+        }
+        if (count($emails) > 20) {
+            throw new InvalidArgumentException('Too many SMTP recipients.');
+        }
+
+        return $emails;
     }
 
     /** @param array<string, mixed> $input */
@@ -325,6 +352,21 @@ final class NotificationSettingsRepository
         }
 
         return $value;
+    }
+
+    /** @param array<string, mixed> $settings */
+    private function decodeRecipients(array &$settings): void
+    {
+        $decoded = json_decode((string) ($settings['smtp_recipients'] ?? '[]'), true);
+        $recipients = [];
+        if (is_array($decoded)) {
+            foreach ($decoded as $email) {
+                if (is_string($email) && $email !== '') {
+                    $recipients[] = $email;
+                }
+            }
+        }
+        $settings['smtp_recipients'] = $recipients;
     }
 
     /** @param array<string, mixed> $settings */

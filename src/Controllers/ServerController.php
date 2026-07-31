@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Services\AgentCredentialIssuer;
+use InvalidArgumentException;
 use JsonException;
 use PDO;
 use Psr\Http\Message\ResponseInterface as Response;
@@ -161,6 +162,9 @@ final class ServerController
             'server_display_metrics' => $this->decodeStringList(
                 $server['display_metrics'] ?? '[]'
             ),
+            'server_notification_emails' => $this->decodeStringList(
+                $server['notification_emails'] ?? '[]'
+            ),
         ]);
     }
 
@@ -206,9 +210,19 @@ final class ServerController
                 description = :description,
                 offline_timeout_seconds = :offline_timeout_seconds,
                 notify_on_offline = :notify_on_offline,
+                notification_telegram_chat_id = :notification_telegram_chat_id,
+                notification_emails = CAST(:notification_emails AS jsonb),
                 display_metrics = CAST(:display_metrics AS jsonb)
              WHERE id = :server_id'
         );
+        try {
+            $recipientEmails = $this->emailList($body['notification_emails'] ?? null);
+        } catch (InvalidArgumentException $exception) {
+            $_SESSION['flash_message'] = $exception->getMessage();
+            $_SESSION['flash_type'] = 'danger';
+
+            return $this->redirect($response, '/servers/' . $serverId . '/edit');
+        }
         $statement->execute([
             'server_id' => $serverId,
             'name' => $name,
@@ -217,6 +231,11 @@ final class ServerController
             'description' => $this->optionalString($body['description'] ?? null),
             'offline_timeout_seconds' => $timeout,
             'notify_on_offline' => isset($body['notify_on_offline']),
+            'notification_telegram_chat_id' => $this->optionalString(
+                $body['notification_telegram_chat_id'] ?? null,
+                100
+            ),
+            'notification_emails' => json_encode($recipientEmails, JSON_THROW_ON_ERROR),
             'display_metrics' => json_encode($displayMetrics, JSON_THROW_ON_ERROR),
         ]);
 
@@ -361,6 +380,35 @@ final class ServerController
             'server' => ['id' => $serverId, 'name' => $name],
             'installer_tokens' => $tokens,
         ]);
+    }
+
+    /**
+     * @return list<string>
+     * @throws InvalidArgumentException When an address is not an email.
+     */
+    private function emailList(mixed $value): array
+    {
+        $parts = preg_split('/[,;\r\n]+/', (string) ($value ?? '')) ?: [];
+        $emails = [];
+        foreach ($parts as $part) {
+            $email = trim((string) $part);
+            if ($email === '') {
+                continue;
+            }
+            if (filter_var($email, FILTER_VALIDATE_EMAIL) === false || strlen($email) > 254) {
+                throw new InvalidArgumentException(
+                    'Проверьте адреса получателей: «' . $email . '» не похож на email'
+                );
+            }
+            if (!in_array($email, $emails, true)) {
+                $emails[] = $email;
+            }
+        }
+        if (count($emails) > 20) {
+            throw new InvalidArgumentException('Слишком много адресов получателей');
+        }
+
+        return $emails;
     }
 
     private function optionalString(mixed $value, int $maximum = 5000): ?string

@@ -177,6 +177,47 @@ final class NotificationSettingsRepositoryTest extends TestCase
         self::assertNull($requeued[0]['last_error']);
     }
 
+    public function testAServerOverrideReplacesTheInstallationWideRecipients(): void
+    {
+        $this->repository->save($this->validSettings());
+        $outbox = new NotificationOutboxRepository(self::$pdo);
+        $shared = (int) self::$pdo?->query(
+            "INSERT INTO servers (name) VALUES ('shared') RETURNING id"
+        )->fetchColumn();
+        $owned = (int) self::$pdo?->query(
+            "INSERT INTO servers (name, notification_telegram_chat_id, notification_emails)
+             VALUES ('owned', '-500', '[\"ivan@example.net\"]'::jsonb)
+             RETURNING id"
+        )->fetchColumn();
+        $alert = (int) self::$pdo?->query(
+            "INSERT INTO alerts (server_id, kind, subject, severity)
+             VALUES ({$owned}, 'metric', 'cpu_load', 'critical')
+             RETURNING id"
+        )->fetchColumn();
+
+        $payload = ['severity' => 'critical', 'server_id' => $owned];
+        $outbox->enqueueConfigured($owned, $alert, 'metric_triggered', $payload, 'own');
+        $outbox->enqueueConfigured($shared, $alert, 'metric_triggered', $payload, 'shared');
+
+        $statement = self::$pdo?->prepare(
+            'SELECT channel, recipient
+             FROM notification_outbox
+             WHERE server_id = :id
+             ORDER BY channel, recipient'
+        );
+        $statement?->execute(['id' => $owned]);
+        self::assertSame(
+            [['email', 'ivan@example.net'], ['telegram', '-500']],
+            $statement?->fetchAll(PDO::FETCH_NUM)
+        );
+
+        $statement?->execute(['id' => $shared]);
+        self::assertSame(
+            [['email', 'ops@example.net'], ['telegram', '-100123']],
+            $statement?->fetchAll(PDO::FETCH_NUM)
+        );
+    }
+
     public function testPurgeKeepsUndeliveredJobsAndRecentHistory(): void
     {
         $outbox = new NotificationOutboxRepository(self::$pdo);
@@ -219,7 +260,7 @@ final class NotificationSettingsRepositoryTest extends TestCase
             'smtp_password' => 'smtp-secret',
             'smtp_encryption' => 'tls',
             'smtp_from_email' => 'monitor@example.net',
-            'smtp_recipient_email' => 'ops@example.net',
+            'smtp_recipients' => 'ops@example.net',
             'telegram_enabled' => true,
             'telegram_bot_token' => '123:bot-secret',
             'telegram_chat_id' => '-100123',

@@ -30,7 +30,9 @@ final class NotificationOutboxRepository
                 email_enabled,
                 telegram_enabled,
                 notify_on_warning,
-                notify_on_critical
+                notify_on_critical,
+                telegram_chat_id,
+                smtp_recipients
              FROM notification_settings
              WHERE id = 1'
         )?->fetch();
@@ -39,14 +41,8 @@ final class NotificationOutboxRepository
             return 0;
         }
 
-        $channels = [];
-        if ($this->toBool($settings['email_enabled'])) {
-            $channels[] = 'email';
-        }
-        if ($this->toBool($settings['telegram_enabled'])) {
-            $channels[] = 'telegram';
-        }
-        if ($channels === []) {
+        $deliveries = $this->deliveries($settings, $serverId);
+        if ($deliveries === []) {
             return 0;
         }
 
@@ -61,6 +57,7 @@ final class NotificationOutboxRepository
                 server_id,
                 alert_id,
                 channel,
+                recipient,
                 event_type,
                 payload,
                 deduplication_key
@@ -68,6 +65,7 @@ final class NotificationOutboxRepository
                 :server_id,
                 :alert_id,
                 :channel,
+                :recipient,
                 :event_type,
                 CAST(:payload AS jsonb),
                 :deduplication_key
@@ -76,14 +74,19 @@ final class NotificationOutboxRepository
         );
 
         $inserted = 0;
-        foreach ($channels as $channel) {
+        foreach ($deliveries as [$channel, $recipient]) {
             $statement->execute([
                 'server_id' => $serverId,
                 'alert_id' => $alertId,
                 'channel' => $channel,
+                'recipient' => $recipient,
                 'event_type' => $eventType,
                 'payload' => $encodedPayload,
-                'deduplication_key' => $deduplicationKey . ':' . $channel,
+                'deduplication_key' => $this->recipientKey(
+                    $deduplicationKey,
+                    $channel,
+                    $recipient
+                ),
             ]);
             $inserted += $statement->rowCount();
         }
@@ -91,11 +94,104 @@ final class NotificationOutboxRepository
         return $inserted;
     }
 
+    /**
+     * Resolves who this event reaches: a server may override the
+     * installation-wide chat and mailboxes, and each recipient becomes its own
+     * job so one rejected address cannot hold up the rest.
+     *
+     * @param array<string, mixed> $settings
+     * @return list<array{0: string, 1: ?string}>
+     */
+    private function deliveries(array $settings, ?int $serverId): array
+    {
+        $override = ['telegram' => null, 'emails' => []];
+        if ($serverId !== null) {
+            $statement = $this->pdo->prepare(
+                'SELECT notification_telegram_chat_id, notification_emails
+                 FROM servers
+                 WHERE id = :id'
+            );
+            $statement->execute(['id' => $serverId]);
+            $row = $statement->fetch();
+            if (is_array($row)) {
+                $chatId = trim((string) ($row['notification_telegram_chat_id'] ?? ''));
+                $override['telegram'] = $chatId === '' ? null : $chatId;
+                $override['emails'] = $this->emailList($row['notification_emails'] ?? null);
+            }
+        }
+
+        $deliveries = [];
+        if ($this->toBool($settings['email_enabled'])) {
+            $emails = $override['emails'] !== []
+                ? $override['emails']
+                : $this->emailList($settings['smtp_recipients'] ?? null);
+            foreach ($emails as $email) {
+                $deliveries[] = ['email', $email];
+            }
+        }
+        if ($this->toBool($settings['telegram_enabled'])) {
+            $chatId = $override['telegram']
+                ?? $this->nullableString($settings['telegram_chat_id'] ?? null);
+            if ($chatId !== null) {
+                $deliveries[] = ['telegram', $chatId];
+            }
+        }
+
+        return $deliveries;
+    }
+
+    /**
+     * The recipient is hashed into the key so an address of any length keeps
+     * the unique key inside its column.
+     */
+    private function recipientKey(
+        string $deduplicationKey,
+        string $channel,
+        ?string $recipient
+    ): string {
+        return $deduplicationKey
+            . ':' . $channel
+            . ':' . substr(hash('sha256', (string) $recipient), 0, 16);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function emailList(mixed $value): array
+    {
+        $decoded = is_array($value)
+            ? $value
+            : json_decode((string) ($value ?? '[]'), true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $emails = [];
+        foreach ($decoded as $email) {
+            if (is_string($email) && trim($email) !== '') {
+                $emails[] = trim($email);
+            }
+        }
+
+        return $emails;
+    }
+
+    private function nullableString(mixed $value): ?string
+    {
+        $text = trim((string) ($value ?? ''));
+
+        return $text === '' ? null : $text;
+    }
+
     /** @param array<string, mixed> $payload */
     public function enqueueTest(array $payload): int
     {
         $settings = $this->pdo->query(
-            'SELECT email_enabled, telegram_enabled
+            'SELECT
+                email_enabled,
+                telegram_enabled,
+                telegram_chat_id,
+                smtp_recipients
              FROM notification_settings
              WHERE id = 1'
         )?->fetch();
@@ -103,14 +199,8 @@ final class NotificationOutboxRepository
             return 0;
         }
 
-        $channels = [];
-        if ($this->toBool($settings['email_enabled'])) {
-            $channels[] = 'email';
-        }
-        if ($this->toBool($settings['telegram_enabled'])) {
-            $channels[] = 'telegram';
-        }
-        if ($channels === []) {
+        $deliveries = $this->deliveries($settings, null);
+        if ($deliveries === []) {
             return 0;
         }
 
@@ -123,26 +213,29 @@ final class NotificationOutboxRepository
         $statement = $this->pdo->prepare(
             "INSERT INTO notification_outbox (
                 channel,
+                recipient,
                 event_type,
                 payload,
                 deduplication_key
              ) VALUES (
                 :channel,
+                :recipient,
                 'test',
                 CAST(:payload AS jsonb),
                 :deduplication_key
              )"
         );
         $batchKey = 'test:' . bin2hex(random_bytes(16));
-        foreach ($channels as $channel) {
+        foreach ($deliveries as [$channel, $recipient]) {
             $statement->execute([
                 'channel' => $channel,
+                'recipient' => $recipient,
                 'payload' => $encodedPayload,
-                'deduplication_key' => $batchKey . ':' . $channel,
+                'deduplication_key' => $this->recipientKey($batchKey, $channel, $recipient),
             ]);
         }
 
-        return count($channels);
+        return count($deliveries);
     }
 
     /**
@@ -188,6 +281,7 @@ final class NotificationOutboxRepository
                     jobs.server_id,
                     jobs.alert_id,
                     jobs.channel,
+                    jobs.recipient,
                     jobs.event_type,
                     jobs.payload,
                     jobs.attempts
@@ -272,6 +366,7 @@ final class NotificationOutboxRepository
             'SELECT
                 jobs.id,
                 jobs.channel,
+                jobs.recipient,
                 jobs.event_type,
                 jobs.status,
                 jobs.attempts,
