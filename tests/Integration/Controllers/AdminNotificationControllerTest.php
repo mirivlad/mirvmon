@@ -91,14 +91,19 @@ final class AdminNotificationControllerTest extends TestCase
             'Тест поставлен в очередь',
             (string) $_SESSION['flash_message']
         );
+        // One job per recipient: two mailboxes and one Telegram chat.
         self::assertSame(
-            ['pending', 'pending'],
+            [
+                ['email', 'dev@example.net'],
+                ['email', 'ops@example.net'],
+                ['telegram', '-100123'],
+            ],
             self::$pdo?->query(
-                "SELECT status
+                "SELECT channel, recipient
                  FROM notification_outbox
-                 WHERE event_type = 'test'
-                 ORDER BY channel"
-            )->fetchAll(PDO::FETCH_COLUMN)
+                 WHERE event_type = 'test' AND status = 'pending'
+                 ORDER BY channel, recipient"
+            )->fetchAll(PDO::FETCH_NUM)
         );
     }
 
@@ -175,7 +180,7 @@ final class AdminNotificationControllerTest extends TestCase
         foreach ($outbox->claim() as $job) {
             $outbox->markFailed($job['id'], 10, 'telegram_http_401: Unauthorized');
         }
-        self::assertSame(['dead' => 2], $outbox->statusCounts());
+        self::assertSame(['dead' => 3], $outbox->statusCounts());
 
         $response = $this->controller->retryNotificationQueue(
             (new ServerRequestFactory())->createServerRequest(
@@ -188,7 +193,7 @@ final class AdminNotificationControllerTest extends TestCase
 
         self::assertSame(302, $response->getStatusCode());
         self::assertSame('/admin/notifications', $response->getHeaderLine('Location'));
-        self::assertSame(['pending' => 2], $outbox->statusCounts());
+        self::assertSame(['pending' => 3], $outbox->statusCounts());
     }
 
     /** @return array<string, mixed> */
@@ -202,7 +207,7 @@ final class AdminNotificationControllerTest extends TestCase
             'smtp_password' => 'smtp-secret',
             'smtp_encryption' => 'tls',
             'smtp_from_email' => 'monitor@example.net',
-            'smtp_recipient_email' => 'ops@example.net',
+            'smtp_recipients' => 'ops@example.net, dev@example.net',
             'telegram_enabled' => 'on',
             'telegram_bot_token' => '123:bot-secret',
             'telegram_chat_id' => '-100123',

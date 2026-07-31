@@ -92,11 +92,16 @@
                                    placeholder="monitor@example.net" maxlength="254">
                         </div>
                         <div class="col-12">
-                            <label for="smtp_recipient_email" class="form-label">Адрес получателя</label>
-                            <input type="email" class="form-control" id="smtp_recipient_email"
-                                   name="smtp_recipient_email"
-                                   value="{{ settings.smtp_recipient_email|default('') }}"
-                                   placeholder="ops@example.net" maxlength="254">
+                            <label for="smtp_recipients" class="form-label">Адреса получателей</label>
+                            <input type="text" class="form-control" id="smtp_recipients"
+                                   name="smtp_recipients"
+                                   value="{{ settings.smtp_recipients|default([])|join(', ') }}"
+                                   placeholder="ops@example.net, dev@example.net">
+                            <div class="form-text">
+                                Несколько адресов через запятую, до двадцати. Каждый
+                                получает отдельное письмо, поэтому отказ одного адреса
+                                не задерживает остальные.
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -309,6 +314,7 @@
                     <tr>
                         <th>Создано</th>
                         <th>Канал</th>
+                        <th>Получатель</th>
                         <th>Событие</th>
                         <th>Статус</th>
                         <th>Попытки</th>
@@ -321,6 +327,7 @@
                     <tr>
                         <td class="text-nowrap">{{ job.created_at|date('d.m.Y H:i:s') }}</td>
                         <td>{{ job.channel }}</td>
+                        <td class="small">{{ job.recipient|default('—') }}</td>
                         <td>
                             {{ job.event_type }}
                             {% if job.server_name %}

@@ -109,6 +109,38 @@
                         </div>
                     </div>
 
+                    <div class="row">
+                        <div class="col-12">
+                            <label class="form-label">Персональные получатели</label>
+                            <p class="form-text mt-0">
+                                Оставьте пустым, чтобы уведомления об этом сервере уходили
+                                общим получателям из <a href="/admin/notifications">настроек уведомлений</a>.
+                                Заполненное поле полностью заменяет общее значение — так
+                                конкретный сервер закрепляется за конкретным человеком.
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="notification_telegram_chat_id" class="form-label">Telegram Chat ID</label>
+                                <input type="text" class="form-control"
+                                       id="notification_telegram_chat_id"
+                                       name="notification_telegram_chat_id"
+                                       value="{{ server.notification_telegram_chat_id|default('') }}"
+                                       placeholder="-1001234567890" maxlength="100">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="notification_emails" class="form-label">Адреса email</label>
+                                <input type="text" class="form-control"
+                                       id="notification_emails"
+                                       name="notification_emails"
+                                       value="{{ server_notification_emails|default([])|join(', ') }}"
+                                       placeholder="ivan@example.net, ops@example.net">
+                            </div>
+                        </div>
+                    </div>
+
                     {% if server.last_offline_alert_at %}
                     <div class="alert alert-info small">
                         <i class="fas fa-clock"></i> Последний offline алерт: {{ server.last_offline_alert_at|date('d.m.Y H:i:s') }}
