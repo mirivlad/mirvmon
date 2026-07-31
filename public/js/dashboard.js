@@ -143,7 +143,7 @@
             return;
         }
         target.textContent = metric && Number.isFinite(Number(metric.value))
-            ? `${Number(metric.value).toFixed(1)}${metric.unit || '%'}`
+            ? window.MirvMon.formatMetricValue(metric.value, metric.unit || '%')
             : '—';
     }
 

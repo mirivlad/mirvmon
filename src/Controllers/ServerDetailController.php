@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Domain\Metrics\MetricValueFormatter;
 use App\Repositories\MetricRepository;
 use App\Repositories\ServerRepository;
 use DateTimeImmutable;
@@ -544,12 +545,15 @@ final class ServerDetailController
                     }
                 }
                 if ($topNetwork === null || $peak > $topNetwork['value']) {
-                    $topNetwork = ['label' => $chart['title'], 'value' => round($peak, 2), 'unit' => $chart['unit'] ?? ''];
+                    $topNetwork = ['label' => $chart['title'], 'value' => $peak, 'unit' => $chart['unit'] ?? ''];
                 }
             }
             $cards[] = [
                 'title' => 'Самый активный интерфейс',
-                'value' => $topNetwork['value'] . $topNetwork['unit'],
+                'value' => (new MetricValueFormatter())->format(
+                    $topNetwork['value'],
+                    $topNetwork['unit']
+                ),
                 'subtitle' => $topNetwork['label'],
             ];
         }
