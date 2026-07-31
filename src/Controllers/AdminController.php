@@ -194,6 +194,8 @@ final class AdminController
         return $this->twig->render($response, 'admin/notifications.twig', [
             'title' => 'Настройки уведомлений',
             'settings' => $this->notificationSettings->getPublic(),
+            'queue' => $this->notificationOutbox->recent(20),
+            'queue_counts' => $this->notificationOutbox->statusCounts(),
         ]);
     }
 
@@ -218,6 +220,29 @@ final class AdminController
             );
         } catch (Throwable) {
             $this->flash('Не удалось сохранить настройки уведомлений', 'error');
+        }
+
+        return $this->redirect($response, '/admin/notifications');
+    }
+
+    /** @param array<string, string> $args */
+    public function retryNotificationQueue(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        if (!$this->isAdmin()) {
+            return $this->redirect($response, '/');
+        }
+
+        try {
+            $requeued = $this->notificationOutbox->retryUndelivered();
+            $this->flash(
+                sprintf('Повторная отправка запланирована для записей: %d', $requeued),
+                'success'
+            );
+        } catch (Throwable) {
+            $this->flash('Не удалось перезапустить очередь уведомлений', 'error');
         }
 
         return $this->redirect($response, '/admin/notifications');

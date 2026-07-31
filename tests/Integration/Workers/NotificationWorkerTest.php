@@ -6,6 +6,7 @@ namespace Tests\Integration\Workers;
 
 use App\Database\ConnectionFactory;
 use App\Database\Migrator;
+use App\Notifications\NotificationTransportException;
 use App\Repositories\NotificationOutboxRepository;
 use App\Workers\NotificationWorker;
 use PDO;
@@ -55,8 +56,10 @@ final class NotificationWorkerTest extends TestCase
         $secondId = $this->insertJob('second');
         $delivered = [];
 
-        $deliver = static function (array $job) use (&$delivered): void {
+        $deliver = static function (array $job) use (&$delivered): bool {
             $delivered[] = $job['id'];
+
+            return true;
         };
         $firstWorker = new NotificationWorker(
             new NotificationOutboxRepository(self::$pdo),
@@ -103,6 +106,75 @@ final class NotificationWorkerTest extends TestCase
         self::assertSame('delivery_failed', $job['last_error']);
         self::assertTrue($this->toBool($job['delayed']));
         self::assertStringNotContainsString('SUPER-SECRET', (string) $job['last_error']);
+    }
+
+    public function testTransportErrorIsVisibleToTheAdministrator(): void
+    {
+        $jobId = $this->insertJob('transport-error');
+        $worker = new NotificationWorker(
+            new NotificationOutboxRepository(self::$pdo),
+            static function (): never {
+                throw new NotificationTransportException(
+                    "telegram_http_400: chat not found\n<script>"
+                );
+            }
+        );
+
+        self::assertSame(1, $worker->runOnce());
+        $statement = self::$pdo?->prepare(
+            'SELECT status, last_error FROM notification_outbox WHERE id = :id'
+        );
+        $statement?->execute(['id' => $jobId]);
+        $job = $statement?->fetch();
+
+        self::assertSame('failed', $job['status']);
+        self::assertSame('telegram_http_400: chat not found  script', $job['last_error']);
+    }
+
+    public function testDisabledChannelIsNeverReportedAsSent(): void
+    {
+        $jobId = $this->insertJob('disabled-channel');
+        $worker = new NotificationWorker(
+            new NotificationOutboxRepository(self::$pdo),
+            static fn (): bool => false
+        );
+
+        self::assertSame(1, $worker->runOnce());
+        $statement = self::$pdo?->prepare(
+            'SELECT status, last_error, sent_at FROM notification_outbox WHERE id = :id'
+        );
+        $statement?->execute(['id' => $jobId]);
+        $job = $statement?->fetch();
+
+        self::assertSame('dead', $job['status']);
+        self::assertSame('channel_disabled', $job['last_error']);
+        self::assertNull($job['sent_at']);
+    }
+
+    public function testRetryBudgetSurvivesTheSecondAttempt(): void
+    {
+        $jobId = $this->insertJob('second-attempt');
+        $worker = new NotificationWorker(
+            new NotificationOutboxRepository(self::$pdo),
+            static function (): never {
+                throw new NotificationTransportException('telegram_network_failed');
+            }
+        );
+
+        $worker->runOnce();
+        self::$pdo?->exec(
+            'UPDATE notification_outbox SET available_at = CURRENT_TIMESTAMP'
+        );
+        $worker->runOnce();
+
+        $statement = self::$pdo?->prepare(
+            'SELECT status, attempts FROM notification_outbox WHERE id = :id'
+        );
+        $statement?->execute(['id' => $jobId]);
+        $job = $statement?->fetch();
+
+        self::assertSame('failed', $job['status']);
+        self::assertSame(2, (int) $job['attempts']);
     }
 
     public function testRetryBudgetMovesAJobToDeadLetterState(): void

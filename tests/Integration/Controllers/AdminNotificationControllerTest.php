@@ -125,6 +125,70 @@ final class AdminNotificationControllerTest extends TestCase
         self::assertStringContainsString('сохранён', $html);
     }
 
+    public function testSettingsPageShowsWhyAQueuedNotificationWasNotDelivered(): void
+    {
+        $repository = new NotificationSettingsRepository(
+            self::$pdo,
+            new SecretCipher(str_repeat('a', 32))
+        );
+        $repository->save($this->settings());
+        $outbox = new NotificationOutboxRepository(self::$pdo);
+        $outbox->enqueueTest([
+            'type' => 'test',
+            'event' => 'test',
+            'event_time' => '2026-07-31T00:00:00+00:00',
+        ]);
+        foreach ($outbox->claim() as $job) {
+            $outbox->markFailed($job['id'], $job['attempts'], 'telegram_http_401: Unauthorized');
+        }
+
+        $response = $this->controller->notificationSettings(
+            (new ServerRequestFactory())->createServerRequest(
+                'GET',
+                'https://monitor.example/admin/notifications'
+            ),
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+        $html = (string) $response->getBody();
+
+        self::assertStringContainsString('Очередь уведомлений', $html);
+        self::assertStringContainsString('telegram_http_401: Unauthorized', $html);
+        self::assertStringContainsString('/admin/notifications/queue/retry', $html);
+    }
+
+    public function testQueueRetryGivesUndeliveredJobsAFreshBudget(): void
+    {
+        $repository = new NotificationSettingsRepository(
+            self::$pdo,
+            new SecretCipher(str_repeat('a', 32))
+        );
+        $repository->save($this->settings());
+        $outbox = new NotificationOutboxRepository(self::$pdo);
+        $outbox->enqueueTest([
+            'type' => 'test',
+            'event' => 'test',
+            'event_time' => '2026-07-31T00:00:00+00:00',
+        ]);
+        foreach ($outbox->claim() as $job) {
+            $outbox->markFailed($job['id'], 10, 'telegram_http_401: Unauthorized');
+        }
+        self::assertSame(['dead' => 2], $outbox->statusCounts());
+
+        $response = $this->controller->retryNotificationQueue(
+            (new ServerRequestFactory())->createServerRequest(
+                'POST',
+                'https://monitor.example/admin/notifications/queue/retry'
+            ),
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+
+        self::assertSame(302, $response->getStatusCode());
+        self::assertSame('/admin/notifications', $response->getHeaderLine('Location'));
+        self::assertSame(['pending' => 2], $outbox->statusCounts());
+    }
+
     /** @return array<string, mixed> */
     private function settings(): array
     {

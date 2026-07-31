@@ -72,6 +72,7 @@ final class TelegramTransport
         if ($result['status'] !== 200) {
             throw new NotificationTransportException(
                 'telegram_http_' . $result['status']
+                . $this->apiDescription($result['body'])
             );
         }
 
@@ -92,6 +93,20 @@ final class TelegramTransport
         if (!is_array($response) || ($response['ok'] ?? false) !== true) {
             throw new NotificationTransportException('telegram_api_rejected');
         }
+    }
+
+    /**
+     * Telegram explains a rejection in `description`. The bot token travels in
+     * the URL, so the response body never carries a MirvMon secret.
+     */
+    private function apiDescription(string $body): string
+    {
+        $response = json_decode($body, true, 32);
+        if (!is_array($response) || !is_string($response['description'] ?? null)) {
+            return '';
+        }
+
+        return ': ' . $response['description'];
     }
 
     /**
@@ -151,15 +166,17 @@ final class TelegramTransport
             throw new NotificationTransportException('telegram_client_init_failed');
         }
         if (!curl_setopt_array($curl, $options)) {
-            curl_close($curl);
             throw new NotificationTransportException('telegram_client_config_failed');
         }
 
         $body = curl_exec($curl);
         $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
-        curl_close($curl);
         if (!is_string($body)) {
-            throw new NotificationTransportException('telegram_network_failed');
+            // curl_strerror() returns a fixed message table, never the URL,
+            // the proxy credentials or the bot token.
+            throw new NotificationTransportException(
+                'telegram_network_failed: ' . curl_strerror(curl_errno($curl))
+            );
         }
 
         return ['status' => $status, 'body' => $body];

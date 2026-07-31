@@ -241,6 +241,101 @@ final class NotificationOutboxRepository
         $statement->execute(['id' => $jobId]);
     }
 
+    public function markDead(int $jobId, string $safeError): void
+    {
+        $statement = $this->pdo->prepare(
+            "UPDATE notification_outbox
+             SET
+                status = 'dead',
+                locked_at = NULL,
+                last_error = :last_error
+             WHERE id = :id AND status = 'processing'"
+        );
+        $statement->execute([
+            'id' => $jobId,
+            'last_error' => substr($safeError, 0, 500),
+        ]);
+    }
+
+    /**
+     * Recent jobs for the administration UI, newest first.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function recent(int $limit = 20): array
+    {
+        if ($limit < 1 || $limit > 200) {
+            throw new RuntimeException('Outbox listing limit must be between 1 and 200.');
+        }
+
+        $statement = $this->pdo->prepare(
+            'SELECT
+                jobs.id,
+                jobs.channel,
+                jobs.event_type,
+                jobs.status,
+                jobs.attempts,
+                jobs.last_error,
+                jobs.created_at,
+                jobs.available_at,
+                jobs.sent_at,
+                servers.name AS server_name
+             FROM notification_outbox AS jobs
+             LEFT JOIN servers ON servers.id = jobs.server_id
+             ORDER BY jobs.id DESC
+             LIMIT :limit'
+        );
+        $statement->bindValue('limit', $limit, PDO::PARAM_INT);
+        $statement->execute();
+
+        $jobs = $statement->fetchAll();
+        foreach ($jobs as &$job) {
+            $job['id'] = (int) $job['id'];
+            $job['attempts'] = (int) $job['attempts'];
+        }
+        unset($job);
+
+        return $jobs;
+    }
+
+    /** @return array<string, int> Job count per status. */
+    public function statusCounts(): array
+    {
+        $rows = $this->pdo->query(
+            'SELECT status, COUNT(*) AS total
+             FROM notification_outbox
+             GROUP BY status
+             ORDER BY status'
+        )?->fetchAll() ?: [];
+
+        $counts = [];
+        foreach ($rows as $row) {
+            $counts[(string) $row['status']] = (int) $row['total'];
+        }
+
+        return $counts;
+    }
+
+    /**
+     * Give every failed and dead job a fresh retry budget, for example after
+     * a corrected bot token.
+     */
+    public function retryUndelivered(): int
+    {
+        $statement = $this->pdo->query(
+            "UPDATE notification_outbox
+             SET
+                status = 'pending',
+                attempts = 0,
+                available_at = CURRENT_TIMESTAMP,
+                locked_at = NULL,
+                last_error = NULL
+             WHERE status IN ('failed', 'dead')"
+        );
+
+        return $statement === false ? 0 : $statement->rowCount();
+    }
+
     public function markFailed(int $jobId, int $attempts, string $safeError): void
     {
         $delaySeconds = min(3600, 5 * (2 ** max(0, min(10, $attempts - 1))));
@@ -248,11 +343,13 @@ final class NotificationOutboxRepository
             "UPDATE notification_outbox
              SET
                 status = CASE
-                    WHEN :attempts_status >= :max_attempts THEN 'dead'
+                    WHEN CAST(:attempts_status AS integer)
+                        >= CAST(:max_attempts AS integer) THEN 'dead'
                     ELSE 'failed'
                 END,
                 available_at = CASE
-                    WHEN :attempts_available >= :max_attempts_available
+                    WHEN CAST(:attempts_available AS integer)
+                        >= CAST(:max_attempts_available AS integer)
                         THEN CURRENT_TIMESTAMP
                     ELSE CURRENT_TIMESTAMP
                         + CAST(:delay_seconds AS integer) * INTERVAL '1 second'
