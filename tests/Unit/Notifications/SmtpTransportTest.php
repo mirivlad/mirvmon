@@ -49,4 +49,62 @@ final class SmtpTransportTest extends TestCase
             $capturedOptions[CURLOPT_MAIL_RCPT]
         );
     }
+
+    public function testAChartIsAttachedAsAMultipartPngWithoutTouchingTheText(): void
+    {
+        $captured = null;
+        $transport = new SmtpTransport(
+            static function (string $url, array $options) use (&$captured): array {
+                rewind($options[CURLOPT_INFILE]);
+                $captured = stream_get_contents($options[CURLOPT_INFILE]);
+
+                return ['status' => 250, 'body' => ''];
+            }
+        );
+
+        $transport->send(
+            [
+                'smtp_host' => 'smtp.example.net',
+                'smtp_from_email' => 'monitor@example.net',
+                'smtp_recipient_email' => 'ops@example.net',
+            ],
+            'Тревога',
+            'Сервер: edge-1',
+            "\x89PNG\r\n\x1a\nfake"
+        );
+
+        self::assertIsString($captured);
+        self::assertStringContainsString('Content-Type: multipart/mixed; boundary="mirvmon-', $captured);
+        self::assertStringContainsString('Content-Type: image/png; name="metric.png"', $captured);
+        self::assertStringContainsString('Content-Transfer-Encoding: base64', $captured);
+        self::assertStringContainsString(base64_encode("\x89PNG\r\n\x1a\nfake"), $captured);
+        self::assertStringContainsString('Сервер: edge-1', $captured);
+    }
+
+    public function testWithoutAChartTheMessageStaysPlainText(): void
+    {
+        $captured = null;
+        $transport = new SmtpTransport(
+            static function (string $url, array $options) use (&$captured): array {
+                rewind($options[CURLOPT_INFILE]);
+                $captured = stream_get_contents($options[CURLOPT_INFILE]);
+
+                return ['status' => 250, 'body' => ''];
+            }
+        );
+
+        $transport->send(
+            [
+                'smtp_host' => 'smtp.example.net',
+                'smtp_from_email' => 'monitor@example.net',
+                'smtp_recipient_email' => 'ops@example.net',
+            ],
+            'Тревога',
+            'Сервер: edge-1'
+        );
+
+        self::assertIsString($captured);
+        self::assertStringContainsString('Content-Type: text/plain; charset=UTF-8', $captured);
+        self::assertStringNotContainsString('multipart', $captured);
+    }
 }

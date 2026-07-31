@@ -27,9 +27,11 @@ USER root
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         curl \
+        fonts-dejavu-core \
         supervisor \
         tini \
     && install-php-extensions \
+        gd \
         intl \
         opcache \
         pcntl \
