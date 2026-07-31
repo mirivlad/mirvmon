@@ -10,6 +10,7 @@ use App\Notifications\SmtpTransport;
 use App\Notifications\TelegramTransport;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\NotificationSettingsRepository;
+use App\Repositories\WorkerHeartbeatRepository;
 use App\Security\SecretCipher;
 use App\Workers\NotificationWorker;
 
@@ -40,6 +41,25 @@ if ($applicationKey === false || strlen($applicationKey) !== 32) {
     exit(1);
 }
 
+$sentRetentionDays = filter_var(
+    getenv('NOTIFICATION_SENT_RETENTION_DAYS') ?: 7,
+    FILTER_VALIDATE_INT,
+    ['options' => ['min_range' => 1, 'max_range' => 3650]]
+);
+$deadRetentionDays = filter_var(
+    getenv('NOTIFICATION_DEAD_RETENTION_DAYS') ?: 30,
+    FILTER_VALIDATE_INT,
+    ['options' => ['min_range' => 1, 'max_range' => 3650]]
+);
+if ($sentRetentionDays === false || $deadRetentionDays === false) {
+    fwrite(
+        STDERR,
+        "NOTIFICATION_SENT_RETENTION_DAYS and "
+        . "NOTIFICATION_DEAD_RETENTION_DAYS must be 1-3650.\n"
+    );
+    exit(1);
+}
+
 $once = in_array('--once', $argv, true);
 $running = true;
 if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
@@ -53,14 +73,24 @@ if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
 }
 
 $worker = null;
+$runtime = null;
+$nextPurge = 0.0;
 
 do {
     try {
-        $worker ??= createNotificationWorker($applicationKey);
-        $processed = $worker->runOnce($batchSize);
+        $runtime ??= createNotificationRuntime($applicationKey);
+        $processed = $runtime['worker']->runOnce($batchSize);
+        $runtime['heartbeat']->record(
+            WorkerHeartbeatRepository::NOTIFICATION_WORKER
+        );
+        if (microtime(true) >= $nextPurge) {
+            $runtime['outbox']->purge($sentRetentionDays, $deadRetentionDays);
+            $nextPurge = microtime(true) + 3600;
+        }
     } catch (PDOException) {
         fwrite(STDERR, "notification_worker_database_unavailable\n");
         $worker = null;
+        $runtime = null;
         $processed = 0;
         if ($once) {
             exit(1);
@@ -84,7 +114,14 @@ do {
     }
 } while ($running);
 
-function createNotificationWorker(string $applicationKey): NotificationWorker
+/**
+ * @return array{
+ *     worker: NotificationWorker,
+ *     outbox: NotificationOutboxRepository,
+ *     heartbeat: WorkerHeartbeatRepository
+ * }
+ */
+function createNotificationRuntime(string $applicationKey): array
 {
     $pdo = ConnectionFactory::fromEnvironment();
     $settings = new NotificationSettingsRepository(
@@ -97,9 +134,11 @@ function createNotificationWorker(string $applicationKey): NotificationWorker
         new TelegramTransport(),
         new SmtpTransport()
     );
+    $outbox = new NotificationOutboxRepository($pdo);
 
-    return new NotificationWorker(
-        new NotificationOutboxRepository($pdo),
-        $delivery->deliver(...)
-    );
+    return [
+        'worker' => new NotificationWorker($outbox, $delivery->deliver(...)),
+        'outbox' => $outbox,
+        'heartbeat' => new WorkerHeartbeatRepository($pdo),
+    ];
 }

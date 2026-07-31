@@ -336,6 +336,39 @@ final class NotificationOutboxRepository
         return $statement === false ? 0 : $statement->rowCount();
     }
 
+    /**
+     * The outbox is a log as much as a queue and nothing ever removed a
+     * delivered row, so it grew for the lifetime of the installation.
+     *
+     * @return int Rows removed.
+     */
+    public function purge(int $sentDays, int $deadDays): int
+    {
+        if ($sentDays < 1 || $deadDays < 1) {
+            throw new RuntimeException('Outbox retention must be at least one day.');
+        }
+
+        $statement = $this->pdo->prepare(
+            "DELETE FROM notification_outbox
+             WHERE (
+                status = 'sent'
+                AND sent_at IS NOT NULL
+                AND sent_at < CURRENT_TIMESTAMP
+                    - CAST(:sent_days AS integer) * INTERVAL '1 day'
+             ) OR (
+                status = 'dead'
+                AND created_at < CURRENT_TIMESTAMP
+                    - CAST(:dead_days AS integer) * INTERVAL '1 day'
+             )"
+        );
+        $statement->execute([
+            'sent_days' => $sentDays,
+            'dead_days' => $deadDays,
+        ]);
+
+        return $statement->rowCount();
+    }
+
     public function markFailed(int $jobId, int $attempts, string $safeError): void
     {
         $delaySeconds = min(3600, 5 * (2 ** max(0, min(10, $attempts - 1))));

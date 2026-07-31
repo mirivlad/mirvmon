@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 use App\Database\ConnectionFactory;
 use App\Repositories\NotificationOutboxRepository;
+use App\Repositories\WorkerHeartbeatRepository;
 use App\Workers\OfflineStatusWorker;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
@@ -31,15 +32,17 @@ if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
     });
 }
 
-$worker = null;
+$runtime = null;
 
 do {
     try {
-        $worker ??= createOfflineWorker();
-        $worker->runOnce();
+        $runtime ??= createOfflineRuntime();
+        $runtime['worker']->runOnce();
+        $runtime['heartbeat']->record(WorkerHeartbeatRepository::OFFLINE_WORKER);
     } catch (PDOException) {
         fwrite(STDERR, "offline_worker_database_unavailable\n");
         $worker = null;
+        $runtime = null;
         if ($once) {
             exit(1);
         }
@@ -59,12 +62,18 @@ do {
     }
 } while ($running);
 
-function createOfflineWorker(): OfflineStatusWorker
+/**
+ * @return array{worker: OfflineStatusWorker, heartbeat: WorkerHeartbeatRepository}
+ */
+function createOfflineRuntime(): array
 {
     $pdo = ConnectionFactory::fromEnvironment();
 
-    return new OfflineStatusWorker(
-        $pdo,
-        new NotificationOutboxRepository($pdo)
-    );
+    return [
+        'worker' => new OfflineStatusWorker(
+            $pdo,
+            new NotificationOutboxRepository($pdo)
+        ),
+        'heartbeat' => new WorkerHeartbeatRepository($pdo),
+    ];
 }

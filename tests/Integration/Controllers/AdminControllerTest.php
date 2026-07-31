@@ -9,6 +9,7 @@ use App\Database\ConnectionFactory;
 use App\Database\Migrator;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\NotificationSettingsRepository;
+use App\Repositories\WorkerHeartbeatRepository;
 use App\Security\SecretCipher;
 use PDO;
 use PHPUnit\Framework\TestCase;
@@ -50,7 +51,8 @@ final class AdminControllerTest extends TestCase
                 self::$pdo,
                 new SecretCipher(str_repeat('a', 32))
             ),
-            new NotificationOutboxRepository(self::$pdo)
+            new NotificationOutboxRepository(self::$pdo),
+            new WorkerHeartbeatRepository(self::$pdo)
         );
         $_SESSION = ['role' => 'admin'];
     }

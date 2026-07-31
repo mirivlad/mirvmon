@@ -177,6 +177,37 @@ final class NotificationSettingsRepositoryTest extends TestCase
         self::assertNull($requeued[0]['last_error']);
     }
 
+    public function testPurgeKeepsUndeliveredJobsAndRecentHistory(): void
+    {
+        $outbox = new NotificationOutboxRepository(self::$pdo);
+        self::$pdo?->exec(
+            "INSERT INTO notification_outbox
+                (channel, event_type, payload, deduplication_key, status, sent_at, created_at)
+             VALUES
+                ('telegram', 'test', '{}'::jsonb, 'old-sent', 'sent',
+                 CURRENT_TIMESTAMP - INTERVAL '30 days',
+                 CURRENT_TIMESTAMP - INTERVAL '30 days'),
+                ('telegram', 'test', '{}'::jsonb, 'fresh-sent', 'sent',
+                 CURRENT_TIMESTAMP - INTERVAL '1 day',
+                 CURRENT_TIMESTAMP - INTERVAL '1 day'),
+                ('telegram', 'test', '{}'::jsonb, 'old-dead', 'dead', NULL,
+                 CURRENT_TIMESTAMP - INTERVAL '60 days'),
+                ('telegram', 'test', '{}'::jsonb, 'fresh-dead', 'dead', NULL,
+                 CURRENT_TIMESTAMP - INTERVAL '2 days'),
+                ('telegram', 'test', '{}'::jsonb, 'ancient-pending', 'pending', NULL,
+                 CURRENT_TIMESTAMP - INTERVAL '90 days')"
+        );
+
+        self::assertSame(2, $outbox->purge(7, 30));
+        self::assertSame(
+            ['ancient-pending', 'fresh-dead', 'fresh-sent'],
+            self::$pdo?->query(
+                'SELECT deduplication_key FROM notification_outbox
+                 ORDER BY deduplication_key'
+            )->fetchAll(PDO::FETCH_COLUMN)
+        );
+    }
+
     /** @return array<string, mixed> */
     private function validSettings(): array
     {

@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\NotificationSettingsRepository;
+use App\Repositories\WorkerHeartbeatRepository;
 use DateTimeImmutable;
 use InvalidArgumentException;
 use JsonException;
@@ -22,7 +23,8 @@ final class AdminController
         private readonly PDO $pdo,
         private readonly Twig $twig,
         private readonly NotificationSettingsRepository $notificationSettings,
-        private readonly NotificationOutboxRepository $notificationOutbox
+        private readonly NotificationOutboxRepository $notificationOutbox,
+        private readonly WorkerHeartbeatRepository $heartbeats
     ) {
     }
 
@@ -196,6 +198,7 @@ final class AdminController
             'settings' => $this->notificationSettings->getPublic(),
             'queue' => $this->notificationOutbox->recent(20),
             'queue_counts' => $this->notificationOutbox->statusCounts(),
+            'heartbeats' => $this->heartbeats->all(),
         ]);
     }
 
