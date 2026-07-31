@@ -64,4 +64,67 @@ final class AgentInstallerServiceTest extends TestCase
         self::assertStringNotContainsString(str_repeat('c', 64), $batch);
         self::assertStringNotContainsString('?token=', $batch);
     }
+
+    public function testLegacyInstallerAvoidsEveryApiNewerThanPowerShell2(): void
+    {
+        $script = $this->installer->windowsLegacyPowerShell(
+            'https://legacy-monitor.example',
+            str_repeat('d', 64)
+        );
+
+        foreach ([
+            'Invoke-WebRequest',
+            'Invoke-RestMethod',
+            'ConvertTo-Json',
+            'ConvertFrom-Json',
+            'Register-ScheduledTask',
+            'New-ScheduledTaskAction',
+            'Get-CimInstance',
+        ] as $unavailable) {
+            self::assertStringNotContainsString($unavailable, $script, $unavailable);
+        }
+
+        self::assertStringContainsString('schtasks.exe /Create', $script);
+        self::assertStringContainsString('Get-WmiObject Win32_OperatingSystem', $script);
+        self::assertStringContainsString('[Net.HttpWebRequest]::Create', $script);
+        // Tls12 is spelled numerically because the enum member is missing on
+        // the .NET versions these systems ship with.
+        self::assertStringContainsString('[Net.SecurityProtocolType]3072', $script);
+        self::assertStringNotContainsString('python', mb_strtolower($script));
+    }
+
+    public function testLegacyCollectorSendsTheSameEnvelopeContract(): void
+    {
+        $script = $this->installer->windowsLegacyPowerShell(
+            'https://legacy-monitor.example',
+            str_repeat('e', 64)
+        );
+
+        self::assertStringContainsString(
+            'https://legacy-monitor.example/api/v1/metrics',
+            $script
+        );
+        self::assertStringContainsString('"version":2,', $script);
+        self::assertStringContainsString("'yyyy-MM-ddTHH:mm:ss') + 'Z'", $script);
+        foreach (['cpu_load', 'ram_used', 'ram_total_gb', 'uptime', 'disk_used'] as $metric) {
+            self::assertStringContainsString($metric, $script);
+        }
+        self::assertStringContainsString("'net_in_'", $script);
+        self::assertStringContainsString("'disk_total_gb_'", $script);
+        // The token belongs in the request body, never in a command line.
+        self::assertStringNotContainsString('?token=', $script);
+        self::assertStringContainsString(str_repeat('e', 64), $script);
+    }
+
+    public function testLegacyBatchHidesTheTokenAndElevates(): void
+    {
+        $batch = $this->installer->windowsLegacyBatch(
+            'https://legacy-monitor.example',
+            str_repeat('f', 64)
+        );
+
+        self::assertStringContainsString('net session', $batch);
+        self::assertStringContainsString('-EncodedCommand', $batch);
+        self::assertStringNotContainsString(str_repeat('f', 64), $batch);
+    }
 }

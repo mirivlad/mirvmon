@@ -142,7 +142,8 @@ docker compose -f docker/docker-compose.yml logs -f db
 ## Установка агента
 
 Добавьте сервер в веб-интерфейсе и скачайте один из одноразовых установщиков:
-Linux shell, PowerShell или BAT. Ссылка действует один час и при скачивании
+Linux shell, PowerShell, BAT или отдельный установщик для Windows 7 и
+Server 2008 R2. Ссылка действует один час и при скачивании
 обменивается на постоянный ключ агента. Постоянный ключ не передаётся в URL и в
 БД хранится только как SHA-256.
 
@@ -161,6 +162,25 @@ systemd:
 sudo systemctl status mirvmon-agent
 sudo journalctl -u mirvmon-agent -f
 ```
+
+### Windows 7 и Server 2008 R2
+
+CPython 3.9 и новее на этих системах не устанавливается, а PowerShell 2.0 не
+знает `Invoke-WebRequest`, `ConvertTo-Json` и `Register-ScheduledTask`. Поэтому
+для них есть отдельные установщики `/agent/install-legacy.bat` и
+`/agent/install-legacy.ps1`: они разворачивают самодостаточный сборщик на
+PowerShell 2.0, который читает метрики через WMI, собирает тот же envelope v2
+вручную и отправляет его `HttpWebRequest` с принудительно включённым TLS 1.2.
+Python не требуется.
+
+Задача планировщика `MirvMon Agent` запускает сборщик раз в минуту через
+`schtasks`. Собираются `cpu_load`, `ram_used`, `ram_total_gb`, `uptime`,
+`disk_used*`, `net_in_*`/`net_out_*` и службы Windows. Недоставленные замеры
+складываются в `%ProgramData%\MirvMon\Agent\queue.txt` (до 200 штук) и
+досылаются следующим запуском. Снимок процессов и удалённое управление
+конфигурацией агента в этом режиме не поддерживаются. Службы, имя которых не
+проходит серверную проверку (пробелы, `$` — например `MSSQL$SQLEXPRESS`),
+пропускаются, чтобы не отбраковать весь замер.
 
 Для outbound proxy задайте `HTTPS_PROXY`, `HTTP_PROXY` и при необходимости
 `NO_PROXY` в `/etc/default/mirvmon-agent`. TLS-сертификаты проверяются по

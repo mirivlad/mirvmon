@@ -79,6 +79,14 @@ final class AppFactory
             '/agent/install.bat',
             self::controller($container, AgentController::class, 'generateWindowsBatScript')
         );
+        $app->get(
+            '/agent/install-legacy.ps1',
+            self::controller($container, AgentController::class, 'generateLegacyWindowsInstallScript')
+        );
+        $app->get(
+            '/agent/install-legacy.bat',
+            self::controller($container, AgentController::class, 'generateLegacyWindowsBatScript')
+        );
 
         $protected = $app->group('', function (RouteCollectorProxyInterface $group) use (
             $container
@@ -234,6 +242,8 @@ final class AppFactory
                 '/agent/install.sh',
                 '/agent/install.ps1',
                 '/agent/install.bat',
+                '/agent/install-legacy.ps1',
+                '/agent/install-legacy.bat',
                 '/api/v1/agent/config',
             ]
         ));

@@ -321,18 +321,34 @@ final class ServerController
         }
     }
 
-    /** @return array{linux: string, powershell: string, batch: string} */
+    /**
+     * @return array{
+     *     linux: string,
+     *     powershell: string,
+     *     batch: string,
+     *     legacy_powershell: string,
+     *     legacy_batch: string
+     * }
+     */
     private function installerTokens(int $serverId): array
     {
         return [
             'linux' => $this->credentials->issueInstaller($serverId),
             'powershell' => $this->credentials->issueInstaller($serverId),
             'batch' => $this->credentials->issueInstaller($serverId),
+            'legacy_powershell' => $this->credentials->issueInstaller($serverId),
+            'legacy_batch' => $this->credentials->issueInstaller($serverId),
         ];
     }
 
     /**
-     * @param array{linux: string, powershell: string, batch: string} $tokens
+     * @param array{
+     *     linux: string,
+     *     powershell: string,
+     *     batch: string,
+     *     legacy_powershell: string,
+     *     legacy_batch: string
+     * } $tokens
      */
     private function createdResponse(
         Response $response,

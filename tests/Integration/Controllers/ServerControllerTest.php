@@ -53,7 +53,7 @@ final class ServerControllerTest extends TestCase
         }
     }
 
-    public function testCreationProducesThreeOneTimeInstallersWithoutAgentSecret(): void
+    public function testCreationProducesOneTimeInstallersWithoutAgentSecret(): void
     {
         $request = (new ServerRequestFactory())
             ->createServerRequest('POST', 'https://monitor.example/servers')
@@ -71,7 +71,7 @@ final class ServerControllerTest extends TestCase
 
         self::assertSame(200, $response->getStatusCode());
         self::assertSame(
-            '3',
+            '5',
             (string) self::$pdo?->query(
                 'SELECT count(*) FROM installer_tokens'
             )->fetchColumn()
@@ -86,5 +86,7 @@ final class ServerControllerTest extends TestCase
         self::assertStringContainsString('/agent/install.sh?token=', $html);
         self::assertStringContainsString('/agent/install.ps1?token=', $html);
         self::assertStringContainsString('/agent/install.bat?token=', $html);
+        self::assertStringContainsString('/agent/install-legacy.ps1?token=', $html);
+        self::assertStringContainsString('/agent/install-legacy.bat?token=', $html);
     }
 }

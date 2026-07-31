@@ -22,6 +22,12 @@
                         <a href="/agent/install.bat?token={{ installer_tokens.batch|url_encode }}" class="btn btn-outline-info">
                             <i class="fab fa-windows"></i> BAT
                         </a>
+                        <a href="/agent/install-legacy.bat?token={{ installer_tokens.legacy_batch|url_encode }}" class="btn btn-warning">
+                            <i class="fab fa-windows"></i> Windows 7 / 2008 (BAT)
+                        </a>
+                        <a href="/agent/install-legacy.ps1?token={{ installer_tokens.legacy_powershell|url_encode }}" class="btn btn-outline-warning">
+                            <i class="fab fa-windows"></i> Windows 7 / 2008 (PS1)
+                        </a>
                     </div>
                 </div>
                 
@@ -41,7 +47,7 @@
                         </div>
                     </div>
                     
-                    <div class="card">
+                    <div class="card mb-3">
                         <div class="card-header">
                             <i class="fab fa-windows"></i> Windows Server 2012+
                         </div>
@@ -51,6 +57,32 @@
                                 <li>Запустите PowerShell <strong>от имени Администратора</strong></li>
                                 <li>Выполните: <code>Set-ExecutionPolicy Bypass -Scope Process -Force; .\install.ps1</code></li>
                             </ol>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fab fa-windows"></i> Windows 7 SP1 / Server 2008 R2
+                        </div>
+                        <div class="card-body">
+                            <p class="mb-2">
+                                Python на этих системах не ставится: CPython 3.9
+                                и новее их не поддерживает. Установщик для них
+                                разворачивает отдельный сборщик на PowerShell 2.0,
+                                который собирает метрики через WMI и не требует
+                                ничего дополнительно.
+                            </p>
+                            <ol class="mb-2">
+                                <li>Скачайте <code>mirvmon-install-legacy.bat</code></li>
+                                <li>Запустите <strong>от имени Администратора</strong></li>
+                            </ol>
+                            <p class="mb-0 text-muted small">
+                                Задача планировщика «MirvMon Agent» отправляет
+                                замер раз в минуту. Собираются CPU, память,
+                                диски, сеть, аптайм и службы; снимок процессов
+                                и удалённая настройка агента в этом режиме
+                                недоступны.
+                            </p>
                         </div>
                     </div>
                 </div>
