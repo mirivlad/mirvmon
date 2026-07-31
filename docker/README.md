@@ -36,6 +36,14 @@ For example, `v0.1.0` requires `MIRVMON_IMAGE=ghcr.io/mirivlad/mirvmon:0.1.0`.
 Keep the named volumes when redeploying. Do not enable a published database
 port.
 
+Pin that version tag instead of `latest`. `latest` is mutable: when the host
+already holds an image under that name, `docker compose up -d` reuses it and
+the stack silently redeploys the previous release. Moving `latest` forward
+requires `docker compose pull` or the Portainer **Re-pull image and redeploy**
+option, while a new version tag always forces the pull by itself. Verify what
+the host actually holds with
+`docker image inspect <image> --format '{{index .RepoDigests 0}}'`.
+
 Pushing a `vX.Y.Z` Git tag publishes `linux/amd64` and `linux/arm64` images to
 GHCR with semver tags, SBOM, and provenance. Prerelease tags do not move
 `latest`. Make the GHCR package public after its first publication, or
