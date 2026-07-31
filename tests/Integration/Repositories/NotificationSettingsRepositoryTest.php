@@ -99,6 +99,24 @@ final class NotificationSettingsRepositoryTest extends TestCase
         self::assertSame('99', $delivery['telegram_chat_id']);
     }
 
+    public function testUncheckedSwitchesArePersistedAsFalse(): void
+    {
+        $this->repository->save($this->validSettings());
+
+        // Unchecked checkboxes are absent from the submitted form body.
+        $this->repository->save([
+            'telegram_enabled' => 'on',
+            'telegram_chat_id' => '-100123',
+            'notify_on_critical' => 'on',
+        ]);
+
+        $settings = $this->repository->getPublic();
+        self::assertFalse($settings['email_enabled']);
+        self::assertTrue($settings['telegram_enabled']);
+        self::assertFalse($settings['notify_on_warning']);
+        self::assertTrue($settings['notify_on_critical']);
+    }
+
     public function testTestNotificationIsQueuedForEveryEnabledChannel(): void
     {
         $this->repository->save($this->validSettings());
