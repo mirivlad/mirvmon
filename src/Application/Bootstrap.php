@@ -21,6 +21,7 @@ use App\Repositories\MetricRepository;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\NotificationSettingsRepository;
 use App\Repositories\ServerRepository;
+use App\Repositories\WorkerHeartbeatRepository;
 use App\Security\SecretCipher;
 use App\Services\AgentCredentialIssuer;
 use App\Services\AgentInstallerService;
@@ -211,12 +212,18 @@ final class Bootstrap
             )
         );
         $container->set(
+            WorkerHeartbeatRepository::class,
+            static fn (Container $container): WorkerHeartbeatRepository =>
+                new WorkerHeartbeatRepository($container->get(PDO::class))
+        );
+        $container->set(
             AdminController::class,
             static fn (Container $container): AdminController => new AdminController(
                 $container->get(PDO::class),
                 $container->get(Twig::class),
                 $container->get(NotificationSettingsRepository::class),
-                $container->get(NotificationOutboxRepository::class)
+                $container->get(NotificationOutboxRepository::class),
+                $container->get(WorkerHeartbeatRepository::class)
             )
         );
         $container->set(

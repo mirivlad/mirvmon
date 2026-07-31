@@ -49,7 +49,8 @@ tests/          unit, integration, functional и contract tests
 - `metric_samples_hourly` и `metric_samples_daily` — continuous aggregates;
 - `notification_outbox` отделяет приём метрик от Telegram/SMTP;
 - `bin/offline-worker` вычисляет offline transitions;
-- `bin/notification-worker` доставляет outbox jobs;
+- `bin/notification-worker` доставляет outbox jobs и раз в час чистит очередь;
+- оба worker отмечаются в `worker_heartbeats` на каждой итерации;
 - SQL применяет `bin/migrate` под PostgreSQL advisory lock.
 
 Не создавайте параллельные schema dumps и не редактируйте уже применённую

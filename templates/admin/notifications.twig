@@ -276,6 +276,26 @@
         </div>
     </div>
     <div class="card-body">
+        <div class="mb-3">
+            <span class="text-muted small me-2">Фоновые worker:</span>
+            {% if heartbeats is empty %}
+                <span class="badge bg-danger">нет ни одного сигнала</span>
+            {% else %}
+                {% for heartbeat in heartbeats %}
+                    {% if heartbeat.stale %}
+                        <span class="badge bg-danger me-1"
+                              title="Последний сигнал: {{ heartbeat.last_tick_at|date('d.m.Y H:i:s') }}">
+                            {{ heartbeat.worker }}: молчит {{ heartbeat.seconds_since_tick }} с
+                        </span>
+                    {% else %}
+                        <span class="badge bg-success me-1"
+                              title="Последний сигнал: {{ heartbeat.last_tick_at|date('d.m.Y H:i:s') }}">
+                            {{ heartbeat.worker }}: жив
+                        </span>
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+        </div>
         <p class="text-muted small">
             Последние 20 заданий фонового worker. Столбец «Ошибка» содержит
             причину, которую вернул Telegram или SMTP-сервер.
