@@ -96,6 +96,7 @@ final class NotificationSettingsRepository
                     :telegram_proxy_password_encrypted,
                 notify_on_warning = :notify_on_warning,
                 notify_on_critical = :notify_on_critical,
+                cooldown_seconds = :cooldown_seconds,
                 updated_at = CURRENT_TIMESTAMP
              WHERE id = 1'
         );
@@ -212,6 +213,7 @@ final class NotificationSettingsRepository
             'telegram_proxy_port' => $proxyPort,
             'telegram_proxy_username' => $proxyUsername,
             'telegram_proxy_password_encrypted' => $proxyPassword,
+            'cooldown_seconds' => $this->cooldown($input['cooldown_seconds'] ?? 0),
             'notify_on_warning' => $this->toBool(
                 $input['notify_on_warning'] ?? false
             ),
@@ -219,6 +221,22 @@ final class NotificationSettingsRepository
                 $input['notify_on_critical'] ?? false
             ),
         ];
+    }
+
+    private function cooldown(mixed $value): int
+    {
+        $seconds = filter_var(
+            $value === '' ? 0 : $value,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 0, 'max_range' => 86400]]
+        );
+        if ($seconds === false) {
+            throw new InvalidArgumentException(
+                'Пауза между одинаковыми уведомлениями — от 0 до 86400 секунд.'
+            );
+        }
+
+        return $seconds;
     }
 
     /**

@@ -234,7 +234,7 @@
         <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-sliders-h"></i> Уровни событий</h5>
         </div>
-        <div class="card-body d-flex flex-wrap gap-4">
+        <div class="card-body d-flex flex-wrap gap-4 align-items-end">
             <div class="form-check form-switch">
                 <input class="form-check-input" type="checkbox"
                        name="notify_on_warning" id="notify_on_warning"
@@ -250,6 +250,22 @@
                 <label class="form-check-label" for="notify_on_critical">
                     Критические события
                 </label>
+            </div>
+            <div>
+                <label for="cooldown_seconds" class="form-label mb-1">
+                    Пауза между одинаковыми уведомлениями
+                </label>
+                <div class="input-group input-group-sm" style="max-width: 220px;">
+                    <input type="number" class="form-control" id="cooldown_seconds"
+                           name="cooldown_seconds" min="0" max="86400"
+                           value="{{ settings.cooldown_seconds|default(0) }}">
+                    <span class="input-group-text">сек</span>
+                </div>
+                <div class="form-text">
+                    Не чаще одного сообщения об одном и том же событии по одной
+                    метрике одного сервера. Восстановления — отдельное событие,
+                    их пауза не задерживает. Ноль отключает ограничение.
+                </div>
             </div>
         </div>
     </div>
