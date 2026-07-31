@@ -206,7 +206,8 @@ final class Bootstrap
             AlertController::class,
             static fn (Container $container): AlertController => new AlertController(
                 $container->get(PDO::class),
-                $container->get(Twig::class)
+                $container->get(Twig::class),
+                $container->get(NotificationOutboxRepository::class)
             )
         );
         $container->set(

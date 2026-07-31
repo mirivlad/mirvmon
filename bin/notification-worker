@@ -93,7 +93,7 @@ function createNotificationWorker(string $applicationKey): NotificationWorker
     );
     $delivery = new NotificationDeliveryService(
         $settings,
-        new NotificationMessageFormatter(),
+        new NotificationMessageFormatter((string) getenv('PUBLIC_BASE_URL')),
         new TelegramTransport(),
         new SmtpTransport()
     );
