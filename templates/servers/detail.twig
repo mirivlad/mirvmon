@@ -428,9 +428,14 @@
                                                         </div>
                                                     </div>
                                                     <div class="col-md-3">
-                                                        <div class="input-group input-group-sm" title="Длительность превышения (секунды)">
+                                                        <div class="input-group input-group-sm mb-2" title="Длительность превышения перед алертом (секунды)">
                                                             <span class="input-group-text"><i class="fas fa-clock"></i></span>
                                                             <input type="number" class="form-control" style="max-width: 90px;" name="{{ metricType.name }}_duration" min="0" step="1" placeholder="0" {% if existingThresholds[metricType.name].duration is defined %}value="{{ existingThresholds[metricType.name].duration }}"{% endif %}>
+                                                            <span class="input-group-text">сек</span>
+                                                        </div>
+                                                        <div class="input-group input-group-sm" title="Длительность возврата ниже порога перед восстановлением (секунды)">
+                                                            <span class="input-group-text"><i class="fas fa-clock-rotate-left"></i></span>
+                                                            <input type="number" class="form-control" style="max-width: 90px;" name="{{ metricType.name }}_recovery" min="0" step="1" placeholder="300" {% if existingThresholds[metricType.name].recovery is defined %}value="{{ existingThresholds[metricType.name].recovery }}"{% endif %}>
                                                             <span class="input-group-text">сек</span>
                                                         </div>
                                                     </div>

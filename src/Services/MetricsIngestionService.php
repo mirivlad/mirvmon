@@ -326,7 +326,8 @@ final class MetricsIngestionService
                 metric_id,
                 warning_threshold,
                 critical_threshold,
-                duration_seconds
+                duration_seconds,
+                recovery_duration_seconds
              FROM metric_thresholds
              WHERE server_id = :server_id
                AND metric_id IN (' . implode(', ', $placeholders) . ')'
@@ -352,7 +353,16 @@ final class MetricsIngestionService
 
             $active = $this->activeAlert($server['id'], 'metric', $metricId, null);
             if ($severity === null) {
-                if ($active !== null) {
+                if (
+                    $active !== null
+                    && $this->metricRecovered(
+                        $server['id'],
+                        $metricId,
+                        $warning ?? $critical,
+                        (int) ($threshold['recovery_duration_seconds'] ?? 0),
+                        $envelope->sampleTime
+                    )
+                ) {
                     $this->resolveAlert(
                         $active,
                         $server,
@@ -846,6 +856,60 @@ final class MetricsIngestionService
                       AND sample_time > :window_start_window
                       AND sample_time <= :sample_time
                       AND value < :window_threshold
+                )'
+        );
+        $statement->execute([
+            'boundary_threshold' => $threshold,
+            'server_id' => $serverId,
+            'metric_id' => $metricId,
+            'window_start' => $this->timestamp($windowStart),
+            'server_id_window' => $serverId,
+            'metric_id_window' => $metricId,
+            'window_start_window' => $this->timestamp($windowStart),
+            'sample_time' => $this->timestamp($sampleTime),
+            'window_threshold' => $threshold,
+        ]);
+
+        return $this->toBool($statement->fetchColumn());
+    }
+
+    /**
+     * Mirrors thresholdHeldForDuration() for the way back: an alert closes
+     * only after the metric has stayed under the lowest configured threshold
+     * for the whole recovery window, so a value oscillating around the
+     * threshold does not produce an alert-recovery-alert stream.
+     */
+    private function metricRecovered(
+        int $serverId,
+        int $metricId,
+        ?float $threshold,
+        int $recoverySeconds,
+        DateTimeImmutable $sampleTime
+    ): bool {
+        if ($threshold === null || $recoverySeconds <= 0) {
+            return true;
+        }
+
+        $windowStart = $sampleTime->modify('-' . $recoverySeconds . ' seconds');
+        $statement = $this->pdo->prepare(
+            'SELECT
+                COALESCE((
+                    SELECT value < :boundary_threshold
+                    FROM metric_samples
+                    WHERE server_id = :server_id
+                      AND metric_id = :metric_id
+                      AND sample_time <= :window_start
+                    ORDER BY sample_time DESC
+                    LIMIT 1
+                ), FALSE)
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM metric_samples
+                    WHERE server_id = :server_id_window
+                      AND metric_id = :metric_id_window
+                      AND sample_time > :window_start_window
+                      AND sample_time <= :sample_time
+                      AND value >= :window_threshold
                 )'
         );
         $statement->execute([

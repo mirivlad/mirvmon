@@ -92,6 +92,24 @@
                                 Ноль создаёт алерт сразу после превышения порога.
                             </p>
                         </div>
+                        <div class="col-12">
+                            <label for="default_recovery_duration_seconds" class="form-label">
+                                Минимальная длительность возврата ниже порога
+                            </label>
+                            <div class="input-group">
+                                <input type="number" class="form-control"
+                                       id="default_recovery_duration_seconds"
+                                       name="default_recovery_duration_seconds"
+                                       value="{{ settings.default_recovery_duration_seconds|default(300) }}"
+                                       min="0" max="86400" required>
+                                <span class="input-group-text">сек.</span>
+                            </div>
+                            <p class="form-text mb-0">
+                                Алерт снимается только после того, как метрика
+                                продержалась ниже порога всё это время. Ноль
+                                снимает алерт сразу.
+                            </p>
+                        </div>
                     </div>
                 </div>
             </section>

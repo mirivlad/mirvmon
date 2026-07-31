@@ -117,9 +117,13 @@ final class MetricsIngestionServiceTest extends TestCase
     {
         $metricId = $this->metricId('cpu_load');
         self::$pdo?->prepare(
-            'INSERT INTO metric_thresholds
-                (server_id, metric_id, warning_threshold, critical_threshold)
-             VALUES (:server_id, :metric_id, 70, 90)'
+            'INSERT INTO metric_thresholds (
+                server_id,
+                metric_id,
+                warning_threshold,
+                critical_threshold,
+                recovery_duration_seconds
+             ) VALUES (:server_id, :metric_id, 70, 90, 0)'
         )->execute(['server_id' => $this->serverId, 'metric_id' => $metricId]);
 
         $this->ingestion->ingest($this->envelope(
@@ -140,6 +144,89 @@ final class MetricsIngestionServiceTest extends TestCase
                  FROM alerts'
             )->fetch(PDO::FETCH_NUM)
         );
+    }
+
+    public function testRecoveryWaitsForACompleteWindowBelowTheThreshold(): void
+    {
+        $metricId = $this->metricId('cpu_load');
+        self::$pdo?->prepare(
+            'INSERT INTO metric_thresholds (
+                server_id,
+                metric_id,
+                warning_threshold,
+                critical_threshold,
+                recovery_duration_seconds
+             ) VALUES (:server_id, :metric_id, 70, 90, 300)'
+        )->execute(['server_id' => $this->serverId, 'metric_id' => $metricId]);
+
+        $samples = [
+            ['2026-07-30T12:00:00Z', 95],
+            ['2026-07-30T12:01:00Z', 20],
+            ['2026-07-30T12:03:00Z', 20],
+        ];
+        foreach ($samples as $index => [$time, $value]) {
+            $this->ingestion->ingest($this->envelope(
+                sprintf('30000000-0000-4000-8000-00000000000%d', $index),
+                $time,
+                ['cpu_load' => $value]
+            ));
+        }
+
+        // Four minutes below the threshold is short of the five-minute window.
+        self::assertSame('false', (string) self::$pdo?->query(
+            'SELECT resolved::text FROM alerts'
+        )->fetchColumn());
+
+        $this->ingestion->ingest($this->envelope(
+            '30000000-0000-4000-8000-000000000009',
+            '2026-07-30T12:07:00Z',
+            ['cpu_load' => 20]
+        ));
+
+        self::assertSame('true', (string) self::$pdo?->query(
+            'SELECT resolved::text FROM alerts'
+        )->fetchColumn());
+        self::assertSame(1, (int) self::$pdo?->query(
+            "SELECT count(*) FROM notification_outbox
+             WHERE event_type = 'metric_recovered'"
+        )->fetchColumn());
+    }
+
+    public function testAFlappingMetricDoesNotCloseTheAlert(): void
+    {
+        $metricId = $this->metricId('cpu_load');
+        self::$pdo?->prepare(
+            'INSERT INTO metric_thresholds (
+                server_id,
+                metric_id,
+                warning_threshold,
+                critical_threshold,
+                recovery_duration_seconds
+             ) VALUES (:server_id, :metric_id, 70, 90, 300)'
+        )->execute(['server_id' => $this->serverId, 'metric_id' => $metricId]);
+
+        $samples = [
+            ['2026-07-30T12:00:00Z', 95],
+            ['2026-07-30T12:02:00Z', 20],
+            ['2026-07-30T12:04:00Z', 95],
+            ['2026-07-30T12:06:00Z', 20],
+            ['2026-07-30T12:08:00Z', 20],
+        ];
+        foreach ($samples as $index => [$time, $value]) {
+            $this->ingestion->ingest($this->envelope(
+                sprintf('40000000-0000-4000-8000-00000000000%d', $index),
+                $time,
+                ['cpu_load' => $value]
+            ));
+        }
+
+        self::assertSame('false', (string) self::$pdo?->query(
+            'SELECT resolved::text FROM alerts'
+        )->fetchColumn());
+        self::assertSame(0, (int) self::$pdo?->query(
+            "SELECT count(*) FROM notification_outbox
+             WHERE event_type = 'metric_recovered'"
+        )->fetchColumn());
     }
 
     public function testOutOfOrderSampleAddsHistoryButDoesNotRegressCurrentState(): void

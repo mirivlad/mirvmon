@@ -308,7 +308,8 @@ final class AdminController
                 'default_offline_timeout',
                 'default_warning_threshold',
                 'default_critical_threshold',
-                'default_duration_seconds'
+                'default_duration_seconds',
+                'default_recovery_duration_seconds'
             )
             ORDER BY setting_key
             SQL
@@ -611,6 +612,11 @@ final class AdminController
             FILTER_VALIDATE_INT,
             ['options' => ['min_range' => 0, 'max_range' => 86400]]
         );
+        $recovery = filter_var(
+            $body['default_recovery_duration_seconds'] ?? null,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 0, 'max_range' => 86400]]
+        );
         $warning = $this->boundedFloat(
             $body['default_warning_threshold'] ?? null,
             0,
@@ -624,6 +630,7 @@ final class AdminController
         if (
             $offlineTimeout === false
             || $duration === false
+            || $recovery === false
             || $warning === null
             || $critical === null
         ) {
@@ -642,6 +649,7 @@ final class AdminController
             'default_warning_threshold' => $warning,
             'default_critical_threshold' => $critical,
             'default_duration_seconds' => $duration,
+            'default_recovery_duration_seconds' => $recovery,
         ];
     }
 
