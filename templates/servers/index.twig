@@ -22,6 +22,7 @@
                                 <th>Группа</th>
                                 <th>Описание</th>
                                 <th>Последние метрики</th>
+                                <th>Агент</th>
                                 <th>Действия</th>
                             </tr>
                         </thead>
@@ -43,6 +44,13 @@
                                         {{ server.last_metrics_at|date('d.m.Y H:i:s') }}
                                     {% else %}
                                         Нет данных
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if server.agent_version %}
+                                        <span class="badge bg-light text-dark">{{ server.agent_version }}</span>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
                                     {% endif %}
                                 </td>
                                 <td>

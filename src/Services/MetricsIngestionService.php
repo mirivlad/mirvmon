@@ -245,12 +245,14 @@ final class MetricsIngestionService
              SET last_metrics_at = GREATEST(
                     COALESCE(last_metrics_at, :sample_time),
                     :sample_time
-                 )
+                 ),
+                 agent_version = COALESCE(:agent_version, agent_version)
              WHERE id = :server_id'
         );
         $server->execute([
             'server_id' => $serverId,
             'sample_time' => $timestamp,
+            'agent_version' => $envelope->agentVersion,
         ]);
 
         $token = $this->pdo->prepare(

@@ -7,6 +7,7 @@ from typing import Any
 
 import requests
 
+from . import __version__
 from .config import AgentConfig
 
 
@@ -82,6 +83,7 @@ def build_envelope(
     timestamp = timestamp.astimezone(timezone.utc).replace(microsecond=0)
     envelope: dict[str, Any] = {
         "version": 2,
+        "agent_version": __version__,
         "sample_id": str(uuid.uuid4()),
         "sample_time": timestamp.isoformat().replace("+00:00", "Z"),
         "token": token,
