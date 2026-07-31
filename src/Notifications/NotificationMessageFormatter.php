@@ -6,11 +6,42 @@ namespace App\Notifications;
 
 final class NotificationMessageFormatter
 {
+    private readonly ?string $publicBaseUrl;
+
+    /**
+     * @param string $publicBaseUrl PUBLIC_BASE_URL. Empty when the deployment
+     *                              did not configure one; messages then carry
+     *                              no link, because a background worker has no
+     *                              request to derive the origin from.
+     */
+    public function __construct(string $publicBaseUrl = '')
+    {
+        $publicBaseUrl = rtrim(trim($publicBaseUrl), '/');
+        $this->publicBaseUrl = $publicBaseUrl === '' ? null : $publicBaseUrl;
+    }
+
     /**
      * @param array<string, mixed> $job
      * @return array{subject: string, body: string}
      */
     public function format(array $job): array
+    {
+        $message = $this->message($job);
+        $link = $this->serverLink(
+            is_array($job['payload'] ?? null) ? $job['payload'] : []
+        );
+        if ($link !== null) {
+            $message['body'] .= "\n" . $link;
+        }
+
+        return $message;
+    }
+
+    /**
+     * @param array<string, mixed> $job
+     * @return array{subject: string, body: string}
+     */
+    private function message(array $job): array
     {
         $payload = is_array($job['payload'] ?? null) ? $job['payload'] : [];
         $eventType = (string) ($job['event_type'] ?? '');
@@ -26,6 +57,28 @@ final class NotificationMessageFormatter
                     'Канал уведомлений настроен и фоновый worker работает.',
                     'Время события: ' . $time,
                 ]),
+            ];
+        }
+
+        if ($eventType === 'alert_resolved') {
+            $subject = $this->text($payload['subject'] ?? 'unknown');
+            $lines = [
+                'Сервер: ' . $server,
+                'Объект: ' . $subject,
+                'Серьёзность: ' . $this->text($payload['severity'] ?? 'warning'),
+                'Время события: ' . $time,
+            ];
+            if (isset($payload['resolved_by'])) {
+                $lines[] = 'Снял: ' . $this->text($payload['resolved_by']);
+            }
+
+            return [
+                'subject' => sprintf(
+                    '✅ Алерт снят вручную: %s / %s',
+                    $server,
+                    $subject
+                ),
+                'body' => implode("\n", $lines),
             ];
         }
 
@@ -104,6 +157,21 @@ final class NotificationMessageFormatter
                 'Время события: ' . $time,
             ]),
         ];
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function serverLink(array $payload): ?string
+    {
+        $serverId = filter_var(
+            $payload['server_id'] ?? null,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1]]
+        );
+        if ($this->publicBaseUrl === null || $serverId === false) {
+            return null;
+        }
+
+        return 'Открыть сервер: ' . $this->publicBaseUrl . '/servers/' . $serverId;
     }
 
     private function text(mixed $value): string

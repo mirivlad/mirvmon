@@ -7,6 +7,7 @@ namespace Tests\Integration\Controllers;
 use App\Controllers\AlertController;
 use App\Database\ConnectionFactory;
 use App\Database\Migrator;
+use App\Repositories\NotificationOutboxRepository;
 use PDO;
 use PHPUnit\Framework\TestCase;
 use Slim\Psr7\Factory\ResponseFactory;
@@ -41,7 +42,11 @@ final class AlertControllerTest extends TestCase
         self::$pdo?->beginTransaction();
         $twig = Twig::create(dirname(__DIR__, 3) . '/templates', ['cache' => false]);
         $twig->getEnvironment()->addGlobal('session', []);
-        $this->controller = new AlertController(self::$pdo, $twig);
+        $this->controller = new AlertController(
+            self::$pdo,
+            $twig,
+            new NotificationOutboxRepository(self::$pdo)
+        );
 
         $serverId = (int) self::$pdo?->query(
             "INSERT INTO servers (name) VALUES ('alert-server') RETURNING id"
@@ -107,6 +112,72 @@ final class AlertControllerTest extends TestCase
         self::assertSame('/alerts', $response->getHeaderLine('Location'));
         self::assertTrue((bool) self::$pdo?->query(
             'SELECT resolved FROM alerts WHERE id = ' . $this->alertId
+        )->fetchColumn());
+    }
+
+    public function testManualResolutionNotifiesTheEnabledChannels(): void
+    {
+        self::$pdo?->exec(
+            "UPDATE notification_settings
+             SET telegram_enabled = TRUE,
+                 telegram_chat_id = '-100',
+                 notify_on_critical = TRUE
+             WHERE id = 1"
+        );
+        $_SESSION['username'] = 'operator';
+
+        $this->controller->markAsResolved(
+            (new ServerRequestFactory())->createServerRequest(
+                'POST',
+                '/alerts/' . $this->alertId . '/resolve'
+            ),
+            (new ResponseFactory())->createResponse(),
+            ['id' => (string) $this->alertId]
+        );
+
+        $statement = self::$pdo?->prepare(
+            'SELECT channel, event_type, payload
+             FROM notification_outbox
+             WHERE alert_id = :id'
+        );
+        $statement?->execute(['id' => $this->alertId]);
+        $job = $statement?->fetch();
+
+        self::assertIsArray($job);
+        self::assertSame('telegram', $job['channel']);
+        self::assertSame('alert_resolved', $job['event_type']);
+        $payload = json_decode((string) $job['payload'], true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame('operator', $payload['resolved_by']);
+        self::assertSame('cpu_load', $payload['subject']);
+        self::assertSame('critical', $payload['severity']);
+        self::assertIsInt($payload['server_id']);
+    }
+
+    public function testAnAlreadyResolvedAlertIsNotAnnouncedTwice(): void
+    {
+        self::$pdo?->exec(
+            "UPDATE notification_settings
+             SET telegram_enabled = TRUE, telegram_chat_id = '-100'
+             WHERE id = 1"
+        );
+        $request = (new ServerRequestFactory())->createServerRequest(
+            'POST',
+            '/alerts/' . $this->alertId . '/resolve'
+        );
+
+        $this->controller->markAsResolved(
+            $request,
+            (new ResponseFactory())->createResponse(),
+            ['id' => (string) $this->alertId]
+        );
+        $this->controller->markAsResolved(
+            $request,
+            (new ResponseFactory())->createResponse(),
+            ['id' => (string) $this->alertId]
+        );
+
+        self::assertSame(1, (int) self::$pdo?->query(
+            'SELECT COUNT(*) FROM notification_outbox WHERE alert_id = ' . $this->alertId
         )->fetchColumn());
     }
 }
