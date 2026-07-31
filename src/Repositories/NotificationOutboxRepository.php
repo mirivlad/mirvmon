@@ -32,7 +32,8 @@ final class NotificationOutboxRepository
                 notify_on_warning,
                 notify_on_critical,
                 telegram_chat_id,
-                smtp_recipients
+                smtp_recipients,
+                cooldown_seconds
              FROM notification_settings
              WHERE id = 1'
         )?->fetch();
@@ -41,6 +42,16 @@ final class NotificationOutboxRepository
             return 0;
         }
         if ($this->underMaintenance($serverId)) {
+            return 0;
+        }
+        if (
+            $this->withinCooldown(
+                (int) ($settings['cooldown_seconds'] ?? 0),
+                $serverId,
+                $eventType,
+                $payload
+            )
+        ) {
             return 0;
         }
 
@@ -95,6 +106,51 @@ final class NotificationOutboxRepository
         }
 
         return $inserted;
+    }
+
+    /**
+     * A metric sitting on its threshold can trigger and recover repeatedly.
+     * The cooldown rate-limits one kind of event about one subject on one
+     * server; recoveries carry a different event type, so the all-clear is
+     * never swallowed.
+     *
+     * @param array<string, mixed> $payload
+     */
+    private function withinCooldown(
+        int $cooldownSeconds,
+        int $serverId,
+        string $eventType,
+        array $payload
+    ): bool {
+        if ($cooldownSeconds <= 0) {
+            return false;
+        }
+
+        $statement = $this->pdo->prepare(
+            "SELECT EXISTS(
+                SELECT 1
+                FROM notification_outbox
+                WHERE server_id = :server_id
+                  AND event_type = :event_type
+                  AND COALESCE(
+                        payload->>'metric',
+                        payload->>'service',
+                        ''
+                      ) = :subject
+                  AND created_at > CURRENT_TIMESTAMP
+                      - CAST(:cooldown AS integer) * INTERVAL '1 second'
+             )"
+        );
+        $statement->execute([
+            'server_id' => $serverId,
+            'event_type' => $eventType,
+            'subject' => (string) (
+                $payload['metric'] ?? $payload['service'] ?? ''
+            ),
+            'cooldown' => $cooldownSeconds,
+        ]);
+
+        return $this->toBool($statement->fetchColumn());
     }
 
     /**

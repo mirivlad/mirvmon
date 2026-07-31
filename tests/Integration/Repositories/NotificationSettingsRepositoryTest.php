@@ -218,6 +218,64 @@ final class NotificationSettingsRepositoryTest extends TestCase
         );
     }
 
+    public function testCooldownRateLimitsARepeatingEventButNotItsRecovery(): void
+    {
+        $settings = $this->validSettings();
+        $settings['cooldown_seconds'] = '600';
+        $this->repository->save($settings);
+        $outbox = new NotificationOutboxRepository(self::$pdo);
+        $serverId = (int) self::$pdo?->query(
+            "INSERT INTO servers (name) VALUES ('flapping') RETURNING id"
+        )->fetchColumn();
+        $alertId = (int) self::$pdo?->query(
+            "INSERT INTO alerts (server_id, kind, subject, severity)
+             VALUES ({$serverId}, 'metric', 'cpu_load', 'critical')
+             RETURNING id"
+        )->fetchColumn();
+
+        $trigger = static fn (string $key): array => [
+            $key,
+            ['severity' => 'critical', 'metric' => 'cpu_load', 'server_id' => $serverId],
+        ];
+
+        [$key, $payload] = $trigger('first');
+        self::assertSame(2, $outbox->enqueueConfigured(
+            $serverId,
+            $alertId,
+            'metric_triggered',
+            $payload,
+            $key
+        ));
+
+        // Same metric, same event, inside the window: nothing queued.
+        [$key, $payload] = $trigger('second');
+        self::assertSame(0, $outbox->enqueueConfigured(
+            $serverId,
+            $alertId,
+            'metric_triggered',
+            $payload,
+            $key
+        ));
+
+        // A different metric is a different subject.
+        self::assertSame(2, $outbox->enqueueConfigured(
+            $serverId,
+            $alertId,
+            'metric_triggered',
+            ['severity' => 'critical', 'metric' => 'ram_used', 'server_id' => $serverId],
+            'other-metric'
+        ));
+
+        // The all-clear is a different event type and must never be delayed.
+        self::assertSame(2, $outbox->enqueueConfigured(
+            $serverId,
+            $alertId,
+            'metric_recovered',
+            ['severity' => 'critical', 'metric' => 'cpu_load', 'server_id' => $serverId],
+            'recovery'
+        ));
+    }
+
     public function testPurgeKeepsUndeliveredJobsAndRecentHistory(): void
     {
         $outbox = new NotificationOutboxRepository(self::$pdo);
