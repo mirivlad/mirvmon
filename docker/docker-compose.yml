@@ -31,6 +31,11 @@ services:
       - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-8080}:8080"
     expose:
       - "8080"
+    # Names the Docker host so a Telegram proxy listening on the host loopback
+    # can be reached as host.docker.internal instead of a gateway address that
+    # changes whenever the network is recreated.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - app_data:/app/var
     tmpfs:

@@ -71,6 +71,11 @@ ENV APP_ENV=production \
 
 EXPOSE 8080
 
+# Replaces the inherited FrankenPHP check against the Caddy admin API on port
+# 2019, which this image disables in its Caddyfile and can never answer.
+HEALTHCHECK --interval=15s --timeout=5s --start-period=15s --retries=5 \
+    CMD curl --fail --silent --show-error http://127.0.0.1:8080/readyz || exit 1
+
 USER app
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/app/docker/entrypoint.sh"]

@@ -154,7 +154,10 @@
                     <h6>Прокси только для Telegram</h6>
                     <p class="text-muted small">
                         Выберите «Без прокси» для прямого соединения. SOCKS5H
-                        разрешает DNS через прокси.
+                        разрешает DNS через прокси. Прокси, слушающий на самом
+                        хосте Docker, доступен по имени
+                        <code>host.docker.internal</code>: внутри контейнера
+                        <code>127.0.0.1</code> указывает на сам контейнер.
                     </p>
                     <div class="row g-3">
                         <div class="col-md-4">
@@ -175,7 +178,7 @@
                             <input type="text" class="form-control"
                                    id="telegram_proxy_host" name="telegram_proxy_host"
                                    value="{{ settings.telegram_proxy_host|default('') }}"
-                                   placeholder="proxy.internal" maxlength="255">
+                                   placeholder="host.docker.internal" maxlength="255">
                         </div>
                         <div class="col-md-3">
                             <label for="telegram_proxy_port" class="form-label">Порт</label>

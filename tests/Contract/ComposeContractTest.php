@@ -56,6 +56,7 @@ final class ComposeContractTest extends TestCase
         self::assertStringContainsString('127.0.0.1', $application);
         self::assertStringContainsString('healthcheck:', $application);
         self::assertStringContainsString('/readyz', $application);
+        self::assertStringContainsString('host.docker.internal:host-gateway', $application);
         self::assertStringContainsString('read_only: true', $application);
         self::assertStringContainsString('no-new-privileges:true', $application);
         self::assertStringContainsString('SERVER_NAME: ":8080"', $application);
@@ -66,6 +67,13 @@ final class ComposeContractTest extends TestCase
         self::assertStringContainsString('mem_limit:', $application);
         self::assertStringContainsString('cpus:', $application);
         self::assertStringContainsString('USER app', $this->dockerfile);
+        // The FrankenPHP base image probes the Caddy admin API, which the
+        // Caddyfile disables, so the image must declare its own check.
+        self::assertMatchesRegularExpression(
+            '/^HEALTHCHECK .*\R\s+CMD curl .*\/readyz/m',
+            $this->dockerfile
+        );
+        self::assertStringContainsString('admin off', $this->caddyfile);
         self::assertStringContainsString(
             'SETUP_TOKEN: "${SETUP_TOKEN:?Set SETUP_TOKEN in Portainer or .env}"',
             $application
