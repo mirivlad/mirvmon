@@ -138,6 +138,45 @@ final class NotificationSettingsRepositoryTest extends TestCase
         );
     }
 
+    public function testQueueListingExposesFailuresAndRetryRestoresTheBudget(): void
+    {
+        $this->repository->save($this->validSettings());
+        $outbox = new NotificationOutboxRepository(self::$pdo);
+        $outbox->enqueueTest([
+            'type' => 'test',
+            'event' => 'test',
+            'event_time' => '2026-07-30T00:00:00+00:00',
+        ]);
+
+        $claimed = $outbox->claim();
+        self::assertCount(2, $claimed);
+        $outbox->markFailed($claimed[0]['id'], 10, 'telegram_http_401: Unauthorized');
+        $outbox->markSent($claimed[1]['id']);
+
+        $queue = $outbox->recent();
+        self::assertCount(2, $queue);
+        $statuses = array_map(
+            static fn (array $job): string => (string) $job['status'],
+            $queue
+        );
+        sort($statuses);
+        self::assertSame(['dead', 'sent'], $statuses);
+        self::assertContains(
+            'telegram_http_401: Unauthorized',
+            array_column($queue, 'last_error')
+        );
+        self::assertSame(['dead' => 1, 'sent' => 1], $outbox->statusCounts());
+
+        self::assertSame(1, $outbox->retryUndelivered());
+        self::assertSame(['pending' => 1, 'sent' => 1], $outbox->statusCounts());
+        $requeued = array_values(array_filter(
+            $outbox->recent(),
+            static fn (array $job): bool => (string) $job['status'] === 'pending'
+        ));
+        self::assertSame(0, $requeued[0]['attempts']);
+        self::assertNull($requeued[0]['last_error']);
+    }
+
     /** @return array<string, mixed> */
     private function validSettings(): array
     {

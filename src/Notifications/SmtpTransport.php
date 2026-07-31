@@ -119,15 +119,17 @@ final class SmtpTransport
             throw new NotificationTransportException('smtp_client_init_failed');
         }
         if (!curl_setopt_array($curl, $options)) {
-            curl_close($curl);
             throw new NotificationTransportException('smtp_client_config_failed');
         }
 
         $body = curl_exec($curl);
         $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
-        curl_close($curl);
         if ($body === false) {
-            throw new NotificationTransportException('smtp_network_failed');
+            // curl_strerror() returns a fixed message table, never the host,
+            // the mailbox or the SMTP password.
+            throw new NotificationTransportException(
+                'smtp_network_failed: ' . curl_strerror(curl_errno($curl))
+            );
         }
 
         return [

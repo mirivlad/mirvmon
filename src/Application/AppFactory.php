@@ -177,6 +177,10 @@ final class AppFactory
                     '/notifications/test',
                     self::controller($container, AdminController::class, 'testNotification')
                 );
+                $group->post(
+                    '/notifications/queue/retry',
+                    self::controller($container, AdminController::class, 'retryNotificationQueue')
+                );
                 $group->get('/defaults', self::controller($container, AdminController::class, 'defaultSettings'));
                 $group->post(
                     '/defaults/save',

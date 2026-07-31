@@ -16,8 +16,12 @@ final class NotificationDeliveryService
     ) {
     }
 
-    /** @param array<string, mixed> $job */
-    public function deliver(array $job): void
+    /**
+     * @param array<string, mixed> $job
+     * @return bool False when the channel is disabled and the job can never
+     *              be delivered.
+     */
+    public function deliver(array $job): bool
     {
         $settings = $this->settings->getForDelivery();
         $channel = (string) ($job['channel'] ?? '');
@@ -25,26 +29,26 @@ final class NotificationDeliveryService
 
         if ($channel === 'telegram') {
             if ($settings['telegram_enabled'] !== true) {
-                return;
+                return false;
             }
             $this->telegram->send(
                 $settings,
                 $message['subject'],
                 $message['body']
             );
-            return;
+            return true;
         }
 
         if ($channel === 'email') {
             if ($settings['email_enabled'] !== true) {
-                return;
+                return false;
             }
             $this->smtp->send(
                 $settings,
                 $message['subject'],
                 $message['body']
             );
-            return;
+            return true;
         }
 
         throw new NotificationTransportException('notification_channel_unknown');
