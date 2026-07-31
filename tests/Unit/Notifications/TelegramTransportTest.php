@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Notifications;
 
 use App\Notifications\TelegramTransport;
+use CURLStringFile;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -112,5 +113,58 @@ final class TelegramTransportTest extends TestCase
 
         self::assertArrayNotHasKey(CURLOPT_PROXY, $capturedOptions);
         self::assertArrayNotHasKey(CURLOPT_PROXYTYPE, $capturedOptions);
+    }
+
+    public function testAChartIsSentAsAPhotoWithTheTextAsCaption(): void
+    {
+        $url = null;
+        $options = null;
+        $transport = new TelegramTransport(
+            static function (string $requestUrl, array $requestOptions) use (&$url, &$options): array {
+                $url = $requestUrl;
+                $options = $requestOptions;
+
+                return ['status' => 200, 'body' => '{"ok":true}'];
+            }
+        );
+
+        $transport->send(
+            ['telegram_bot_token' => '123:token', 'telegram_chat_id' => '-100'],
+            'Критическая тревога',
+            'Сервер: edge-1',
+            "\x89PNG\r\n\x1a\nfake"
+        );
+
+        self::assertSame('https://api.telegram.org/bot123:token/sendPhoto', $url);
+        self::assertIsArray($options[CURLOPT_POSTFIELDS]);
+        self::assertInstanceOf(
+            CURLStringFile::class,
+            $options[CURLOPT_POSTFIELDS]['photo']
+        );
+        self::assertStringContainsString(
+            'Критическая тревога',
+            $options[CURLOPT_POSTFIELDS]['caption']
+        );
+        self::assertSame('-100', $options[CURLOPT_POSTFIELDS]['chat_id']);
+    }
+
+    public function testWithoutAChartTheMessageGoesThroughSendMessage(): void
+    {
+        $url = null;
+        $transport = new TelegramTransport(
+            static function (string $requestUrl) use (&$url): array {
+                $url = $requestUrl;
+
+                return ['status' => 200, 'body' => '{"ok":true}'];
+            }
+        );
+
+        $transport->send(
+            ['telegram_bot_token' => '123:token', 'telegram_chat_id' => '-100'],
+            'Тревога',
+            'Сервер: edge-1'
+        );
+
+        self::assertSame('https://api.telegram.org/bot123:token/sendMessage', $url);
     }
 }

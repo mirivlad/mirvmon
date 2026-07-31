@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Notifications;
 
 use Closure;
+use CURLStringFile;
 use JsonException;
 
 final class TelegramTransport
@@ -26,12 +27,18 @@ final class TelegramTransport
     public function send(
         array $settings,
         string $subject,
-        string $message
+        string $message,
+        ?string $chartPng = null
     ): void {
         $token = (string) ($settings['telegram_bot_token'] ?? '');
         $chatId = (string) ($settings['telegram_chat_id'] ?? '');
         if ($token === '' || $chatId === '') {
             throw new NotificationTransportException('telegram_not_configured');
+        }
+
+        if ($chartPng !== null) {
+            $this->sendPhoto($settings, $token, $chatId, $subject, $message, $chartPng);
+            return;
         }
 
         try {
@@ -83,6 +90,77 @@ final class TelegramTransport
                 32,
                 JSON_THROW_ON_ERROR
             );
+        } catch (JsonException $exception) {
+            throw new NotificationTransportException(
+                'telegram_response_invalid',
+                0,
+                $exception
+            );
+        }
+        if (!is_array($response) || ($response['ok'] ?? false) !== true) {
+            throw new NotificationTransportException('telegram_api_rejected');
+        }
+    }
+
+    /**
+     * sendPhoto carries the chart with the text as its caption, so the alert
+     * arrives as a single message instead of a picture next to a wall of text.
+     *
+     * @param array<string, mixed> $settings
+     */
+    private function sendPhoto(
+        array $settings,
+        string $token,
+        string $chatId,
+        string $subject,
+        string $message,
+        string $chartPng
+    ): void {
+        $caption = sprintf(
+            "<b>%s</b>\n\n%s",
+            $this->escapeHtml($subject),
+            $this->escapeHtml($message)
+        );
+        // Telegram truncates a caption at 1024 characters.
+        if (mb_strlen($caption) > 1000) {
+            $caption = mb_substr($caption, 0, 997) . '...';
+        }
+
+        $options = [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => [
+                'chat_id' => $chatId,
+                'caption' => $caption,
+                'parse_mode' => 'HTML',
+                'photo' => new CURLStringFile($chartPng, 'metric.png', 'image/png'),
+            ],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+        ];
+        $this->configureProxy($options, $settings);
+
+        $result = ($this->execute)(
+            'https://api.telegram.org/bot' . $token . '/sendPhoto',
+            $options
+        );
+        $this->assertAccepted($result);
+    }
+
+    /** @param array{status: int, body: string} $result */
+    private function assertAccepted(array $result): void
+    {
+        if ($result['status'] !== 200) {
+            throw new NotificationTransportException(
+                'telegram_http_' . $result['status']
+                . $this->apiDescription($result['body'])
+            );
+        }
+
+        try {
+            $response = json_decode($result['body'], true, 32, JSON_THROW_ON_ERROR);
         } catch (JsonException $exception) {
             throw new NotificationTransportException(
                 'telegram_response_invalid',

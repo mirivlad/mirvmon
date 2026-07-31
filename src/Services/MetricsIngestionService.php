@@ -401,7 +401,8 @@ final class MetricsIngestionService
                     $metricName,
                     $value,
                     $severity,
-                    $envelope
+                    $envelope,
+                    $thresholdValue
                 );
                 continue;
             }
@@ -644,7 +645,8 @@ final class MetricsIngestionService
         string $metricName,
         float $value,
         string $severity,
-        MetricsEnvelope $envelope
+        MetricsEnvelope $envelope,
+        ?float $threshold = null
     ): void {
         $statement = $this->pdo->prepare(
             "INSERT INTO alerts (
@@ -678,7 +680,8 @@ final class MetricsIngestionService
             $metricName,
             $value,
             $severity,
-            $envelope
+            $envelope,
+            $threshold
         );
         $this->outbox->enqueueConfigured(
             $server['id'],
@@ -939,9 +942,10 @@ final class MetricsIngestionService
         string $metricName,
         float $value,
         string $severity,
-        MetricsEnvelope $envelope
+        MetricsEnvelope $envelope,
+        ?float $threshold = null
     ): array {
-        return [
+        $payload = [
             'type' => 'metric',
             'event' => $event,
             'server_id' => $server['id'],
@@ -951,6 +955,12 @@ final class MetricsIngestionService
             'severity' => $severity,
             'sample_time' => $envelope->sampleTime->format(DATE_ATOM),
         ];
+        if ($threshold !== null) {
+            // Drawn as the alarm line on the chart attached to the message.
+            $payload['threshold'] = $threshold;
+        }
+
+        return $payload;
     }
 
     /**

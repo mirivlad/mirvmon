@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Notifications;
 
 use App\Repositories\NotificationSettingsRepository;
+use Throwable;
 
 final class NotificationDeliveryService
 {
@@ -12,7 +13,8 @@ final class NotificationDeliveryService
         private readonly NotificationSettingsRepository $settings,
         private readonly NotificationMessageFormatter $formatter,
         private readonly TelegramTransport $telegram,
-        private readonly SmtpTransport $smtp
+        private readonly SmtpTransport $smtp,
+        private readonly ?MetricChartRenderer $charts = null
     ) {
     }
 
@@ -29,6 +31,7 @@ final class NotificationDeliveryService
         // The recipient was resolved when the job was queued, so a later
         // change of the global address does not redirect a pending alert.
         $recipient = $this->recipient($job);
+        $chart = $this->chart($job);
 
         if ($channel === 'telegram') {
             if ($settings['telegram_enabled'] !== true) {
@@ -39,7 +42,8 @@ final class NotificationDeliveryService
             $this->telegram->send(
                 $settings,
                 $message['subject'],
-                $message['body']
+                $message['body'],
+                $chart
             );
             return true;
         }
@@ -55,12 +59,37 @@ final class NotificationDeliveryService
             $this->smtp->send(
                 $settings,
                 $message['subject'],
-                $message['body']
+                $message['body'],
+                $chart
             );
             return true;
         }
 
         throw new NotificationTransportException('notification_channel_unknown');
+    }
+
+    /**
+     * A failed chart must never cost the alert itself, so rendering problems
+     * degrade to a message without a picture.
+     *
+     * @param array<string, mixed> $job
+     */
+    private function chart(array $job): ?string
+    {
+        if ($this->charts === null) {
+            return null;
+        }
+        if (!str_starts_with((string) ($job['event_type'] ?? ''), 'metric_')) {
+            return null;
+        }
+
+        try {
+            return $this->charts->render(
+                is_array($job['payload'] ?? null) ? $job['payload'] : []
+            );
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     /** @param array<string, mixed> $job */

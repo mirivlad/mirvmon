@@ -25,7 +25,8 @@ final class SmtpTransport
     public function send(
         array $settings,
         string $subject,
-        string $message
+        string $message,
+        ?string $chartPng = null
     ): void {
         $host = (string) ($settings['smtp_host'] ?? '');
         $from = (string) ($settings['smtp_from_email'] ?? '');
@@ -41,7 +42,7 @@ final class SmtpTransport
         if ($stream === false) {
             throw new NotificationTransportException('smtp_message_buffer_failed');
         }
-        $email = $this->message($from, $recipient, $subject, $message);
+        $email = $this->message($from, $recipient, $subject, $message, $chartPng);
         fwrite($stream, $email);
         rewind($stream);
 
@@ -90,20 +91,50 @@ final class SmtpTransport
         string $from,
         string $recipient,
         string $subject,
-        string $body
+        string $body,
+        ?string $chartPng = null
     ): string {
         $encodedSubject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
-
-        return implode("\r\n", [
+        $text = str_replace(["\r\n", "\r"], "\n", $body);
+        $headers = [
             'Date: ' . gmdate(DATE_RFC2822),
             'From: ' . $from,
             'To: ' . $recipient,
             'Subject: ' . $encodedSubject,
             'MIME-Version: 1.0',
+        ];
+
+        if ($chartPng === null) {
+            return implode("\r\n", [
+                ...$headers,
+                'Content-Type: text/plain; charset=UTF-8',
+                'Content-Transfer-Encoding: 8bit',
+                '',
+                $text,
+                '',
+            ]);
+        }
+
+        $boundary = 'mirvmon-' . bin2hex(random_bytes(12));
+
+        return implode("\r\n", [
+            ...$headers,
+            'Content-Type: multipart/mixed; boundary="' . $boundary . '"',
+            '',
+            '--' . $boundary,
             'Content-Type: text/plain; charset=UTF-8',
             'Content-Transfer-Encoding: 8bit',
             '',
-            str_replace(["\r\n", "\r"], "\n", $body),
+            $text,
+            '',
+            '--' . $boundary,
+            'Content-Type: image/png; name="metric.png"',
+            'Content-Transfer-Encoding: base64',
+            'Content-Disposition: inline; filename="metric.png"',
+            '',
+            trim(chunk_split(base64_encode($chartPng), 76, "\r\n")),
+            '',
+            '--' . $boundary . '--',
             '',
         ]);
     }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 use App\Database\ConnectionFactory;
 use App\Notifications\NotificationDeliveryService;
+use App\Notifications\MetricChartRenderer;
 use App\Notifications\NotificationMessageFormatter;
 use App\Notifications\SmtpTransport;
 use App\Notifications\TelegramTransport;
@@ -132,7 +133,8 @@ function createNotificationRuntime(string $applicationKey): array
         $settings,
         new NotificationMessageFormatter((string) getenv('PUBLIC_BASE_URL')),
         new TelegramTransport(),
-        new SmtpTransport()
+        new SmtpTransport(),
+        new MetricChartRenderer($pdo)
     );
     $outbox = new NotificationOutboxRepository($pdo);
 
