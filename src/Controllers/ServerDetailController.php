@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Domain\Metrics\MetricValueFormatter;
+use App\Repositories\MaintenanceWindowRepository;
 use App\Repositories\MetricRepository;
 use App\Repositories\ServerRepository;
 use DateTimeImmutable;
+use InvalidArgumentException;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Views\Twig;
@@ -32,7 +34,8 @@ final class ServerDetailController
     public function __construct(
         private readonly Twig $twig,
         private readonly ServerRepository $servers,
-        private readonly MetricRepository $metrics
+        private readonly MetricRepository $metrics,
+        private readonly MaintenanceWindowRepository $maintenance
     ) {
     }
 
@@ -121,6 +124,7 @@ final class ServerDetailController
             'existingThresholds' => $existingThresholds,
             'allServices' => $this->servers->services($serverId),
             'monitorServices' => $this->servers->monitoredServices($serverId),
+            'maintenance' => $this->maintenance->active($serverId),
             'latestUptime' => $latestUptime,
             'uptimeText' => $this->formatUptime($latestUptime['value'] ?? null),
             'startDate' => $startDate->format('Y-m-d\TH:i'),
@@ -737,6 +741,82 @@ final class ServerDetailController
         $parts[] = $minutes . ' мин';
 
         return implode(' ', $parts);
+    }
+
+    /** @param array<string, string> $args */
+    public function startMaintenance(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        $serverId = $this->serverId($args);
+        if ($serverId === null) {
+            return $response->withHeader('Location', '/servers')->withStatus(302);
+        }
+
+        $body = $request->getParsedBody();
+        $body = is_array($body) ? $body : [];
+        $minutes = filter_var(
+            $body['duration_minutes'] ?? null,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1, 'max_range' => 10080]]
+        );
+
+        try {
+            if ($minutes === false) {
+                throw new InvalidArgumentException(
+                    'Длительность обслуживания — от 1 минуты до 7 суток'
+                );
+            }
+            $this->maintenance->start(
+                $serverId,
+                $minutes * 60,
+                is_string($body['reason'] ?? null) ? $body['reason'] : null,
+                is_string($_SESSION['username'] ?? null) ? $_SESSION['username'] : null
+            );
+            $_SESSION['flash_message'] = sprintf(
+                'Обслуживание включено на %d мин: уведомления по этому серверу приостановлены',
+                $minutes
+            );
+            $_SESSION['flash_type'] = 'success';
+        } catch (InvalidArgumentException $exception) {
+            $_SESSION['flash_message'] = $exception->getMessage();
+            $_SESSION['flash_type'] = 'danger';
+        } catch (Throwable) {
+            $_SESSION['flash_message'] = 'Не удалось включить обслуживание';
+            $_SESSION['flash_type'] = 'danger';
+        }
+
+        return $response
+            ->withHeader('Location', '/servers/' . $serverId)
+            ->withStatus(302);
+    }
+
+    /** @param array<string, string> $args */
+    public function cancelMaintenance(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        $serverId = $this->serverId($args);
+        if ($serverId === null) {
+            return $response->withHeader('Location', '/servers')->withStatus(302);
+        }
+
+        try {
+            $closed = $this->maintenance->cancel($serverId);
+            $_SESSION['flash_message'] = $closed > 0
+                ? 'Обслуживание завершено, уведомления снова доставляются'
+                : 'Активного окна обслуживания не было';
+            $_SESSION['flash_type'] = $closed > 0 ? 'success' : 'warning';
+        } catch (Throwable) {
+            $_SESSION['flash_message'] = 'Не удалось завершить обслуживание';
+            $_SESSION['flash_type'] = 'danger';
+        }
+
+        return $response
+            ->withHeader('Location', '/servers/' . $serverId)
+            ->withStatus(302);
     }
 
     /** @param array<string, string> $args */

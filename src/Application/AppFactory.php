@@ -138,6 +138,14 @@ final class AppFactory
                 self::controller($container, ServerController::class, 'regenerateToken')
             );
             $group->post(
+                '/servers/{id}/maintenance',
+                self::controller($container, ServerDetailController::class, 'startMaintenance')
+            );
+            $group->post(
+                '/servers/{id}/maintenance/cancel',
+                self::controller($container, ServerDetailController::class, 'cancelMaintenance')
+            );
+            $group->post(
                 '/servers/{id}/thresholds',
                 self::controller($container, ServerDetailController::class, 'saveThresholds')
             );

@@ -8,6 +8,7 @@ use App\Controllers\DashboardController;
 use App\Controllers\ServerDetailController;
 use App\Database\ConnectionFactory;
 use App\Database\Migrator;
+use App\Repositories\MaintenanceWindowRepository;
 use App\Repositories\MetricRepository;
 use App\Repositories\ServerRepository;
 use App\Services\ServerStatusService;
@@ -123,7 +124,12 @@ final class DashboardReadModelTest extends TestCase
             $dashboardHtml
         );
 
-        $detail = (new ServerDetailController($twig, $servers, $metrics))->show(
+        $detail = (new ServerDetailController(
+            $twig,
+            $servers,
+            $metrics,
+            new MaintenanceWindowRepository(self::$pdo)
+        ))->show(
             $requestFactory->createServerRequest(
                 'GET',
                 'http://localhost/servers/' . $this->serverId . '?period=24h'
