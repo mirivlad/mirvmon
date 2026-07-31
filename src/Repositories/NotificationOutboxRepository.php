@@ -40,6 +40,9 @@ final class NotificationOutboxRepository
         if (!is_array($settings) || !$this->severityIsEnabled($settings, $payload)) {
             return 0;
         }
+        if ($this->underMaintenance($serverId)) {
+            return 0;
+        }
 
         $deliveries = $this->deliveries($settings, $serverId);
         if ($deliveries === []) {
@@ -92,6 +95,25 @@ final class NotificationOutboxRepository
         }
 
         return $inserted;
+    }
+
+    /**
+     * Planned work still produces alerts, it just does not wake anybody.
+     */
+    private function underMaintenance(int $serverId): bool
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT EXISTS(
+                SELECT 1
+                FROM maintenance_windows
+                WHERE server_id = :server_id
+                  AND starts_at <= CURRENT_TIMESTAMP
+                  AND ends_at > CURRENT_TIMESTAMP
+             )'
+        );
+        $statement->execute(['server_id' => $serverId]);
+
+        return $this->toBool($statement->fetchColumn());
     }
 
     /**

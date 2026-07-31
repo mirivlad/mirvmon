@@ -48,6 +48,7 @@ tests/          unit, integration, functional и contract tests
 - `current_metric_values` — компактный read model для текущего состояния;
 - `metric_samples_hourly` и `metric_samples_daily` — continuous aggregates;
 - `notification_outbox` отделяет приём метрик от Telegram/SMTP;
+- `maintenance_windows` подавляет доставку, но не создание алертов;
 - `bin/offline-worker` вычисляет offline transitions;
 - `bin/notification-worker` доставляет outbox jobs и раз в час чистит очередь;
 - оба worker отмечаются в `worker_heartbeats` на каждой итерации;

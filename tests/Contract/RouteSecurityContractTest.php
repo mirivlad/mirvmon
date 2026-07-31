@@ -44,6 +44,8 @@ final class RouteSecurityContractTest extends TestCase
             '/admin/users/{id}/delete',
             '/admin/notifications/test',
             '/admin/notifications/queue/retry',
+            '/servers/{id}/maintenance',
+            '/servers/{id}/maintenance/cancel',
         ] as $pattern) {
             self::assertSame(['POST'], $routes[$pattern] ?? null, $pattern);
         }

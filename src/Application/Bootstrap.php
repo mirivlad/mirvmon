@@ -17,6 +17,7 @@ use App\Controllers\ServerDetailController;
 use App\Controllers\SetupController;
 use App\Database\ConnectionFactory;
 use App\Domain\Metrics\MetricsValidator;
+use App\Repositories\MaintenanceWindowRepository;
 use App\Repositories\MetricRepository;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\NotificationSettingsRepository;
@@ -89,6 +90,11 @@ final class Bootstrap
             static fn (Container $container): ServerRepository => new ServerRepository(
                 $container->get(PDO::class)
             )
+        );
+        $container->set(
+            MaintenanceWindowRepository::class,
+            static fn (Container $container): MaintenanceWindowRepository =>
+                new MaintenanceWindowRepository($container->get(PDO::class))
         );
         $container->set(
             MetricRepository::class,
@@ -200,7 +206,8 @@ final class Bootstrap
             static fn (Container $container): ServerDetailController => new ServerDetailController(
                 $container->get(Twig::class),
                 $container->get(ServerRepository::class),
-                $container->get(MetricRepository::class)
+                $container->get(MetricRepository::class),
+                $container->get(MaintenanceWindowRepository::class)
             )
         );
         $container->set(
