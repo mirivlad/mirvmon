@@ -68,8 +68,8 @@ final class AgentCredentialIssuerTest extends TestCase
         );
         self::assertSame(
             '2',
-            self::$pdo?->query(
-            'SELECT count(*) FROM installer_tokens WHERE consumed_at IS NOT NULL'
+            (string) self::$pdo?->query(
+                'SELECT count(*) FROM installer_tokens WHERE consumed_at IS NOT NULL'
             )->fetchColumn()
         );
 

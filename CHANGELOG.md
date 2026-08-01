@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.4
+
+- Corrected integration-test expectations for the agent token generation
+  migration and PostgreSQL `COUNT(*)` result type.
+
 ## 0.3.3
 
 - Installer credentials now reuse the active agent token. Only an explicitly
