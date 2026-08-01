@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.3
+
+- Installer credentials now reuse the active agent token. Only an explicitly
+  confirmed administrator action revokes it and creates a replacement.
+
 ## 0.3.2
 
 - Linux installer rotation: a newly downloaded installer atomically replaces

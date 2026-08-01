@@ -42,7 +42,7 @@ final class ServerControllerTest extends TestCase
         $this->controller = new ServerController(
             self::$pdo,
             Twig::create(dirname(__DIR__, 3) . '/templates', ['cache' => false]),
-            new AgentCredentialIssuer(self::$pdo)
+            new AgentCredentialIssuer(self::$pdo, str_repeat('k', 32))
         );
     }
 
@@ -77,7 +77,7 @@ final class ServerControllerTest extends TestCase
             )->fetchColumn()
         );
         self::assertSame(
-            '0',
+            '1',
             (string) self::$pdo?->query(
                 'SELECT count(*) FROM agent_tokens'
             )->fetchColumn()

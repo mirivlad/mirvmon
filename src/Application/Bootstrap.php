@@ -135,11 +135,6 @@ final class Bootstrap
             )
         );
         $container->set(
-            AgentCredentialIssuer::class,
-            static fn (Container $container): AgentCredentialIssuer =>
-                new AgentCredentialIssuer($container->get(PDO::class))
-        );
-        $container->set(
             AgentInstallerService::class,
             static fn (): AgentInstallerService => new AgentInstallerService()
         );
@@ -148,6 +143,11 @@ final class Bootstrap
         if ($applicationKey === false || strlen($applicationKey) !== 32) {
             throw new RuntimeException('APP_KEY must be a base64-encoded 32-byte key.');
         }
+        $container->set(
+            AgentCredentialIssuer::class,
+            static fn (Container $container): AgentCredentialIssuer =>
+                new AgentCredentialIssuer($container->get(PDO::class), $applicationKey)
+        );
         $container->set(
             SecretCipher::class,
             static fn (): SecretCipher => new SecretCipher($applicationKey)

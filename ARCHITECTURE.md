@@ -132,11 +132,11 @@ credential в HTTPS body на публичный `POST /api/v1/metrics`.
 предустановленного домена.
 
 Для Linux, PowerShell и BAT создаются независимые installer credentials:
-каждый одноразовый и действует один час. При скачивании credential атомарно
-обменивается на новый permanent agent token, после чего повторное скачивание
-невозможно. Исходники агента публичны и скачиваются без credential; permanent
-token хранится на сервере только как SHA-256 hash и никогда не попадает в query
-string.
+каждый одноразовый и действует один час. Credential выдаёт текущий permanent
+agent token и не меняет его. Новый token создаётся только после явного отзыва
+администратором; тогда прежний сразу становится недействительным. Исходники
+агента публичны и скачиваются без credential; permanent token хранится на
+сервере только как SHA-256 hash и никогда не попадает в query string.
 
 Агент использует outbound HTTPS, стандартные proxy environment variables и
 локальную bounded persistent retry queue; входящий сетевой доступ ему не нужен.

@@ -45,7 +45,7 @@ final class AgentControllerTest extends TestCase
         $this->serverId = (int) self::$pdo?->query(
             "INSERT INTO servers (name) VALUES ('agent-controller-server') RETURNING id"
         )->fetchColumn();
-        $this->issuer = new AgentCredentialIssuer(self::$pdo);
+        $this->issuer = new AgentCredentialIssuer(self::$pdo, str_repeat('k', 32));
         $this->controller = new AgentController(
             self::$pdo,
             new PublicUrlResolver(''),

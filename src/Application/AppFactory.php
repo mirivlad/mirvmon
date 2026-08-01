@@ -89,7 +89,8 @@ final class AppFactory
         );
 
         $protected = $app->group('', function (RouteCollectorProxyInterface $group) use (
-            $container
+            $container,
+            $admin
         ): void {
             $group->get('/', self::controller($container, DashboardController::class, 'index'));
             $group->post('/logout', self::controller($container, AuthController::class, 'logout'));
@@ -133,10 +134,11 @@ final class AppFactory
             $group->get('/servers/{id}/edit', self::controller($container, ServerController::class, 'edit'));
             $group->post('/servers/{id}', self::controller($container, ServerController::class, 'update'));
             $group->post('/servers/{id}/delete', self::controller($container, ServerController::class, 'delete'));
+            $group->post('/servers/{id}/installers', self::controller($container, ServerController::class, 'installers'));
             $group->post(
                 '/servers/{id}/regenerate-token',
                 self::controller($container, ServerController::class, 'regenerateToken')
-            );
+            )->add($admin);
             $group->post(
                 '/servers/{id}/maintenance',
                 self::controller($container, ServerDetailController::class, 'startMaintenance')
