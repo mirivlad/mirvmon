@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.5
+
+- Multi-architecture GHCR publication now runs only after all release-tag CI
+  jobs, including TimescaleDB tests, complete successfully.
+
 ## 0.3.4
 
 - Corrected integration-test expectations for the agent token generation
