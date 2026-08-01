@@ -44,6 +44,7 @@ final class AgentInstallerServiceTest extends TestCase
         self::assertStringContainsString('psutil==7.2.2', $script);
         self::assertStringContainsString('chmod -R a+rX "$STAGING_DIR"', $script);
         self::assertStringContainsString('mv -Tf "$INSTALL_DIR/.current-$$" "$CURRENT_LINK"', $script);
+        self::assertStringContainsString('rm -f "$STATE_DIR/queue.json"', $script);
         self::assertStringNotContainsString('?token=', $script);
         self::assertStringNotContainsString('mon.mirv.top', $script);
     }
@@ -60,6 +61,10 @@ final class AgentInstallerServiceTest extends TestCase
         self::assertStringContainsString('"verify_tls": true', $script);
         self::assertStringContainsString(
             'https://windows-monitor.example/api/v1/agent/config',
+            $script
+        );
+        self::assertStringContainsString(
+            'Remove-Item -LiteralPath (Join-Path $StateDir \'queue.json\') -Force -ErrorAction SilentlyContinue',
             $script
         );
         self::assertStringNotContainsString('?token=', $script);
@@ -84,19 +89,19 @@ final class AgentInstallerServiceTest extends TestCase
         $baseUrl = 'https://windows-monitor.example';
 
         self::assertSame(
-            'df6b4bcfce01e6627209a072e7344fcbf85758509a895ad619777be540e2fca2',
+            '7b91fbca7e18315c30fd2dfc3df7858736a8b3ec2c973fe16500efce3cb573f3',
             hash('sha256', $this->installer->windowsPowerShell($baseUrl, $token))
         );
         self::assertSame(
-            'a027410918a345ca301856a5985b68edffe98a2b5634d42fa013fa931a5e844f',
+            'e4443b84c1be59d0db3833c4cf3e20ba925e540dbef411cc915b7e74872bc0f2',
             hash('sha256', $this->installer->windowsBatch($baseUrl, $token))
         );
         self::assertSame(
-            'b81f1d924e40c9a934738d0b18fdc5ca6b103c667f4642b5822f5c413abd6b22',
+            'c3013a11ae200343715a8070ba8bf7aec5c0329c6b8916e54558891038b7ef35',
             hash('sha256', $this->installer->windowsLegacyPowerShell($baseUrl, $token))
         );
         self::assertSame(
-            '981de5177e983463440c93fcd606b265c8f34ce6deaa08185c2d575afa74ab5b',
+            '5488c19712bd6460637e3dade1f6bd02f460ee66bce7fc7fca3440c5751feaad',
             hash('sha256', $this->installer->windowsLegacyBatch($baseUrl, $token))
         );
     }
@@ -201,7 +206,7 @@ SH);
         self::assertSame(0, $exitCode, $stderr);
         $config = json_decode((string) file_get_contents($configDirectory . '/config.json'), true, 512, JSON_THROW_ON_ERROR);
         self::assertSame(str_repeat('a', 64), $config['token']);
-        self::assertSame("[{\"sample_id\":\"queued\"}]\n", file_get_contents($stateDirectory . '/queue.json'));
+        self::assertFileDoesNotExist($stateDirectory . '/queue.json');
         self::assertSame(0640, fileperms($configDirectory . '/config.json') & 0777);
         self::assertFileExists($root . '/init.d/mirvmon-agent');
         self::assertSame(
@@ -256,6 +261,10 @@ SH);
         }
 
         self::assertStringContainsString('schtasks.exe /Create', $script);
+        self::assertStringContainsString(
+            'Remove-Item -LiteralPath (Join-Path $StateDir \'queue.txt\') -Force -ErrorAction SilentlyContinue',
+            $script
+        );
         self::assertStringContainsString('Get-WmiObject Win32_OperatingSystem', $script);
         self::assertStringContainsString('[Net.HttpWebRequest]::Create', $script);
         // Tls12 is spelled numerically because the enum member is missing on

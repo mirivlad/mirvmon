@@ -217,6 +217,16 @@ fi
 # dedicated service account before the launcher is switched.
 chmod -R a+rX "$STAGING_DIR"
 
+# An explicitly rotated credential makes queued samples signed with the old
+# credential permanently undeliverable. Stop the old process before removing
+# that queue so it cannot recreate it during the release switch.
+if systemd_is_active; then
+    systemctl stop mirvmon-agent.service >/dev/null 2>&1 || true
+elif [ -x "$SYSV_SCRIPT" ]; then
+    service mirvmon-agent stop >/dev/null 2>&1 || true
+fi
+rm -f "$STATE_DIR/queue.json"
+
 cat > "$INSTALL_DIR/.agent-launcher-$$" <<MIRVMON_LAUNCHER
 #!/bin/sh
 set -eu
@@ -374,6 +384,7 @@ if (-not \$Python) {
     throw 'Python 3.11 or newer is required. Install it from python.org and rerun.'
 }
 
+Stop-ScheduledTask -TaskName 'MirvMon Agent' -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path \$InstallDir, \$StateDir, \$PackageDir | Out-Null
 Invoke-WebRequest -Uri "\$BaseUrl/get-agent" -OutFile "\$InstallDir\\agent.py" -UseBasicParsing
 {$downloads}
@@ -384,6 +395,7 @@ Invoke-WebRequest -Uri "\$BaseUrl/get-agent" -OutFile "\$InstallDir\\agent.py" -
 @'
 {$config}
 '@ | Set-Content -LiteralPath "\$StateDir\\config.json" -Encoding UTF8
+Remove-Item -LiteralPath (Join-Path \$StateDir 'queue.json') -Force -ErrorAction SilentlyContinue
 
 icacls \$StateDir /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'Administrators:(OI)(CI)F' | Out-Null
 \$Action = New-ScheduledTaskAction `
@@ -441,6 +453,8 @@ if (-not \$principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administr
 
 if (-not (Test-Path \$InstallDir)) { New-Item -ItemType Directory -Path \$InstallDir | Out-Null }
 if (-not (Test-Path \$StateDir)) { New-Item -ItemType Directory -Path \$StateDir | Out-Null }
+schtasks.exe /End /TN 'MirvMon Agent' 2>\$null | Out-Null
+Remove-Item -LiteralPath (Join-Path \$StateDir 'queue.txt') -Force -ErrorAction SilentlyContinue
 
 \$Collector = @'
 {$collector}
