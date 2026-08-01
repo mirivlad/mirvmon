@@ -1,10 +1,6 @@
-from __future__ import annotations
-
 import re
 import subprocess
 import time
-from pathlib import Path
-from typing import Any
 
 import psutil
 
@@ -12,13 +8,12 @@ from .redaction import redact_command
 
 
 class ServiceChangeTracker:
-    def __init__(self) -> None:
-        self._states: dict[str, dict[str, str]] = {}
+    def __init__(self):
+        self._states = {}
 
     def changed(
-        self,
-        services: list[dict[str, str]],
-    ) -> list[dict[str, str]]:
+        self, services
+    ):
         changes = []
         for service in services:
             name = service.get("name", "")
@@ -43,12 +38,12 @@ class SystemCollector:
         "tmpfs",
     }
 
-    def __init__(self) -> None:
-        self._network: dict[str, tuple[int, int, float]] = {}
+    def __init__(self):
+        self._network = {}
 
-    def metrics(self) -> dict[str, float]:
+    def metrics(self):
         memory = psutil.virtual_memory()
-        metrics: dict[str, float] = {
+        metrics = {
             "cpu_load": float(psutil.cpu_percent(interval=1)),
             "ram_used": float(memory.percent),
             "ram_total_gb": round(memory.total / (1024**3), 2),
@@ -62,7 +57,7 @@ class SystemCollector:
     def process_snapshot(
         self,
         include_commands: bool,
-    ) -> dict[str, list[dict[str, Any]]]:
+    ):
         processes = []
         for process in psutil.process_iter(
             ["pid", "name", "cmdline", "cpu_percent", "memory_percent"]
@@ -86,7 +81,7 @@ class SystemCollector:
             except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):
                 continue
 
-        def top(key: str) -> list[dict[str, Any]]:
+        def top(key):
             return [
                 {
                     "pid": process["pid"],
@@ -103,27 +98,41 @@ class SystemCollector:
 
         return {"top_cpu": top("cpu"), "top_memory": top("memory")}
 
-    def services(self) -> list[dict[str, str]]:
+    def services(self):
+        if self._systemd_is_pid_one():
+            return self._systemd_services()
+        return self._sysv_services()
+
+    @staticmethod
+    def _command(arguments):
         try:
             result = subprocess.run(
-                [
-                    "systemctl",
-                    "list-units",
-                    "--type=service",
-                    "--all",
-                    "--no-legend",
-                    "--no-pager",
-                ],
-                capture_output=True,
-                text=True,
+                arguments,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                universal_newlines=True,
                 timeout=15,
                 check=False,
             )
         except (OSError, subprocess.SubprocessError):
-            return []
+            return ""
+        return result.stdout
+
+    @staticmethod
+    def _systemd_is_pid_one():
+        try:
+            with open("/proc/1/comm", "r") as stream:
+                return stream.read().strip() == "systemd"
+        except OSError:
+            return False
+
+    def _systemd_services(self):
+        output = self._command([
+            "systemctl", "list-units", "--type=service", "--all", "--no-legend", "--no-pager",
+        ])
 
         services = []
-        for line in result.stdout.splitlines():
+        for line in output.splitlines():
             fields = line.split(None, 4)
             if len(fields) < 4 or not fields[0].endswith(".service"):
                 continue
@@ -146,7 +155,40 @@ class SystemCollector:
             )
         return sorted(services, key=lambda item: item["name"])[:500]
 
-    def _disk_metrics(self, metrics: dict[str, float]) -> None:
+    def _sysv_services(self):
+        services = []
+        output = self._command(["service", "--status-all"])
+        for line in output.splitlines():
+            match = re.match(r"^\s*\[\s*([+\-?])\s*\]\s+(.+?)\s*$", line)
+            if not match:
+                continue
+            state = match.group(1)
+            services.append({
+                "name": match.group(2)[:255],
+                "status": "running" if state == "+" else "stopped" if state == "-" else "unknown",
+                "load_state": "sysv",
+                "active_state": "active" if state == "+" else "inactive" if state == "-" else "unknown",
+                "sub_state": "unknown",
+            })
+        if services:
+            return sorted(services, key=lambda item: item["name"])[:500]
+
+        output = self._command(["chkconfig", "--list"])
+        for line in output.splitlines():
+            fields = line.split()
+            if not fields:
+                continue
+            running = any(field.endswith(":on") for field in fields[1:])
+            services.append({
+                "name": fields[0][:255],
+                "status": "running" if running else "stopped",
+                "load_state": "sysv",
+                "active_state": "active" if running else "inactive",
+                "sub_state": "unknown",
+            })
+        return sorted(services, key=lambda item: item["name"])[:500]
+
+    def _disk_metrics(self, metrics):
         root_recorded = False
         for partition in psutil.disk_partitions(all=False):
             if partition.fstype in self.SKIP_FILESYSTEMS:
@@ -171,7 +213,7 @@ class SystemCollector:
             except (OSError, PermissionError):
                 pass
 
-    def _network_metrics(self, metrics: dict[str, float]) -> None:
+    def _network_metrics(self, metrics):
         now = time.monotonic()
         counters = psutil.net_io_counters(pernic=True)
         stats = psutil.net_if_stats()
@@ -194,7 +236,7 @@ class SystemCollector:
                 (counter.bytes_sent - previous[1]) / elapsed,
             )
 
-    def _temperatures(self, metrics: dict[str, float]) -> None:
+    def _temperatures(self, metrics):
         try:
             temperatures = psutil.sensors_temperatures()
         except (AttributeError, OSError):

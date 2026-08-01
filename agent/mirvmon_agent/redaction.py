@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import re
 import shlex
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -22,7 +20,7 @@ def redact_command(command: str) -> str:
     except ValueError:
         return _fallback_redaction(command)
 
-    redacted: list[str] = []
+    redacted = []
     redact_next = False
     for part in parts:
         if redact_next:
@@ -45,7 +43,7 @@ def redact_command(command: str) -> str:
         else:
             redacted.append(part)
 
-    return shlex.join(redacted)
+    return " ".join(shlex.quote(part) for part in redacted)
 
 
 def _redact_url(value: str) -> str:

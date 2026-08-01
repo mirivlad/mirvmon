@@ -20,8 +20,8 @@
 4. environment variables: значения из `docker/.env.example`.
 
 Git tag `vX.Y.Z` соответствует Docker image tag `X.Y.Z`.
-Например, repository reference `v0.1.0` использует
-`MIRVMON_IMAGE=ghcr.io/mirivlad/mirvmon:0.1.0`. После первой публикации
+Например, repository reference `v0.3.1` использует
+`MIRVMON_IMAGE=ghcr.io/mirivlad/mirvmon:0.3.1`. После первой публикации
 сделайте GHCR package публичным либо настройте registry credentials в Portainer.
 
 Сгенерируйте независимые секреты:
@@ -35,7 +35,7 @@ openssl rand -hex 32     # DB_PASSWORD
 Обязательные переменные:
 
 ```dotenv
-MIRVMON_IMAGE=ghcr.io/mirivlad/mirvmon:1.0.0
+MIRVMON_IMAGE=ghcr.io/mirivlad/mirvmon:0.3.1
 APP_KEY=<base64-encoded-32-byte-key>
 SETUP_TOKEN=<random-hex-token>
 DB_PASSWORD=<random-database-password>
@@ -121,6 +121,23 @@ curl --fail http://127.0.0.1:8080/readyz
 - `/livez` проверяет HTTP runtime;
 - `/readyz` проверяет приложение и соединение с TimescaleDB;
 - healthcheck контейнера использует `/readyz`.
+
+## Linux-агенты
+
+Linux agent requires x86-64 CPython 3.6–3.14 and is supported on Debian 10+,
+Ubuntu 18.04+, CentOS/RHEL/Oracle Linux 7+, AlmaLinux/Rocky Linux 8+, and MX
+Linux. Download the one-time Linux installer from the MirvMon UI and run it as
+root. It uses the configured `apt-get`, `dnf`, or `yum` repositories only; it
+does not add third-party repositories. On CentOS/RHEL 7, configure EPEL or the
+official Software Collections `rh-python36` first if the distribution has no
+compatible Python package.
+
+The installer registers systemd only when systemd is PID 1; otherwise it
+registers a SysVinit service. Proxy settings belong in
+`/etc/default/mirvmon-agent` on Debian/MX and
+`/etc/sysconfig/mirvmon-agent` on RHEL-like systems. Use `systemctl`/`journalctl`
+for systemd or `service mirvmon-agent {status|restart}` for SysVinit. EOL OS
+compatibility does not provide security support for the OS itself.
 
 ## Обновление
 

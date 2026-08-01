@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-from __future__ import annotations
-
 import argparse
 import os
 import signal
@@ -15,20 +13,20 @@ from mirvmon_agent.config import AgentConfig
 from mirvmon_agent.queue import PersistentQueue
 
 
-def default_config_path() -> Path:
+def default_config_path():
     if os.name == "nt":
         return Path(os.environ.get("PROGRAMDATA", "C:\\ProgramData")) / "MirvMon" / "Agent" / "config.json"
     return Path("/etc/mirvmon-agent/config.json")
 
 
-def run(config_path: Path) -> int:
+def run(config_path):
     config = AgentConfig.load(config_path)
     queue = PersistentQueue(config.queue_path, config.queue_limit)
     collector = SystemCollector()
     service_tracker = ServiceChangeTracker()
     running = True
 
-    def stop(_signal: int, _frame: object) -> None:
+    def stop(_signal, _frame):
         nonlocal running
         running = False
 
@@ -87,12 +85,22 @@ def run(config_path: Path) -> int:
     return 0
 
 
+def check(config_path):
+    """Validate an installed agent without collecting or sending a sample."""
+    config = AgentConfig.load(config_path)
+    PersistentQueue(config.queue_path, config.queue_limit)
+    SystemCollector()
+    ServiceChangeTracker()
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="MirvMon outbound monitoring agent")
     parser.add_argument("--config", type=Path, default=default_config_path())
+    parser.add_argument("--check", action="store_true")
     arguments = parser.parse_args()
     try:
-        return run(arguments.config)
+        return check(arguments.config) if arguments.check else run(arguments.config)
     except Exception as exception:
         print(
             f"agent_start_failed:{exception.__class__.__name__}",

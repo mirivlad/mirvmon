@@ -1,40 +1,38 @@
-from __future__ import annotations
-
 import json
 import os
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 
 class PersistentQueue:
-    def __init__(self, path: Path, max_items: int = 1000) -> None:
+    def __init__(self, path, max_items=1000):
         if max_items < 1 or max_items > 10000:
             raise ValueError("Queue size is out of range.")
         self.path = path
         self.max_items = max_items
         self._items = self._load()
 
-    def __len__(self) -> int:
+    def __len__(self):
         return len(self._items)
 
-    def append(self, item: dict[str, Any]) -> None:
+    def append(self, item):
         self._items.append(item)
         if len(self._items) > self.max_items:
             self._items = self._items[-self.max_items :]
         self._persist()
 
-    def peek(self) -> dict[str, Any] | None:
+    def peek(self):
         return self._items[0] if self._items else None
 
-    def pop(self) -> dict[str, Any] | None:
+    def pop(self):
         if not self._items:
             return None
         item = self._items.pop(0)
         self._persist()
         return item
 
-    def _load(self) -> list[dict[str, Any]]:
+    def _load(self):
         if not self.path.exists():
             return []
         try:
@@ -54,7 +52,7 @@ class PersistentQueue:
                 pass
             return []
 
-    def _persist(self) -> None:
+    def _persist(self):
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         descriptor, temporary_name = tempfile.mkstemp(
             prefix=".queue-",

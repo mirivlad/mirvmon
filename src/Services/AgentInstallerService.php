@@ -24,73 +24,223 @@ final class AgentInstallerService
     {
         $this->assertInputs($baseUrl, $agentToken);
         $config = $this->configJson($baseUrl, $agentToken, '/var/lib/mirvmon-agent');
-        $files = implode(' ', self::AGENT_FILES);
-        $requestsVersion = self::REQUESTS_VERSION;
-        $psutilVersion = self::PSUTIL_VERSION;
 
-        return <<<BASH
+        return $this->linuxScript($baseUrl, $config);
+    }
+
+    private function linuxScript(string $baseUrl, string $config): string
+    {
+        $template = <<<'SH'
 #!/bin/sh
 set -eu
+umask 077
 
-if [ "\$(id -u)" -ne 0 ]; then
+if [ "$(id -u)" -ne 0 ]; then
     echo "Run this installer as root." >&2
     exit 1
 fi
 
-BASE_URL='{$baseUrl}'
+BASE_URL='__BASE_URL__'
 INSTALL_DIR='/opt/mirvmon-agent'
 CONFIG_DIR='/etc/mirvmon-agent'
 STATE_DIR='/var/lib/mirvmon-agent'
 AGENT_USER='mirvmon-agent'
+RELEASES_DIR="$INSTALL_DIR/releases"
+CURRENT_LINK="$INSTALL_DIR/current"
+SYSTEMD_UNIT='/etc/systemd/system/mirvmon-agent.service'
+SYSV_SCRIPT='/etc/init.d/mirvmon-agent'
+SCL_NAME=''
+PYTHON=''
+
+fail() {
+    echo "MirvMon agent installation failed: $1" >&2
+    exit 1
+}
+
+python_supported() {
+    "$1" -c 'import sys; raise SystemExit(0 if (3, 6) <= sys.version_info[:2] <= (3, 14) else 1)' >/dev/null 2>&1
+}
+
+find_python() {
+    for candidate in python3.14 python3.13 python3.12 python3.11 python3.10 python3.9 python3.8 python3.7 python3.6 python3 python36; do
+        if command -v "$candidate" >/dev/null 2>&1; then
+            path=$(command -v "$candidate")
+            if python_supported "$path"; then
+                PYTHON="$path"
+                return 0
+            fi
+        fi
+    done
+    for path in /usr/bin/python3 /usr/bin/python36 /usr/local/bin/python3 /opt/rh/rh-python36/root/usr/bin/python3; do
+        if [ -x "$path" ] && python_supported "$path"; then
+            PYTHON="$path"
+            if [ "$path" = '/opt/rh/rh-python36/root/usr/bin/python3' ]; then
+                SCL_NAME='rh-python36'
+            fi
+            return 0
+        fi
+    done
+    return 1
+}
+
+run_python() {
+    if [ -n "$SCL_NAME" ] && command -v scl >/dev/null 2>&1; then
+        scl enable "$SCL_NAME" -- "$PYTHON" "$@"
+    else
+        "$PYTHON" "$@"
+    fi
+}
+
+systemd_is_active() {
+    [ -r /proc/1/comm ] && [ "$(cat /proc/1/comm)" = 'systemd' ]
+}
+
+disable_sysv() {
+    if [ -x "$SYSV_SCRIPT" ]; then
+        "$SYSV_SCRIPT" stop >/dev/null 2>&1 || true
+        if command -v update-rc.d >/dev/null 2>&1; then
+            update-rc.d -f mirvmon-agent remove >/dev/null 2>&1 || true
+        elif command -v chkconfig >/dev/null 2>&1; then
+            chkconfig --del mirvmon-agent >/dev/null 2>&1 || true
+        fi
+        rm -f "$SYSV_SCRIPT"
+    fi
+}
+
+disable_systemd() {
+    if [ -f "$SYSTEMD_UNIT" ] && command -v systemctl >/dev/null 2>&1; then
+        systemctl stop mirvmon-agent.service >/dev/null 2>&1 || true
+        systemctl disable mirvmon-agent.service >/dev/null 2>&1 || true
+        rm -f "$SYSTEMD_UNIT"
+        systemctl daemon-reload >/dev/null 2>&1 || true
+    fi
+}
 
 if command -v apt-get >/dev/null 2>&1; then
+    ENV_FILE='/etc/default/mirvmon-agent'
     apt-get update
-    apt-get install -y --no-install-recommends ca-certificates curl python3 python3-venv
+    apt-get install -y --no-install-recommends ca-certificates curl python3 python3-venv python3-pip
 elif command -v dnf >/dev/null 2>&1; then
-    dnf install -y ca-certificates curl python3
-elif command -v apk >/dev/null 2>&1; then
-    apk add --no-cache ca-certificates curl python3 py3-pip
+    ENV_FILE='/etc/sysconfig/mirvmon-agent'
+    dnf install -y ca-certificates curl python3 python3-pip
+elif command -v yum >/dev/null 2>&1; then
+    ENV_FILE='/etc/sysconfig/mirvmon-agent'
+    yum install -y ca-certificates curl
+    if ! find_python; then
+        yum install -y python3 python3-pip >/dev/null 2>&1 || yum install -y python36 python36-pip >/dev/null 2>&1 || yum install -y rh-python36 >/dev/null 2>&1 || fail 'No Python 3.6+ is available from configured yum repositories. Enable a supported EPEL repository or install Software Collections rh-python36, then rerun.'
+    fi
 else
-    echo "Install Python 3.11+, curl, and CA certificates first." >&2
-    exit 1
+    fail 'Automatic installation supports apt-get, dnf, and yum only. Install CPython 3.6-3.14, curl, CA certificates, and pip manually.'
 fi
 
-if ! id "\$AGENT_USER" >/dev/null 2>&1; then
-    useradd --system --home-dir "\$STATE_DIR" --create-home --shell /usr/sbin/nologin "\$AGENT_USER"
+find_python || fail 'No supported CPython 3.6-3.14 interpreter was found after package installation.'
+PYTHON_MINOR=$(run_python -c 'import sys; print("%s.%s" % sys.version_info[:2])')
+
+if ! id "$AGENT_USER" >/dev/null 2>&1; then
+    if command -v useradd >/dev/null 2>&1; then
+        useradd --system --home-dir "$STATE_DIR" --create-home --shell /usr/sbin/nologin "$AGENT_USER"
+    elif [ "$ENV_FILE" = '/etc/default/mirvmon-agent' ] && command -v adduser >/dev/null 2>&1; then
+        adduser --system --home "$STATE_DIR" --disabled-login --shell /usr/sbin/nologin "$AGENT_USER"
+    else
+        fail 'Neither useradd nor a compatible adduser command is available to create mirvmon-agent.'
+    fi
 fi
 
-install -d -m 0755 -o root -g root "\$INSTALL_DIR/mirvmon_agent"
-install -d -m 0750 -o root -g "\$AGENT_USER" "\$CONFIG_DIR"
-install -d -m 0700 -o "\$AGENT_USER" -g "\$AGENT_USER" "\$STATE_DIR"
+install -d -m 0755 -o root -g root "$INSTALL_DIR" "$RELEASES_DIR"
+install -d -m 0750 -o root -g "$AGENT_USER" "$CONFIG_DIR"
+install -d -m 0700 -o "$AGENT_USER" -g "$AGENT_USER" "$STATE_DIR"
+STAGING_DIR="$RELEASES_DIR/.staging-$$"
+mkdir "$STAGING_DIR"
+install -d -m 0755 -o root -g root "$STAGING_DIR/mirvmon_agent"
 
-curl --fail --silent --show-error --location \
-    "\$BASE_URL/get-agent" -o "\$INSTALL_DIR/agent.py"
-for file in {$files}; do
-    curl --fail --silent --show-error --location \
-        "\$BASE_URL/agent/files/\$file" \
-        -o "\$INSTALL_DIR/mirvmon_agent/\$file"
+curl --fail --silent --show-error --location "$BASE_URL/get-agent" -o "$STAGING_DIR/agent.py"
+for file in __AGENT_FILES__; do
+    curl --fail --silent --show-error --location "$BASE_URL/agent/files/$file" -o "$STAGING_DIR/mirvmon_agent/$file"
 done
+chmod 0755 "$STAGING_DIR/agent.py"
 
-python3 -m venv "\$INSTALL_DIR/venv"
-"\$INSTALL_DIR/venv/bin/python" -m pip install --disable-pip-version-check \
-    requests=={$requestsVersion} psutil=={$psutilVersion}
+if [ "$PYTHON_MINOR" = '3.6' ]; then
+    PIP_SPEC='pip<22'
+    PSUTIL_SPEC='psutil==5.9.8'
+elif [ "$PYTHON_MINOR" = '3.7' ]; then
+    PIP_SPEC='pip<24.1'
+    PSUTIL_SPEC='psutil==5.9.8'
+else
+    PIP_SPEC='pip'
+    PSUTIL_SPEC='psutil==7.2.2'
+fi
 
-cat > "\$CONFIG_DIR/config.json" <<'MIRVMON_CONFIG'
-{$config}
+USE_VENV=0
+if run_python -m venv "$STAGING_DIR/venv" >/dev/null 2>&1; then
+    AGENT_PYTHON="$STAGING_DIR/venv/bin/python"
+    "$AGENT_PYTHON" -m ensurepip --upgrade >/dev/null 2>&1 || fail 'The virtual environment has no usable pip. Install the distribution venv/ensurepip package and rerun.'
+    "$AGENT_PYTHON" -m pip install --disable-pip-version-check --upgrade "$PIP_SPEC"
+    "$AGENT_PYTHON" -m pip install --disable-pip-version-check --only-binary=:all: "$PSUTIL_SPEC" || fail 'No compatible psutil wheel is available. Install a supported CPython build or required compiler toolchain, then rerun.'
+    USE_VENV=1
+else
+    run_python -m ensurepip --upgrade >/dev/null 2>&1 || fail 'Python venv is unavailable and ensurepip is missing. Install the distribution pip package and rerun.'
+    run_python -m pip install --disable-pip-version-check --upgrade "$PIP_SPEC"
+    run_python -m pip install --disable-pip-version-check --only-binary=:all: --target "$STAGING_DIR/vendor" "$PSUTIL_SPEC" || fail 'No compatible psutil wheel is available. Install a supported CPython build or required compiler toolchain, then rerun.'
+fi
+
+if [ ! -f "$CONFIG_DIR/config.json" ]; then
+cat > "$CONFIG_DIR/config.json" <<'MIRVMON_CONFIG'
+__CONFIG__
 MIRVMON_CONFIG
-chown root:"\$AGENT_USER" "\$CONFIG_DIR/config.json"
-chmod 0640 "\$CONFIG_DIR/config.json"
-chmod 0755 "\$INSTALL_DIR/agent.py"
+fi
+chown root:"$AGENT_USER" "$CONFIG_DIR/config.json"
+chmod 0640 "$CONFIG_DIR/config.json"
 
-cat > /etc/default/mirvmon-agent <<'MIRVMON_ENV'
-# Optional outbound proxy:
+if [ ! -f "$ENV_FILE" ]; then
+cat > "$ENV_FILE" <<'MIRVMON_ENV'
+# Optional outbound proxy. Do not put agent credentials here.
 # HTTPS_PROXY=http://proxy.example:3128
 # HTTP_PROXY=http://proxy.example:3128
 # NO_PROXY=localhost,127.0.0.1
 MIRVMON_ENV
-chmod 0640 /etc/default/mirvmon-agent
+fi
+chmod 0640 "$ENV_FILE"
 
-cat > /etc/systemd/system/mirvmon-agent.service <<'MIRVMON_SERVICE'
+if [ "$USE_VENV" -eq 1 ]; then
+    "$AGENT_PYTHON" -m compileall -q "$STAGING_DIR"
+    "$AGENT_PYTHON" "$STAGING_DIR/agent.py" --config "$CONFIG_DIR/config.json" --check
+    LAUNCHER_PYTHON="$CURRENT_LINK/venv/bin/python"
+    LAUNCHER_PYTHONPATH=''
+else
+    PYTHONPATH="$STAGING_DIR/vendor" run_python -m compileall -q "$STAGING_DIR"
+    PYTHONPATH="$STAGING_DIR/vendor" run_python "$STAGING_DIR/agent.py" --config "$CONFIG_DIR/config.json" --check
+    LAUNCHER_PYTHON="$PYTHON"
+    LAUNCHER_PYTHONPATH="$CURRENT_LINK/vendor"
+fi
+
+# The staged release contains no credentials; it must be readable by the
+# dedicated service account before the launcher is switched.
+chmod -R a+rX "$STAGING_DIR"
+
+cat > "$INSTALL_DIR/.agent-launcher-$$" <<MIRVMON_LAUNCHER
+#!/bin/sh
+set -eu
+if [ -r "$ENV_FILE" ]; then
+    set -a
+    . "$ENV_FILE"
+    set +a
+fi
+if [ -n "$LAUNCHER_PYTHONPATH" ]; then
+    export PYTHONPATH="$LAUNCHER_PYTHONPATH"
+fi
+if [ -n "$SCL_NAME" ] && command -v scl >/dev/null 2>&1; then
+    exec scl enable "$SCL_NAME" -- "$LAUNCHER_PYTHON" "$CURRENT_LINK/agent.py" "\$@"
+fi
+exec "$LAUNCHER_PYTHON" "$CURRENT_LINK/agent.py" "\$@"
+MIRVMON_LAUNCHER
+chmod 0755 "$INSTALL_DIR/.agent-launcher-$$"
+ln -s "$STAGING_DIR" "$INSTALL_DIR/.current-$$"
+mv -Tf "$INSTALL_DIR/.current-$$" "$CURRENT_LINK"
+mv -f "$INSTALL_DIR/.agent-launcher-$$" "$INSTALL_DIR/agent-launcher"
+
+if systemd_is_active; then
+    disable_sysv
+    cat > "$SYSTEMD_UNIT" <<MIRVMON_SERVICE
 [Unit]
 Description=MirvMon monitoring agent
 After=network-online.target
@@ -100,25 +250,87 @@ Wants=network-online.target
 Type=simple
 User=mirvmon-agent
 Group=mirvmon-agent
-EnvironmentFile=-/etc/default/mirvmon-agent
-WorkingDirectory=/var/lib/mirvmon-agent
-ExecStart=/opt/mirvmon-agent/venv/bin/python /opt/mirvmon-agent/agent.py --config /etc/mirvmon-agent/config.json
+EnvironmentFile=-$ENV_FILE
+WorkingDirectory=$STATE_DIR
+ExecStart=$INSTALL_DIR/agent-launcher --config $CONFIG_DIR/config.json
 Restart=on-failure
 RestartSec=10
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/var/lib/mirvmon-agent
 
 [Install]
 WantedBy=multi-user.target
 MIRVMON_SERVICE
+    systemctl daemon-reload
+    systemctl enable mirvmon-agent.service
+    systemctl restart mirvmon-agent.service
+    systemctl status mirvmon-agent.service --no-pager >/dev/null 2>&1 || fail 'systemd could not start mirvmon-agent.service; inspect journalctl -u mirvmon-agent.'
+    echo 'MirvMon agent installed. Check: systemctl status mirvmon-agent'
+else
+    disable_systemd
+    cat > "$SYSV_SCRIPT" <<MIRVMON_INIT
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          mirvmon-agent
+# Required-Start:    \$network \$remote_fs
+# Required-Stop:     \$network \$remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: MirvMon outbound monitoring agent
+### END INIT INFO
+NAME='mirvmon-agent'
+USER='mirvmon-agent'
+LAUNCHER='$INSTALL_DIR/agent-launcher'
+CONFIG='$CONFIG_DIR/config.json'
+ENV_FILE='$ENV_FILE'
+PID_FILE='/var/run/mirvmon-agent.pid'
+LOG_FILE='/var/log/mirvmon-agent.log'
+# shellcheck disable=SC1090
+load_environment() { [ -r "\$ENV_FILE" ] && set -a && . "\$ENV_FILE" && set +a; }
+is_running() { [ -s "\$PID_FILE" ] && kill -0 "\$(cat "\$PID_FILE")" 2>/dev/null; }
+start() {
+    load_environment
+    is_running && return 0
+    rm -f "\$PID_FILE"
+    if command -v start-stop-daemon >/dev/null 2>&1; then
+        start-stop-daemon --start --background --make-pidfile --pidfile "\$PID_FILE" --chuid "\$USER" --exec "\$LAUNCHER" -- --config "\$CONFIG"
+    else
+        su -s /bin/sh -c "exec '\$LAUNCHER' --config '\$CONFIG'" "\$USER" >>"\$LOG_FILE" 2>&1 &
+        echo \$! > "\$PID_FILE"
+    fi
+}
+stop() {
+    is_running || { rm -f "\$PID_FILE"; return 0; }
+    pid=\$(cat "\$PID_FILE"); kill -TERM "\$pid" 2>/dev/null || true; waited=0
+    while kill -0 "\$pid" 2>/dev/null && [ "\$waited" -lt 30 ]; do sleep 1; waited=\$((waited + 1)); done
+    if kill -0 "\$pid" 2>/dev/null; then
+        kill -KILL "\$pid" 2>/dev/null || true
+    fi
+    rm -f "\$PID_FILE"
+}
+status() { is_running && { echo "\$NAME is running"; return 0; }; echo "\$NAME is not running"; return 3; }
+case "\${1:-}" in start) start ;; stop) stop ;; restart|force-reload) stop; start ;; status) status ;; *) echo "Usage: \$0 {start|stop|restart|force-reload|status}" >&2; exit 2 ;; esac
+MIRVMON_INIT
+    chmod 0755 "$SYSV_SCRIPT"
+    if command -v update-rc.d >/dev/null 2>&1; then
+        update-rc.d mirvmon-agent defaults
+    elif command -v chkconfig >/dev/null 2>&1; then
+        chkconfig --add mirvmon-agent
+        chkconfig mirvmon-agent on
+    else
+        fail 'No supported SysV boot registration command was found (need update-rc.d or chkconfig).'
+    fi
+    service mirvmon-agent start
+    service mirvmon-agent status >/dev/null 2>&1 || fail 'SysV could not start mirvmon-agent; inspect /var/log/mirvmon-agent.log.'
+    echo 'MirvMon agent installed. Check: service mirvmon-agent status'
+fi
+SH;
 
-systemctl daemon-reload
-systemctl enable --now mirvmon-agent.service
-echo "MirvMon agent installed. Check: systemctl status mirvmon-agent"
-BASH;
+        return str_replace(
+            ['__BASE_URL__', '__AGENT_FILES__', '__CONFIG__'],
+            [$baseUrl, implode(' ', self::AGENT_FILES), $config],
+            $template
+        );
     }
 
     public function windowsPowerShell(

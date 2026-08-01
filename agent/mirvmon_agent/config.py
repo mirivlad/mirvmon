@@ -1,28 +1,56 @@
-from __future__ import annotations
-
 import json
 import os
-from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any
 from urllib.parse import urlparse
 
 
-@dataclass(frozen=True)
-class AgentConfig:
-    api_url: str
-    config_url: str
-    token: str
-    queue_path: Path
-    interval_seconds: int = 60
-    verify_tls: bool = True
-    collect_process_commands: bool = False
-    enabled: bool = True
-    monitor_services: tuple[str, ...] = ()
-    queue_limit: int = 1000
+class AgentConfig(object):
+    """Immutable validated agent configuration with only the standard library."""
+
+    __slots__ = (
+        "api_url",
+        "config_url",
+        "token",
+        "queue_path",
+        "interval_seconds",
+        "verify_tls",
+        "collect_process_commands",
+        "enabled",
+        "monitor_services",
+        "queue_limit",
+    )
+
+    def __setattr__(self, name, value):
+        if hasattr(self, name):
+            raise AttributeError("Agent configuration is immutable.")
+        object.__setattr__(self, name, value)
+
+    def __init__(
+        self,
+        api_url,
+        config_url,
+        token,
+        queue_path,
+        interval_seconds=60,
+        verify_tls=True,
+        collect_process_commands=False,
+        enabled=True,
+        monitor_services=(),
+        queue_limit=1000,
+    ):
+        self.api_url = api_url
+        self.config_url = config_url
+        self.token = token
+        self.queue_path = queue_path
+        self.interval_seconds = interval_seconds
+        self.verify_tls = verify_tls
+        self.collect_process_commands = collect_process_commands
+        self.enabled = enabled
+        self.monitor_services = monitor_services
+        self.queue_limit = queue_limit
 
     @classmethod
-    def load(cls, path: Path) -> "AgentConfig":
+    def load(cls, path):
         data = json.loads(path.read_text(encoding="utf-8-sig"))
         if not isinstance(data, dict):
             raise ValueError("Agent configuration must be an object.")
@@ -41,18 +69,18 @@ class AgentConfig:
         config.validate()
         return config
 
-    def validate(self) -> None:
+    def validate(self):
         for value in (self.api_url, self.config_url):
             parsed = urlparse(value)
             local_http = parsed.scheme == "http" and parsed.hostname in {
-                "localhost",
-                "127.0.0.1",
-                "::1",
+                "localhost", "127.0.0.1", "::1"
             }
             if (
-                parsed.scheme != "https"
-                and not local_http
-            ) or not parsed.hostname or parsed.username or parsed.password:
+                (parsed.scheme != "https" and not local_http)
+                or not parsed.hostname
+                or parsed.username
+                or parsed.password
+            ):
                 raise ValueError("Agent URLs must use HTTPS.")
         if len(self.token) < 32 or len(self.token) > 512:
             raise ValueError("Invalid agent token.")
@@ -63,7 +91,7 @@ class AgentConfig:
         if not str(self.queue_path):
             raise ValueError("Queue path is required.")
 
-    def apply_remote(self, payload: dict[str, Any]) -> "AgentConfig":
+    def apply_remote(self, payload):
         interval = payload.get("interval_seconds", self.interval_seconds)
         enabled = payload.get("enabled", self.enabled)
         services = payload.get("monitor_services", list(self.monitor_services))
@@ -77,9 +105,15 @@ class AgentConfig:
         ):
             return self
 
-        return replace(
-            self,
+        return AgentConfig(
+            self.api_url,
+            self.config_url,
+            self.token,
+            self.queue_path,
             interval_seconds=interval,
+            verify_tls=self.verify_tls,
+            collect_process_commands=self.collect_process_commands,
             enabled=enabled,
             monitor_services=tuple(services),
+            queue_limit=self.queue_limit,
         )
