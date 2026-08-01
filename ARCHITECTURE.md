@@ -143,6 +143,14 @@ string.
 На Linux процесс работает под отдельным `mirvmon-agent`, на Windows code и
 state разделены между `Program Files` и `ProgramData`.
 
+Linux runtime совместим с CPython 3.6–3.14 на x86-64. HTTP transport реализован
+на `urllib` и системном CA store; он поддерживает proxy environment, ограничивает
+response body и не передаёт Bearer credential при redirect на другой origin.
+Installer готовит release в staging, проверяет `compileall` и `--check`, затем
+атомарно переключает launcher. systemd выбирается только когда он PID 1; иначе
+используется SysVinit с LSB service script. `/etc/default/mirvmon-agent` — файл
+environment на Debian/MX, `/etc/sysconfig/mirvmon-agent` — на RHEL-подобных ОС.
+
 ## Уведомления
 
 Telegram и SMTP являются независимыми transports. Telegram proxy применяется

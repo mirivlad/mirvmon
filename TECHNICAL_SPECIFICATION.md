@@ -14,7 +14,7 @@ MirvMon принимает push-метрики серверов, отображ�
 | Runtime | PHP 8.5, Slim 4, Twig 3 |
 | Primary HTTP adapter | FrankenPHP 1.12 classic mode |
 | Database | PostgreSQL 17 + TimescaleDB 2.28 |
-| Agent | Python 3.11+, `psutil`, HTTPS client |
+| Agent | CPython 3.6–3.14, `psutil`, standard-library HTTPS client |
 | UI | Bootstrap 5, Chart.js 4, локально закреплённые assets |
 | Deployment | два контейнера: `app`, `db` |
 | TLS | внешний nginx reverse proxy |
@@ -72,6 +72,11 @@ notifications. Запоздалый допустимый sample записыва
 - proxy environment поддерживается HTTP client;
 - persistent retry queue ограничена 1000 пакетами, записывается атомарно с
   режимом `0600` и переживает restart;
+- Linux installer поддерживает Debian 10+, Ubuntu 18+, CentOS/RHEL/Oracle 7+,
+  AlmaLinux/Rocky 8+ и MX Linux; systemd определяется по PID 1, иначе
+  регистрируется SysVinit service;
+- старые EOL ОС поддерживаются только как compatibility target агента и не
+  считаются безопасными production platform;
 - конфигурация и queue записываются атомарно с ограниченными правами;
 - логи не содержат token, proxy credential или URL query secrets.
 

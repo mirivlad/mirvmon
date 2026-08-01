@@ -151,17 +151,44 @@ Server 2008 R2. Ссылка действует один час и при ска
 scheme, host и port запроса, уже нормализованные middleware доверенного reverse
 proxy. В исходниках нет предустановленного домена.
 
-Linux-установщик создаёт непривилегированного пользователя `mirvmon-agent`,
-виртуальное окружение с закреплёнными `requests 2.34.2` и `psutil 7.2.2`,
+Linux-агент поддерживает CPython 3.6–3.14 на x86-64: Debian 10+, Ubuntu
+18.04+, CentOS/RHEL/Oracle Linux 7+, AlmaLinux/Rocky Linux 8+ и современные
+Debian-, Ubuntu-, Fedora- и RHEL-подобные системы. Старые EOL-системы не
+становятся от этого безопасными и должны быть изолированы и планово заменены.
+
+Установщик ищет совместимый CPython, создаёт непривилегированного пользователя
+`mirvmon-agent`, изолированно устанавливает `psutil` (без `requests`), сохраняет
 конфигурацию `/etc/mirvmon-agent/config.json` и persistent queue в
-`/var/lib/mirvmon-agent`. Агент отправляет данные на публичный HTTPS endpoint и
-не принимает входящих соединений. Его состояние и журнал доступны через
-systemd:
+`/var/lib/mirvmon-agent`. Повторный запуск сохраняет существующие configuration,
+token и queue, готовит новый release в staging-каталоге, проверяет импорт и лишь
+затем переключает launcher. Агент отправляет данные на публичный HTTPS endpoint
+и не принимает входящих соединений.
+
+На systemd (включая systemd 219 CentOS/RHEL 7) используйте:
 
 ```bash
 sudo systemctl status mirvmon-agent
 sudo journalctl -u mirvmon-agent -f
 ```
+
+На MX Linux и других системах, где systemd не является PID 1, установщик создаёт
+SysVinit service. Используйте:
+
+```bash
+sudo service mirvmon-agent status
+sudo service mirvmon-agent restart
+sudo service mirvmon-agent stop
+sudo service mirvmon-agent start
+```
+
+Для Debian/MX переменные proxy находятся в `/etc/default/mirvmon-agent`; для
+RHEL-подобных систем — в `/etc/sysconfig/mirvmon-agent`. Поддерживаются
+`HTTPS_PROXY`, `HTTP_PROXY` и `NO_PROXY`; TLS certificate verification всегда
+использует системное CA store. На CentOS/RHEL 7 installer использует уже
+настроенные штатные репозитории: сначала существующий `python3`/`python36`, затем
+доступные пакеты, включая EPEL или Software Collections (`rh-python36`), если они
+уже настроены. Он не добавляет сторонние репозитории сам; при отсутствии Python
+выводит конкретную инструкцию.
 
 ### Windows 7 и Server 2008 R2
 
@@ -324,7 +351,7 @@ PYTHONPATH=agent python3 -m unittest discover -s agent/tests
 `npm run assets:sync`.
 
 CI в `.github/workflows/ci.yml` проверяет PHP 8.5 на TimescaleDB, PHPStan
-level 6, воспроизводимость frontend assets, Python 3.11/3.14 и production
+level 6, воспроизводимость frontend assets, Python 3.6/3.7/3.8/3.9/3.11/3.14 и production
 Docker image. Release workflow публикует multi-arch image в GHCR, а Dependabot
 следит за Composer, npm, Docker и GitHub Actions.
 
