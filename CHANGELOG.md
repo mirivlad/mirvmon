@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2
+
+- Linux installer rotation: a newly downloaded installer atomically replaces
+  an existing agent configuration with its new credential while preserving the
+  persistent queue.
+
 ## 0.3.1
 
 - Extended the x86-64 Linux agent to CPython 3.6–3.14 without a `requests`
