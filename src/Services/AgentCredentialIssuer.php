@@ -11,8 +11,13 @@ use Throwable;
 
 final class AgentCredentialIssuer
 {
-    public function __construct(private readonly PDO $pdo)
-    {
+    public function __construct(
+        private readonly PDO $pdo,
+        private readonly string $tokenKey
+    ) {
+        if (strlen($this->tokenKey) !== 32) {
+            throw new RuntimeException('Agent token key must contain exactly 32 bytes.');
+        }
     }
 
     public function issueInstaller(int $serverId, int $lifetimeSeconds = 3600): string
@@ -21,6 +26,7 @@ final class AgentCredentialIssuer
             throw new RuntimeException('Invalid installer credential parameters.');
         }
 
+        $this->ensureToken($serverId);
         $token = bin2hex(random_bytes(32));
         $expiresAt = (new DateTimeImmutable())
             ->modify('+' . $lifetimeSeconds . ' seconds')
@@ -71,19 +77,11 @@ final class AgentCredentialIssuer
                 'token_hash' => hash('sha256', $installerToken),
             ]);
 
-            $agentToken = bin2hex(random_bytes(32));
-            $agent = $this->pdo->prepare(
-                'INSERT INTO agent_tokens (server_id, token_hash)
-                 VALUES (:server_id, :token_hash)
-                 ON CONFLICT (server_id) DO UPDATE SET
-                    token_hash = EXCLUDED.token_hash,
-                    created_at = CURRENT_TIMESTAMP,
-                    last_used_at = NULL'
-            );
-            $agent->execute([
-                'server_id' => (int) $serverId,
-                'token_hash' => hash('sha256', $agentToken),
-            ]);
+            $generation = $this->generation((int) $serverId);
+            if ($generation === null) {
+                throw new RuntimeException('Legacy agent token requires explicit rotation.');
+            }
+            $agentToken = $this->agentToken((int) $serverId, $generation);
 
             $config = $this->pdo->prepare(
                 "INSERT INTO agent_configs (server_id)
@@ -98,6 +96,70 @@ final class AgentCredentialIssuer
             $this->rollbackTransaction($ownsTransaction);
             throw $exception;
         }
+    }
+
+    public function rotate(int $serverId): void
+    {
+        if ($serverId < 1) {
+            throw new RuntimeException('Invalid server identifier.');
+        }
+        $ownsTransaction = $this->beginTransaction();
+        try {
+            $current = $this->generation($serverId);
+            $next = ($current ?? 0) + 1;
+            $agent = $this->pdo->prepare(
+                'INSERT INTO agent_tokens (server_id, token_hash, token_generation)
+                 VALUES (:server_id, :token_hash, :generation)
+                 ON CONFLICT (server_id) DO UPDATE SET
+                    token_hash = EXCLUDED.token_hash,
+                    token_generation = EXCLUDED.token_generation,
+                    created_at = CURRENT_TIMESTAMP,
+                    last_used_at = NULL'
+            );
+            $agent->execute([
+                'server_id' => $serverId,
+                'token_hash' => hash('sha256', $this->agentToken($serverId, $next)),
+                'generation' => $next,
+            ]);
+            $expire = $this->pdo->prepare(
+                'UPDATE installer_tokens SET consumed_at = CURRENT_TIMESTAMP
+                 WHERE server_id = :server_id AND consumed_at IS NULL'
+            );
+            $expire->execute(['server_id' => $serverId]);
+            $this->commitTransaction($ownsTransaction);
+        } catch (Throwable $exception) {
+            $this->rollbackTransaction($ownsTransaction);
+            throw $exception;
+        }
+    }
+
+    private function ensureToken(int $serverId): void
+    {
+        $generation = $this->generation($serverId);
+        if ($generation !== false) {
+            return;
+        }
+        $token = $this->agentToken($serverId, 1);
+        $statement = $this->pdo->prepare(
+            'INSERT INTO agent_tokens (server_id, token_hash, token_generation)
+             VALUES (:server_id, :token_hash, 1)'
+        );
+        $statement->execute(['server_id' => $serverId, 'token_hash' => hash('sha256', $token)]);
+    }
+
+    private function generation(int $serverId): int|false|null
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT token_generation FROM agent_tokens WHERE server_id = :server_id FOR UPDATE'
+        );
+        $statement->execute(['server_id' => $serverId]);
+        $value = $statement->fetchColumn();
+        return $value === false || $value === null ? $value : (int) $value;
+    }
+
+    private function agentToken(int $serverId, int $generation): string
+    {
+        return hash_hmac('sha256', 'mirvmon-agent-token:' . $serverId . ':' . $generation, $this->tokenKey);
     }
 
     private function beginTransaction(): bool

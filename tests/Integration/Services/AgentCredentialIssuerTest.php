@@ -40,7 +40,7 @@ final class AgentCredentialIssuerTest extends TestCase
         $this->serverId = (int) self::$pdo?->query(
             "INSERT INTO servers (name) VALUES ('installer-server') RETURNING id"
         )->fetchColumn();
-        $this->issuer = new AgentCredentialIssuer(self::$pdo);
+        $this->issuer = new AgentCredentialIssuer(self::$pdo, str_repeat('k', 32));
     }
 
     protected function tearDown(): void
@@ -50,13 +50,16 @@ final class AgentCredentialIssuerTest extends TestCase
         }
     }
 
-    public function testInstallerCredentialIsOneTimeAndOnlyAgentHashIsStored(): void
+    public function testInstallerCredentialsReuseTheCurrentTokenUntilExplicitRotation(): void
     {
-        $installerToken = $this->issuer->issueInstaller($this->serverId);
-        $credential = $this->issuer->exchange($installerToken);
+        $firstInstaller = $this->issuer->issueInstaller($this->serverId);
+        $secondInstaller = $this->issuer->issueInstaller($this->serverId);
+        $credential = $this->issuer->exchange($firstInstaller);
+        $sameCredential = $this->issuer->exchange($secondInstaller);
 
         self::assertSame($this->serverId, $credential->serverId);
         self::assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $credential->token);
+        self::assertSame($credential->token, $sameCredential->token);
         self::assertSame(
             hash('sha256', $credential->token),
             self::$pdo?->query(
@@ -64,13 +67,18 @@ final class AgentCredentialIssuerTest extends TestCase
             )->fetchColumn()
         );
         self::assertSame(
-            'true',
+            '2',
             self::$pdo?->query(
-                'SELECT (consumed_at IS NOT NULL)::text FROM installer_tokens'
+            'SELECT count(*) FROM installer_tokens WHERE consumed_at IS NOT NULL'
             )->fetchColumn()
         );
 
+        $this->issuer->rotate($this->serverId);
+        $rotatedInstaller = $this->issuer->issueInstaller($this->serverId);
+        $rotated = $this->issuer->exchange($rotatedInstaller);
+        self::assertNotSame($credential->token, $rotated->token);
+
         $this->expectException(RuntimeException::class);
-        $this->issuer->exchange($installerToken);
+        $this->issuer->exchange($firstInstaller);
     }
 }

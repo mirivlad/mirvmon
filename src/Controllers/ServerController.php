@@ -281,16 +281,7 @@ final class ServerController
 
         $ownsTransaction = $this->beginTransaction('server_regenerate');
         try {
-            $deleteAgent = $this->pdo->prepare(
-                'DELETE FROM agent_tokens WHERE server_id = :server_id'
-            );
-            $deleteAgent->execute(['server_id' => $serverId]);
-            $expireInstallers = $this->pdo->prepare(
-                'UPDATE installer_tokens
-                 SET consumed_at = CURRENT_TIMESTAMP
-                 WHERE server_id = :server_id AND consumed_at IS NULL'
-            );
-            $expireInstallers->execute(['server_id' => $serverId]);
+            $this->credentials->rotate($serverId);
             $installerTokens = $this->installerTokens($serverId);
             $this->commitTransaction($ownsTransaction, 'server_regenerate');
 
@@ -303,6 +294,34 @@ final class ServerController
         } catch (Throwable) {
             $this->rollbackTransaction($ownsTransaction, 'server_regenerate');
 
+            return $this->redirect($response, '/servers/' . $serverId . '/edit');
+        }
+    }
+
+    /** @param array<string, string> $args */
+    public function installers(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        $serverId = $this->serverId($args);
+        if ($serverId === null) {
+            return $this->redirect($response, '/servers');
+        }
+        $statement = $this->pdo->prepare('SELECT name FROM servers WHERE id = :server_id');
+        $statement->execute(['server_id' => $serverId]);
+        $name = $statement->fetchColumn();
+        if ($name === false) {
+            return $this->redirect($response, '/servers');
+        }
+        try {
+            return $this->createdResponse(
+                $response,
+                $serverId,
+                (string) $name,
+                $this->installerTokens($serverId)
+            );
+        } catch (Throwable) {
             return $this->redirect($response, '/servers/' . $serverId . '/edit');
         }
     }
