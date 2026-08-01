@@ -183,13 +183,13 @@ else
     run_python -m pip install --disable-pip-version-check --only-binary=:all: --target "$STAGING_DIR/vendor" "$PSUTIL_SPEC" || fail 'No compatible psutil wheel is available. Install a supported CPython build or required compiler toolchain, then rerun.'
 fi
 
-if [ ! -f "$CONFIG_DIR/config.json" ]; then
-cat > "$CONFIG_DIR/config.json" <<'MIRVMON_CONFIG'
+CONFIG_TMP="$CONFIG_DIR/.config.json-$$"
+cat > "$CONFIG_TMP" <<'MIRVMON_CONFIG'
 __CONFIG__
 MIRVMON_CONFIG
-fi
-chown root:"$AGENT_USER" "$CONFIG_DIR/config.json"
-chmod 0640 "$CONFIG_DIR/config.json"
+chown root:"$AGENT_USER" "$CONFIG_TMP"
+chmod 0640 "$CONFIG_TMP"
+mv -f "$CONFIG_TMP" "$CONFIG_DIR/config.json"
 
 if [ ! -f "$ENV_FILE" ]; then
 cat > "$ENV_FILE" <<'MIRVMON_ENV'

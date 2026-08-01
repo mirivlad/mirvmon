@@ -199,7 +199,8 @@ SH);
         $exitCode = proc_close($process);
 
         self::assertSame(0, $exitCode, $stderr);
-        self::assertSame("{\"token\":\"existing\"}\n", file_get_contents($configDirectory . '/config.json'));
+        $config = json_decode((string) file_get_contents($configDirectory . '/config.json'), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame(str_repeat('a', 64), $config['token']);
         self::assertSame("[{\"sample_id\":\"queued\"}]\n", file_get_contents($stateDirectory . '/queue.json'));
         self::assertSame(0640, fileperms($configDirectory . '/config.json') & 0777);
         self::assertFileExists($root . '/init.d/mirvmon-agent');
