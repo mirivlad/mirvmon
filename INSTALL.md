@@ -20,8 +20,8 @@
 4. environment variables: значения из `docker/.env.example`.
 
 Git tag `vX.Y.Z` соответствует Docker image tag `X.Y.Z`.
-Например, repository reference `v0.3.1` использует
-`MIRVMON_IMAGE=ghcr.io/mirivlad/mirvmon:0.3.1`. После первой публикации
+Например, repository reference `v0.3.2` использует
+`MIRVMON_IMAGE=ghcr.io/mirivlad/mirvmon:0.3.2`. После первой публикации
 сделайте GHCR package публичным либо настройте registry credentials в Portainer.
 
 Сгенерируйте независимые секреты:
@@ -35,7 +35,7 @@ openssl rand -hex 32     # DB_PASSWORD
 Обязательные переменные:
 
 ```dotenv
-MIRVMON_IMAGE=ghcr.io/mirivlad/mirvmon:0.3.1
+MIRVMON_IMAGE=ghcr.io/mirivlad/mirvmon:0.3.2
 APP_KEY=<base64-encoded-32-byte-key>
 SETUP_TOKEN=<random-hex-token>
 DB_PASSWORD=<random-database-password>
