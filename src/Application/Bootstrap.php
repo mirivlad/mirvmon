@@ -60,6 +60,7 @@ final class Bootstrap
             'session_name' => self::environment('SESSION_NAME', 'mirvmon_session'),
             'session_secure' => self::booleanEnvironment('SESSION_SECURE', false),
             'max_request_bytes' => (int) self::environment('MAX_REQUEST_BYTES', '1048576'),
+            'app_version' => self::environment('APP_VERSION', 'development'),
             'public_base_url' => self::environment('PUBLIC_BASE_URL'),
             'templates_path' => dirname(__DIR__, 2) . '/templates',
             'twig_cache' => self::environment('APP_ENV', 'production') === 'production'
@@ -81,6 +82,10 @@ final class Bootstrap
             'auto_reload' => ($settings['app_env'] ?? 'production') !== 'production',
             'strict_variables' => ($settings['app_env'] ?? 'production') !== 'production',
         ]);
+        $twig->getEnvironment()->addGlobal(
+            'app_version',
+            (string) ($settings['app_version'] ?? 'development')
+        );
 
         $container->set('settings', $settings);
         $container->set(PDO::class, $pdo);

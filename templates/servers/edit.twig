@@ -166,12 +166,20 @@
                         агента. Отзыв создаёт новый ключ и потребует установить
                         новый installer на сервер.
                     </p>
+                    {% if requires_token_rotation %}
+                    <div class="alert alert-warning small">
+                        Этот ключ создан предыдущей версией MirvMon. Его значение
+                        хранится только в конфигурации агента, поэтому для выдачи
+                        нового установщика сначала явно отзовите ключ.
+                    </div>
+                    {% else %}
                     <form method="post" action="/servers/{{ server.id }}/installers" class="d-inline">
                         {% include "partials/csrf.twig" %}
                         <button type="submit" class="btn btn-outline-primary">
                             <i class="fas fa-download"></i> Скачать установщики
                         </button>
                     </form>
+                    {% endif %}
                     <button type="button" class="btn btn-outline-warning"
                             data-bs-toggle="modal" data-bs-target="#revokeAgentTokenModal">
                         <i class="fas fa-sync-alt"></i>

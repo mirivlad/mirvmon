@@ -22,6 +22,8 @@ RUN composer dump-autoload \
 
 FROM dunglas/frankenphp:1.12.6-php8.5-trixie@sha256:da270879b95225345b2ee984f717aef5cba7336e1f206ec005074a79235af347
 
+ARG APP_VERSION=development
+
 USER root
 
 RUN apt-get update \
@@ -67,6 +69,7 @@ RUN chmod 0555 \
     && composer check-platform-reqs --no-dev
 
 ENV APP_ENV=production \
+    APP_VERSION=${APP_VERSION} \
     SERVER_NAME=:8080 \
     XDG_CONFIG_HOME=/config \
     XDG_DATA_HOME=/data

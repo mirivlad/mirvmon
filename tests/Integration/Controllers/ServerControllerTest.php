@@ -89,4 +89,36 @@ final class ServerControllerTest extends TestCase
         self::assertStringContainsString('/agent/install-legacy.ps1?token=', $html);
         self::assertStringContainsString('/agent/install-legacy.bat?token=', $html);
     }
+
+    public function testLegacyAgentTokenRequiresExplicitRotationBeforeDownloadingInstallers(): void
+    {
+        $serverId = (int) self::$pdo?->query(
+            "INSERT INTO servers (name) VALUES ('legacy-installer-server') RETURNING id"
+        )->fetchColumn();
+        $token = self::$pdo?->prepare(
+            'INSERT INTO agent_tokens (server_id, token_hash) VALUES (:server_id, :token_hash)'
+        );
+        $token?->execute([
+            'server_id' => $serverId,
+            'token_hash' => hash('sha256', 'legacy-agent-token'),
+        ]);
+
+        $response = $this->controller->installers(
+            (new ServerRequestFactory())->createServerRequest(
+                'POST',
+                'https://monitor.example/servers/' . $serverId . '/installers'
+            ),
+            (new ResponseFactory())->createResponse(),
+            ['id' => (string) $serverId]
+        );
+
+        self::assertSame(302, $response->getStatusCode());
+        self::assertSame('/servers/' . $serverId . '/edit', $response->getHeaderLine('Location'));
+        self::assertSame(
+            '0',
+            (string) self::$pdo?->query('SELECT count(*) FROM installer_tokens')->fetchColumn()
+        );
+        self::assertSame('Для этого агента требуется явный отзыв ключа.', $_SESSION['flash_message']);
+        self::assertSame('warning', $_SESSION['flash_type']);
+    }
 }
