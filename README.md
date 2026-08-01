@@ -74,8 +74,9 @@ Production Compose загружает готовый образ из `MIRVMON_IM
 поддержки Docker build со стороны Portainer. Для production рекомендуется
 зафиксировать release tag образа вместо `latest`.
 
-Tag `vX.Y.Z` запускает `.github/workflows/release-image.yml`: он публикует
-`linux/amd64` и `linux/arm64` image в GHCR с semver-тегами, SBOM и provenance.
+Tag `vX.Y.Z` запускает `.github/workflows/ci.yml`: после успешных PHP,
+frontend, agent и container checks он публикует `linux/amd64` и `linux/arm64`
+image в GHCR с semver-тегами, SBOM и provenance.
 Docker image tag не содержит начальную `v`: Git tag `v0.1.0` публикует
 `ghcr.io/mirivlad/mirvmon:0.1.0`. Prerelease tag не перезаписывает `latest`.
 
@@ -158,12 +159,12 @@ Debian-, Ubuntu-, Fedora- и RHEL-подобные системы. Старые 
 становятся от этого безопасными и должны быть изолированы и планово заменены.
 
 Установщик ищет совместимый CPython, создаёт непривилегированного пользователя
-`mirvmon-agent`, изолированно устанавливает `psutil` (без `requests`), сохраняет
-конфигурацию `/etc/mirvmon-agent/config.json` и persistent queue в
-`/var/lib/mirvmon-agent`. Повторный запуск сохраняет существующие configuration,
-token и queue, готовит новый release в staging-каталоге, проверяет импорт и лишь
-затем переключает launcher. Агент отправляет данные на публичный HTTPS endpoint
-и не принимает входящих соединений.
+`mirvmon-agent`, изолированно устанавливает `psutil` (без `requests`), записывает
+конфигурацию `/etc/mirvmon-agent/config.json` и использует persistent queue в
+`/var/lib/mirvmon-agent`. Повторный запуск перезаписывает конфигурацию токеном из
+installer, готовит новый release в staging-каталоге, проверяет импорт и лишь затем
+переключает launcher. Агент отправляет данные на публичный HTTPS endpoint и не
+принимает входящих соединений.
 
 На systemd (включая systemd 219 CentOS/RHEL 7) используйте:
 

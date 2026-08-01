@@ -151,7 +151,7 @@ jobs:
             config --quiet
 
       - name: Build production image
-        run: docker build --tag mirvmon:test --file docker/Dockerfile .
+        run: docker build --build-arg APP_VERSION=ci --tag mirvmon:test --file docker/Dockerfile .
 
   publish:
     name: Publish multi-arch image
@@ -194,6 +194,8 @@ jobs:
           context: .
           file: docker/Dockerfile
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            APP_VERSION=${{ github.ref_name }}
           push: true
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}

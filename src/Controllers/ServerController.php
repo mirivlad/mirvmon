@@ -146,18 +146,18 @@ final class ServerController
              ORDER BY metric_names.name'
         );
         $metrics->execute(['server_id' => $serverId]);
-        $hasToken = $this->pdo->prepare(
-            'SELECT EXISTS(
-                SELECT 1 FROM agent_tokens WHERE server_id = :server_id
-             )'
+        $agentToken = $this->pdo->prepare(
+            'SELECT token_generation FROM agent_tokens WHERE server_id = :server_id'
         );
-        $hasToken->execute(['server_id' => $serverId]);
+        $agentToken->execute(['server_id' => $serverId]);
+        $tokenGeneration = $agentToken->fetchColumn();
 
         return $this->twig->render($response, 'servers/edit.twig', [
             'title' => 'Редактировать сервер',
             'server' => $server,
             'groups' => $this->groups(),
-            'has_agent_token' => $this->toBool($hasToken->fetchColumn()),
+            'has_agent_token' => $tokenGeneration !== false,
+            'requires_token_rotation' => $tokenGeneration === null,
             'allMetrics' => $metrics->fetchAll(),
             'server_display_metrics' => $this->decodeStringList(
                 $server['display_metrics'] ?? '[]'
@@ -314,6 +314,12 @@ final class ServerController
         if ($name === false) {
             return $this->redirect($response, '/servers');
         }
+        if ($this->requiresTokenRotation($serverId)) {
+            $_SESSION['flash_message'] = 'Для этого агента требуется явный отзыв ключа.';
+            $_SESSION['flash_type'] = 'warning';
+
+            return $this->redirect($response, '/servers/' . $serverId . '/edit');
+        }
         try {
             return $this->createdResponse(
                 $response,
@@ -377,6 +383,16 @@ final class ServerController
             'legacy_powershell' => $this->credentials->issueInstaller($serverId),
             'legacy_batch' => $this->credentials->issueInstaller($serverId),
         ];
+    }
+
+    private function requiresTokenRotation(int $serverId): bool
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT token_generation FROM agent_tokens WHERE server_id = :server_id'
+        );
+        $statement->execute(['server_id' => $serverId]);
+
+        return $statement->fetchColumn() === null;
     }
 
     /**
@@ -480,11 +496,6 @@ final class ServerController
         );
 
         return $serverId === false ? null : $serverId;
-    }
-
-    private function toBool(mixed $value): bool
-    {
-        return $value === true || $value === 1 || $value === '1' || $value === 't';
     }
 
     private function redirect(Response $response, string $location): Response

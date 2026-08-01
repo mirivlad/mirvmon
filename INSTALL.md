@@ -20,8 +20,8 @@
 4. environment variables: значения из `docker/.env.example`.
 
 Git tag `vX.Y.Z` соответствует Docker image tag `X.Y.Z`.
-Например, repository reference `v0.3.5` использует
-`MIRVMON_IMAGE=ghcr.io/mirivlad/mirvmon:0.3.5`. После первой публикации
+Например, repository reference `v0.3.6` использует
+`MIRVMON_IMAGE=ghcr.io/mirivlad/mirvmon:0.3.6`. После первой публикации
 сделайте GHCR package публичным либо настройте registry credentials в Portainer.
 
 Сгенерируйте независимые секреты:
