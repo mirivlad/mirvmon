@@ -42,6 +42,8 @@ final class AgentInstallerServiceTest extends TestCase
             $script
         );
         self::assertStringContainsString('User=root', $script);
+        self::assertStringContainsString('ReadOnlyDirectories=/', $script);
+        self::assertStringContainsString('ReadWriteDirectories=/opt/mirvmon-agent /var/lib/mirvmon-agent', $script);
         self::assertStringContainsString('chmod 0644 "$SERVICE_UNIT" "$UPDATE_PATH_UNIT" "$UPDATE_SERVICE_UNIT"', $script);
         self::assertStringContainsString('systemctl enable mirvmon-agent-update.path', $script);
         self::assertStringNotContainsString('python', mb_strtolower($script));

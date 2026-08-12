@@ -74,8 +74,24 @@ func executeApply(arguments []string, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "invalid configuration")
 		return exitInvalid
 	}
-	command, applyErr := update.Apply(*requestPath, *installedPath, *parentPID)
 	client := transport.New(configuration)
+	remote, authErr := client.PullConfig(context.Background())
+	if authErr != nil || remote.UpdateCommand == nil {
+		_ = os.Remove(update.HandoffPath(*requestPath))
+		_ = os.Remove(*requestPath)
+		if err := update.PlatformRecoverHandoff(*parentPID); err != nil {
+			fmt.Fprintln(stderr, "agent update recovery failed")
+			return exitRuntime
+		}
+		fmt.Fprintln(stderr, "agent update authorization failed")
+		return exitPending
+	}
+	command, applyErr := update.Apply(
+		*requestPath,
+		*installedPath,
+		*parentPID,
+		remote.UpdateCommand,
+	)
 	state, errorCode := update.StateAwaitingRestart, ""
 	if applyErr != nil {
 		state, errorCode = update.StateFailed, "apply_failed"

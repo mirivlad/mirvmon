@@ -83,7 +83,7 @@ func (manager Manager) Process(
 	if state.State != StateInstalling {
 		return ErrInvalidCommand
 	}
-	handoffPath := filepath.Join(directory, "update-handoff")
+	handoffPath := HandoffPath(filepath.Join(directory, "update-request.json"))
 	if marker, err := os.ReadFile(handoffPath); err == nil && string(marker) == command.ID {
 		return nil
 	}
@@ -107,6 +107,11 @@ func (manager Manager) Process(
 		}
 	}
 	return atomicfile.Write(handoffPath, []byte(command.ID), 0600)
+}
+
+// HandoffPath returns the fixed local marker associated with a request.
+func HandoffPath(requestPath string) string {
+	return filepath.Join(filepath.Dir(requestPath), "update-handoff")
 }
 
 func (manager Manager) fail(

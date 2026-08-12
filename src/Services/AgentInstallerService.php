@@ -145,6 +145,8 @@ WorkingDirectory=/var/lib/mirvmon-agent
 ExecStart=/opt/mirvmon-agent/mirvmon-agent apply-update --config /etc/mirvmon-agent/config.json --request /var/lib/mirvmon-agent/update-request.json --installed /opt/mirvmon-agent/mirvmon-agent
 NoNewPrivileges=true
 PrivateTmp=true
+ReadOnlyDirectories=/
+ReadWriteDirectories=/opt/mirvmon-agent /var/lib/mirvmon-agent
 MIRVMON_UPDATE_SERVICE
 chmod 0644 "$SERVICE_UNIT" "$UPDATE_PATH_UNIT" "$UPDATE_SERVICE_UNIT"
 systemctl daemon-reload
