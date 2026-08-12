@@ -14,22 +14,44 @@
             <div class="card-body">
                 {% if servers|length > 0 %}
                 <div class="table-responsive">
+                    <form id="server-filters" method="get" action="/servers" data-server-filter-form>
+                        <input type="hidden" name="sort" value="{{ sort }}">
+                        <input type="hidden" name="direction" value="{{ direction|lower }}">
+                    </form>
                     <table class="table table-striped">
                         <thead>
                             <tr>
-                                <th>Название</th>
-                                <th>Адрес</th>
-                                <th>Группа</th>
-                                <th>Описание</th>
-                                <th>Последние метрики</th>
+                                <th><a href="{{ sort_urls.name }}" class="link-dark text-decoration-none">Название{% if sort == 'name' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}</a></th>
+                                <th><a href="{{ sort_urls.address }}" class="link-dark text-decoration-none">Адрес{% if sort == 'address' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}</a></th>
+                                <th><a href="{{ sort_urls.group }}" class="link-dark text-decoration-none">Группа{% if sort == 'group' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}</a></th>
+                                <th><a href="{{ sort_urls.description }}" class="link-dark text-decoration-none">Описание{% if sort == 'description' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}</a></th>
+                                <th><a href="{{ sort_urls.last_metrics }}" class="link-dark text-decoration-none">Последние метрики{% if sort == 'last_metrics' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}</a></th>
                                 <th>Агент</th>
                                 <th>Действия</th>
+                            </tr>
+                            <tr>
+                                <th><input form="server-filters" class="form-control form-control-sm" type="search" name="name" value="{{ filters.name }}" aria-label="Поиск по названию" placeholder="Поиск"></th>
+                                <th><input form="server-filters" class="form-control form-control-sm" type="search" name="address" value="{{ filters.address }}" aria-label="Поиск по адресу" placeholder="Поиск"></th>
+                                <th><input form="server-filters" class="form-control form-control-sm" type="search" name="group" value="{{ filters.group }}" aria-label="Поиск по группе" placeholder="Поиск"></th>
+                                <th><input form="server-filters" class="form-control form-control-sm" type="search" name="description" value="{{ filters.description }}" aria-label="Поиск по описанию" placeholder="Поиск"></th>
+                                <th><input form="server-filters" class="form-control form-control-sm" type="search" name="last_metrics" value="{{ filters.last_metrics }}" aria-label="Поиск по последним метрикам" placeholder="Поиск"></th>
+                                <th></th><th></th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for server in servers %}
                             <tr>
-                                <td>{{ server.name }}</td>
+                                <td>
+                                    {% set os = server.os_version|default('') %}
+                                    {% if os|lower starts with 'windows' %}
+                                        {% set os_icon = 'fab fa-windows' %}
+                                    {% elseif os|lower starts with 'linux' %}
+                                        {% set os_icon = 'fab fa-linux' %}
+                                    {% else %}
+                                        {% set os_icon = 'fas fa-server' %}
+                                    {% endif %}
+                                    <i class="{{ os_icon }} me-1" aria-label="{{ os ?: 'ОС не сообщена' }}" data-bs-toggle="tooltip" title="{{ os ?: 'ОС не сообщена' }}"></i>{{ server.name }}
+                                </td>
                                 <td>{{ server.address|default('-') }}</td>
                                 <td>
                                     {% if server.group_name %}
