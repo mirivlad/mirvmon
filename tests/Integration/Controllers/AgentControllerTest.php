@@ -10,6 +10,9 @@ use App\Database\Migrator;
 use App\Services\AgentArtifactCatalog;
 use App\Services\AgentCredentialIssuer;
 use App\Services\AgentInstallerService;
+use App\Services\AgentUpdateService;
+use App\Services\AgentVersionService;
+use App\Repositories\AgentUpdateRepository;
 use App\Services\PublicUrlResolver;
 use PDO;
 use PHPUnit\Framework\TestCase;
@@ -50,12 +53,19 @@ final class AgentControllerTest extends TestCase
         $this->issuer = new AgentCredentialIssuer(self::$pdo, str_repeat('k', 32));
         $this->artifactDirectory = $this->createArtifactDirectory();
         $artifacts = AgentArtifactCatalog::load($this->artifactDirectory);
+        $updates = new AgentUpdateService(
+            self::$pdo,
+            new AgentUpdateRepository(self::$pdo),
+            new AgentVersionService(),
+            $artifacts
+        );
         $this->controller = new AgentController(
             self::$pdo,
             new PublicUrlResolver(''),
             $this->issuer,
             new AgentInstallerService(),
-            static fn (): AgentArtifactCatalog => $artifacts
+            static fn (): AgentArtifactCatalog => $artifacts,
+            $updates
         );
     }
 
@@ -162,6 +172,41 @@ final class AgentControllerTest extends TestCase
         self::assertStringNotContainsString($credential->token, (string) $response->getBody());
     }
 
+    public function testAgentConfigurationIncludesOnlyItsActiveUpdateCommand(): void
+    {
+        $credential = $this->issuer->exchange(
+            $this->issuer->issueInstaller($this->serverId)
+        );
+        self::$pdo?->prepare(
+            "UPDATE servers
+             SET agent_version = 'v0.4.2',
+                 agent_artifact = 'linux-amd64',
+                 agent_capabilities = '[\"self_update_v1\"]'::jsonb
+             WHERE id = :server_id"
+        )->execute(['server_id' => $this->serverId]);
+        $updates = new AgentUpdateService(
+            self::$pdo,
+            new AgentUpdateRepository(self::$pdo),
+            new AgentVersionService(),
+            AgentArtifactCatalog::load($this->artifactDirectory)
+        );
+        $command = $updates->request($this->serverId, null);
+
+        $request = (new ServerRequestFactory())
+            ->createServerRequest('GET', 'https://download.example/api/v1/agent/config')
+            ->withHeader('Authorization', 'Bearer ' . $credential->token);
+        $response = $this->controller->getAgentConfig(
+            $request,
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+        $body = json_decode((string) $response->getBody(), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame($command['id'], $body['update_command']['id'] ?? null);
+        self::assertSame('linux-amd64', $body['update_command']['artifact'] ?? null);
+        self::assertArrayNotHasKey('token', $body['update_command'] ?? []);
+        self::assertArrayNotHasKey('url', $body['update_command'] ?? []);
+    }
+
     private function createArtifactDirectory(): string
     {
         $directory = sys_get_temp_dir() . '/mirvmon-controller-artifacts-' . bin2hex(random_bytes(8));
@@ -174,12 +219,13 @@ final class AgentControllerTest extends TestCase
                 'content' => 'legacy-windows-agent',
             ],
         ];
-        $manifest = ['artifacts' => []];
+        $manifest = ['version' => 'v0.4.3', 'artifacts' => []];
         foreach ($artifacts as $key => $artifact) {
             file_put_contents($directory . '/' . $artifact['filename'], $artifact['content']);
             $manifest['artifacts'][$key] = [
                 'filename' => $artifact['filename'],
                 'sha256' => hash('sha256', $artifact['content']),
+                'size' => strlen($artifact['content']),
                 'content_type' => 'application/octet-stream',
             ];
         }

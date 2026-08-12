@@ -8,6 +8,7 @@ use App\Services\AgentCredential;
 use App\Services\AgentCredentialIssuer;
 use App\Services\AgentArtifactCatalog;
 use App\Services\AgentInstallerService;
+use App\Services\AgentUpdateService;
 use App\Services\PublicUrlResolver;
 use Closure;
 use JsonException;
@@ -25,7 +26,8 @@ final class AgentController
         private readonly AgentCredentialIssuer $credentials,
         private readonly AgentInstallerService $installers,
         /** @var Closure(): AgentArtifactCatalog */
-        private readonly Closure $artifactCatalog
+        private readonly Closure $artifactCatalog,
+        private readonly AgentUpdateService $updates
     ) {
     }
 
@@ -253,7 +255,7 @@ final class AgentController
         );
         $touch->execute(['server_id' => (int) $config['server_id']]);
 
-        return $this->json($response, [
+        $payload = [
             'enabled' => $config['enabled'] === null
                 ? true
                 : $this->toBool($config['enabled']),
@@ -263,7 +265,13 @@ final class AgentController
             'monitor_services' => $this->decodeStringList(
                 $config['monitor_services'] ?? '[]'
             ),
-        ]);
+        ];
+        $command = $this->updates->commandForServer((int) $config['server_id']);
+        if ($command !== null) {
+            $payload['update_command'] = $command;
+        }
+
+        return $this->json($response, $payload);
     }
 
     /** @param array<string, string> $args */

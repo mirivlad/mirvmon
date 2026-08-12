@@ -6,6 +6,7 @@ namespace App\Application;
 
 use App\Controllers\AdminController;
 use App\Controllers\AgentController;
+use App\Controllers\AgentUpdateController;
 use App\Controllers\AlertController;
 use App\Controllers\Api\MetricsApiController;
 use App\Controllers\Api\MetricsController;
@@ -18,6 +19,7 @@ use App\Controllers\SetupController;
 use App\Database\ConnectionFactory;
 use App\Domain\Metrics\MetricsValidator;
 use App\Repositories\MaintenanceWindowRepository;
+use App\Repositories\AgentUpdateRepository;
 use App\Repositories\MetricRepository;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\NotificationSettingsRepository;
@@ -27,6 +29,8 @@ use App\Security\SecretCipher;
 use App\Services\AgentCredentialIssuer;
 use App\Services\AgentArtifactCatalog;
 use App\Services\AgentInstallerService;
+use App\Services\AgentUpdateService;
+use App\Services\AgentVersionService;
 use App\Services\MetricsIngestionService;
 use App\Services\PublicUrlResolver;
 use App\Services\ServerStatusService;
@@ -150,6 +154,24 @@ final class Bootstrap
                 dirname(__DIR__, 2) . '/agent-dist'
             )
         );
+        $container->set(
+            AgentUpdateRepository::class,
+            static fn (Container $container): AgentUpdateRepository =>
+                new AgentUpdateRepository($container->get(PDO::class))
+        );
+        $container->set(
+            AgentVersionService::class,
+            static fn (): AgentVersionService => new AgentVersionService()
+        );
+        $container->set(
+            AgentUpdateService::class,
+            static fn (Container $container): AgentUpdateService => new AgentUpdateService(
+                $container->get(PDO::class),
+                $container->get(AgentUpdateRepository::class),
+                $container->get(AgentVersionService::class),
+                $container->get(AgentArtifactCatalog::class)
+            )
+        );
 
         $applicationKey = base64_decode((string) $settings['app_key'], true);
         if ($applicationKey === false || strlen($applicationKey) !== 32) {
@@ -253,8 +275,14 @@ final class Bootstrap
                 $container->get(PublicUrlResolver::class),
                 $container->get(AgentCredentialIssuer::class),
                 $container->get(AgentInstallerService::class),
-                static fn (): AgentArtifactCatalog => $container->get(AgentArtifactCatalog::class)
+                static fn (): AgentArtifactCatalog => $container->get(AgentArtifactCatalog::class),
+                $container->get(AgentUpdateService::class)
             )
+        );
+        $container->set(
+            AgentUpdateController::class,
+            static fn (Container $container): AgentUpdateController =>
+                new AgentUpdateController($container->get(AgentUpdateService::class))
         );
         $container->set(
             MetricsController::class,
