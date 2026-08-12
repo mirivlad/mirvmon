@@ -229,6 +229,32 @@ final class AdminController
     }
 
     /** @param array<string, string> $args */
+    public function notificationQueue(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        if (!$this->isAdmin()) {
+            return $this->redirect($response, '/');
+        }
+
+        $query = $request->getQueryParams();
+        $filters = $this->notificationOutbox->filters($query);
+        $page = $this->positiveInteger($query['page'] ?? null) ?? 1;
+
+        return $this->twig->render($response, 'admin/notification-queue.twig', [
+            'title' => 'Очередь уведомлений',
+            'filters' => $filters,
+            'queue' => $this->notificationOutbox->page($filters, $page),
+            'queue_counts' => $this->notificationOutbox->statusCounts(),
+            'servers' => $this->pdo->query(
+                'SELECT id, name FROM servers ORDER BY name, id'
+            )?->fetchAll() ?? [],
+            'heartbeats' => $this->heartbeats->all(),
+        ]);
+    }
+
+    /** @param array<string, string> $args */
     public function retryNotificationQueue(
         Request $request,
         Response $response,
@@ -238,6 +264,10 @@ final class AdminController
             return $this->redirect($response, '/');
         }
 
+        $body = $request->getParsedBody();
+        $filters = $this->notificationOutbox->filters(
+            is_array($body) ? $body : []
+        );
         try {
             $requeued = $this->notificationOutbox->retryUndelivered();
             $this->flash(
@@ -248,7 +278,111 @@ final class AdminController
             $this->flash('Не удалось перезапустить очередь уведомлений', 'error');
         }
 
-        return $this->redirect($response, '/admin/notifications');
+        return $this->redirect($response, $this->queueLocation($filters));
+    }
+
+    /** @param array<string, string> $args */
+    public function retryNotificationJob(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        if (!$this->isAdmin()) {
+            return $this->redirect($response, '/');
+        }
+
+        $body = $request->getParsedBody();
+        $filters = $this->notificationOutbox->filters(
+            is_array($body) ? $body : []
+        );
+        $jobId = $this->positiveInteger($args['id'] ?? null);
+        if ($jobId === null) {
+            $this->flash('Задание очереди не найдено', 'error');
+
+            return $this->redirect($response, $this->queueLocation($filters));
+        }
+        try {
+            $requeued = $this->notificationOutbox->retryByIds([$jobId]);
+            $this->flash(
+                $requeued === 1
+                    ? 'Повторная отправка запланирована'
+                    : 'Задание нельзя повторно отправить',
+                $requeued === 1 ? 'success' : 'warning'
+            );
+        } catch (Throwable) {
+            $this->flash('Не удалось перезапустить задание очереди', 'error');
+        }
+
+        return $this->redirect($response, $this->queueLocation($filters));
+    }
+
+    /** @param array<string, string> $args */
+    public function deleteNotificationJob(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        if (!$this->isAdmin()) {
+            return $this->redirect($response, '/');
+        }
+
+        $body = $request->getParsedBody();
+        $filters = $this->notificationOutbox->filters(
+            is_array($body) ? $body : []
+        );
+        $jobId = $this->positiveInteger($args['id'] ?? null);
+        if ($jobId === null) {
+            $this->flash('Задание очереди не найдено', 'error');
+        } else {
+            try {
+                $deleted = $this->notificationOutbox->deleteByIds([$jobId]);
+                $this->flash(
+                    $deleted === 1 ? 'Задание очереди удалено' : 'Задание очереди не найдено',
+                    $deleted === 1 ? 'success' : 'warning'
+                );
+            } catch (Throwable) {
+                $this->flash('Не удалось удалить задание очереди', 'error');
+            }
+        }
+
+        return $this->redirect($response, $this->queueLocation($filters));
+    }
+
+    /** @param array<string, string> $args */
+    public function deleteNotificationQueue(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        if (!$this->isAdmin()) {
+            return $this->redirect($response, '/');
+        }
+
+        $body = $request->getParsedBody();
+        $body = is_array($body) ? $body : [];
+        $filters = $this->notificationOutbox->filters($body);
+        if (($body['confirm_delete'] ?? null) !== '1') {
+            $this->flash(
+                sprintf(
+                    'Подтвердите удаление заданий: %d',
+                    $this->notificationOutbox->countMatching($filters)
+                ),
+                'warning'
+            );
+
+            return $this->redirect($response, $this->queueLocation($filters));
+        }
+        try {
+            $deleted = $this->notificationOutbox->deleteMatching($filters);
+            $this->flash(
+                sprintf('Удалено заданий очереди: %d', $deleted),
+                'success'
+            );
+        } catch (Throwable) {
+            $this->flash('Не удалось удалить задания очереди', 'error');
+        }
+
+        return $this->redirect($response, $this->queueLocation($filters));
     }
 
     /** @param array<string, string> $args */
@@ -723,6 +857,42 @@ final class AdminController
     {
         $_SESSION['flash_message'] = $message;
         $_SESSION['flash_type'] = $type;
+    }
+
+    /**
+     * @param array{
+     *     statuses:list<string>,
+     *     channel:?string,
+     *     server_id:?int,
+     *     from:?string,
+     *     to:?string,
+     *     error:?string
+     * } $filters
+     */
+    private function queueLocation(array $filters): string
+    {
+        $query = [];
+        if ($filters['statuses'] !== []) {
+            $query['status'] = $filters['statuses'];
+        }
+        if ($filters['channel'] !== null) {
+            $query['channel'] = $filters['channel'];
+        }
+        if ($filters['server_id'] !== null) {
+            $query['server'] = $filters['server_id'];
+        }
+        if ($filters['from'] !== null) {
+            $query['from'] = substr($filters['from'], 0, 10);
+        }
+        if ($filters['to'] !== null) {
+            $query['to'] = substr($filters['to'], 0, 10);
+        }
+        if ($filters['error'] !== null) {
+            $query['error'] = $filters['error'];
+        }
+
+        return '/admin/notifications/queue'
+            . ($query === [] ? '' : '?' . http_build_query($query));
     }
 
     private function redirect(Response $response, string $location): Response

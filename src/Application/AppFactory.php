@@ -198,6 +198,22 @@ final class AppFactory
                     '/notifications/queue/retry',
                     self::controller($container, AdminController::class, 'retryNotificationQueue')
                 );
+                $group->get(
+                    '/notifications/queue',
+                    self::controller($container, AdminController::class, 'notificationQueue')
+                );
+                $group->post(
+                    '/notifications/queue/{id}/retry',
+                    self::controller($container, AdminController::class, 'retryNotificationJob')
+                );
+                $group->post(
+                    '/notifications/queue/{id}/delete',
+                    self::controller($container, AdminController::class, 'deleteNotificationJob')
+                );
+                $group->post(
+                    '/notifications/queue/delete',
+                    self::controller($container, AdminController::class, 'deleteNotificationQueue')
+                );
                 $group->get('/defaults', self::controller($container, AdminController::class, 'defaultSettings'));
                 $group->post(
                     '/defaults/save',
