@@ -716,7 +716,7 @@ final class NotificationOutboxRepository
             $parameters['from'] = $filters['from'];
         }
         if ($filters['to'] !== null) {
-            $conditions[] = 'jobs.created_at < CAST(:to AS timestamptz)';
+            $conditions[] = "jobs.created_at < CAST(:to AS timestamptz) + INTERVAL '1 day'";
             $parameters['to'] = $filters['to'];
         }
         if ($filters['error'] !== null) {
@@ -774,7 +774,7 @@ final class NotificationOutboxRepository
             return null;
         }
 
-        return ($end ? $date->modify('+1 day') : $date)->format(DATE_ATOM);
+        return $date->format(DATE_ATOM);
     }
 
     private function substring(mixed $value): ?string

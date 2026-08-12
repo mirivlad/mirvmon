@@ -134,7 +134,7 @@ final class AdminNotificationControllerTest extends TestCase
         self::assertStringContainsString('сохранён', $html);
     }
 
-    public function testSettingsPageShowsWhyAQueuedNotificationWasNotDelivered(): void
+    public function testQueuePageShowsFailureDetailsAndSettingsKeepsNoOutboxRows(): void
     {
         $repository = new NotificationSettingsRepository(
             self::$pdo,
@@ -151,10 +151,21 @@ final class AdminNotificationControllerTest extends TestCase
             $outbox->markFailed($job['id'], $job['attempts'], 'telegram_http_401: Unauthorized');
         }
 
-        $response = $this->controller->notificationSettings(
+        $settingsResponse = $this->controller->notificationSettings(
             (new ServerRequestFactory())->createServerRequest(
                 'GET',
                 'https://monitor.example/admin/notifications'
+            ),
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+        $settingsHtml = (string) $settingsResponse->getBody();
+        self::assertStringNotContainsString('Последние 20 заданий', $settingsHtml);
+
+        $response = $this->controller->notificationQueue(
+            (new ServerRequestFactory())->createServerRequest(
+                'GET',
+                'https://monitor.example/admin/notifications/queue?status[]=failed'
             ),
             (new ResponseFactory())->createResponse(),
             []
@@ -163,7 +174,8 @@ final class AdminNotificationControllerTest extends TestCase
 
         self::assertStringContainsString('Очередь уведомлений', $html);
         self::assertStringContainsString('telegram_http_401: Unauthorized', $html);
-        self::assertStringContainsString('/admin/notifications/queue/retry', $html);
+        self::assertStringContainsString('/admin/notifications/queue/delete', $html);
+        self::assertStringContainsString('confirm_delete', $html);
     }
 
     public function testQueueRetryGivesUndeliveredJobsAFreshBudget(): void

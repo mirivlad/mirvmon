@@ -196,9 +196,6 @@ final class AdminController
         return $this->twig->render($response, 'admin/notifications.twig', [
             'title' => 'Настройки уведомлений',
             'settings' => $this->notificationSettings->getPublic(),
-            'queue' => $this->notificationOutbox->recent(20),
-            'queue_counts' => $this->notificationOutbox->statusCounts(),
-            'heartbeats' => $this->heartbeats->all(),
         ]);
     }
 
@@ -241,11 +238,16 @@ final class AdminController
         $query = $request->getQueryParams();
         $filters = $this->notificationOutbox->filters($query);
         $page = $this->positiveInteger($query['page'] ?? null) ?? 1;
+        $queue = $this->notificationOutbox->page($filters, $page);
+        $page = min($page, $queue['pages']);
 
         return $this->twig->render($response, 'admin/notification-queue.twig', [
             'title' => 'Очередь уведомлений',
             'filters' => $filters,
-            'queue' => $this->notificationOutbox->page($filters, $page),
+            'queue' => $queue,
+            'queue_url' => $this->queueLocation($filters),
+            'page' => $page,
+            'queue_filter_fields' => $this->queueFilterFields($filters),
             'queue_counts' => $this->notificationOutbox->statusCounts(),
             'servers' => $this->pdo->query(
                 'SELECT id, name FROM servers ORDER BY name, id'
@@ -893,6 +895,38 @@ final class AdminController
 
         return '/admin/notifications/queue'
             . ($query === [] ? '' : '?' . http_build_query($query));
+    }
+
+    /**
+     * @param array{
+     *     statuses:list<string>,
+     *     channel:?string,
+     *     server_id:?int,
+     *     from:?string,
+     *     to:?string,
+     *     error:?string
+     * } $filters
+     * @return list<array{name:string,value:string|int}>
+     */
+    private function queueFilterFields(array $filters): array
+    {
+        $fields = [];
+        foreach ($filters['statuses'] as $status) {
+            $fields[] = ['name' => 'status[]', 'value' => $status];
+        }
+        foreach ([
+            'channel' => $filters['channel'],
+            'server' => $filters['server_id'],
+            'from' => $filters['from'] === null ? null : substr($filters['from'], 0, 10),
+            'to' => $filters['to'] === null ? null : substr($filters['to'], 0, 10),
+            'error' => $filters['error'],
+        ] as $name => $value) {
+            if ($value !== null) {
+                $fields[] = ['name' => $name, 'value' => $value];
+            }
+        }
+
+        return $fields;
     }
 
     private function redirect(Response $response, string $location): Response

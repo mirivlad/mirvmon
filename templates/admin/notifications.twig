@@ -281,99 +281,10 @@
     </div>
 </form>
 
-<div class="card mb-4">
-    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-        <h5 class="mb-0"><i class="fas fa-list-check"></i> Очередь уведомлений</h5>
-        <div class="d-flex flex-wrap align-items-center gap-2">
-            {% for status, total in queue_counts %}
-                <span class="badge bg-secondary">{{ status }}: {{ total }}</span>
-            {% endfor %}
-            <form method="post" action="/admin/notifications/queue/retry" class="mb-0">
-                {% include "partials/csrf.twig" %}
-                <button type="submit" class="btn btn-sm btn-outline-primary">
-                    <i class="fas fa-rotate-right"></i> Повторить неудачные
-                </button>
-            </form>
-        </div>
-    </div>
-    <div class="card-body">
-        <div class="mb-3">
-            <span class="text-muted small me-2">Фоновые worker:</span>
-            {% if heartbeats is empty %}
-                <span class="badge bg-danger">нет ни одного сигнала</span>
-            {% else %}
-                {% for heartbeat in heartbeats %}
-                    {% if heartbeat.stale %}
-                        <span class="badge bg-danger me-1"
-                              title="Последний сигнал: {{ heartbeat.last_tick_at|date('d.m.Y H:i:s') }}">
-                            {{ heartbeat.worker }}: молчит {{ heartbeat.seconds_since_tick }} с
-                        </span>
-                    {% else %}
-                        <span class="badge bg-success me-1"
-                              title="Последний сигнал: {{ heartbeat.last_tick_at|date('d.m.Y H:i:s') }}">
-                            {{ heartbeat.worker }}: жив
-                        </span>
-                    {% endif %}
-                {% endfor %}
-            {% endif %}
-        </div>
-        <p class="text-muted small">
-            Последние 20 заданий фонового worker. Столбец «Ошибка» содержит
-            причину, которую вернул Telegram или SMTP-сервер.
-        </p>
-        {% if queue is empty %}
-            <p class="mb-0 text-muted">Очередь пуста.</p>
-        {% else %}
-        <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0">
-                <thead>
-                    <tr>
-                        <th>Создано</th>
-                        <th>Канал</th>
-                        <th>Получатель</th>
-                        <th>Событие</th>
-                        <th>Статус</th>
-                        <th>Попытки</th>
-                        <th>Отправлено</th>
-                        <th>Ошибка</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for job in queue %}
-                    <tr>
-                        <td class="text-nowrap">{{ job.created_at|date('d.m.Y H:i:s') }}</td>
-                        <td>{{ job.channel }}</td>
-                        <td class="small">{{ job.recipient|default('—') }}</td>
-                        <td>
-                            {{ job.event_type }}
-                            {% if job.server_name %}
-                                <span class="text-muted">/ {{ job.server_name }}</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if job.status == 'sent' %}
-                                <span class="badge bg-success">sent</span>
-                            {% elseif job.status == 'dead' %}
-                                <span class="badge bg-danger">dead</span>
-                            {% elseif job.status == 'failed' %}
-                                <span class="badge bg-warning text-dark">failed</span>
-                            {% elseif job.status == 'processing' %}
-                                <span class="badge bg-info text-dark">processing</span>
-                            {% else %}
-                                <span class="badge bg-secondary">pending</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ job.attempts }}</td>
-                        <td class="text-nowrap">
-                            {{ job.sent_at ? job.sent_at|date('d.m.Y H:i:s') : '—' }}
-                        </td>
-                        <td class="small">{{ job.last_error|default('—') }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% endif %}
-    </div>
+<div class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <span>Состояние доставки, ошибки и повторная отправка находятся в отдельной очереди.</span>
+    <a class="btn btn-sm btn-outline-primary" href="/admin/notifications/queue">
+        <i class="fas fa-list-check"></i> Открыть очередь уведомлений
+    </a>
 </div>
 {% endblock %}

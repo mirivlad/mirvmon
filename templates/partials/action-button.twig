@@ -1,0 +1,18 @@
+{% if form_action is defined %}
+<form method="post" action="{{ form_action }}" class="d-inline">
+    {% include "partials/csrf.twig" %}
+    {% for field in hidden_fields|default([]) %}
+        <input type="hidden" name="{{ field.name }}" value="{{ field.value }}">
+    {% endfor %}
+    <button type="submit" class="btn btn-sm {{ class|default('btn-outline-secondary') }}"
+            aria-label="{{ label }}" data-bs-toggle="tooltip" title="{{ label }}"
+            {% if confirm is defined %}data-confirm="{{ confirm }}"{% endif %}>
+        <i class="fas {{ icon }}" aria-hidden="true"></i>
+    </button>
+</form>
+{% else %}
+<a href="{{ href }}" class="btn btn-sm {{ class|default('btn-outline-secondary') }}"
+   aria-label="{{ label }}" data-bs-toggle="tooltip" title="{{ label }}">
+    <i class="fas {{ icon }}" aria-hidden="true"></i>
+</a>
+{% endif %}
