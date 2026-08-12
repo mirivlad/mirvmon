@@ -27,6 +27,7 @@ func TestManagerStagesOnceReportsProgressAndPublishesFixedRequest(t *testing.T) 
 	command.Size = int64(len(payload))
 	states := []string{}
 	handoffs := 0
+	markerVisible := false
 	manager := Manager{
 		Store: NewStore(queuePath),
 		Downloader: Downloader{
@@ -38,6 +39,8 @@ func TestManagerStagesOnceReportsProgressAndPublishesFixedRequest(t *testing.T) 
 		Artifact:         "linux-amd64",
 		Handoff: func(string) error {
 			handoffs++
+			_, err := os.Stat(filepath.Join(directory, "update-handoff"))
+			markerVisible = err == nil
 			return nil
 		},
 	}
@@ -53,6 +56,9 @@ func TestManagerStagesOnceReportsProgressAndPublishesFixedRequest(t *testing.T) 
 	}
 	if handoffs != 1 {
 		t.Fatalf("handoffs=%d", handoffs)
+	}
+	if !markerVisible {
+		t.Fatal("handoff started before durable marker was published")
 	}
 	if _, err := os.Stat(filepath.Join(directory, "update-request.json")); err != nil {
 		t.Fatal(err)
