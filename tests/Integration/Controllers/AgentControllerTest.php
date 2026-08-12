@@ -65,7 +65,7 @@ final class AgentControllerTest extends TestCase
             $this->issuer,
             new AgentInstallerService(),
             static fn (): AgentArtifactCatalog => $artifacts,
-            $updates
+            static fn (): AgentUpdateService => $updates
         );
     }
 

@@ -286,7 +286,7 @@ final class Bootstrap
                 $container->get(AgentCredentialIssuer::class),
                 $container->get(AgentInstallerService::class),
                 static fn (): AgentArtifactCatalog => $container->get(AgentArtifactCatalog::class),
-                $container->get(AgentUpdateService::class)
+                static fn (): AgentUpdateService => $container->get(AgentUpdateService::class)
             )
         );
         $container->set(

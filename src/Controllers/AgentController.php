@@ -27,7 +27,8 @@ final class AgentController
         private readonly AgentInstallerService $installers,
         /** @var Closure(): AgentArtifactCatalog */
         private readonly Closure $artifactCatalog,
-        private readonly AgentUpdateService $updates
+        /** @var Closure(): AgentUpdateService */
+        private readonly Closure $updateService
     ) {
     }
 
@@ -266,7 +267,9 @@ final class AgentController
                 $config['monitor_services'] ?? '[]'
             ),
         ];
-        $command = $this->updates->commandForServer((int) $config['server_id']);
+        $command = ($this->updateService)()->commandForServer(
+            (int) $config['server_id']
+        );
         if ($command !== null) {
             $payload['update_command'] = $command;
         }
