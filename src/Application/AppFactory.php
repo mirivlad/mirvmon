@@ -6,6 +6,7 @@ namespace App\Application;
 
 use App\Controllers\AdminController;
 use App\Controllers\AgentController;
+use App\Controllers\AgentUpdateController;
 use App\Controllers\AlertController;
 use App\Controllers\Api\MetricsApiController;
 use App\Controllers\Api\MetricsController;
@@ -135,6 +136,10 @@ final class AppFactory
             $group->post('/servers/{id}/delete', self::controller($container, ServerController::class, 'delete'));
             $group->post('/servers/{id}/installers', self::controller($container, ServerController::class, 'installers'));
             $group->post(
+                '/servers/{id}/agent/update',
+                self::controller($container, AgentUpdateController::class, 'requestUpdate')
+            )->add($admin);
+            $group->post(
                 '/servers/{id}/regenerate-token',
                 self::controller($container, ServerController::class, 'regenerateToken')
             )->add($admin);
@@ -231,6 +236,10 @@ final class AppFactory
             '/api/v1/agent/config',
             self::controller($container, AgentController::class, 'getAgentConfig')
         );
+        $app->post(
+            '/api/v1/agent/update/{command}/status',
+            self::controller($container, AgentUpdateController::class, 'reportStatus')
+        );
         $app->get('/livez', static function (
             ServerRequestInterface $request,
             ResponseInterface $response
@@ -269,6 +278,7 @@ final class AppFactory
                 '/agent/install-legacy.ps1',
                 '/agent/install-legacy.bat',
                 '/api/v1/agent/config',
+                '/api/v1/agent/update/*/status',
             ]
         ));
         $app->add(new RequestSizeMiddleware($responseFactory, (int) $settings['max_request_bytes']));
