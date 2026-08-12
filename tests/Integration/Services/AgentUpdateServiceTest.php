@@ -85,6 +85,14 @@ final class AgentUpdateServiceTest extends TestCase
         self::assertSame('linux-amd64', $delivery['artifact'] ?? null);
     }
 
+    public function testBatchStatusUsesTheSameEligibilityModel(): void
+    {
+        $statuses = $this->service->statusesForServers([$this->serverId]);
+        self::assertArrayHasKey($this->serverId, $statuses);
+        self::assertSame('update_available', $statuses[$this->serverId]['state']);
+        self::assertTrue($statuses[$this->serverId]['can_update']);
+    }
+
     public function testOldAgentRequiresManualUpdateAndCannotCreateCommand(): void
     {
         self::$pdo?->prepare(

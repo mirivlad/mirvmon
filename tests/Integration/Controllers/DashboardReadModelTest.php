@@ -129,7 +129,8 @@ final class DashboardReadModelTest extends TestCase
             $twig,
             $servers,
             $metrics,
-            new MaintenanceWindowRepository(self::$pdo)
+            new MaintenanceWindowRepository(self::$pdo),
+            null
         ))->show(
             $requestFactory->createServerRequest(
                 'GET',

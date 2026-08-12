@@ -1,3 +1,67 @@
+{% if agent_update %}
+{% set state_labels = {
+    current: ['Актуальная версия', 'success', 'fa-circle-check'],
+    unknown: ['Версия агента не сообщена', 'secondary', 'fa-circle-question'],
+    manual_required: ['Требуется ручное обновление', 'warning', 'fa-triangle-exclamation'],
+    update_available: ['Доступно обновление', 'info', 'fa-circle-arrow-up'],
+    pending: ['Ожидает подключения агента', 'secondary', 'fa-clock'],
+    accepted: ['Команда принята агентом', 'info', 'fa-circle-check'],
+    downloading: ['Агент скачивает обновление', 'info', 'fa-download'],
+    installing: ['Агент устанавливает обновление', 'warning', 'fa-gears'],
+    awaiting_restart: ['Проверяется новая версия', 'warning', 'fa-rotate'],
+    succeeded: ['Обновление установлено', 'success', 'fa-circle-check'],
+    failed: ['Обновление не выполнено', 'danger', 'fa-circle-xmark']
+} %}
+{% set state = state_labels[agent_update.state]|default(state_labels.unknown) %}
+{% set error_labels = {
+    checksum_mismatch: 'Контрольная сумма файла не совпала.',
+    identity_mismatch: 'Скачанный агент сообщил другую версию или платформу.',
+    download_failed: 'Не удалось скачать файл обновления.',
+    handoff_failed: 'Не удалось запустить системный помощник обновления.',
+    apply_failed: 'Новая версия не запустилась; выполнен откат.',
+    update_failed: 'Обновление завершилось ошибкой.'
+} %}
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+            <div>
+                <h4 class="mb-3"><i class="fas fa-code-branch"></i> Версия агента</h4>
+                <dl class="row mb-0">
+                    <dt class="col-sm-5">Установлена</dt>
+                    <dd class="col-sm-7"><code>{{ agent_update.installed_version|default('не сообщена') }}</code></dd>
+                    <dt class="col-sm-5">Доступна</dt>
+                    <dd class="col-sm-7"><code>{{ agent_update.available_version }}</code></dd>
+                </dl>
+            </div>
+            <div class="text-sm-end">
+                <span class="badge text-bg-{{ state[1] }} mb-2">
+                    <i class="fas {{ state[2] }} me-1" aria-hidden="true"></i>{{ state[0] }}
+                </span>
+                {% if agent_update.command and agent_update.command.error_code %}
+                    <div class="small text-danger">
+                        {{ error_labels[agent_update.command.error_code]|default('Обновление завершилось ошибкой.') }}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        {% if session.role == 'admin' and agent_update.can_update and agent_update.state in ['update_available', 'failed'] %}
+            <form method="post" action="/servers/{{ server.id }}/agent/update" class="mt-3">
+                {% include "partials/csrf.twig" %}
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-circle-arrow-up me-1"></i>
+                    {{ agent_update.state == 'failed' ? 'Повторить обновление' : 'Обновить агент' }}
+                </button>
+            </form>
+        {% endif %}
+        {% if agent_update.state == 'manual_required' %}
+            <p class="small text-muted mb-0 mt-2">
+                Этот агент ещё не поддерживает удалённое обновление. Один раз установите актуальную версию вручную.
+            </p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 <div class="card">
     <div class="card-body">
         <h4><i class="fas fa-download"></i> Управление агентом мониторинга</h4>

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Services\AgentCredentialIssuer;
+use App\Services\AgentUpdateService;
 use InvalidArgumentException;
 use JsonException;
 use PDO;
@@ -18,7 +19,8 @@ final class ServerController
     public function __construct(
         private readonly PDO $pdo,
         private readonly Twig $twig,
-        private readonly AgentCredentialIssuer $credentials
+        private readonly AgentCredentialIssuer $credentials,
+        private readonly ?AgentUpdateService $agentUpdates
     ) {
     }
 
@@ -71,6 +73,16 @@ final class ServerController
         );
         $statement->execute($parameters);
         $servers = $statement->fetchAll();
+        if ($this->agentUpdates !== null) {
+            $statuses = $this->agentUpdates->statusesForServers(array_map(
+                static fn (array $server): int => (int) $server['id'],
+                $servers
+            ));
+            foreach ($servers as &$server) {
+                $server['agent_update'] = $statuses[(int) $server['id']] ?? null;
+            }
+            unset($server);
+        }
         $sortUrls = [];
         foreach (array_keys($sortColumns) as $key) {
             $sortUrls[$key] = '/servers?' . http_build_query(array_merge(

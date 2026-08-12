@@ -232,7 +232,8 @@ final class Bootstrap
             static fn (Container $container): ServerController => new ServerController(
                 $container->get(PDO::class),
                 $container->get(Twig::class),
-                $container->get(AgentCredentialIssuer::class)
+                $container->get(AgentCredentialIssuer::class),
+                $container->get(AgentUpdateService::class)
             )
         );
         $container->set(
@@ -242,7 +243,8 @@ final class Bootstrap
                 $container->get(Twig::class),
                 $container->get(ServerRepository::class),
                 $container->get(MetricRepository::class),
-                $container->get(MaintenanceWindowRepository::class)
+                $container->get(MaintenanceWindowRepository::class),
+                $container->get(AgentUpdateService::class)
             )
         );
         $container->set(

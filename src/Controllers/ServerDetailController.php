@@ -8,6 +8,7 @@ use App\Domain\Metrics\MetricValueFormatter;
 use App\Repositories\MaintenanceWindowRepository;
 use App\Repositories\MetricRepository;
 use App\Repositories\ServerRepository;
+use App\Services\AgentUpdateService;
 use DateTimeImmutable;
 use InvalidArgumentException;
 use PDO;
@@ -37,7 +38,8 @@ final class ServerDetailController
         private readonly Twig $twig,
         private readonly ServerRepository $servers,
         private readonly MetricRepository $metrics,
-        private readonly MaintenanceWindowRepository $maintenance
+        private readonly MaintenanceWindowRepository $maintenance,
+        private readonly ?AgentUpdateService $agentUpdates
     ) {
     }
 
@@ -122,6 +124,7 @@ final class ServerDetailController
             'server' => $server,
             'has_agent_token' => $tokenGeneration !== false,
             'requires_token_rotation' => $tokenGeneration === null,
+            'agent_update' => $this->agentUpdates?->statusForServer($serverId),
             'metrics' => $groupedMetrics,
             'displayMetrics' => $displayMetrics,
             'simpleMetricCharts' => $simpleMetricCharts,

@@ -97,6 +97,40 @@ final class AgentUpdateRepository
         return is_array($row) ? $this->normalize($row) : null;
     }
 
+    /**
+     * @param list<int> $serverIds
+     * @return array<int, array<string, mixed>>
+     */
+    public function latestForServers(array $serverIds): array
+    {
+        if ($serverIds === []) {
+            return [];
+        }
+        $placeholders = [];
+        $parameters = [];
+        foreach (array_values(array_unique($serverIds)) as $index => $serverId) {
+            $key = 'server_' . $index;
+            $placeholders[] = ':' . $key;
+            $parameters[$key] = $serverId;
+        }
+        $statement = $this->pdo->prepare(
+            'SELECT DISTINCT ON (server_id) *
+             FROM agent_update_commands
+             WHERE server_id IN (' . implode(', ', $placeholders) . ')
+             ORDER BY server_id, created_at DESC'
+        );
+        $statement->execute($parameters);
+        $commands = [];
+        foreach ($statement->fetchAll() as $row) {
+            if (is_array($row)) {
+                $command = $this->normalize($row);
+                $commands[$command['server_id']] = $command;
+            }
+        }
+
+        return $commands;
+    }
+
     public function advance(string $id, int $serverId, string $state): bool
     {
         return $this->withLockedCommand(
