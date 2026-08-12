@@ -25,6 +25,7 @@ use App\Repositories\ServerRepository;
 use App\Repositories\WorkerHeartbeatRepository;
 use App\Security\SecretCipher;
 use App\Services\AgentCredentialIssuer;
+use App\Services\AgentArtifactCatalog;
 use App\Services\AgentInstallerService;
 use App\Services\MetricsIngestionService;
 use App\Services\PublicUrlResolver;
@@ -143,6 +144,12 @@ final class Bootstrap
             AgentInstallerService::class,
             static fn (): AgentInstallerService => new AgentInstallerService()
         );
+        $container->set(
+            AgentArtifactCatalog::class,
+            static fn (): AgentArtifactCatalog => AgentArtifactCatalog::load(
+                dirname(__DIR__, 2) . '/agent-dist'
+            )
+        );
 
         $applicationKey = base64_decode((string) $settings['app_key'], true);
         if ($applicationKey === false || strlen($applicationKey) !== 32) {
@@ -245,7 +252,7 @@ final class Bootstrap
                 $container->get(PublicUrlResolver::class),
                 $container->get(AgentCredentialIssuer::class),
                 $container->get(AgentInstallerService::class),
-                dirname(__DIR__, 2)
+                static fn (): AgentArtifactCatalog => $container->get(AgentArtifactCatalog::class)
             )
         );
         $container->set(

@@ -122,22 +122,22 @@ curl --fail http://127.0.0.1:8080/readyz
 - `/readyz` проверяет приложение и соединение с TimescaleDB;
 - healthcheck контейнера использует `/readyz`.
 
-## Linux-агенты
+## Нативные агенты
 
-Linux agent requires x86-64 CPython 3.6–3.14 and is supported on Debian 10+,
-Ubuntu 18.04+, CentOS/RHEL/Oracle Linux 7+, AlmaLinux/Rocky Linux 8+, and MX
-Linux. Download the one-time Linux installer from the MirvMon UI and run it as
-root. It uses the configured `apt-get`, `dnf`, or `yum` repositories only; it
-does not add third-party repositories. On CentOS/RHEL 7, configure EPEL or the
-official Software Collections `rh-python36` first if the distribution has no
-compatible Python package.
+Поддерживаются только x64-системы. Linux-агент Go 1.26.5 работает на systemd
+хостах Debian 11+, Ubuntu 20.04+, CentOS/RHEL/Oracle Linux 7+,
+AlmaLinux/Rocky Linux 8+ и NethServer 7. Он не требует Python, пакетного
+менеджера или сторонних репозиториев: нужен только `curl` либо `wget`.
 
-The installer registers systemd only when systemd is PID 1; otherwise it
-registers a SysVinit service. Proxy settings belong in
-`/etc/default/mirvmon-agent` on Debian/MX and
-`/etc/sysconfig/mirvmon-agent` on RHEL-like systems. Use `systemctl`/`journalctl`
-for systemd or `service mirvmon-agent {status|restart}` for SysVinit. EOL OS
-compatibility does not provide security support for the OS itself.
+Windows Server 2012 R2+ и Windows 10+ используют Go 1.26.5. Windows 7 SP1 x64
+и Windows Server 2008 R2 x64 используют отдельную сборку Go 1.20.14 и
+совместимый с PowerShell 2.0 installer. Windows Server 2008 без R2 и 32-bit
+платформы не поддерживаются.
+
+Все установщики создают native service, сохраняют configuration и bounded queue
+в защищённых каталогах и перед переключением импортируют state старого
+Python/PowerShell агента в отдельные файлы. При неудаче исходные state files
+не изменяются.
 
 ## Обновление
 

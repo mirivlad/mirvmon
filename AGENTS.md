@@ -18,7 +18,7 @@ MirvMon — self-hosted система push-мониторинга сервер�
 - PostgreSQL 17 + TimescaleDB 2.28;
 - FrankenPHP в classic mode как основной HTTP adapter;
 - внешний nginx завершает TLS;
-- Python 3.11+ для агента;
+- Go 1.26.5 для современного агента и Go 1.20.14 для Windows 7/Server 2008 R2;
 - production Compose содержит ровно два сервиса: `app` и `db`.
 
 Расширение `gd` и пакет `fonts-dejavu-core` нужны для графика в уведомлении:
@@ -36,7 +36,7 @@ Caddy API, FrankenPHP API, worker mode или долгоживущее глоб�
 ## Основные каталоги
 
 ```text
-agent/          Python-агент и его тесты
+agent/          нативный Go-агент и его тесты
 bin/            миграции, workers и benchmark
 docker/         production Compose, image и Portainer-инструкции
 migrations/     checksum-protected PostgreSQL/TimescaleDB migrations
@@ -87,12 +87,13 @@ Telegram и SMTP настраиваются в `/admin/notifications`. Telegram 
 
 - `POST /api/v1/metrics` — идемпотентный приём envelope v2;
 - `GET /api/v1/agent/config` — конфигурация по Bearer credential;
-- `GET /get-agent?token=...` — legacy-compatible Python download;
+- `GET /agent/binaries/{artifact}` — публичная раздача проверенного нативного
+  артефакта (`linux-amd64`, `windows-amd64`, `windows-legacy-amd64`);
 - `GET /agent/install.sh?token=...` — одноразовый Linux installer;
 - `GET /agent/install.ps1?token=...` — одноразовый PowerShell installer;
 - `GET /agent/install.bat?token=...` — одноразовый BAT installer;
-- `GET /agent/install-legacy.ps1?token=...` — установщик для Windows 7 и
-  Server 2008 R2, разворачивает сборщик на PowerShell 2.0 без Python;
+- `GET /agent/install-legacy.ps1?token=...` — установщик для x64 Windows 7
+  SP1 и Server 2008 R2, разворачивает Go 1.20 native agent;
 - `GET /agent/install-legacy.bat?token=...` — то же одноразовым BAT;
 - `GET /livez` — только HTTP runtime;
 - `GET /readyz` — приложение и БД.
@@ -138,9 +139,10 @@ composer audit
 Для агента:
 
 ```bash
-python3 -m pip install -r agent/requirements.txt
-PYTHONPATH=agent python3 -m unittest discover -s agent/tests
-python3 -m compileall -q agent
+(cd agent && go test ./...)
+(cd agent && go test -race ./...)
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 \
+  go -C agent build -trimpath -buildvcs=false ./cmd/mirvmon-agent
 ```
 
 Для frontend и deployment:

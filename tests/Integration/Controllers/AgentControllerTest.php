@@ -7,6 +7,7 @@ namespace Tests\Integration\Controllers;
 use App\Controllers\AgentController;
 use App\Database\ConnectionFactory;
 use App\Database\Migrator;
+use App\Services\AgentArtifactCatalog;
 use App\Services\AgentCredentialIssuer;
 use App\Services\AgentInstallerService;
 use App\Services\PublicUrlResolver;
@@ -21,6 +22,7 @@ final class AgentControllerTest extends TestCase
     private AgentController $controller;
     private AgentCredentialIssuer $issuer;
     private int $serverId;
+    private string $artifactDirectory;
 
     public static function setUpBeforeClass(): void
     {
@@ -46,12 +48,14 @@ final class AgentControllerTest extends TestCase
             "INSERT INTO servers (name) VALUES ('agent-controller-server') RETURNING id"
         )->fetchColumn();
         $this->issuer = new AgentCredentialIssuer(self::$pdo, str_repeat('k', 32));
+        $this->artifactDirectory = $this->createArtifactDirectory();
+        $artifacts = AgentArtifactCatalog::load($this->artifactDirectory);
         $this->controller = new AgentController(
             self::$pdo,
             new PublicUrlResolver(''),
             $this->issuer,
             new AgentInstallerService(),
-            dirname(__DIR__, 3)
+            static fn (): AgentArtifactCatalog => $artifacts
         );
     }
 
@@ -90,24 +94,30 @@ final class AgentControllerTest extends TestCase
         self::assertSame(403, $reused->getStatusCode());
     }
 
-    public function testAgentSourceIsPublicButRestrictedToAllowlistedFiles(): void
+    public function testNativeArtifactIsPublicAndStrictlyAllowlisted(): void
     {
         $request = (new ServerRequestFactory())->createServerRequest(
             'GET',
-            'https://download.example/get-agent'
+            'https://download.example/agent/binaries/linux-amd64'
         );
-        $agent = $this->controller->downloadAgent(
+        $artifact = $this->controller->downloadBinary(
             $request,
             (new ResponseFactory())->createResponse(),
-            []
+            ['artifact' => 'linux-amd64']
         );
-        self::assertSame(200, $agent->getStatusCode());
-        self::assertStringContainsString('mirvmon_agent.client', (string) $agent->getBody());
 
-        $forbidden = $this->controller->downloadAgentFile(
+        self::assertSame(200, $artifact->getStatusCode());
+        self::assertSame('application/octet-stream', $artifact->getHeaderLine('Content-Type'));
+        self::assertSame(
+            'attachment; filename="mirvmon-agent-linux-amd64"',
+            $artifact->getHeaderLine('Content-Disposition')
+        );
+        self::assertSame('linux-agent', (string) $artifact->getBody());
+
+        $forbidden = $this->controller->downloadBinary(
             $request,
             (new ResponseFactory())->createResponse(),
-            ['file' => '../../.env']
+            ['artifact' => '../../.env']
         );
         self::assertSame(404, $forbidden->getStatusCode());
     }
@@ -150,5 +160,31 @@ final class AgentControllerTest extends TestCase
             json_decode((string) $response->getBody(), true)
         );
         self::assertStringNotContainsString($credential->token, (string) $response->getBody());
+    }
+
+    private function createArtifactDirectory(): string
+    {
+        $directory = sys_get_temp_dir() . '/mirvmon-controller-artifacts-' . bin2hex(random_bytes(8));
+        mkdir($directory, 0700, true);
+        $artifacts = [
+            'linux-amd64' => ['filename' => 'mirvmon-agent-linux-amd64', 'content' => 'linux-agent'],
+            'windows-amd64' => ['filename' => 'mirvmon-agent-windows-amd64.exe', 'content' => 'windows-agent'],
+            'windows-legacy-amd64' => [
+                'filename' => 'mirvmon-agent-windows-legacy-amd64.exe',
+                'content' => 'legacy-windows-agent',
+            ],
+        ];
+        $manifest = ['artifacts' => []];
+        foreach ($artifacts as $key => $artifact) {
+            file_put_contents($directory . '/' . $artifact['filename'], $artifact['content']);
+            $manifest['artifacts'][$key] = [
+                'filename' => $artifact['filename'],
+                'sha256' => hash('sha256', $artifact['content']),
+                'content_type' => 'application/octet-stream',
+            ];
+        }
+        file_put_contents($directory . '/manifest.json', json_encode($manifest, JSON_THROW_ON_ERROR));
+
+        return $directory;
     }
 }

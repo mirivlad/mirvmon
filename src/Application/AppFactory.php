@@ -62,10 +62,9 @@ final class AppFactory
         $app->post('/setup', self::controller($container, SetupController::class, 'create'))
             ->add($csrf);
 
-        $app->get('/get-agent', self::controller($container, AgentController::class, 'downloadAgent'));
         $app->get(
-            '/agent/files/{file:[A-Za-z0-9_.-]+}',
-            self::controller($container, AgentController::class, 'downloadAgentFile')
+            '/agent/binaries/{artifact:[a-z0-9-]+}',
+            self::controller($container, AgentController::class, 'downloadBinary')
         );
         $app->get(
             '/agent/install.sh',
@@ -247,8 +246,7 @@ final class AppFactory
                 '/livez',
                 '/readyz',
                 '/api/v1/metrics',
-                '/get-agent',
-                '/agent/files/*',
+                '/agent/binaries/*',
                 '/agent/install.sh',
                 '/agent/install.ps1',
                 '/agent/install.bat',

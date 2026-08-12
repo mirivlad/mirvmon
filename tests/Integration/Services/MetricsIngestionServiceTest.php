@@ -335,6 +335,46 @@ final class MetricsIngestionServiceTest extends TestCase
         );
     }
 
+    public function testOperatingSystemVersionIsPersistedWithoutClearingOldAgents(): void
+    {
+        $envelope = new MetricsEnvelope(
+            2,
+            '20000000-0000-4000-8000-000000000099',
+            new DateTimeImmutable('2026-07-30T11:59:00Z'),
+            $this->token,
+            ['disk_read_sda' => 10.0],
+            [],
+            null,
+            '2.0.0',
+            'Windows Server 2008 R2 SP1 (build 7601)'
+        );
+        $this->ingestion->ingest($envelope);
+        self::assertSame(
+            'Windows Server 2008 R2 SP1 (build 7601)',
+            (string) self::$pdo?->query(
+                'SELECT os_version FROM servers WHERE id = ' . $this->serverId
+            )->fetchColumn()
+        );
+        self::assertSame(
+            'B/s',
+            (string) self::$pdo?->query(
+                "SELECT unit FROM metric_names WHERE name = 'disk_read_sda'"
+            )->fetchColumn()
+        );
+
+        $this->ingestion->ingest($this->envelope(
+            '20000000-0000-4000-8000-000000000100',
+            '2026-07-30T11:59:01Z',
+            ['cpu_load' => 10]
+        ));
+        self::assertSame(
+            'Windows Server 2008 R2 SP1 (build 7601)',
+            (string) self::$pdo?->query(
+                'SELECT os_version FROM servers WHERE id = ' . $this->serverId
+            )->fetchColumn()
+        );
+    }
+
     public function testDurationThresholdRequiresACompleteHealthyWindow(): void
     {
         $metricId = $this->metricId('cpu_load');

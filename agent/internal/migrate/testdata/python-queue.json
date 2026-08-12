@@ -1,0 +1,5 @@
+[
+  {"version":2,"sample_id":"one","sample_time":"2026-08-12T11:59:00Z","token":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","metrics":{"cpu_load":1}},
+  {"version":2,"sample_id":"one","sample_time":"2026-08-12T11:59:01Z","token":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","metrics":{"cpu_load":2}},
+  {"version":2,"sample_id":"two","sample_time":"2026-08-12T11:59:02Z","token":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","metrics":{"cpu_load":3}}
+]
