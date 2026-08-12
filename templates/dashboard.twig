@@ -6,13 +6,6 @@
     'critical': 'Критично',
     'offline': 'Нет данных'
 } %}
-{% set status_icons = {
-    'online': 'fa-circle-check',
-    'warning': 'fa-triangle-exclamation',
-    'critical': 'fa-circle-exclamation',
-    'offline': 'fa-circle-xmark'
-} %}
-
 {% block content %}
 <header class="dashboard-heading">
     <div>
@@ -145,10 +138,10 @@
                        id="server-card-{{ server.id }}">
                         <div class="server-card-header">
                             <div class="server-identity">
-                                <span class="server-status-icon" aria-hidden="true">
-                                    <i id="status-icon-{{ server.id }}"
-                                       class="fas {{ status_icons[server.status] }}"></i>
-                                </span>
+                                {% include "partials/server-status-icon.twig" with {
+                                    icon_container_class: 'server-status-icon',
+                                    icon_id: 'status-icon-' ~ server.id
+                                } %}
                                 <div class="server-title-wrap">
                                     <h3 class="server-name" title="{{ server.name }}">
                                         {{ server.name }}

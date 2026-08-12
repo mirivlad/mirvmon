@@ -80,6 +80,8 @@ final class ServerRepository
                 servers.name,
                 servers.address,
                 servers.description,
+                servers.os_version,
+                servers.agent_artifact,
                 servers.group_id,
                 servers.display_metrics,
                 servers.is_active,
@@ -132,9 +134,19 @@ final class ServerRepository
                 groups.name AS group_name,
                 groups.icon AS group_icon,
                 groups.color AS group_color,
+                COALESCE(alert_counts.warning_alerts, 0) AS warning_alerts,
+                COALESCE(alert_counts.critical_alerts, 0) AS critical_alerts,
                 servers.last_metrics_at AS last_seen
             FROM servers
             LEFT JOIN server_groups AS groups ON groups.id = servers.group_id
+            LEFT JOIN LATERAL (
+                SELECT
+                    count(*) FILTER (WHERE severity = 'warning') AS warning_alerts,
+                    count(*) FILTER (WHERE severity = 'critical') AS critical_alerts
+                FROM alerts
+                WHERE alerts.server_id = servers.id
+                  AND alerts.resolved = FALSE
+            ) AS alert_counts ON TRUE
             WHERE servers.id = :server_id
             SQL
         );

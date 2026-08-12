@@ -41,16 +41,9 @@
                         <tbody>
                             {% for server in servers %}
                             <tr>
-                                <td>
-                                    {% set os = server.os_version|default('') %}
-                                    {% if os|lower starts with 'windows' %}
-                                        {% set os_icon = 'fab fa-windows' %}
-                                    {% elseif os|lower starts with 'linux' %}
-                                        {% set os_icon = 'fab fa-linux' %}
-                                    {% else %}
-                                        {% set os_icon = 'fas fa-server' %}
-                                    {% endif %}
-                                    <i class="{{ os_icon }} me-1" aria-label="{{ os ?: 'ОС не сообщена' }}" data-bs-toggle="tooltip" title="{{ os ?: 'ОС не сообщена' }}"></i>{{ server.name }}
+                                <td class="server-status-{{ server.status }}">
+                                    {% include "partials/server-status-icon.twig" %}
+                                    {{ server.name }}
                                 </td>
                                 <td>{{ server.address|default('-') }}</td>
                                 <td>

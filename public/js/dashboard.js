@@ -13,12 +13,6 @@
         critical: 'Критично',
         offline: 'Нет данных'
     };
-    const statusIcons = {
-        online: 'fa-circle-check',
-        warning: 'fa-triangle-exclamation',
-        critical: 'fa-circle-exclamation',
-        offline: 'fa-circle-xmark'
-    };
     const statusOrder = {
         critical: 0,
         offline: 1,
@@ -153,8 +147,7 @@
         );
         const card = document.getElementById(`server-card-${server.id}`);
         const label = document.getElementById(`status-label-${server.id}`);
-        const icon = document.getElementById(`status-icon-${server.id}`);
-        if (!item || !card || !label || !icon || !statusLabels[server.status]) {
+        if (!item || !card || !label || !statusLabels[server.status]) {
             return;
         }
 
@@ -167,9 +160,7 @@
                 `server-status-${status}`,
                 status === server.status
             );
-            icon.classList.remove(statusIcons[status]);
         });
-        icon.classList.add(statusIcons[server.status]);
         label.textContent = statusLabels[server.status];
 
         updateMetric(server.id, 'cpu', server.metrics.cpu_load);

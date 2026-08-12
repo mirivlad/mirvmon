@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Services;
 
 use App\Services\ServerStatusService;
+use App\Services\ServerPlatformService;
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -16,7 +17,7 @@ final class ServerStatusServiceTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->service = new ServerStatusService();
+        $this->service = new ServerStatusService(new ServerPlatformService());
         $this->now = new DateTimeImmutable('2026-07-30T12:00:00+00:00');
     }
 
@@ -144,5 +145,22 @@ final class ServerStatusServiceTest extends TestCase
             'critical_servers' => 1,
             'offline_servers' => 1,
         ], $this->service->summary($servers, 4));
+    }
+
+    public function testEnrichAddsPlatformWithoutReplacingStatus(): void
+    {
+        $server = $this->service->enrich([[
+            'is_active' => true,
+            'last_metrics_at' => '2026-07-30T11:59:00+00:00',
+            'offline_timeout_seconds' => 300,
+            'warning_alerts' => 1,
+            'critical_alerts' => 0,
+            'os_version' => 'Oracle Linux Server 9',
+            'agent_artifact' => null,
+        ]], $this->now)[0];
+
+        self::assertSame('warning', $server['status']);
+        self::assertSame('linux', $server['platform']['family']);
+        self::assertSame('fab fa-linux', $server['platform']['icon_class']);
     }
 }

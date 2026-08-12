@@ -466,6 +466,27 @@ a {
     border-radius: 10px;
 }
 
+.server-platform-icon {
+    display: inline-flex;
+    width: 1.35rem;
+    align-items: center;
+    justify-content: center;
+    margin-right: 0.25rem;
+    color: var(--app-online);
+}
+
+.server-status-warning .server-platform-icon {
+    color: var(--app-warning);
+}
+
+.server-status-critical .server-platform-icon {
+    color: var(--app-critical);
+}
+
+.server-status-offline .server-platform-icon {
+    color: var(--app-offline);
+}
+
 .server-status-warning .server-status-icon {
     color: var(--app-warning);
     background: var(--app-warning-bg);

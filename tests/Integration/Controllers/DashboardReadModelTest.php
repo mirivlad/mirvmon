@@ -12,6 +12,7 @@ use App\Repositories\MaintenanceWindowRepository;
 use App\Repositories\MetricRepository;
 use App\Repositories\ServerRepository;
 use App\Services\ServerStatusService;
+use App\Services\ServerPlatformService;
 use PDO;
 use PHPUnit\Framework\TestCase;
 use Slim\Psr7\Factory\ResponseFactory;
@@ -49,13 +50,15 @@ final class DashboardReadModelTest extends TestCase
                 name,
                 display_metrics,
                 last_metrics_at,
-                offline_timeout_seconds
+                offline_timeout_seconds,
+                os_version
             )
             VALUES (
                 'read-model-server',
                 '["cpu_load"]'::jsonb,
                 CURRENT_TIMESTAMP,
-                300
+                300,
+                'Debian GNU/Linux 12'
             )
             RETURNING id
             SQL
@@ -110,7 +113,7 @@ final class DashboardReadModelTest extends TestCase
         $dashboard = (new DashboardController(
             $twig,
             $servers,
-            new ServerStatusService()
+            new ServerStatusService(new ServerPlatformService())
         ))->index(
             $requestFactory->createServerRequest('GET', 'http://localhost/'),
             $responseFactory->createResponse(),
@@ -123,6 +126,9 @@ final class DashboardReadModelTest extends TestCase
             '/id="cpu-val-\d+">\s*40%\s*<\/dd>/',
             $dashboardHtml
         );
+        self::assertStringContainsString('fab fa-linux', $dashboardHtml);
+        self::assertStringContainsString('title="Debian GNU/Linux 12"', $dashboardHtml);
+        self::assertStringContainsString('server-status-online', $dashboardHtml);
 
         $detail = (new ServerDetailController(
             self::$pdo,
@@ -130,7 +136,8 @@ final class DashboardReadModelTest extends TestCase
             $servers,
             $metrics,
             new MaintenanceWindowRepository(self::$pdo),
-            null
+            null,
+            new ServerStatusService(new ServerPlatformService())
         ))->show(
             $requestFactory->createServerRequest(
                 'GET',
@@ -146,5 +153,8 @@ final class DashboardReadModelTest extends TestCase
         self::assertStringContainsString('40%', $detailHtml);
         self::assertStringContainsString('id="agent-tab"', $detailHtml);
         self::assertStringContainsString('Создать ключ', $detailHtml);
+        self::assertStringContainsString('fab fa-linux', $detailHtml);
+        self::assertStringContainsString('title="Debian GNU/Linux 12"', $detailHtml);
+        self::assertStringContainsString('server-status-online', $detailHtml);
     }
 }

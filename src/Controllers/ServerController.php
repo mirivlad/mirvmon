@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Services\AgentCredentialIssuer;
 use App\Services\AgentUpdateService;
+use App\Services\ServerStatusService;
 use InvalidArgumentException;
 use JsonException;
 use PDO;
@@ -20,7 +21,8 @@ final class ServerController
         private readonly PDO $pdo,
         private readonly Twig $twig,
         private readonly AgentCredentialIssuer $credentials,
-        private readonly ?AgentUpdateService $agentUpdates
+        private readonly ?AgentUpdateService $agentUpdates,
+        private readonly ServerStatusService $status
     ) {
     }
 
@@ -64,15 +66,25 @@ final class ServerController
                 servers.*,
                 server_groups.name AS group_name,
                 server_groups.icon AS group_icon,
-                server_groups.color AS group_color
+                server_groups.color AS group_color,
+                COALESCE(alert_counts.warning_alerts, 0) AS warning_alerts,
+                COALESCE(alert_counts.critical_alerts, 0) AS critical_alerts
              FROM servers
-             LEFT JOIN server_groups ON server_groups.id = servers.group_id'
+             LEFT JOIN server_groups ON server_groups.id = servers.group_id
+             LEFT JOIN LATERAL (
+                SELECT
+                    count(*) FILTER (WHERE severity = \'warning\') AS warning_alerts,
+                    count(*) FILTER (WHERE severity = \'critical\') AS critical_alerts
+                FROM alerts
+                WHERE alerts.server_id = servers.id
+                  AND alerts.resolved = FALSE
+             ) AS alert_counts ON TRUE'
             . ($conditions === [] ? '' : ' WHERE ' . implode(' AND ', $conditions))
             . ' ORDER BY ' . $sortColumns[$sort] . ' ' . $direction
             . ' NULLS LAST, servers.id ASC'
         );
         $statement->execute($parameters);
-        $servers = $statement->fetchAll();
+        $servers = $this->status->enrich($statement->fetchAll());
         if ($this->agentUpdates !== null) {
             $statuses = $this->agentUpdates->statusesForServers(array_map(
                 static fn (array $server): int => (int) $server['id'],
