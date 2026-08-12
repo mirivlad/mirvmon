@@ -75,6 +75,49 @@ func TestParseIdentityRequiresExactVersionArtifactAndPlatform(t *testing.T) {
 	}
 }
 
+func TestAuthorizeRequiresExactServerCommand(t *testing.T) {
+	command := testCommand()
+	if err := authorize(command, &command); err != nil {
+		t.Fatal(err)
+	}
+	if err := authorize(command, nil); !errors.Is(err, ErrUnauthorizedCommand) {
+		t.Fatalf("nil command: %v", err)
+	}
+	changed := command
+	changed.SHA256 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	if err := authorize(command, &changed); !errors.Is(err, ErrUnauthorizedCommand) {
+		t.Fatalf("changed command: %v", err)
+	}
+}
+
+func TestProtectCandidateCopiesIntoInstalledDirectory(t *testing.T) {
+	directory := t.TempDir()
+	stagedDirectory := filepath.Join(directory, "state")
+	installedDirectory := filepath.Join(directory, "root-owned")
+	if err := os.MkdirAll(stagedDirectory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(installedDirectory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	staged := filepath.Join(stagedDirectory, "update-staged")
+	installed := filepath.Join(installedDirectory, "agent")
+	if err := os.WriteFile(staged, []byte("trusted"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	candidate, err := protectCandidate(staged, installed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Dir(candidate) != installedDirectory {
+		t.Fatalf("candidate path=%s", candidate)
+	}
+	if err := os.WriteFile(staged, []byte("changed"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	assertFileContents(t, candidate, "trusted")
+}
+
 func TestWaitForTargetHealthRejectsOldVersionAndAcceptsTarget(t *testing.T) {
 	store := health.New(filepath.Join(t.TempDir(), "queue.json"))
 	if err := store.Write(health.Status{AgentVersion: "v0.4.2", State: "accepted"}); err != nil {

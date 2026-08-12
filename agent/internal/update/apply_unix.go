@@ -20,3 +20,7 @@ func platformApply(staged, installed string, _ int, targetVersion, healthPath st
 		return exec.Command("systemctl", "stop", "mirvmon-agent.service").Run()
 	})
 }
+
+// PlatformRecoverHandoff is unnecessary on Linux because the collector never
+// exits while the separate one-shot updater authorizes the request.
+func PlatformRecoverHandoff(int) error { return nil }

@@ -12,20 +12,38 @@ import (
 )
 
 func platformApply(staged, installed string, parentPID int, targetVersion, healthPath string) error {
-	if parentPID > 0 {
-		handle, err := windows.OpenProcess(windows.SYNCHRONIZE, false, uint32(parentPID))
-		if err == nil {
-			defer windows.CloseHandle(handle)
-			status, waitErr := windows.WaitForSingleObject(handle, 30000)
-			if waitErr != nil || status == uint32(windows.WAIT_TIMEOUT) {
-				return errors.New("agent service did not stop")
-			}
-		}
+	if err := waitForParent(parentPID); err != nil {
+		return err
 	}
 	restart := func() error { return startService() }
 	return replaceExecutable(staged, installed, restart, func() error {
 		return waitForTargetHealth(healthPath, targetVersion, 30*time.Second)
 	}, stopService)
+}
+
+// PlatformRecoverHandoff restarts the unchanged Windows service if the helper
+// cannot authorize an update after the service process has begun exiting.
+func PlatformRecoverHandoff(parentPID int) error {
+	if err := waitForParent(parentPID); err != nil {
+		return err
+	}
+	return startService()
+}
+
+func waitForParent(parentPID int) error {
+	if parentPID <= 0 {
+		return nil
+	}
+	handle, err := windows.OpenProcess(windows.SYNCHRONIZE, false, uint32(parentPID))
+	if err != nil {
+		return nil
+	}
+	defer windows.CloseHandle(handle)
+	status, waitErr := windows.WaitForSingleObject(handle, 30000)
+	if waitErr != nil || status == uint32(windows.WAIT_TIMEOUT) {
+		return errors.New("agent service did not stop")
+	}
+	return nil
 }
 
 func startService() error {
