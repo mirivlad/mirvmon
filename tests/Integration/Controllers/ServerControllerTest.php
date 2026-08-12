@@ -113,7 +113,7 @@ final class ServerControllerTest extends TestCase
         );
 
         self::assertSame(302, $response->getStatusCode());
-        self::assertSame('/servers/' . $serverId . '/edit', $response->getHeaderLine('Location'));
+        self::assertSame('/servers/' . $serverId, $response->getHeaderLine('Location'));
         self::assertSame(
             '0',
             (string) self::$pdo?->query('SELECT count(*) FROM installer_tokens')->fetchColumn()

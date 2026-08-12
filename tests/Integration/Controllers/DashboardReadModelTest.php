@@ -125,6 +125,7 @@ final class DashboardReadModelTest extends TestCase
         );
 
         $detail = (new ServerDetailController(
+            self::$pdo,
             $twig,
             $servers,
             $metrics,
@@ -142,5 +143,7 @@ final class DashboardReadModelTest extends TestCase
         self::assertSame(200, $detail->getStatusCode());
         self::assertStringContainsString('CPU сейчас', $detailHtml);
         self::assertStringContainsString('40%', $detailHtml);
+        self::assertStringContainsString('id="agent-tab"', $detailHtml);
+        self::assertStringContainsString('Создать ключ', $detailHtml);
     }
 }

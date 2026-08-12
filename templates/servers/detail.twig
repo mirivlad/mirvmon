@@ -85,6 +85,11 @@
                             <i class="fas fa-bell me-1"></i> Пороги
                         </button>
                     </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="agent-tab" data-bs-toggle="tab" data-bs-target="#agent" type="button" role="tab" aria-controls="agent" aria-selected="false">
+                            <i class="fas fa-download me-1"></i> Агент
+                        </button>
+                    </li>
                 </ul>
 
                 <div class="tab-content">
@@ -496,6 +501,9 @@
                                 </form>
                             </div>
                         </div>
+                    </div>
+                    <div class="tab-pane fade" id="agent" role="tabpanel" aria-labelledby="agent-tab">
+                        {% include "servers/partials/agent-management.twig" %}
                     </div>
                 </div>
             </div>

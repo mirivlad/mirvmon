@@ -157,55 +157,6 @@
                     </div>
                 </form>
                 
-                <hr>
-                
-                <div class="mt-4">
-                    <h5>Управление агентом мониторинга:</h5>
-                    <p class="text-muted">
-                        Обычная выдача установщиков не меняет действующий ключ
-                        агента. Отзыв создаёт новый ключ и потребует установить
-                        новый installer на сервер.
-                    </p>
-                    {% if requires_token_rotation %}
-                    <div class="alert alert-warning small">
-                        Этот ключ создан предыдущей версией MirvMon. Его значение
-                        хранится только в конфигурации агента, поэтому для выдачи
-                        нового установщика сначала явно отзовите ключ.
-                    </div>
-                    {% else %}
-                    <form method="post" action="/servers/{{ server.id }}/installers" class="d-inline">
-                        {% include "partials/csrf.twig" %}
-                        <button type="submit" class="btn btn-outline-primary">
-                            <i class="fas fa-download"></i> Скачать установщики
-                        </button>
-                    </form>
-                    {% endif %}
-                    <button type="button" class="btn btn-outline-warning"
-                            data-bs-toggle="modal" data-bs-target="#revokeAgentTokenModal">
-                        <i class="fas fa-sync-alt"></i>
-                        {{ has_agent_token ? 'Отозвать ключ' : 'Создать ключ' }}
-                    </button>
-                </div>
-                <div class="modal fade" id="revokeAgentTokenModal" tabindex="-1" aria-labelledby="revokeAgentTokenTitle" aria-hidden="true">
-                    <div class="modal-dialog">
-                        <div class="modal-content">
-                            <form method="post" action="/servers/{{ server.id }}/regenerate-token">
-                                {% include "partials/csrf.twig" %}
-                                <div class="modal-header">
-                                    <h5 class="modal-title" id="revokeAgentTokenTitle">Отозвать ключ агента?</h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
-                                </div>
-                                <div class="modal-body">
-                                    Текущий ключ немедленно перестанет приниматься. Скачайте и установите новый installer на сервере.
-                                </div>
-                                <div class="modal-footer">
-                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                                    <button type="submit" class="btn btn-warning">Отозвать и создать установщики</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     </div>

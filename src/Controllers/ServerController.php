@@ -294,7 +294,7 @@ final class ServerController
         } catch (Throwable) {
             $this->rollbackTransaction($ownsTransaction, 'server_regenerate');
 
-            return $this->redirect($response, '/servers/' . $serverId . '/edit');
+            return $this->redirect($response, '/servers/' . $serverId);
         }
     }
 
@@ -318,7 +318,7 @@ final class ServerController
             $_SESSION['flash_message'] = 'Для этого агента требуется явный отзыв ключа.';
             $_SESSION['flash_type'] = 'warning';
 
-            return $this->redirect($response, '/servers/' . $serverId . '/edit');
+            return $this->redirect($response, '/servers/' . $serverId);
         }
         try {
             return $this->createdResponse(
@@ -328,7 +328,7 @@ final class ServerController
                 $this->installerTokens($serverId)
             );
         } catch (Throwable) {
-            return $this->redirect($response, '/servers/' . $serverId . '/edit');
+            return $this->redirect($response, '/servers/' . $serverId);
         }
     }
 

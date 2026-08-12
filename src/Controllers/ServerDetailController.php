@@ -10,6 +10,7 @@ use App\Repositories\MetricRepository;
 use App\Repositories\ServerRepository;
 use DateTimeImmutable;
 use InvalidArgumentException;
+use PDO;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Views\Twig;
@@ -32,6 +33,7 @@ final class ServerDetailController
     ];
 
     public function __construct(
+        private readonly PDO $pdo,
         private readonly Twig $twig,
         private readonly ServerRepository $servers,
         private readonly MetricRepository $metrics,
@@ -51,6 +53,11 @@ final class ServerDetailController
         if ($server === null) {
             return $response->withHeader('Location', '/servers')->withStatus(302);
         }
+        $agentToken = $this->pdo->prepare(
+            'SELECT token_generation FROM agent_tokens WHERE server_id = :server_id'
+        );
+        $agentToken->execute(['server_id' => $serverId]);
+        $tokenGeneration = $agentToken->fetchColumn();
 
         $query = $request->getQueryParams();
         $period = is_string($query['period'] ?? null) && isset(self::PERIODS[$query['period']])
@@ -113,6 +120,8 @@ final class ServerDetailController
         return $this->twig->render($response, 'servers/detail.twig', [
             'title' => 'Сервер: ' . $server['name'],
             'server' => $server,
+            'has_agent_token' => $tokenGeneration !== false,
+            'requires_token_rotation' => $tokenGeneration === null,
             'metrics' => $groupedMetrics,
             'displayMetrics' => $displayMetrics,
             'simpleMetricCharts' => $simpleMetricCharts,
