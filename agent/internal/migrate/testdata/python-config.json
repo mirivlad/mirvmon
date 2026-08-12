@@ -1,0 +1,11 @@
+{
+  "api_url": "https://old.example/api/v1/metrics",
+  "config_url": "https://old.example/api/v1/agent/config",
+  "token": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "queue_path": "/var/lib/mirvmon-agent/queue.json",
+  "interval_seconds": 120,
+  "verify_tls": true,
+  "collect_process_commands": true,
+  "queue_limit": 500,
+  "custom_setting": {"keep": true}
+}

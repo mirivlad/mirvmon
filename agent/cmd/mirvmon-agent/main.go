@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"time"
 
 	"github.com/mirivlad/mirvmon/agent/internal/buildinfo"
 	"github.com/mirivlad/mirvmon/agent/internal/collector"
 	"github.com/mirivlad/mirvmon/agent/internal/config"
+	"github.com/mirivlad/mirvmon/agent/internal/migrate"
 	"github.com/mirivlad/mirvmon/agent/internal/protocol"
 	"github.com/mirivlad/mirvmon/agent/internal/queue"
 	"github.com/mirivlad/mirvmon/agent/internal/runner"
@@ -32,7 +34,7 @@ func main() {
 
 func execute(arguments []string, stdout, stderr io.Writer) int {
 	if len(arguments) == 0 {
-		fmt.Fprintln(stderr, "usage: mirvmon-agent <run|check|once|version>")
+		fmt.Fprintln(stderr, "usage: mirvmon-agent <run|check|once|migrate|version>")
 		return exitInvalid
 	}
 	switch arguments[0] {
@@ -45,10 +47,39 @@ func execute(arguments []string, stdout, stderr io.Writer) int {
 		return exitSuccess
 	case "run", "once", "check":
 		return executeConfigured(arguments, stdout, stderr)
+	case "migrate":
+		return executeMigrate(arguments[1:], stderr)
 	default:
 		fmt.Fprintln(stderr, "unknown command")
 		return exitInvalid
 	}
+}
+
+func executeMigrate(arguments []string, stderr io.Writer) int {
+	flags := flag.NewFlagSet("migrate", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	sourceConfig := flags.String("source-config", "", "legacy config")
+	sourceQueue := flags.String("source-queue", "", "legacy queue")
+	serverConfig := flags.String("server-config", "", "staged server config")
+	outputConfig := flags.String("output-config", "", "native config")
+	outputQueue := flags.String("output-queue", "", "native queue")
+	if err := flags.Parse(arguments); err != nil || *serverConfig == "" || *outputConfig == "" || *outputQueue == "" || flags.NArg() != 0 {
+		fmt.Fprintln(stderr, "invalid migration arguments")
+		return exitInvalid
+	}
+	_, err := migrate.Import(migrate.Request{
+		SourceConfig:   *sourceConfig,
+		SourceQueue:    *sourceQueue,
+		ServerConfig:   *serverConfig,
+		OutputConfig:   *outputConfig,
+		OutputQueue:    *outputQueue,
+		QuarantinePath: filepath.Join(filepath.Dir(*outputQueue), "quarantine.json"),
+	})
+	if err != nil {
+		fmt.Fprintln(stderr, "migration failed")
+		return exitRuntime
+	}
+	return exitSuccess
 }
 
 func executeConfigured(arguments []string, _ io.Writer, stderr io.Writer) int {
