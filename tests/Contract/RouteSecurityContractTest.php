@@ -44,11 +44,19 @@ final class RouteSecurityContractTest extends TestCase
             '/admin/users/{id}/delete',
             '/admin/notifications/test',
             '/admin/notifications/queue/retry',
+            '/admin/notifications/queue/{id}/retry',
+            '/admin/notifications/queue/{id}/delete',
+            '/admin/notifications/queue/delete',
             '/servers/{id}/maintenance',
             '/servers/{id}/maintenance/cancel',
         ] as $pattern) {
             self::assertSame(['POST'], $routes[$pattern] ?? null, $pattern);
         }
+
+        self::assertSame(
+            ['GET'],
+            $routes['/admin/notifications/queue'] ?? null
+        );
 
         self::assertArrayNotHasKey('/csrf-token', $routes);
         self::assertArrayNotHasKey('/test', $routes);

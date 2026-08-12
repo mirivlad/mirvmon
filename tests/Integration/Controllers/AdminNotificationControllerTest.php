@@ -194,7 +194,7 @@ final class AdminNotificationControllerTest extends TestCase
         );
 
         self::assertSame(302, $response->getStatusCode());
-        self::assertSame('/admin/notifications', $response->getHeaderLine('Location'));
+        self::assertSame('/admin/notifications/queue', $response->getHeaderLine('Location'));
         self::assertSame(['pending' => 3], $outbox->statusCounts());
     }
 
@@ -214,6 +214,35 @@ final class AdminNotificationControllerTest extends TestCase
             array_column($this->outbox->page($filters, 1)['jobs'], 'id')
         );
         self::assertSame(1, $this->outbox->deleteMatching($filters));
+        self::assertSame(
+            $pendingId,
+            (int) self::$pdo?->query(
+                'SELECT id FROM notification_outbox WHERE id = ' . $pendingId
+            )->fetchColumn()
+        );
+    }
+
+    public function testBulkQueueDeletionRequiresConfirmation(): void
+    {
+        $pendingId = $this->seedQueueJob('email', 'pending', null);
+        $request = (new ServerRequestFactory())
+            ->createServerRequest(
+                'POST',
+                'https://monitor.example/admin/notifications/queue/delete'
+            )
+            ->withParsedBody(['status' => ['pending']]);
+
+        $response = $this->controller->deleteNotificationQueue(
+            $request,
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+
+        self::assertSame(302, $response->getStatusCode());
+        self::assertSame(
+            '/admin/notifications/queue?status%5B0%5D=pending',
+            $response->getHeaderLine('Location')
+        );
         self::assertSame(
             $pendingId,
             (int) self::$pdo?->query(
