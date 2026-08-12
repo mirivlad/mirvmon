@@ -96,6 +96,7 @@ func (manager Manager) Process(
 		return manager.fail(context, command, report, "request_write_failed", err)
 	}
 	if err := atomicfile.Write(handoffPath, []byte(command.ID), 0600); err != nil {
+		_ = os.Remove(requestPath)
 		return manager.fail(context, command, report, "handoff_write_failed", err)
 	}
 	if manager.Handoff != nil {
