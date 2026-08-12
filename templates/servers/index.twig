@@ -70,7 +70,27 @@
                                 </td>
                                 <td>
                                     {% if server.agent_version %}
-                                        <span class="badge bg-light text-dark">{{ server.agent_version }}</span>
+                                        <a href="/servers/{{ server.id }}?tab=agent" class="text-decoration-none">
+                                            <span class="badge bg-light text-dark">{{ server.agent_version }}</span>
+                                            {% if server.agent_update %}
+                                                {% set update_indicators = {
+                                                    update_available: ['fa-circle-arrow-up', 'text-info', 'Доступно обновление агента'],
+                                                    manual_required: ['fa-triangle-exclamation', 'text-warning', 'Требуется ручное обновление агента'],
+                                                    pending: ['fa-clock', 'text-secondary', 'Обновление ожидает агента'],
+                                                    accepted: ['fa-circle-check', 'text-info', 'Команда обновления принята'],
+                                                    downloading: ['fa-download', 'text-info', 'Агент скачивает обновление'],
+                                                    installing: ['fa-gears', 'text-warning', 'Агент устанавливает обновление'],
+                                                    awaiting_restart: ['fa-rotate', 'text-warning', 'Проверяется новая версия агента'],
+                                                    failed: ['fa-circle-xmark', 'text-danger', 'Обновление агента не выполнено']
+                                                } %}
+                                                {% set indicator = update_indicators[server.agent_update.state]|default(null) %}
+                                                {% if indicator %}
+                                                    <i class="fas {{ indicator[0] }} {{ indicator[1] }} ms-1"
+                                                       aria-label="{{ indicator[2] }}" title="{{ indicator[2] }}"
+                                                       data-bs-toggle="tooltip"></i>
+                                                {% endif %}
+                                            {% endif %}
+                                        </a>
                                     {% else %}
                                         <span class="text-muted">—</span>
                                     {% endif %}

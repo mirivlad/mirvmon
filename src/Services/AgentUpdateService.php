@@ -34,13 +34,68 @@ final class AgentUpdateService
             throw new InvalidArgumentException('Server was not found.');
         }
 
-        $installed = is_string($server['agent_version'])
+        return $this->buildStatus(
+            $server,
+            $this->commands->latestForServer($serverId)
+        );
+    }
+
+    /**
+     * @param list<int> $serverIds
+     * @return array<int, array<string, mixed>>
+     */
+    public function statusesForServers(array $serverIds): array
+    {
+        $serverIds = array_values(array_unique(array_filter(
+            $serverIds,
+            static fn (int $id): bool => $id > 0
+        )));
+        if ($serverIds === []) {
+            return [];
+        }
+        $placeholders = [];
+        $parameters = [];
+        foreach ($serverIds as $index => $serverId) {
+            $key = 'server_' . $index;
+            $placeholders[] = ':' . $key;
+            $parameters[$key] = $serverId;
+        }
+        $statement = $this->pdo->prepare(
+            'SELECT id, agent_version, agent_artifact, agent_capabilities
+             FROM servers
+             WHERE id IN (' . implode(', ', $placeholders) . ')'
+        );
+        $statement->execute($parameters);
+        $commands = $this->commands->latestForServers($serverIds);
+        $statuses = [];
+        foreach ($statement->fetchAll() as $server) {
+            if (!is_array($server)) {
+                continue;
+            }
+            $serverId = (int) $server['id'];
+            $statuses[$serverId] = $this->buildStatus(
+                $server,
+                $commands[$serverId] ?? null
+            );
+        }
+
+        return $statuses;
+    }
+
+    /**
+     * @param array<string, mixed> $server
+     * @param array<string, mixed>|null $latest
+     * @return array<string, mixed>
+     */
+    private function buildStatus(array $server, ?array $latest): array
+    {
+        $installed = is_string($server['agent_version'] ?? null)
             ? $server['agent_version']
             : null;
-        $artifactKey = is_string($server['agent_artifact'])
+        $artifactKey = is_string($server['agent_artifact'] ?? null)
             ? $server['agent_artifact']
             : null;
-        $capabilities = $this->stringList($server['agent_capabilities']);
+        $capabilities = $this->stringList($server['agent_capabilities'] ?? []);
         $available = $this->artifacts->version();
         $isNewer = $installed !== null
             && $this->versions->isUpgrade($installed, $available);
@@ -56,7 +111,6 @@ final class AgentUpdateService
         } elseif ($canUpdate) {
             $state = 'update_available';
         }
-        $latest = $this->commands->latestForServer($serverId);
         if ($latest !== null && !in_array($latest['state'], ['succeeded'], true)) {
             $state = (string) $latest['state'];
         }
