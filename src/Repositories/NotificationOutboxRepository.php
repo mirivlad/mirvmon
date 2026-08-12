@@ -625,7 +625,7 @@ final class NotificationOutboxRepository
             return 0;
         }
         $statement = $this->pdo->prepare(
-            "UPDATE notification_outbox
+            "UPDATE notification_outbox AS jobs
              SET
                 status = 'pending',
                 attempts = 0,
@@ -647,7 +647,7 @@ final class NotificationOutboxRepository
             return 0;
         }
         $statement = $this->pdo->prepare(
-            'DELETE FROM notification_outbox WHERE TRUE' . $where
+            'DELETE FROM notification_outbox AS jobs WHERE TRUE' . $where
         );
         $statement->execute($parameters);
 

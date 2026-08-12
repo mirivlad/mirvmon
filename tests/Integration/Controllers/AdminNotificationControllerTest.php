@@ -263,6 +263,41 @@ final class AdminNotificationControllerTest extends TestCase
         );
     }
 
+    public function testIndividualQueueActionsRetryAndDeleteTheSelectedJob(): void
+    {
+        $failedId = $this->seedQueueJob('email', 'failed', 'smtp_timeout');
+        $pendingId = $this->seedQueueJob('telegram', 'pending', null);
+
+        $retryResponse = $this->controller->retryNotificationJob(
+            (new ServerRequestFactory())->createServerRequest(
+                'POST',
+                'https://monitor.example/admin/notifications/queue/' . $failedId . '/retry'
+            ),
+            (new ResponseFactory())->createResponse(),
+            ['id' => (string) $failedId]
+        );
+        $deleteResponse = $this->controller->deleteNotificationJob(
+            (new ServerRequestFactory())->createServerRequest(
+                'POST',
+                'https://monitor.example/admin/notifications/queue/' . $pendingId . '/delete'
+            ),
+            (new ResponseFactory())->createResponse(),
+            ['id' => (string) $pendingId]
+        );
+
+        self::assertSame(302, $retryResponse->getStatusCode());
+        self::assertSame(302, $deleteResponse->getStatusCode());
+        self::assertSame(
+            'pending',
+            self::$pdo?->query(
+                'SELECT status FROM notification_outbox WHERE id = ' . $failedId
+            )->fetchColumn()
+        );
+        self::assertFalse((bool) self::$pdo?->query(
+            'SELECT EXISTS(SELECT 1 FROM notification_outbox WHERE id = ' . $pendingId . ')'
+        )->fetchColumn());
+    }
+
     private function seedQueueJob(
         string $channel,
         string $status,
