@@ -247,7 +247,13 @@ final class MetricsIngestionService
                     :sample_time
                  ),
                  agent_version = COALESCE(:agent_version, agent_version),
-                 os_version = COALESCE(:os_version, os_version)
+                 os_version = COALESCE(:os_version, os_version),
+                 agent_artifact = COALESCE(:agent_artifact, agent_artifact),
+                 agent_capabilities = CASE
+                    WHEN CAST(:has_agent_identity AS integer) = 1
+                    THEN CAST(:agent_capabilities AS jsonb)
+                    ELSE agent_capabilities
+                 END
              WHERE id = :server_id'
         );
         $server->execute([
@@ -255,7 +261,30 @@ final class MetricsIngestionService
             'sample_time' => $timestamp,
             'agent_version' => $envelope->agentVersion,
             'os_version' => $envelope->osVersion,
+            'agent_artifact' => $envelope->agentArtifact,
+            'has_agent_identity' => $envelope->agentArtifact !== null ? 1 : 0,
+            'agent_capabilities' => json_encode(
+                $envelope->agentCapabilities,
+                JSON_THROW_ON_ERROR
+            ),
         ]);
+
+        if ($envelope->agentVersion !== null) {
+            $complete = $this->pdo->prepare(
+                "UPDATE agent_update_commands
+                 SET state = 'succeeded',
+                     error_code = NULL,
+                     completed_at = CURRENT_TIMESTAMP,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE server_id = :server_id
+                   AND target_version = :agent_version
+                   AND state = 'awaiting_restart'"
+            );
+            $complete->execute([
+                'server_id' => $serverId,
+                'agent_version' => $envelope->agentVersion,
+            ]);
+        }
 
         $token = $this->pdo->prepare(
             'UPDATE agent_tokens
