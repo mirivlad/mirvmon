@@ -95,38 +95,31 @@ jobs:
         run: npm audit --audit-level=high
 
   agent:
-    name: Agent / Python ${{ matrix.python }}
+    name: Agent / Go ${{ matrix.go }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
         include:
-          - python: "3.6"
-            image: python:3.6.15-slim-bullseye@sha256:2cfebc27956e6a55f78606864d91fe527696f9e32a724e6f9702b5f9602d0474
-          - python: "3.7"
-            image: python:3.7.17-slim-bullseye@sha256:603879aeff06df23f0d392a19f7ce02aa85e14e6b4d25fd9647b116e0cb93467
-          - python: "3.8"
-            image: python:3.8.20-slim-bullseye@sha256:e191a71397fd61fbddb6712cd43ef9a2c17df0b5e7ba67607128554cd6bff267
-          - python: "3.9"
-            image: python:3.9.23-slim-bookworm@sha256:7bffea15bcc3d7fb87cf10a027986203e4281e078fa2f5b234c30fca291f0834
-          - python: "3.11"
-            image: python:3.11.13-slim-bookworm@sha256:86adf8dbadc3d6e82ee5dd2c74bec2e1c2467cdad47886280501df722372d2e1
-          - python: "3.14"
-            image: python:3.14.0-slim-bookworm@sha256:d13fa0424035d290decef3d575cea23d1b7d5952cdf429df8f5542c71e961576
+          - go: "1.26.5"
+            image: golang:1.26.5-bookworm@sha256:53eeac89074db483fdf0ab3be1df32bf6e47562263d2d0d6baa7f26acb4957dd
+          - go: "1.20.14"
+            image: golang:1.20.14-bookworm@sha256:9fa9101141c01e9440216d32eb2b380b3c3079bea07aeab3546020cc91b3662c
     container:
       image: ${{ matrix.image }}
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install agent dependencies
-        run: python -m pip install --disable-pip-version-check -r agent/requirements.txt
-
-      - name: Test and compile agent
+      - name: Test and cross-compile agent
         run: |
-          PYTHONPATH=agent python -m unittest discover -s agent/tests
-          python -m compileall -q agent
+          cd agent
+          go test ./...
+          go test -race ./...
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./...
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 GOAMD64=v1 \
+            go build -trimpath -buildvcs=false -o /tmp/mirvmon-agent.exe ./cmd/mirvmon-agent
 
   container:
     name: Container and Compose

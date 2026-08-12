@@ -14,7 +14,7 @@ MirvMon принимает push-метрики серверов, отображ�
 | Runtime | PHP 8.5, Slim 4, Twig 3 |
 | Primary HTTP adapter | FrankenPHP 1.12 classic mode |
 | Database | PostgreSQL 17 + TimescaleDB 2.28 |
-| Agent | CPython 3.6–3.14, `psutil`, standard-library HTTPS client |
+| Agent | native Go: 1.26.5 для modern x64, 1.20.14 для Windows 7/2008 R2 x64 |
 | UI | Bootstrap 5, Chart.js 4, локально закреплённые assets |
 | Deployment | два контейнера: `app`, `db` |
 | TLS | внешний nginx reverse proxy |
@@ -52,6 +52,7 @@ Protocol v2 envelope должен содержать:
 - `sample_time` — UTC timestamp, не старше семи дней и не более чем на пять
   минут в будущем;
 - `token` — agent credential только в HTTPS body;
+- `agent_version` и `os_version` — версии агента и ОС, если агент их знает;
 - `metrics` — от 1 до 100 конечных чисел с именами
   `^[a-z][a-z0-9_]{0,99}$`;
 - optional `process_snapshot` не более 64 KiB, до 20 процессов в каждом top;
@@ -72,9 +73,11 @@ notifications. Запоздалый допустимый sample записыва
 - proxy environment поддерживается HTTP client;
 - persistent retry queue ограничена 1000 пакетами, записывается атомарно с
   режимом `0600` и переживает restart;
-- Linux installer поддерживает Debian 10+, Ubuntu 18+, CentOS/RHEL/Oracle 7+,
-  AlmaLinux/Rocky 8+ и MX Linux; systemd определяется по PID 1, иначе
-  регистрируется SysVinit service;
+- Linux installer поддерживает systemd x64 Debian 11+, Ubuntu 20.04+,
+  CentOS/RHEL/Oracle Linux 7+, AlmaLinux/Rocky Linux 8+ и NethServer 7;
+- Windows Server 2012 R2+ и Windows 10+ используют Go 1.26.5; Windows 7 SP1
+  x64 и Server 2008 R2 x64 — Go 1.20.14; Windows Server 2008 без R2 и x86
+  системы исключены;
 - старые EOL ОС поддерживаются только как compatibility target агента и не
   считаются безопасными production platform;
 - конфигурация и queue записываются атомарно с ограниченными правами;
@@ -167,7 +170,7 @@ Release tags `vX.Y.Z` публикуют multi-arch image в GHCR с SBOM и pro
 Prerelease tags не обновляют `latest`.
 
 Schema integration tests выполняются на чистой TimescaleDB и повторно после
-всех миграций. Agent tests выполняются поддерживаемыми версиями Python.
+всех миграций. Agent tests выполняются Go 1.26.5 и Go 1.20.14.
 Dashboard проверяется browser tests на desktop и mobile viewport.
 
 ## Критерии приёмки

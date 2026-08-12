@@ -30,7 +30,8 @@ final readonly class MetricsEnvelope
         public array $metrics,
         public array $services,
         public ?array $processSnapshot,
-        public ?string $agentVersion = null
+        public ?string $agentVersion = null,
+        public ?string $osVersion = null
     ) {
     }
 }

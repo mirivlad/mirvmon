@@ -205,4 +205,26 @@ final class MetricsValidatorTest extends TestCase
         $this->expectException(MetricsValidationException::class);
         $validator->validate($payload);
     }
+
+    public function testOperatingSystemVersionIsOptionalNormalizedAndBounded(): void
+    {
+        $payload = $this->validPayload();
+        self::assertNull($this->validator->validate($payload, $this->now)->osVersion);
+
+        $payload['os_version'] = '  Windows Server 2008 R2 SP1 (build 7601)  ';
+        self::assertSame(
+            'Windows Server 2008 R2 SP1 (build 7601)',
+            $this->validator->validate($payload, $this->now)->osVersion
+        );
+
+        foreach (["Windows 7\nsecret", '', str_repeat('x', 256)] as $invalid) {
+            $payload['os_version'] = $invalid;
+            try {
+                $this->validator->validate($payload, $this->now);
+                self::fail('Expected invalid_os_version.');
+            } catch (MetricsValidationException $exception) {
+                self::assertSame('invalid_os_version', $exception->errorCode);
+            }
+        }
+    }
 }

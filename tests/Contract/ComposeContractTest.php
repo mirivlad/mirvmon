@@ -92,6 +92,23 @@ final class ComposeContractTest extends TestCase
         );
     }
 
+    public function testNativeAgentArtifactsAreBuiltFromPinnedGoToolchains(): void
+    {
+        self::assertStringContainsString(
+            'golang:1.26.5-bookworm@sha256:53eeac89074db483fdf0ab3be1df32bf6e47562263d2d0d6baa7f26acb4957dd',
+            $this->dockerfile
+        );
+        self::assertStringContainsString(
+            'golang:1.20.14-bookworm@sha256:9fa9101141c01e9440216d32eb2b380b3c3079bea07aeab3546020cc91b3662c',
+            $this->dockerfile
+        );
+        self::assertStringContainsString('AS agent-modern', $this->dockerfile);
+        self::assertStringContainsString('AS agent-legacy', $this->dockerfile);
+        self::assertStringContainsString('GOAMD64=v1', $this->dockerfile);
+        self::assertStringContainsString('manifest.json', $this->dockerfile);
+        self::assertStringContainsString('COPY --from=agent-dist /out /app/agent-dist', $this->dockerfile);
+    }
+
     public function testPersistentTwigCacheIsInvalidatedOnImageStart(): void
     {
         $entrypoint = (string) file_get_contents(

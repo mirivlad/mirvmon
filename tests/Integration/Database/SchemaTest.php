@@ -187,6 +187,18 @@ final class SchemaTest extends TestCase
         self::assertSame([], $migrator->migrate());
 
         $count = self::$pdo?->query('SELECT count(*) FROM schema_migrations')->fetchColumn();
-        self::assertSame('13', (string) $count);
+        self::assertSame('14', (string) $count);
+    }
+
+    public function testReportedOperatingSystemColumnIsNullable(): void
+    {
+        $column = self::$pdo?->query(
+            "SELECT is_nullable, character_maximum_length
+             FROM information_schema.columns
+             WHERE table_schema = 'public'
+               AND table_name = 'servers'
+               AND column_name = 'os_version'"
+        )->fetch(PDO::FETCH_NUM);
+        self::assertSame(['YES', 255], $column);
     }
 }

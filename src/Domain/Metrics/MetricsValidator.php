@@ -19,6 +19,7 @@ final class MetricsValidator
         'services',
         'process_snapshot',
         'agent_version',
+        'os_version',
     ];
     private const SERVICE_FIELDS = [
         'name',
@@ -91,6 +92,8 @@ final class MetricsValidator
         }
 
         $agentVersion = $this->agentVersion($payload['agent_version'] ?? null);
+
+        $osVersion = $this->osVersion($payload['os_version'] ?? null);
         $metrics = $this->metrics($payload['metrics'] ?? null);
         $services = $this->services($payload['services'] ?? []);
         $snapshot = $this->processSnapshot($payload['process_snapshot'] ?? null);
@@ -103,7 +106,8 @@ final class MetricsValidator
             $metrics,
             $services,
             $snapshot,
-            $agentVersion
+            $agentVersion,
+            $osVersion
         );
     }
 
@@ -120,6 +124,31 @@ final class MetricsValidator
             || preg_match('/^[A-Za-z0-9][A-Za-z0-9._+-]{0,31}$/', $value) !== 1
         ) {
             throw new MetricsValidationException('invalid_agent_version');
+        }
+
+        return $value;
+    }
+
+    /**
+     * Optional so agents released before native platform reporting remain
+     * protocol-compatible.
+     */
+    private function osVersion(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        if (is_string($value)) {
+            $value = trim($value);
+        }
+        if (
+            !is_string($value)
+            || $value === ''
+            || strlen($value) > 255
+            || preg_match('//u', $value) !== 1
+            || preg_match('/[\x00-\x1F\x7F]/', $value) === 1
+        ) {
+            throw new MetricsValidationException('invalid_os_version');
         }
 
         return $value;
