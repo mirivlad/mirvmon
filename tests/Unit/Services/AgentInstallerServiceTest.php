@@ -47,6 +47,10 @@ final class AgentInstallerServiceTest extends TestCase
         );
         self::assertStringContainsString('sc.exe create MirvMonAgent', $script);
         self::assertStringContainsString('migrate --source-config', $script);
+        self::assertStringContainsString("Join-Path \$StateDir 'queue.txt'", $script);
+        self::assertStringContainsString('if (-not (Test-Path $SourceQueuePath)', $script);
+        self::assertStringContainsString("icacls \$ConfigPath /inheritance:r /grant:r 'SYSTEM:F' 'Administrators:F'", $script);
+        self::assertStringContainsString("icacls \$QueuePath /inheritance:r /grant:r 'SYSTEM:F' 'Administrators:F'", $script);
         self::assertStringContainsString('"verify_tls": true', $script);
         self::assertStringNotContainsString('Invoke-WebRequest', $script);
         self::assertStringNotContainsString('?token=', $script);

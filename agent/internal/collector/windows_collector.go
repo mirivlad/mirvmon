@@ -110,7 +110,7 @@ func (collector *windowsCollector) collectMetrics(operatingSystem windowsOperati
 	cpu := float64(0)
 	for _, processor := range processors {
 		if processor.Name == "_Total" {
-			cpu = float64(processor.PercentProcessorTime) / float64(collector.source.logicalProcessors)
+			cpu = float64(processor.PercentProcessorTime)
 			break
 		}
 	}

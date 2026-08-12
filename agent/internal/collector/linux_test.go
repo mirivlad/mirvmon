@@ -97,6 +97,24 @@ func TestLinuxCollectorCollectsFixtureHostState(t *testing.T) {
 	}
 }
 
+func TestLinuxProcessCPUUsesElapsedTicksInsteadOfLifetimeTicks(t *testing.T) {
+	observed := time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC)
+	collector := newLinuxCollector(linuxSource{})
+	collector.priorProcesses[42] = linuxProcessUsage{
+		ticks:     100,
+		startTime: 123,
+		observed:  observed,
+	}
+
+	usage := collector.processCPUPercent(linuxProcess{pid: 42, cpuTicks: 150, startTime: 123}, observed.Add(time.Second))
+	if usage != 50 {
+		t.Fatalf("usage=%v, want 50", usage)
+	}
+	if usage := collector.processCPUPercent(linuxProcess{pid: 42, cpuTicks: 10, startTime: 456}, observed.Add(time.Second)); usage != 0 {
+		t.Fatalf("reused pid usage=%v, want 0", usage)
+	}
+}
+
 func writeLinuxFixture(t *testing.T, root string) {
 	t.Helper()
 	files := map[string]string{

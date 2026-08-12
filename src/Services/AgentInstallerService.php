@@ -158,6 +158,7 @@ $InstallDir = Join-Path $env:ProgramFiles 'MirvMon\Agent'
 $StateDir = Join-Path $env:ProgramData 'MirvMon\Agent'
 $ConfigPath = Join-Path $StateDir 'config.json'
 $QueuePath = Join-Path $StateDir 'queue.json'
+$LegacyQueuePath = Join-Path $StateDir 'queue.txt'
 $ArtifactUrl = '__ARTIFACT_URL__'
 $StageDir = Join-Path $InstallDir ('.staging-' + [guid]::NewGuid().ToString())
 
@@ -172,6 +173,8 @@ try {
 }
 
 New-Item -ItemType Directory -Force -Path $InstallDir, $StateDir, $StageDir | Out-Null
+icacls $StateDir /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'Administrators:(OI)(CI)F' | Out-Null
+icacls $StageDir /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'Administrators:(OI)(CI)F' | Out-Null
 try {
     $webClient = New-Object Net.WebClient
     $webClient.DownloadFile($ArtifactUrl, (Join-Path $StageDir 'mirvmon-agent.exe'))
@@ -182,14 +185,16 @@ __CONFIG__
 
     & (Join-Path $StageDir 'mirvmon-agent.exe') check --config (Join-Path $StageDir 'server-config.json')
     if ($LASTEXITCODE -ne 0) { throw 'The downloaded native agent failed its configuration check.' }
-    & (Join-Path $StageDir 'mirvmon-agent.exe') migrate --source-config $ConfigPath --source-queue $QueuePath --server-config (Join-Path $StageDir 'server-config.json') --output-config (Join-Path $StageDir 'config.json') --output-queue (Join-Path $StageDir 'queue.json')
+    $SourceQueuePath = $QueuePath
+    if (-not (Test-Path $SourceQueuePath) -and (Test-Path $LegacyQueuePath)) { $SourceQueuePath = $LegacyQueuePath }
+    & (Join-Path $StageDir 'mirvmon-agent.exe') migrate --source-config $ConfigPath --source-queue $SourceQueuePath --server-config (Join-Path $StageDir 'server-config.json') --output-config (Join-Path $StageDir 'config.json') --output-queue (Join-Path $StageDir 'queue.json')
     if ($LASTEXITCODE -ne 0) { throw 'Native state migration failed; previous agent files were left unchanged.' }
 
     sc.exe stop MirvMonAgent | Out-Null
     schtasks.exe /End /TN 'MirvMon Agent' 2>$null | Out-Null
     $timestamp = Get-Date -Format 'yyyyMMddHHmmss'
     if (Test-Path $ConfigPath) { Copy-Item -LiteralPath $ConfigPath -Destination ($ConfigPath + '.legacy-' + $timestamp) -Force }
-    if (Test-Path $QueuePath) { Copy-Item -LiteralPath $QueuePath -Destination ($QueuePath + '.legacy-' + $timestamp) -Force }
+    if (Test-Path $SourceQueuePath) { Copy-Item -LiteralPath $SourceQueuePath -Destination ($SourceQueuePath + '.legacy-' + $timestamp) -Force }
     Move-Item -LiteralPath (Join-Path $StageDir 'mirvmon-agent.exe') -Destination (Join-Path $InstallDir 'mirvmon-agent.exe') -Force
     Move-Item -LiteralPath (Join-Path $StageDir 'config.json') -Destination $ConfigPath -Force
     Move-Item -LiteralPath (Join-Path $StageDir 'queue.json') -Destination $QueuePath -Force
@@ -199,7 +204,8 @@ __CONFIG__
     $serviceCommand = '"' + (Join-Path $InstallDir 'mirvmon-agent.exe') + '" run --config "' + $ConfigPath + '"'
     sc.exe create MirvMonAgent binPath= $serviceCommand start= auto obj= LocalSystem | Out-Null
     sc.exe description MirvMonAgent 'MirvMon outbound monitoring agent' | Out-Null
-    icacls $StateDir /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'Administrators:(OI)(CI)F' | Out-Null
+    icacls $ConfigPath /inheritance:r /grant:r 'SYSTEM:F' 'Administrators:F' | Out-Null
+    icacls $QueuePath /inheritance:r /grant:r 'SYSTEM:F' 'Administrators:F' | Out-Null
     icacls (Join-Path $InstallDir 'mirvmon-agent.exe') /inheritance:r /grant:r 'SYSTEM:RX' 'Administrators:F' | Out-Null
     sc.exe start MirvMonAgent | Out-Null
     Write-Host 'MirvMon agent installed. Check: sc.exe query MirvMonAgent'

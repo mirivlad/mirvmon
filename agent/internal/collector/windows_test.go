@@ -15,7 +15,7 @@ func TestWindowsCollectorUsesWMIContractFixtures(t *testing.T) {
 		query: func(query string, destination any) error {
 			switch result := destination.(type) {
 			case *[]windowsProcessor:
-				*result = []windowsProcessor{{Name: "_Total", PercentProcessorTime: 200}}
+				*result = []windowsProcessor{{Name: "_Total", PercentProcessorTime: 75}}
 			case *[]windowsOperatingSystem:
 				*result = []windowsOperatingSystem{{
 					TotalVisibleMemorySize:  1048576,
@@ -64,6 +64,9 @@ func TestWindowsCollectorUsesWMIContractFixtures(t *testing.T) {
 	}
 	if measurement.OSVersion != "Windows Server 2008 R2 Enterprise SP1 (build 7601)" {
 		t.Fatal(measurement.OSVersion)
+	}
+	if measurement.Metrics["cpu_load"] != 75 {
+		t.Fatalf("cpu_load=%v, want 75", measurement.Metrics["cpu_load"])
 	}
 	if len(measurement.Services) != 1 || measurement.Services[0].Status != "running" {
 		t.Fatalf("unexpected services: %#v", measurement.Services)

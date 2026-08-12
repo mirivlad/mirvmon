@@ -29,10 +29,11 @@ type linuxSource struct {
 }
 
 type linuxCollector struct {
-	source  linuxSource
-	tracker *ServiceTracker
-	mu      sync.Mutex
-	prior   *linuxCounters
+	source         linuxSource
+	tracker        *ServiceTracker
+	mu             sync.Mutex
+	prior          *linuxCounters
+	priorProcesses map[int]linuxProcessUsage
 }
 
 // New returns the production Linux implementation of Collector.
@@ -41,7 +42,7 @@ func New() Collector {
 }
 
 func newLinuxCollector(source linuxSource) *linuxCollector {
-	return &linuxCollector{source: source, tracker: NewServiceTracker()}
+	return &linuxCollector{source: source, tracker: NewServiceTracker(), priorProcesses: make(map[int]linuxProcessUsage)}
 }
 
 func defaultLinuxSource() linuxSource {
