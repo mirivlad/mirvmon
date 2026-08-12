@@ -58,6 +58,35 @@ func TestCycleAppliesRemoteConfigurationBeforeCollecting(t *testing.T) {
 	}
 }
 
+func TestAuthenticationConfigurationPullIsNotRetriedBeforeOneMinute(t *testing.T) {
+	api := &fakeAPI{pullErr: transport.ErrAuthentication}
+	runner := newTestRunner(t, newRecordingQueue(), api)
+
+	if err := runner.Cycle(context.Background()); !errors.Is(err, ErrAuthentication) {
+		t.Fatalf("first cycle: %v", err)
+	}
+	if err := runner.Cycle(context.Background()); !errors.Is(err, ErrAuthentication) {
+		t.Fatalf("second cycle: %v", err)
+	}
+	if api.pulls != 1 {
+		t.Fatalf("configuration pulls = %d, want 1", api.pulls)
+	}
+}
+
+func TestHealthRetainsCollectionTimeAfterAcceptedDelivery(t *testing.T) {
+	runner := newTestRunner(t, newRecordingQueue(), &fakeAPI{outcome: transport.Accepted})
+	if err := runner.Cycle(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	status, err := runner.health.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.LastCollectionAt.IsZero() || status.LastDeliveryAt.IsZero() {
+		t.Fatalf("health timestamps were not retained: %#v", status)
+	}
+}
+
 type recordingQueue struct {
 	events []string
 	items  [][]byte
@@ -98,6 +127,8 @@ func (queue *recordingQueue) Len() int { return len(queue.items) }
 type fakeAPI struct {
 	outcome transport.Outcome
 	remote  config.Remote
+	pullErr error
+	pulls   int
 }
 
 func (api *fakeAPI) Send(context.Context, []byte) (transport.Outcome, error) {
@@ -105,7 +136,8 @@ func (api *fakeAPI) Send(context.Context, []byte) (transport.Outcome, error) {
 }
 
 func (api *fakeAPI) PullConfig(context.Context) (config.Remote, error) {
-	return api.remote, nil
+	api.pulls++
+	return api.remote, api.pullErr
 }
 
 type recordingCollector struct {

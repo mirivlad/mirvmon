@@ -43,6 +43,27 @@ func TestLoadAndApplyRemotePreservesUnknownValues(t *testing.T) {
 	}
 }
 
+func TestLoadExpandsWindowsStyleEnvironmentVariablesInQueuePath(t *testing.T) {
+	t.Setenv("PROGRAMDATA", `C:\ProgramData`)
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(`{
+        "api_url":"https://monitor.example/api/v1/metrics",
+        "config_url":"https://monitor.example/api/v1/agent/config",
+        "token":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "queue_path":"%PROGRAMDATA%\\MirvMon\\Agent\\queue.json"
+    }`), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	configuration, _, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := configuration.QueuePath, `C:\ProgramData\MirvMon\Agent\queue.json`; got != want {
+		t.Fatalf("QueuePath = %q, want %q", got, want)
+	}
+}
+
 func TestLoadRejectsUnsafeEndpointAndWriteAtomicKeepsUnknownValues(t *testing.T) {
 	directory := t.TempDir()
 	unsafePath := filepath.Join(directory, "unsafe.json")

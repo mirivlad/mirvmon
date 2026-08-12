@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/mirivlad/mirvmon/agent/internal/atomicfile"
@@ -78,7 +79,7 @@ func Load(path string) (Config, Raw, error) {
 	if configuration.QueuePath, err = requiredString(raw, "queue_path"); err != nil {
 		return Config{}, nil, err
 	}
-	configuration.QueuePath = os.ExpandEnv(configuration.QueuePath)
+	configuration.QueuePath = expandEnvironment(configuration.QueuePath)
 	if configuration.IntervalSeconds, err = optionalInt(raw, "interval_seconds", defaultInterval); err != nil {
 		return Config{}, nil, err
 	}
@@ -101,6 +102,21 @@ func Load(path string) (Config, Raw, error) {
 		return Config{}, nil, err
 	}
 	return configuration, raw, nil
+}
+
+var windowsEnvironmentVariable = regexp.MustCompile(`%([^%]+)%`)
+
+func expandEnvironment(value string) string {
+	value = os.ExpandEnv(value)
+
+	return windowsEnvironmentVariable.ReplaceAllStringFunc(value, func(match string) string {
+		name := match[1 : len(match)-1]
+		if replacement, ok := os.LookupEnv(name); ok {
+			return replacement
+		}
+
+		return match
+	})
 }
 
 // Validate enforces the local values that affect transport and storage safety.

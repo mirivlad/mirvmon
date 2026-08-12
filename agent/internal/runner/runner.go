@@ -65,6 +65,7 @@ type Runner struct {
 	now            func() time.Time
 	sampleID       func() (string, error)
 	health         health.Store
+	status         health.Status
 	startedAt      time.Time
 	lastConfigPull time.Time
 	authPaused     bool
@@ -90,6 +91,11 @@ func New(dependencies Dependencies) (*Runner, error) {
 		sampleID:  dependencies.SampleID,
 		health:    health.New(dependencies.Config.QueuePath),
 		startedAt: startedAt,
+		status: health.Status{
+			AgentVersion: dependencies.Version,
+			Commit:       dependencies.Commit,
+			StartedAt:    startedAt,
+		},
 	}
 	if err := runner.health.Clear(); err != nil {
 		return nil, err
@@ -100,7 +106,8 @@ func New(dependencies Dependencies) (*Runner, error) {
 // Cycle refreshes configuration if due, then collects and flushes one oldest
 // queue item. Authentication failures pause fresh collection.
 func (runner *Runner) Cycle(context context.Context) error {
-	if runner.configDue() || runner.authPaused {
+	if runner.configDue() {
+		runner.lastConfigPull = runner.now().UTC()
 		if err := runner.refreshConfig(context); err != nil {
 			runner.writeHealth("authentication_error", err, false, false)
 			if errors.Is(err, transport.ErrAuthentication) {
@@ -225,7 +232,6 @@ func (runner *Runner) refreshConfig(context context.Context) error {
 		return transport.ErrInvalidRemoteConfig
 	}
 	runner.config = updated
-	runner.lastConfigPull = runner.now().UTC()
 	runner.authPaused = false
 	return nil
 }
@@ -235,22 +241,19 @@ func (runner *Runner) configDue() bool {
 }
 
 func (runner *Runner) writeHealth(state string, err error, collected bool, delivered bool) {
-	status := health.Status{
-		AgentVersion: runner.version,
-		Commit:       runner.commit,
-		StartedAt:    runner.startedAt,
-		State:        state,
-	}
+	runner.status.State = state
 	if collected {
-		status.LastCollectionAt = runner.now().UTC()
+		runner.status.LastCollectionAt = runner.now().UTC()
 	}
 	if delivered {
-		status.LastDeliveryAt = runner.now().UTC()
+		runner.status.LastDeliveryAt = runner.now().UTC()
 	}
 	if err != nil {
-		status.LastError = err.Error()
+		runner.status.LastError = err.Error()
+	} else {
+		runner.status.LastError = ""
 	}
-	_ = runner.health.Write(status)
+	_ = runner.health.Write(runner.status)
 }
 
 func jsonMarshal(envelope protocol.Envelope) ([]byte, error) {

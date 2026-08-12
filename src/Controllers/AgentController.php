@@ -6,8 +6,10 @@ namespace App\Controllers;
 
 use App\Services\AgentCredential;
 use App\Services\AgentCredentialIssuer;
+use App\Services\AgentArtifactCatalog;
 use App\Services\AgentInstallerService;
 use App\Services\PublicUrlResolver;
+use Closure;
 use JsonException;
 use PDO;
 use Psr\Http\Message\ResponseInterface as Response;
@@ -22,7 +24,8 @@ final class AgentController
         private readonly PublicUrlResolver $urlResolver,
         private readonly AgentCredentialIssuer $credentials,
         private readonly AgentInstallerService $installers,
-        private readonly string $projectRoot
+        /** @var Closure(): AgentArtifactCatalog */
+        private readonly Closure $artifactCatalog
     ) {
     }
 
@@ -172,37 +175,45 @@ final class AgentController
     }
 
     /** @param array<string, string> $args */
-    public function downloadAgent(
+    public function downloadBinary(
         Request $request,
         Response $response,
         array $args
     ): Response {
-        return $this->downloadSourceFile(
-            $response,
-            $this->projectRoot . '/agent.py',
-            'agent.py'
-        );
-    }
-
-    /** @param array<string, string> $args */
-    public function downloadAgentFile(
-        Request $request,
-        Response $response,
-        array $args
-    ): Response {
-        $file = $args['file'] ?? '';
-        if (
-            !is_string($file)
-            || !in_array($file, AgentInstallerService::agentFiles(), true)
-        ) {
-            return $this->plainError($response, 404, 'Agent file not found.');
+        $key = $args['artifact'] ?? '';
+        if (!is_string($key)) {
+            return $this->plainError($response, 404, 'Agent artifact not found.');
         }
 
-        return $this->downloadSourceFile(
-            $response,
-            $this->projectRoot . '/agent/mirvmon_agent/' . $file,
-            $file
-        );
+        try {
+            $artifact = ($this->artifactCatalog)()->require($key);
+            $stream = fopen($artifact->path, 'rb');
+            if ($stream === false) {
+                throw new RuntimeException('Native agent artifact cannot be opened.');
+            }
+            try {
+                while (!feof($stream)) {
+                    $chunk = fread($stream, 8192);
+                    if ($chunk === false) {
+                        throw new RuntimeException('Native agent artifact cannot be read.');
+                    }
+                    $response->getBody()->write($chunk);
+                }
+            } finally {
+                fclose($stream);
+            }
+        } catch (RuntimeException) {
+            return $this->plainError($response, 404, 'Agent artifact not found.');
+        }
+
+        return $response
+            ->withHeader('Content-Type', $artifact->contentType)
+            ->withHeader(
+                'Content-Disposition',
+                'attachment; filename="' . $artifact->filename . '"'
+            )
+            ->withHeader('Content-Length', (string) filesize($artifact->path))
+            ->withHeader('X-Content-Type-Options', 'nosniff');
     }
 
     /** @param array<string, string> $args */
@@ -425,24 +436,6 @@ final class AgentController
         }
 
         return $matches[1];
-    }
-
-    private function downloadSourceFile(
-        Response $response,
-        string $path,
-        string $filename
-    ): Response {
-        $content = file_get_contents($path);
-        if ($content === false) {
-            return $this->plainError($response, 404, 'Agent file not found.');
-        }
-
-        return $this->download(
-            $response,
-            $content,
-            'text/x-python; charset=UTF-8',
-            $filename
-        );
     }
 
     private function download(

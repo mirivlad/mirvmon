@@ -11,7 +11,7 @@ MirvMon — self-hosted система мониторинга серверов. 
 - PHP 8.5, Slim 4 и Twig 3;
 - FrankenPHP в classic mode как основной HTTP runtime;
 - PostgreSQL 17 с TimescaleDB 2.28 для метрик и агрегатов;
-- Python-агент с `psutil`;
+- нативный Go-агент для x64 Linux и Windows;
 - локальные Bootstrap 5.3.8, Chart.js 4.5.1 и Font Awesome 7.3.1.
 
 Прикладной код использует PSR-интерфейсы и не обращается к API FrankenPHP или
@@ -153,18 +153,18 @@ Server 2008 R2. Ссылка действует один час и переда�
 scheme, host и port запроса, уже нормализованные middleware доверенного reverse
 proxy. В исходниках нет предустановленного домена.
 
-Linux-агент поддерживает CPython 3.6–3.14 на x86-64: Debian 10+, Ubuntu
-18.04+, CentOS/RHEL/Oracle Linux 7+, AlmaLinux/Rocky Linux 8+ и современные
-Debian-, Ubuntu-, Fedora- и RHEL-подобные системы. Старые EOL-системы не
-становятся от этого безопасными и должны быть изолированы и планово заменены.
+Все агентские сборки — только x64. Linux-сборка Go 1.26.5 поддерживает Debian
+11+, Ubuntu 20.04+, RHEL/CentOS 7+, Oracle Linux 7+, AlmaLinux/Rocky Linux 8+,
+NethServer 7 и их современные преемники с systemd. Windows-сборка Go 1.26.5
+предназначена для Windows Server 2012 R2+ и Windows 10+. Отдельная сборка Go
+1.20.14 поддерживает Windows 7 SP1 x64 и Windows Server 2008 R2 x64. Windows
+Server 2008 без R2 и любые 32-битные системы не поддерживаются.
 
-Установщик ищет совместимый CPython, создаёт непривилегированного пользователя
-`mirvmon-agent`, изолированно устанавливает `psutil` (без `requests`), записывает
-конфигурацию `/etc/mirvmon-agent/config.json` и использует persistent queue в
-`/var/lib/mirvmon-agent`. Повторный запуск перезаписывает конфигурацию токеном из
-installer, готовит новый release в staging-каталоге, проверяет импорт и лишь затем
-переключает launcher. Агент отправляет данные на публичный HTTPS endpoint и не
-принимает входящих соединений.
+Установщик скачивает один проверяемый нативный бинарник, создаёт пользователя
+`mirvmon-agent` на Linux, записывает конфигурацию `/etc/mirvmon-agent/config.json`
+и очередь `/var/lib/mirvmon-agent/queue.json`. При обновлении сначала
+мигрируются старые Python/PowerShell config и queue в отдельные файлы; прежние
+файлы заменяются только после успешной миграции и сохраняются как backup.
 
 На systemd (включая systemd 219 CentOS/RHEL 7) используйте:
 
@@ -173,43 +173,21 @@ sudo systemctl status mirvmon-agent
 sudo journalctl -u mirvmon-agent -f
 ```
 
-На MX Linux и других системах, где systemd не является PID 1, установщик создаёт
-SysVinit service. Используйте:
-
-```bash
-sudo service mirvmon-agent status
-sudo service mirvmon-agent restart
-sudo service mirvmon-agent stop
-sudo service mirvmon-agent start
-```
-
-Для Debian/MX переменные proxy находятся в `/etc/default/mirvmon-agent`; для
-RHEL-подобных систем — в `/etc/sysconfig/mirvmon-agent`. Поддерживаются
-`HTTPS_PROXY`, `HTTP_PROXY` и `NO_PROXY`; TLS certificate verification всегда
-использует системное CA store. На CentOS/RHEL 7 installer использует уже
-настроенные штатные репозитории: сначала существующий `python3`/`python36`, затем
-доступные пакеты, включая EPEL или Software Collections (`rh-python36`), если они
-уже настроены. Он не добавляет сторонние репозитории сам; при отсутствии Python
-выводит конкретную инструкцию.
+Для outbound proxy задайте `HTTPS_PROXY`, `HTTP_PROXY` и при необходимости
+`NO_PROXY` в systemd unit override. TLS certificate verification включена по
+умолчанию; агент использует системный CA store.
 
 ### Windows 7 и Server 2008 R2
 
-CPython 3.9 и новее на этих системах не устанавливается, а PowerShell 2.0 не
-знает `Invoke-WebRequest`, `ConvertTo-Json` и `Register-ScheduledTask`. Поэтому
-для них есть отдельные установщики `/agent/install-legacy.bat` и
-`/agent/install-legacy.ps1`: они разворачивают самодостаточный сборщик на
-PowerShell 2.0, который читает метрики через WMI, собирает тот же envelope v2
-вручную и отправляет его `HttpWebRequest` с принудительно включённым TLS 1.2.
-Python не требуется.
+Для этих систем доступны `/agent/install-legacy.bat` и
+`/agent/install-legacy.ps1`. Они совместимы с PowerShell 2.0, скачивают
+нативный x64-бинарник Go 1.20.14 через `Net.WebClient` и регистрируют Windows
+service `MirvMonAgent`. Агент собирает те же метрики, службы, процессы,
+версию ОС и получает удалённую конфигурацию, что и современная Windows-сборка.
 
-Задача планировщика `MirvMon Agent` запускает сборщик раз в минуту через
-`schtasks`. Собираются `cpu_load`, `ram_used`, `ram_total_gb`, `uptime`,
-`disk_used*`, `net_in_*`/`net_out_*` и службы Windows. Недоставленные замеры
-складываются в `%ProgramData%\MirvMon\Agent\queue.txt` (до 200 штук) и
-досылаются следующим запуском. Снимок процессов и удалённое управление
-конфигурацией агента в этом режиме не поддерживаются. Службы, имя которых не
-проходит серверную проверку (пробелы, `$` — например `MSSQL$SQLEXPRESS`),
-пропускаются, чтобы не отбраковать весь замер.
+Сервис постоянно работает под LocalSystem; недоставленные замеры хранятся в
+`%ProgramData%\MirvMon\Agent\queue.json` (до 1000) и досылаются следующим
+циклом. PowerShell нужен только для установки, а не для сбора метрик.
 
 Для outbound proxy задайте `HTTPS_PROXY`, `HTTP_PROXY` и при необходимости
 `NO_PROXY` в `/etc/default/mirvmon-agent`. TLS-сертификаты проверяются по
@@ -338,7 +316,8 @@ composer audit
 npm ci
 npm run assets:sync
 npm audit
-PYTHONPATH=agent python3 -m unittest discover -s agent/tests
+(cd agent && go test ./...)
+(cd agent && go test -race ./...)
 ```
 
 Для schema integration tests требуется отдельная TimescaleDB. Переменные
@@ -353,7 +332,7 @@ PYTHONPATH=agent python3 -m unittest discover -s agent/tests
 `npm run assets:sync`.
 
 CI в `.github/workflows/ci.yml` проверяет PHP 8.5 на TimescaleDB, PHPStan
-level 6, воспроизводимость frontend assets, Python 3.6/3.7/3.8/3.9/3.11/3.14 и production
+level 6, воспроизводимость frontend assets, Go 1.26.5 и Go 1.20.14, а также production
 Docker image. Release workflow публикует multi-arch image в GHCR, а Dependabot
 следит за Composer, npm, Docker и GitHub Actions.
 
