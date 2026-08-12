@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/mirivlad/mirvmon/agent/internal/atomicfile"
+	"github.com/mirivlad/mirvmon/agent/internal/update"
 )
 
 const (
@@ -40,9 +41,10 @@ type Config struct {
 // Remote is the supported response shape from GET /api/v1/agent/config.
 // Pointer scalars distinguish an omitted field from an explicit false or zero.
 type Remote struct {
-	Enabled         *bool    `json:"enabled"`
-	IntervalSeconds *int     `json:"interval_seconds"`
-	MonitorServices []string `json:"monitor_services"`
+	Enabled         *bool           `json:"enabled"`
+	IntervalSeconds *int            `json:"interval_seconds"`
+	MonitorServices []string        `json:"monitor_services"`
+	UpdateCommand   *update.Command `json:"update_command,omitempty"`
 }
 
 // Load decodes a UTF-8 JSON object and returns both recognised settings and

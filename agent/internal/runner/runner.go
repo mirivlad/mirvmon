@@ -13,6 +13,7 @@ import (
 	"github.com/mirivlad/mirvmon/agent/internal/health"
 	"github.com/mirivlad/mirvmon/agent/internal/protocol"
 	"github.com/mirivlad/mirvmon/agent/internal/transport"
+	"github.com/mirivlad/mirvmon/agent/internal/update"
 )
 
 var (
@@ -34,6 +35,11 @@ type Queue interface {
 type API interface {
 	Send(context.Context, []byte) (transport.Outcome, error)
 	PullConfig(context.Context) (config.Remote, error)
+	ReportUpdate(context.Context, update.Command, string, string) error
+}
+
+type UpdateManager interface {
+	Process(context.Context, update.Command, update.Reporter) error
 }
 
 // HostCollector is deliberately equivalent to collector.Collector, allowing
@@ -53,6 +59,7 @@ type Dependencies struct {
 	Artifact  string
 	Now       func() time.Time
 	SampleID  func() (string, error)
+	Updater   UpdateManager
 }
 
 // Runner owns one native agent instance.
@@ -66,6 +73,7 @@ type Runner struct {
 	artifact       string
 	now            func() time.Time
 	sampleID       func() (string, error)
+	updater        UpdateManager
 	health         health.Store
 	status         health.Status
 	startedAt      time.Time
@@ -92,6 +100,7 @@ func New(dependencies Dependencies) (*Runner, error) {
 		artifact:  dependencies.Artifact,
 		now:       dependencies.Now,
 		sampleID:  dependencies.SampleID,
+		updater:   dependencies.Updater,
 		health:    health.New(dependencies.Config.QueuePath),
 		startedAt: startedAt,
 		status: health.Status{
@@ -152,6 +161,9 @@ func (runner *Runner) Run(context context.Context) error {
 		err := runner.Cycle(context)
 		if context.Err() != nil {
 			return context.Err()
+		}
+		if errors.Is(err, update.ErrRestartRequired) {
+			return err
 		}
 		delay := time.Duration(runner.config.IntervalSeconds) * time.Second
 		if err != nil && !errors.Is(err, ErrDisabled) {
@@ -244,6 +256,14 @@ func (runner *Runner) refreshConfig(context context.Context) error {
 	}
 	runner.config = updated
 	runner.authPaused = false
+	if remote.UpdateCommand != nil {
+		if runner.updater == nil {
+			return transport.ErrInvalidRemoteConfig
+		}
+		if err := runner.updater.Process(context, *remote.UpdateCommand, runner.api.ReportUpdate); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
