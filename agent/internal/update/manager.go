@@ -95,18 +95,20 @@ func (manager Manager) Process(
 	if err := atomicfile.Write(requestPath, contents, 0600); err != nil {
 		return manager.fail(context, command, report, "request_write_failed", err)
 	}
+	if err := atomicfile.Write(handoffPath, []byte(command.ID), 0600); err != nil {
+		return manager.fail(context, command, report, "handoff_write_failed", err)
+	}
 	if manager.Handoff != nil {
 		if err := manager.Handoff(requestPath); err != nil {
 			if errors.Is(err, ErrRestartRequired) {
-				if writeErr := atomicfile.Write(handoffPath, []byte(command.ID), 0600); writeErr != nil {
-					return writeErr
-				}
 				return err
 			}
+			_ = os.Remove(handoffPath)
+			_ = os.Remove(requestPath)
 			return manager.fail(context, command, report, "handoff_failed", err)
 		}
 	}
-	return atomicfile.Write(handoffPath, []byte(command.ID), 0600)
+	return nil
 }
 
 // HandoffPath returns the fixed local marker associated with a request.
