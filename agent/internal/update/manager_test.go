@@ -111,3 +111,31 @@ func TestManagerResumesInstallingStateAfterProgressReportFailure(t *testing.T) {
 		t.Fatalf("handoffs after resume=%d", handoffs)
 	}
 }
+
+func TestManagerRemovesRequestWhenHandoffMarkerCannotBePublished(t *testing.T) {
+	payload := []byte("v0.4.3-agent")
+	digest := sha256.Sum256(payload)
+	server := httptest.NewTLSServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Write(payload)
+	}))
+	defer server.Close()
+	directory := t.TempDir()
+	if err := os.Mkdir(filepath.Join(directory, "update-handoff"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	command := testCommand()
+	command.SHA256 = hex.EncodeToString(digest[:])
+	command.Size = int64(len(payload))
+	manager := Manager{
+		Store:            NewStore(filepath.Join(directory, "queue.json")),
+		Downloader:       Downloader{ConfigURL: server.URL + "/api/v1/agent/config", Artifact: "linux-amd64", Client: server.Client()},
+		InstalledVersion: "v0.4.2",
+		Artifact:         "linux-amd64",
+	}
+	if err := manager.Process(context.Background(), command, func(context.Context, Command, string, string) error { return nil }); err == nil {
+		t.Fatal("expected marker write failure")
+	}
+	if _, err := os.Stat(filepath.Join(directory, "update-request.json")); !os.IsNotExist(err) {
+		t.Fatalf("request remains after marker failure: %v", err)
+	}
+}
