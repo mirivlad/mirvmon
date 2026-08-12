@@ -9,6 +9,10 @@ use DateTimeInterface;
 
 final class ServerStatusService
 {
+    public function __construct(private readonly ServerPlatformService $platform)
+    {
+    }
+
     /**
      * @param array<string, mixed> $server
      * @return 'online'|'warning'|'critical'|'offline'
@@ -56,6 +60,14 @@ final class ServerStatusService
                 ? null
                 : max(0, $now->getTimestamp() - $lastMetricsAt->getTimestamp());
             $server['status'] = $this->status($server, $now);
+            $server['platform'] = $this->platform->classify(
+                is_string($server['os_version'] ?? null)
+                    ? $server['os_version']
+                    : null,
+                is_string($server['agent_artifact'] ?? null)
+                    ? $server['agent_artifact']
+                    : null
+            );
 
             return $server;
         }, $servers);

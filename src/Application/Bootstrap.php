@@ -34,6 +34,7 @@ use App\Services\AgentVersionService;
 use App\Services\MetricsIngestionService;
 use App\Services\PublicUrlResolver;
 use App\Services\ServerStatusService;
+use App\Services\ServerPlatformService;
 use App\Services\ThresholdEvaluator;
 use DateTimeZone;
 use PDO;
@@ -113,8 +114,13 @@ final class Bootstrap
             )
         );
         $container->set(
+            ServerPlatformService::class,
+            static fn (): ServerPlatformService => new ServerPlatformService()
+        );
+        $container->set(
             ServerStatusService::class,
-            static fn (): ServerStatusService => new ServerStatusService()
+            static fn (Container $container): ServerStatusService =>
+                new ServerStatusService($container->get(ServerPlatformService::class))
         );
         $container->set(
             MetricsValidator::class,
@@ -233,7 +239,8 @@ final class Bootstrap
                 $container->get(PDO::class),
                 $container->get(Twig::class),
                 $container->get(AgentCredentialIssuer::class),
-                $container->get(AgentUpdateService::class)
+                $container->get(AgentUpdateService::class),
+                $container->get(ServerStatusService::class)
             )
         );
         $container->set(
@@ -244,7 +251,8 @@ final class Bootstrap
                 $container->get(ServerRepository::class),
                 $container->get(MetricRepository::class),
                 $container->get(MaintenanceWindowRepository::class),
-                $container->get(AgentUpdateService::class)
+                $container->get(AgentUpdateService::class),
+                $container->get(ServerStatusService::class)
             )
         );
         $container->set(

@@ -12,6 +12,8 @@ use App\Repositories\AgentUpdateRepository;
 use App\Services\AgentArtifactCatalog;
 use App\Services\AgentUpdateService;
 use App\Services\AgentVersionService;
+use App\Services\ServerPlatformService;
+use App\Services\ServerStatusService;
 use PDO;
 use PHPUnit\Framework\TestCase;
 use Slim\Psr7\Factory\ResponseFactory;
@@ -54,7 +56,8 @@ final class ServerControllerTest extends TestCase
                 new AgentUpdateRepository(self::$pdo),
                 new AgentVersionService(),
                 AgentArtifactCatalog::load($this->artifactDirectory)
-            )
+            ),
+            new ServerStatusService(new ServerPlatformService())
         );
     }
 
@@ -184,6 +187,8 @@ final class ServerControllerTest extends TestCase
 
         self::assertStringContainsString('fa-linux', $html);
         self::assertStringContainsString('title="Linux 6.8"', $html);
+        self::assertStringContainsString('server-status-offline', $html);
+        self::assertStringContainsString('server-platform-icon', $html);
         self::assertStringContainsString('fa-circle', $html);
         self::assertStringContainsString('#dc3545', $html);
         self::assertStringContainsString('Доступно обновление агента', $html);

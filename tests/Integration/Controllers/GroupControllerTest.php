@@ -8,6 +8,7 @@ use App\Controllers\GroupController;
 use App\Database\ConnectionFactory;
 use App\Database\Migrator;
 use App\Services\ServerStatusService;
+use App\Services\ServerPlatformService;
 use PDO;
 use PHPUnit\Framework\TestCase;
 use Slim\Psr7\Factory\ResponseFactory;
@@ -45,7 +46,7 @@ final class GroupControllerTest extends TestCase
         $this->controller = new GroupController(
             self::$pdo,
             $twig,
-            new ServerStatusService()
+            new ServerStatusService(new ServerPlatformService())
         );
         $this->groupId = (int) self::$pdo?->query(
             "INSERT INTO server_groups (name, icon, color)

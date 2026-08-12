@@ -9,6 +9,7 @@ use App\Repositories\MaintenanceWindowRepository;
 use App\Repositories\MetricRepository;
 use App\Repositories\ServerRepository;
 use App\Services\AgentUpdateService;
+use App\Services\ServerStatusService;
 use DateTimeImmutable;
 use InvalidArgumentException;
 use PDO;
@@ -39,7 +40,8 @@ final class ServerDetailController
         private readonly ServerRepository $servers,
         private readonly MetricRepository $metrics,
         private readonly MaintenanceWindowRepository $maintenance,
-        private readonly ?AgentUpdateService $agentUpdates
+        private readonly ?AgentUpdateService $agentUpdates,
+        private readonly ServerStatusService $status
     ) {
     }
 
@@ -55,6 +57,7 @@ final class ServerDetailController
         if ($server === null) {
             return $response->withHeader('Location', '/servers')->withStatus(302);
         }
+        $server = $this->status->enrich([$server])[0];
         $agentToken = $this->pdo->prepare(
             'SELECT token_generation FROM agent_tokens WHERE server_id = :server_id'
         );
