@@ -341,18 +341,6 @@ func skipMount(mount string) bool {
 	return mount != "/" && (strings.HasPrefix(mount, "/proc") || strings.HasPrefix(mount, "/sys") || strings.HasPrefix(mount, "/dev"))
 }
 
-func metricSuffix(value string) string {
-	var builder strings.Builder
-	for _, character := range strings.ToLower(value) {
-		if character >= 'a' && character <= 'z' || character >= '0' && character <= '9' {
-			builder.WriteRune(character)
-		} else {
-			builder.WriteByte('_')
-		}
-	}
-	return strings.Trim(builder.String(), "_")
-}
-
 func unescapeMount(value string) string {
 	replacer := strings.NewReplacer("\\040", " ", "\\011", "\t", "\\012", "\n", "\\134", "\\")
 	return replacer.Replace(value)

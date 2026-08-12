@@ -3,15 +3,12 @@
 package collector
 
 import (
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/mirivlad/mirvmon/agent/internal/protocol"
 )
-
-var sensitiveCommandValue = regexp.MustCompile(`(?i)(--(?:api-?key|authorization|passwd|password|secret|token)(?:=|\s+))[^\s]+`)
 
 type linuxProcess struct {
 	pid     int
@@ -131,16 +128,4 @@ func processList(processes []linuxProcess, value func(linuxProcess) float64) []p
 		})
 	}
 	return result
-}
-
-func redactCommand(value string) string {
-	value = sensitiveCommandValue.ReplaceAllString(value, "$1[REDACTED]")
-	return truncateString(strings.TrimSpace(strings.Join(strings.Fields(value), " ")), 512)
-}
-
-func truncateString(value string, maximum int) string {
-	if len(value) <= maximum {
-		return value
-	}
-	return value[:maximum]
 }

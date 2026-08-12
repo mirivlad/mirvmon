@@ -5,6 +5,7 @@ package collector
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/mirivlad/mirvmon/agent/internal/protocol"
@@ -78,4 +79,44 @@ func boundedMetrics(required map[string]float64, optional ...map[string]float64)
 		}
 	}
 	return metrics
+}
+
+func truncateString(value string, maximum int) string {
+	if len(value) <= maximum {
+		return value
+	}
+	return value[:maximum]
+}
+
+func truncateOSVersion(value string) string {
+	return truncateString(value, 255)
+}
+
+func metricSuffix(value string) string {
+	var builder strings.Builder
+	for _, character := range strings.ToLower(value) {
+		if character >= 'a' && character <= 'z' || character >= '0' && character <= '9' {
+			builder.WriteRune(character)
+		} else {
+			builder.WriteByte('_')
+		}
+	}
+	return strings.Trim(builder.String(), "_")
+}
+
+func serviceName(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	var builder strings.Builder
+	for _, character := range value {
+		if character >= 'A' && character <= 'Z' || character >= 'a' && character <= 'z' ||
+			character >= '0' && character <= '9' || strings.ContainsRune("_.@:-", character) {
+			builder.WriteRune(character)
+		} else {
+			builder.WriteByte('_')
+		}
+	}
+	return truncateString(strings.Trim(builder.String(), "_"), 255)
 }

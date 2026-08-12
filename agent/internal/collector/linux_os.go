@@ -29,10 +29,3 @@ func (collector *linuxCollector) collectOSVersion() (string, error) {
 	}
 	return "", fmt.Errorf("PRETTY_NAME missing from operating system release")
 }
-
-func truncateOSVersion(value string) string {
-	if len(value) <= 255 {
-		return value
-	}
-	return value[:255]
-}
