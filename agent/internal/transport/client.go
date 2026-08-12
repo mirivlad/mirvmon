@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/mirivlad/mirvmon/agent/internal/config"
+	"github.com/mirivlad/mirvmon/agent/internal/update"
 )
 
 const (
@@ -190,7 +191,66 @@ func (client *Client) PullConfig(context context.Context) (config.Remote, error)
 	if _, ok := config.ApplyRemote(client.configuration, remote); !ok {
 		return config.Remote{}, ErrInvalidRemoteConfig
 	}
+	if remote.UpdateCommand != nil {
+		if err := remote.UpdateCommand.Validate(); err != nil {
+			return config.Remote{}, ErrInvalidRemoteConfig
+		}
+	}
 	return remote, nil
+}
+
+// ReportUpdate advances one bearer-owned command without exposing the token in
+// either the URL or body.
+func (client *Client) ReportUpdate(
+	context context.Context,
+	command update.Command,
+	state string,
+	errorCode string,
+) error {
+	if client.initErr != nil {
+		return client.initErr
+	}
+	if err := command.Validate(); err != nil {
+		return err
+	}
+	base, err := url.Parse(client.configuration.ConfigURL)
+	if err != nil {
+		return ErrInvalidRemoteConfig
+	}
+	base.Path = "/api/v1/agent/update/" + command.ID + "/status"
+	base.RawPath = ""
+	base.RawQuery = ""
+	base.Fragment = ""
+	payload := map[string]string{"state": state}
+	if errorCode != "" {
+		payload["error_code"] = errorCode
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("encode update status: %w", err)
+	}
+	request, err := http.NewRequestWithContext(context, http.MethodPost, base.String(), bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create update status request: %w", err)
+	}
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+client.configuration.Token)
+	response, err := client.http.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if _, err := readBody(response.Body); err != nil {
+		return err
+	}
+	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
+		return ErrAuthentication
+	}
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("update status HTTP %d", response.StatusCode)
+	}
+	return nil
 }
 
 // RetryDelay is deterministic exponential backoff, capped at five minutes.

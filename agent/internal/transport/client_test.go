@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mirivlad/mirvmon/agent/internal/config"
+	"github.com/mirivlad/mirvmon/agent/internal/update"
 )
 
 const transportToken = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -56,6 +57,33 @@ func TestPullConfigRejectsOversizedAndMalformedBodies(t *testing.T) {
 				t.Fatal("PullConfig accepted invalid response body")
 			}
 		})
+	}
+}
+
+func TestPullConfigDecodesTypedUpdateAndReportsProgressWithBearer(t *testing.T) {
+	requests := 0
+	client := New(testConfig(), WithRoundTripper(roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+		requests++
+		if request.Header.Get("Authorization") != "Bearer "+transportToken {
+			t.Fatalf("missing bearer: %#v", request.Header)
+		}
+		if request.Method == http.MethodGet {
+			return response(http.StatusOK, `{"enabled":true,"interval_seconds":60,"monitor_services":[],"update_command":{"id":"20000000-0000-4000-8000-000000000001","target_version":"v0.4.3","artifact":"linux-amd64","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","size":100}}`), nil
+		}
+		if request.URL.Path != "/api/v1/agent/update/20000000-0000-4000-8000-000000000001/status" {
+			t.Fatalf("unexpected status path %q", request.URL.Path)
+		}
+		return response(http.StatusOK, `{"saved":true}`), nil
+	})))
+	remote, err := client.PullConfig(context.Background())
+	if err != nil || remote.UpdateCommand == nil || remote.UpdateCommand.Artifact != "linux-amd64" {
+		t.Fatalf("remote=%#v err=%v", remote, err)
+	}
+	if err := client.ReportUpdate(context.Background(), *remote.UpdateCommand, update.StateAccepted, ""); err != nil {
+		t.Fatal(err)
+	}
+	if requests != 2 {
+		t.Fatalf("requests=%d", requests)
 	}
 }
 

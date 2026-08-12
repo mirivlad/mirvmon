@@ -12,6 +12,7 @@ import (
 	"github.com/mirivlad/mirvmon/agent/internal/config"
 	"github.com/mirivlad/mirvmon/agent/internal/protocol"
 	"github.com/mirivlad/mirvmon/agent/internal/transport"
+	"github.com/mirivlad/mirvmon/agent/internal/update"
 )
 
 func TestOncePersistsBeforeDeliveryAndKeepsRetry(t *testing.T) {
@@ -138,6 +139,10 @@ func (api *fakeAPI) Send(context.Context, []byte) (transport.Outcome, error) {
 func (api *fakeAPI) PullConfig(context.Context) (config.Remote, error) {
 	api.pulls++
 	return api.remote, api.pullErr
+}
+
+func (api *fakeAPI) ReportUpdate(context.Context, update.Command, string, string) error {
+	return nil
 }
 
 type recordingCollector struct {
