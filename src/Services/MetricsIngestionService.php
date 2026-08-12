@@ -246,13 +246,15 @@ final class MetricsIngestionService
                     COALESCE(last_metrics_at, :sample_time),
                     :sample_time
                  ),
-                 agent_version = COALESCE(:agent_version, agent_version)
+                 agent_version = COALESCE(:agent_version, agent_version),
+                 os_version = COALESCE(:os_version, os_version)
              WHERE id = :server_id'
         );
         $server->execute([
             'server_id' => $serverId,
             'sample_time' => $timestamp,
             'agent_version' => $envelope->agentVersion,
+            'os_version' => $envelope->osVersion,
         ]);
 
         $token = $this->pdo->prepare(
@@ -1012,6 +1014,9 @@ final class MetricsIngestionService
             return '°C';
         }
         if (str_starts_with($name, 'net_') || str_starts_with($name, 'network_')) {
+            return 'B/s';
+        }
+        if (str_starts_with($name, 'disk_read_') || str_starts_with($name, 'disk_write_')) {
             return 'B/s';
         }
         if ($name === 'uptime') {
