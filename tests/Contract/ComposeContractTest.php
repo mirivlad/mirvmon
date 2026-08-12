@@ -83,7 +83,7 @@ final class ComposeContractTest extends TestCase
     public function testRuntimeImagesAreCurrentAndReproducible(): void
     {
         self::assertStringContainsString(
-            'dunglas/frankenphp:1.12.6-php8.5-trixie@sha256:da270879b95225345b2ee984f717aef5cba7336e1f206ec005074a79235af347',
+            'dunglas/frankenphp:1.12.7-php8.5-trixie@sha256:4b0713ddad6ca7eb21eb82ac6bdb7cb41de5192a930b615d89af6e15d74e82f8',
             $this->dockerfile
         );
         self::assertStringContainsString(
