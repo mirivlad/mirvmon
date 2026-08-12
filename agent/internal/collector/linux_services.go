@@ -149,23 +149,6 @@ func normalizeServiceStatus(active string) string {
 	}
 }
 
-func serviceName(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return ""
-	}
-	var builder strings.Builder
-	for _, character := range value {
-		if character >= 'A' && character <= 'Z' || character >= 'a' && character <= 'z' ||
-			character >= '0' && character <= '9' || strings.ContainsRune("_.@:-", character) {
-			builder.WriteRune(character)
-		} else {
-			builder.WriteByte('_')
-		}
-	}
-	return truncateString(strings.Trim(builder.String(), "_"), 255)
-}
-
 func sortedServices(services []protocol.ServiceState) []protocol.ServiceState {
 	sort.Slice(services, func(left, right int) bool { return services[left].Name < services[right].Name })
 	if len(services) > 500 {
