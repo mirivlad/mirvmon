@@ -35,6 +35,12 @@ func New(queuePath string) Store {
 	return Store{path: filepath.Join(filepath.Dir(queuePath), "health.json")}
 }
 
+// StoreForPath opens the fixed status path for the privileged updater. The
+// path is always derived locally from the queue/request directory.
+func StoreForPath(path string) Store {
+	return Store{path: path}
+}
+
 // Path returns the fixed health file path.
 func (store Store) Path() string {
 	return store.path

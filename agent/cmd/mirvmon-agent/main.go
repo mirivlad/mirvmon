@@ -19,6 +19,7 @@ import (
 	"github.com/mirivlad/mirvmon/agent/internal/queue"
 	"github.com/mirivlad/mirvmon/agent/internal/runner"
 	"github.com/mirivlad/mirvmon/agent/internal/transport"
+	"github.com/mirivlad/mirvmon/agent/internal/update"
 )
 
 const (
@@ -34,7 +35,7 @@ func main() {
 
 func execute(arguments []string, stdout, stderr io.Writer) int {
 	if len(arguments) == 0 {
-		fmt.Fprintln(stderr, "usage: mirvmon-agent <run|check|once|migrate|version>")
+		fmt.Fprintln(stderr, "usage: mirvmon-agent <run|check|once|migrate|apply-update|version>")
 		return exitInvalid
 	}
 	switch arguments[0] {
@@ -43,16 +44,49 @@ func execute(arguments []string, stdout, stderr io.Writer) int {
 			fmt.Fprintln(stderr, "usage: mirvmon-agent version")
 			return exitInvalid
 		}
-		fmt.Fprintf(stdout, "%s %s %s/%s\n", buildinfo.Version, buildinfo.Commit, runtime.GOOS, runtime.GOARCH)
+		fmt.Fprintf(stdout, "%s %s %s/%s %s\n", buildinfo.Version, buildinfo.Commit, runtime.GOOS, runtime.GOARCH, buildinfo.Artifact)
 		return exitSuccess
 	case "run", "once", "check":
 		return executeConfigured(arguments, stdout, stderr)
 	case "migrate":
 		return executeMigrate(arguments[1:], stderr)
+	case "apply-update":
+		return executeApply(arguments[1:], stderr)
 	default:
 		fmt.Fprintln(stderr, "unknown command")
 		return exitInvalid
 	}
+}
+
+func executeApply(arguments []string, stderr io.Writer) int {
+	flags := flag.NewFlagSet("apply-update", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	configPath := flags.String("config", "", "configuration file")
+	requestPath := flags.String("request", "", "fixed update request")
+	installedPath := flags.String("installed", "", "installed executable")
+	parentPID := flags.Int("parent", 0, "service process to wait for")
+	if err := flags.Parse(arguments); err != nil || *configPath == "" || *requestPath == "" || *installedPath == "" || *parentPID < 0 || flags.NArg() != 0 {
+		fmt.Fprintln(stderr, "invalid update arguments")
+		return exitInvalid
+	}
+	configuration, _, err := config.Load(*configPath)
+	if err != nil {
+		fmt.Fprintln(stderr, "invalid configuration")
+		return exitInvalid
+	}
+	command, applyErr := update.Apply(*requestPath, *installedPath, *parentPID)
+	client := transport.New(configuration)
+	state, errorCode := update.StateAwaitingRestart, ""
+	if applyErr != nil {
+		state, errorCode = update.StateFailed, "apply_failed"
+	}
+	reportErr := client.ReportUpdate(context.Background(), command, state, errorCode)
+	_ = os.Remove(*requestPath)
+	if applyErr != nil || reportErr != nil {
+		fmt.Fprintln(stderr, "agent update failed")
+		return exitRuntime
+	}
+	return exitSuccess
 }
 
 func executeMigrate(arguments []string, stderr io.Writer) int {
@@ -133,6 +167,18 @@ func executeConfigured(arguments []string, _ io.Writer, stderr io.Writer) int {
 		Artifact:  buildinfo.Artifact,
 		Now:       now,
 		SampleID:  protocol.NewSampleID,
+		Updater: update.Manager{
+			Store: update.NewStore(configuration.QueuePath),
+			Downloader: update.Downloader{
+				ConfigURL: configuration.ConfigURL,
+				Artifact:  buildinfo.Artifact,
+			},
+			InstalledVersion: buildinfo.Version,
+			Artifact:         buildinfo.Artifact,
+			Handoff: func(requestPath string) error {
+				return update.PlatformHandoff(requestPath, *configPath)
+			},
+		},
 	})
 	if err != nil {
 		fmt.Fprintln(stderr, "agent initialization failed")
