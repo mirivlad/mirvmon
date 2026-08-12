@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -61,6 +62,38 @@ func TestLoadExpandsWindowsStyleEnvironmentVariablesInQueuePath(t *testing.T) {
 	}
 	if got, want := configuration.QueuePath, `C:\ProgramData\MirvMon\Agent\queue.json`; got != want {
 		t.Fatalf("QueuePath = %q, want %q", got, want)
+	}
+}
+
+func TestLoadAcceptsLegacyNullMonitorServicesAndWriteAtomicNormalizesIt(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, "config.json")
+	if err := os.WriteFile(path, []byte(`{
+        "api_url":"https://monitor.example/api/v1/metrics",
+        "config_url":"https://monitor.example/api/v1/agent/config",
+        "token":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "queue_path":"/var/lib/mirvmon-agent/queue.json",
+        "monitor_services":null
+    }`), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	configuration, raw, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if configuration.MonitorServices != nil {
+		t.Fatalf("MonitorServices = %#v, want nil", configuration.MonitorServices)
+	}
+	if err := WriteAtomic(path, configuration, raw); err != nil {
+		t.Fatal(err)
+	}
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(contents, []byte(`"monitor_services":[]`)) {
+		t.Fatalf("empty services were not normalized: %s", contents)
 	}
 }
 

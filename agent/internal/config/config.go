@@ -179,6 +179,10 @@ func WriteAtomic(path string, configuration Config, raw Raw) error {
 	for key, value := range raw {
 		values[key] = append(json.RawMessage(nil), value...)
 	}
+	monitorServices := configuration.MonitorServices
+	if monitorServices == nil {
+		monitorServices = []string{}
+	}
 	for key, value := range map[string]any{
 		"api_url":                  configuration.APIURL,
 		"config_url":               configuration.ConfigURL,
@@ -188,7 +192,7 @@ func WriteAtomic(path string, configuration Config, raw Raw) error {
 		"verify_tls":               configuration.VerifyTLS,
 		"collect_process_commands": configuration.CollectProcessCommands,
 		"enabled":                  configuration.Enabled,
-		"monitor_services":         configuration.MonitorServices,
+		"monitor_services":         monitorServices,
 		"queue_limit":              configuration.QueueLimit,
 	} {
 		encoded, err := json.Marshal(value)
@@ -243,6 +247,9 @@ func optionalBool(raw Raw, key string, fallback bool) (bool, error) {
 func optionalStrings(raw Raw, key string) ([]string, error) {
 	value, ok := raw[key]
 	if !ok {
+		return nil, nil
+	}
+	if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
 		return nil, nil
 	}
 	var decoded []string

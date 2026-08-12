@@ -88,13 +88,11 @@ func Import(request Request) (Report, error) {
 func mergedConfiguration(request Request, server config.Config) (config.Config, config.Raw, error) {
 	if request.SourceConfig == "" {
 		merged := server
-		merged.QueuePath = request.OutputQueue
 		return merged, config.Raw{}, merged.Validate()
 	}
 	source, raw, err := config.Load(request.SourceConfig)
 	if errors.Is(err, os.ErrNotExist) {
 		merged := server
-		merged.QueuePath = request.OutputQueue
 		return merged, config.Raw{}, merged.Validate()
 	}
 	if err != nil {
@@ -103,7 +101,7 @@ func mergedConfiguration(request Request, server config.Config) (config.Config, 
 	source.APIURL = server.APIURL
 	source.ConfigURL = server.ConfigURL
 	source.Token = server.Token
-	source.QueuePath = request.OutputQueue
+	source.QueuePath = server.QueuePath
 	if err := source.Validate(); err != nil {
 		return config.Config{}, nil, err
 	}

@@ -89,6 +89,13 @@ install -m 0755 -o root -g root "$STAGING_DIR/mirvmon-agent" "$INSTALL_DIR/mirvm
 install -m 0640 -o root -g "$AGENT_USER" "$STAGING_DIR/config.json" "$CONFIG_PATH"
 install -m 0600 -o "$AGENT_USER" -g "$AGENT_USER" "$STAGING_DIR/queue.json" "$QUEUE_PATH"
 
+# The service name is retained, but legacy runtime files are no longer used.
+rm -rf "$INSTALL_DIR/current"
+rm -rf "$INSTALL_DIR/releases"
+rm -rf "$INSTALL_DIR/venv"
+rm -rf "$INSTALL_DIR/mirvmon_agent"
+rm -f "$INSTALL_DIR/agent.py" "$INSTALL_DIR/agent-launcher"
+
 cat > "$SERVICE_UNIT" <<'MIRVMON_SERVICE'
 [Unit]
 Description=MirvMon monitoring agent
