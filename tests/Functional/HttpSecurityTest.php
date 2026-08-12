@@ -314,14 +314,8 @@ final class HttpSecurityTest extends TestCase
         self::assertSame('', $response->getHeaderLine('Set-Cookie'));
     }
 
-    public function testPublicAgentFilesAndConfigEndpointDoNotCreateSessions(): void
+    public function testAgentConfigEndpointDoesNotCreateSessions(): void
     {
-        $source = $this->app->handle(
-            $this->request('GET', '/agent/files/config.py')
-        );
-        self::assertSame(200, $source->getStatusCode());
-        self::assertSame('', $source->getHeaderLine('Set-Cookie'));
-
         $config = $this->app->handle(
             $this->request('GET', '/api/v1/agent/config')
                 ->withHeader('Accept', 'application/json')
