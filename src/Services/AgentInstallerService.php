@@ -35,6 +35,8 @@ CONFIG_PATH="$CONFIG_DIR/config.json"
 QUEUE_PATH="$STATE_DIR/queue.json"
 AGENT_USER='mirvmon-agent'
 SERVICE_UNIT='/etc/systemd/system/mirvmon-agent.service'
+UPDATE_PATH_UNIT='/etc/systemd/system/mirvmon-agent-update.path'
+UPDATE_SERVICE_UNIT='/etc/systemd/system/mirvmon-agent-update.service'
 ARTIFACT_URL='__BASE_URL__/agent/binaries/linux-amd64'
 
 fail() {
@@ -81,6 +83,8 @@ chmod 0600 "$SERVER_CONFIG"
 # Migration produces new files first; old config and queue stay intact on error.
 "$STAGING_DIR/mirvmon-agent" migrate --source-config "$CONFIG_PATH" --source-queue "$QUEUE_PATH" --server-config "$SERVER_CONFIG" --output-config "$STAGING_DIR/config.json" --output-queue "$STAGING_DIR/queue.json"
 
+systemctl stop mirvmon-agent-update.path >/dev/null 2>&1 || true
+systemctl stop mirvmon-agent-update.service >/dev/null 2>&1 || true
 systemctl stop mirvmon-agent.service >/dev/null 2>&1 || true
 timestamp=$(date -u +%Y%m%d%H%M%S)
 [ ! -f "$CONFIG_PATH" ] || cp -p "$CONFIG_PATH" "$CONFIG_PATH.legacy-$timestamp"
@@ -116,8 +120,37 @@ PrivateTmp=true
 [Install]
 WantedBy=multi-user.target
 MIRVMON_SERVICE
+cat > "$UPDATE_PATH_UNIT" <<'MIRVMON_UPDATE_PATH'
+[Unit]
+Description=Watch for a MirvMon agent update request
+
+[Path]
+PathExists=/var/lib/mirvmon-agent/update-request.json
+Unit=mirvmon-agent-update.service
+
+[Install]
+WantedBy=multi-user.target
+MIRVMON_UPDATE_PATH
+cat > "$UPDATE_SERVICE_UNIT" <<'MIRVMON_UPDATE_SERVICE'
+[Unit]
+Description=Apply a verified MirvMon agent update
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/var/lib/mirvmon-agent
+ExecStart=/opt/mirvmon-agent/mirvmon-agent apply-update --config /etc/mirvmon-agent/config.json --request /var/lib/mirvmon-agent/update-request.json --installed /opt/mirvmon-agent/mirvmon-agent
+NoNewPrivileges=true
+PrivateTmp=true
+MIRVMON_UPDATE_SERVICE
+chmod 0644 "$SERVICE_UNIT" "$UPDATE_PATH_UNIT" "$UPDATE_SERVICE_UNIT"
 systemctl daemon-reload
 systemctl enable mirvmon-agent.service
+systemctl enable mirvmon-agent-update.path
+systemctl start mirvmon-agent-update.path
 systemctl restart mirvmon-agent.service
 systemctl is-active --quiet mirvmon-agent.service || fail 'systemd could not start mirvmon-agent.service.'
 echo 'MirvMon agent installed. Check: systemctl status mirvmon-agent'
