@@ -216,6 +216,7 @@ final class Bootstrap
         $container->set(
             ServerDetailController::class,
             static fn (Container $container): ServerDetailController => new ServerDetailController(
+                $container->get(PDO::class),
                 $container->get(Twig::class),
                 $container->get(ServerRepository::class),
                 $container->get(MetricRepository::class),
