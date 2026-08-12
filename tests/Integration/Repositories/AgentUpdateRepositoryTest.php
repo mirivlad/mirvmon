@@ -98,6 +98,11 @@ final class AgentUpdateRepositoryTest extends TestCase
                 $this->serverId,
                 $state
             ));
+            self::assertTrue($this->repository->advance(
+                $command['id'],
+                $this->serverId,
+                $state
+            ));
         }
 
         $this->expectException(InvalidArgumentException::class);

@@ -103,6 +103,9 @@ final class AgentUpdateRepository
             $id,
             $serverId,
             function (array $command) use ($state): bool {
+                if ($command['state'] === $state) {
+                    return true;
+                }
                 $expected = self::NEXT_STATE[(string) $command['state']] ?? null;
                 if ($expected !== $state) {
                     throw new InvalidArgumentException('Invalid update transition.');
