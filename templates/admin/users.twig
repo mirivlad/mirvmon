@@ -47,6 +47,7 @@
                                 <td>
                                     <button class="btn btn-sm btn-outline-primary"
                                             data-bs-toggle="modal" data-bs-target="#userModal"
+                                            aria-label="Редактировать" title="Редактировать"
                                             data-user-edit
                                             data-user-id="{{ user.id }}"
                                             data-username="{{ user.username }}"
@@ -59,6 +60,7 @@
                                     <form method="post" action="/admin/users/{{ user.id }}/delete" class="d-inline">
                                         {% include "partials/csrf.twig" %}
                                         <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                aria-label="Удалить" data-bs-toggle="tooltip" title="Удалить"
                                                 data-confirm="Удалить пользователя {{ user.username }}?">
                                             <i class="fas fa-trash"></i>
                                         </button>

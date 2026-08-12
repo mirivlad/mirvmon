@@ -46,13 +46,7 @@
                                 </td>
                                 <td>{{ alert.created_at|date('d.m.Y H:i:s') }}</td>
                                 <td>
-                                    <form method="post" action="/alerts/{{ alert.id }}/resolve">
-                                        {% include "partials/csrf.twig" %}
-                                        <button type="submit" class="btn btn-sm btn-outline-success"
-                                                data-confirm="Вы уверены, что хотите отметить этот алерт как исправленный?">
-                                            <i class="fas fa-check"></i> <span class="d-none d-sm-inline">Исправлено</span>
-                                        </button>
-                                    </form>
+                                    {% include "partials/action-button.twig" with {form_action: '/alerts/' ~ alert.id ~ '/resolve', icon: 'fa-check', label: 'Отметить исправленным', class: 'btn-outline-success', confirm: 'Вы уверены, что хотите отметить этот алерт как исправленный?'} %}
                                 </td>
                             </tr>
                             {% endfor %}

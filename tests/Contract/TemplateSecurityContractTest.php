@@ -73,6 +73,28 @@ final class TemplateSecurityContractTest extends TestCase
         }
     }
 
+    public function testListActionControlsUseAccessibleIconOnlyMarkup(): void
+    {
+        $partial = (string) file_get_contents(
+            dirname(__DIR__, 2) . '/templates/partials/action-button.twig'
+        );
+        self::assertStringContainsString('aria-label="{{ label }}"', $partial);
+        self::assertStringContainsString('data-bs-toggle="tooltip"', $partial);
+
+        foreach ([
+            'templates/servers/index.twig',
+            'templates/groups/index.twig',
+            'templates/groups/show.twig',
+            'templates/alerts/index.twig',
+        ] as $path) {
+            $template = (string) file_get_contents(dirname(__DIR__, 2) . '/' . $path);
+            self::assertStringContainsString('partials/action-button.twig', $template, $path);
+            self::assertStringNotContainsString('>Просмотр</span>', $template, $path);
+            self::assertStringNotContainsString('>Редактировать</span>', $template, $path);
+            self::assertStringNotContainsString('>Удалить</span>', $template, $path);
+        }
+    }
+
     /** @return iterable<string, array{string}> */
     public static function templateProvider(): iterable
     {
