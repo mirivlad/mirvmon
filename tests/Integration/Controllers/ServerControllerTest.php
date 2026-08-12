@@ -121,4 +121,48 @@ final class ServerControllerTest extends TestCase
         self::assertSame('Для этого агента требуется явный отзыв ключа.', $_SESSION['flash_message']);
         self::assertSame('warning', $_SESSION['flash_type']);
     }
+
+    public function testIndexUsesPerServerGroupDataAndFiltersByAllowedSearchAndSort(): void
+    {
+        $redGroupId = (int) self::$pdo?->query(
+            "INSERT INTO server_groups (name, icon, color)
+             VALUES ('Red group', 'fa-circle', '#dc3545') RETURNING id"
+        )->fetchColumn();
+        $blueGroupId = (int) self::$pdo?->query(
+            "INSERT INTO server_groups (name, icon, color)
+             VALUES ('Blue group', 'fa-square', '#0d6efd') RETURNING id"
+        )->fetchColumn();
+        $insert = self::$pdo?->prepare(
+            'INSERT INTO servers (name, address, group_id, os_version)
+             VALUES (:name, :address, :group_id, :os_version)'
+        );
+        $insert?->execute([
+            'name' => 'Zulu',
+            'address' => '10.0.0.2',
+            'group_id' => $blueGroupId,
+            'os_version' => 'Windows Server 2022',
+        ]);
+        $insert?->execute([
+            'name' => 'Alpha',
+            'address' => '10.0.0.1',
+            'group_id' => $redGroupId,
+            'os_version' => 'Linux 6.8',
+        ]);
+
+        $response = $this->controller->index(
+            (new ServerRequestFactory())->createServerRequest(
+                'GET',
+                'https://monitor.example/servers?sort=address&direction=asc&name=Alpha'
+            ),
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+        $html = (string) $response->getBody();
+
+        self::assertStringContainsString('fa-linux', $html);
+        self::assertStringContainsString('title="Linux 6.8"', $html);
+        self::assertStringContainsString('fa-circle', $html);
+        self::assertStringContainsString('#dc3545', $html);
+        self::assertStringNotContainsString('>Zulu<', $html);
+    }
 }

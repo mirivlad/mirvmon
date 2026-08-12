@@ -47,4 +47,16 @@
     document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((element) => {
         bootstrap.Tooltip.getOrCreateInstance(element);
     });
+
+    document.querySelectorAll('[data-server-filter-form]').forEach((form) => {
+        let timeoutId;
+        Array.from(form.elements).filter((element) => (
+            element instanceof HTMLInputElement && element.type === 'search'
+        )).forEach((input) => {
+            input.addEventListener('input', () => {
+                window.clearTimeout(timeoutId);
+                timeoutId = window.setTimeout(() => form.requestSubmit(), 350);
+            });
+        });
+    });
 })();

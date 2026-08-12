@@ -28,16 +28,69 @@ final class ServerController
         Response $response,
         array $args
     ): Response {
-        $servers = $this->pdo->query(
-            'SELECT servers.*, server_groups.name AS group_name
+        $query = $request->getQueryParams();
+        $sortColumns = [
+            'name' => 'servers.name',
+            'address' => 'servers.address',
+            'group' => 'server_groups.name',
+            'description' => 'servers.description',
+            'last_metrics' => 'servers.last_metrics_at',
+        ];
+        $sort = is_string($query['sort'] ?? null) && isset($sortColumns[$query['sort']])
+            ? $query['sort']
+            : 'name';
+        $direction = ($query['direction'] ?? null) === 'desc' ? 'DESC' : 'ASC';
+        $filters = [];
+        $conditions = [];
+        $parameters = [];
+        foreach ([
+            'name' => 'servers.name',
+            'address' => 'servers.address',
+            'group' => 'server_groups.name',
+            'description' => 'servers.description',
+            'last_metrics' => 'CAST(servers.last_metrics_at AS text)',
+        ] as $key => $column) {
+            $value = $this->searchTerm($query[$key] ?? null);
+            $filters[$key] = $value ?? '';
+            if ($value !== null) {
+                $conditions[] = $column . " ILIKE :" . $key . " ESCAPE E'\\\\'";
+                $parameters[$key] = '%' . $this->escapeLike($value) . '%';
+            }
+        }
+        $statement = $this->pdo->prepare(
+            'SELECT
+                servers.*,
+                server_groups.name AS group_name,
+                server_groups.icon AS group_icon,
+                server_groups.color AS group_color
              FROM servers
-             LEFT JOIN server_groups ON server_groups.id = servers.group_id
-             ORDER BY servers.name, servers.id'
-        )?->fetchAll() ?? [];
+             LEFT JOIN server_groups ON server_groups.id = servers.group_id'
+            . ($conditions === [] ? '' : ' WHERE ' . implode(' AND ', $conditions))
+            . ' ORDER BY ' . $sortColumns[$sort] . ' ' . $direction
+            . ' NULLS LAST, servers.id ASC'
+        );
+        $statement->execute($parameters);
+        $servers = $statement->fetchAll();
+        $sortUrls = [];
+        foreach (array_keys($sortColumns) as $key) {
+            $sortUrls[$key] = '/servers?' . http_build_query(array_merge(
+                $filters,
+                [
+                    'sort' => $key,
+                    'direction' => $sort === $key && $direction === 'ASC'
+                        ? 'desc'
+                        : 'asc',
+                ]
+            ));
+        }
 
         return $this->twig->render($response, 'servers/index.twig', [
             'title' => 'Серверы',
             'servers' => $servers,
+            'filters' => $filters,
+            'sort' => $sort,
+            'direction' => $direction,
+            'sort_urls' => $sortUrls,
         ]);
     }
 
@@ -454,6 +507,21 @@ final class ServerController
         $value = trim($value);
 
         return $value === '' ? null : substr($value, 0, $maximum);
+    }
+
+    private function searchTerm(mixed $value): ?string
+    {
+        if (!is_string($value)) {
+            return null;
+        }
+        $value = trim($value);
+
+        return $value === '' ? null : substr($value, 0, 100);
+    }
+
+    private function escapeLike(string $value): string
+    {
+        return strtr($value, ['\\' => '\\\\', '%' => '\\%', '_' => '\\_']);
     }
 
     private function optionalId(mixed $value): ?int
