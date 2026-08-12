@@ -53,6 +53,8 @@ Protocol v2 envelope должен содержать:
   минут в будущем;
 - `token` — agent credential только в HTTPS body;
 - `agent_version` и `os_version` — версии агента и ОС, если агент их знает;
+- `agent_artifact` — allowlisted build key, а `agent_capabilities` — bounded
+  список возможностей; `v0.4.3+` сообщает `self_update_v1`;
 - `metrics` — от 1 до 100 конечных чисел с именами
   `^[a-z][a-z0-9_]{0,99}$`;
 - optional `process_snapshot` не более 64 KiB, до 20 процессов в каждом top;
@@ -82,6 +84,22 @@ notifications. Запоздалый допустимый sample записыва
   считаются безопасными production platform;
 - конфигурация и queue записываются атомарно с ограниченными правами;
 - логи не содержат token, proxy credential или URL query secrets.
+
+Удалённое обновление:
+
+- первый capable release — `v0.4.3`; старые версии требуют одно ручное
+  обновление установщиком;
+- admin создаёт команду через CSRF-protected
+  `POST /servers/{id}/agent/update`;
+- агент получает её только через outbound authenticated config poll и сообщает
+  прогресс в `POST /api/v1/agent/update/{command}/status`;
+- command schema не допускает arbitrary URL, path или executable text;
+- target version должна быть строго новее, artifact обязан совпадать с build
+  identity, а файл — с manifest size и SHA-256;
+- Linux применяет замену root one-shot unit, Windows — trusted LocalSystem
+  helper; config, token и metrics queue остаются неизменными;
+- startup/health failure восстанавливает `.previous`; успех подтверждается
+  только новым metrics envelope с точной target version.
 
 ### Алерты и уведомления
 

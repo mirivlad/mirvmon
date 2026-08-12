@@ -148,6 +148,22 @@ Linux runtime — статический Go 1.26.5 x64 binary. Windows modern и
 Installer сначала проверяет binary и мигрирует старые configuration/queue в
 staging, после чего заменяет state и регистрирует systemd либо Windows service.
 
+Начиная с `v0.4.3`, envelope также сообщает точный artifact key и capability
+`self_update_v1`. Администратор создаёт одну typed-команду обновления для одного
+сервера; она хранится в `agent_update_commands` и возвращается агенту при его
+обычном outbound config poll. Состояния монотонны: `pending`, `accepted`,
+`downloading`, `installing`, `awaiting_restart`, затем `succeeded` либо
+`failed`. Только последующий envelope с точной target version завершает команду
+как `succeeded`.
+
+Команда содержит UUID, target version, allowlisted artifact key, размер и
+SHA-256. URL и исполняемый текст отсутствуют. Public artifact скачивается с
+того же origin без permanent token; Bearer используется только для config и
+progress endpoints. Linux path/one-shot unit отделяет непривилегированную
+загрузку от root-замены. Windows helper является копией доверенного текущего
+бинарника. Обе реализации ожидают health target version и возвращают один
+rollback binary при неуспешном старте.
+
 ## Уведомления
 
 Telegram и SMTP являются независимыми transports. Telegram proxy применяется
