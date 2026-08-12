@@ -15,18 +15,18 @@ COPY agent ./
 RUN set -eux; \
     export CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOAMD64=v1; \
     go build -trimpath -buildvcs=false \
-        -ldflags "-s -w -X github.com/mirivlad/mirvmon/agent/internal/buildinfo.Version=${APP_VERSION}" \
+        -ldflags "-s -w -X github.com/mirivlad/mirvmon/agent/internal/buildinfo.Version=${APP_VERSION} -X github.com/mirivlad/mirvmon/agent/internal/buildinfo.Artifact=linux-amd64" \
         -o /out/mirvmon-agent-linux-amd64 ./cmd/mirvmon-agent; \
     go build -trimpath -buildvcs=false \
-        -ldflags "-s -w -X github.com/mirivlad/mirvmon/agent/internal/buildinfo.Version=${APP_VERSION}" \
+        -ldflags "-s -w -X github.com/mirivlad/mirvmon/agent/internal/buildinfo.Version=${APP_VERSION} -X github.com/mirivlad/mirvmon/agent/internal/buildinfo.Artifact=linux-amd64" \
         -o /tmp/mirvmon-agent-linux-amd64 ./cmd/mirvmon-agent; \
     cmp /out/mirvmon-agent-linux-amd64 /tmp/mirvmon-agent-linux-amd64; \
     export GOOS=windows GOARCH=amd64 GOAMD64=v1; \
     go build -trimpath -buildvcs=false \
-        -ldflags "-s -w -X github.com/mirivlad/mirvmon/agent/internal/buildinfo.Version=${APP_VERSION}" \
+        -ldflags "-s -w -X github.com/mirivlad/mirvmon/agent/internal/buildinfo.Version=${APP_VERSION} -X github.com/mirivlad/mirvmon/agent/internal/buildinfo.Artifact=windows-amd64" \
         -o /out/mirvmon-agent-windows-amd64.exe ./cmd/mirvmon-agent; \
     go build -trimpath -buildvcs=false \
-        -ldflags "-s -w -X github.com/mirivlad/mirvmon/agent/internal/buildinfo.Version=${APP_VERSION}" \
+        -ldflags "-s -w -X github.com/mirivlad/mirvmon/agent/internal/buildinfo.Version=${APP_VERSION} -X github.com/mirivlad/mirvmon/agent/internal/buildinfo.Artifact=windows-amd64" \
         -o /tmp/mirvmon-agent-windows-amd64.exe ./cmd/mirvmon-agent; \
     cmp /out/mirvmon-agent-windows-amd64.exe /tmp/mirvmon-agent-windows-amd64.exe
 
@@ -45,14 +45,16 @@ COPY agent ./
 RUN set -eux; \
     export CGO_ENABLED=0 GOOS=windows GOARCH=amd64 GOAMD64=v1; \
     go build -trimpath -buildvcs=false \
-        -ldflags "-s -w -X github.com/mirivlad/mirvmon/agent/internal/buildinfo.Version=${APP_VERSION}" \
+        -ldflags "-s -w -X github.com/mirivlad/mirvmon/agent/internal/buildinfo.Version=${APP_VERSION} -X github.com/mirivlad/mirvmon/agent/internal/buildinfo.Artifact=windows-legacy-amd64" \
         -o /out/mirvmon-agent-windows-legacy-amd64.exe ./cmd/mirvmon-agent; \
     go build -trimpath -buildvcs=false \
-        -ldflags "-s -w -X github.com/mirivlad/mirvmon/agent/internal/buildinfo.Version=${APP_VERSION}" \
+        -ldflags "-s -w -X github.com/mirivlad/mirvmon/agent/internal/buildinfo.Version=${APP_VERSION} -X github.com/mirivlad/mirvmon/agent/internal/buildinfo.Artifact=windows-legacy-amd64" \
         -o /tmp/mirvmon-agent-windows-legacy-amd64.exe ./cmd/mirvmon-agent; \
     cmp /out/mirvmon-agent-windows-legacy-amd64.exe /tmp/mirvmon-agent-windows-legacy-amd64.exe
 
 FROM agent-modern AS agent-manifest
+
+ARG APP_VERSION
 
 COPY --from=agent-legacy /out/mirvmon-agent-windows-legacy-amd64.exe /out/mirvmon-agent-windows-legacy-amd64.exe
 
@@ -61,12 +63,16 @@ RUN set -eu; \
     linux_sha256=$(sha256sum mirvmon-agent-linux-amd64 | cut -d ' ' -f 1); \
     windows_sha256=$(sha256sum mirvmon-agent-windows-amd64.exe | cut -d ' ' -f 1); \
     legacy_windows_sha256=$(sha256sum mirvmon-agent-windows-legacy-amd64.exe | cut -d ' ' -f 1); \
+    linux_size=$(stat -c %s mirvmon-agent-linux-amd64); \
+    windows_size=$(stat -c %s mirvmon-agent-windows-amd64.exe); \
+    legacy_windows_size=$(stat -c %s mirvmon-agent-windows-legacy-amd64.exe); \
     printf '%s\n' \
         '{' \
+        '  "version": "'"$APP_VERSION"'",' \
         '  "artifacts": {' \
-        '    "linux-amd64": {"filename": "mirvmon-agent-linux-amd64", "sha256": "'"$linux_sha256"'", "content_type": "application/octet-stream"},' \
-        '    "windows-amd64": {"filename": "mirvmon-agent-windows-amd64.exe", "sha256": "'"$windows_sha256"'", "content_type": "application/octet-stream"},' \
-        '    "windows-legacy-amd64": {"filename": "mirvmon-agent-windows-legacy-amd64.exe", "sha256": "'"$legacy_windows_sha256"'", "content_type": "application/octet-stream"}' \
+        '    "linux-amd64": {"filename": "mirvmon-agent-linux-amd64", "sha256": "'"$linux_sha256"'", "size": '"$linux_size"', "content_type": "application/octet-stream"},' \
+        '    "windows-amd64": {"filename": "mirvmon-agent-windows-amd64.exe", "sha256": "'"$windows_sha256"'", "size": '"$windows_size"', "content_type": "application/octet-stream"},' \
+        '    "windows-legacy-amd64": {"filename": "mirvmon-agent-windows-legacy-amd64.exe", "sha256": "'"$legacy_windows_sha256"'", "size": '"$legacy_windows_size"', "content_type": "application/octet-stream"}' \
         '  }' \
         '}' > manifest.json
 

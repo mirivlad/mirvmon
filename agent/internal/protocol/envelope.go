@@ -16,22 +16,26 @@ import (
 )
 
 var (
-	ErrInvalidToken        = errors.New("invalid token")
-	ErrInvalidAgentVersion = errors.New("invalid agent version")
-	ErrInvalidOSVersion    = errors.New("invalid OS version")
-	ErrInvalidSampleID     = errors.New("invalid sample ID")
-	ErrInvalidMetricName   = errors.New("invalid metric name")
-	ErrInvalidMetricValue  = errors.New("invalid metric value")
-	ErrTooManyMetrics      = errors.New("too many metrics")
-	ErrInvalidServices     = errors.New("invalid services")
-	ErrInvalidSnapshot     = errors.New("invalid process snapshot")
+	ErrInvalidToken         = errors.New("invalid token")
+	ErrInvalidAgentVersion  = errors.New("invalid agent version")
+	ErrInvalidAgentArtifact = errors.New("invalid agent artifact")
+	ErrInvalidCapabilities  = errors.New("invalid agent capabilities")
+	ErrInvalidOSVersion     = errors.New("invalid OS version")
+	ErrInvalidSampleID      = errors.New("invalid sample ID")
+	ErrInvalidMetricName    = errors.New("invalid metric name")
+	ErrInvalidMetricValue   = errors.New("invalid metric value")
+	ErrTooManyMetrics       = errors.New("too many metrics")
+	ErrInvalidServices      = errors.New("invalid services")
+	ErrInvalidSnapshot      = errors.New("invalid process snapshot")
 )
 
 var (
-	agentVersionPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,31}$`)
-	metricNamePattern   = regexp.MustCompile(`^[a-z][a-z0-9_]{0,99}$`)
-	serviceNamePattern  = regexp.MustCompile(`^[A-Za-z0-9_.@:-]{1,255}$`)
-	sampleIDPattern     = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+	agentVersionPattern  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,31}$`)
+	agentArtifactPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
+	capabilityPattern    = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+	metricNamePattern    = regexp.MustCompile(`^[a-z][a-z0-9_]{0,99}$`)
+	serviceNamePattern   = regexp.MustCompile(`^[A-Za-z0-9_.@:-]{1,255}$`)
+	sampleIDPattern      = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 )
 
 // ServiceState matches the strict server-side services object.
@@ -67,15 +71,17 @@ type Measurement struct {
 
 // Envelope is the JSON payload accepted by POST /api/v1/metrics.
 type Envelope struct {
-	Version         int                `json:"version"`
-	AgentVersion    string             `json:"agent_version"`
-	OSVersion       string             `json:"os_version"`
-	SampleID        string             `json:"sample_id"`
-	SampleTime      string             `json:"sample_time"`
-	Token           string             `json:"token"`
-	Metrics         map[string]float64 `json:"metrics"`
-	Services        []ServiceState     `json:"services,omitempty"`
-	ProcessSnapshot *ProcessSnapshot   `json:"process_snapshot,omitempty"`
+	Version           int                `json:"version"`
+	AgentVersion      string             `json:"agent_version"`
+	AgentArtifact     string             `json:"agent_artifact,omitempty"`
+	AgentCapabilities []string           `json:"agent_capabilities,omitempty"`
+	OSVersion         string             `json:"os_version"`
+	SampleID          string             `json:"sample_id"`
+	SampleTime        string             `json:"sample_time"`
+	Token             string             `json:"token"`
+	Metrics           map[string]float64 `json:"metrics"`
+	Services          []ServiceState     `json:"services,omitempty"`
+	ProcessSnapshot   *ProcessSnapshot   `json:"process_snapshot,omitempty"`
 }
 
 // Metadata is the small stable identity subset used by queue migration.
@@ -86,12 +92,28 @@ type Metadata struct {
 }
 
 // NewEnvelope validates collector output against the v2 server contract.
-func NewEnvelope(token, agentVersion string, measurement Measurement, now time.Time, sampleID string) (Envelope, error) {
+func NewEnvelope(token, agentVersion, agentArtifact string, agentCapabilities []string, measurement Measurement, now time.Time, sampleID string) (Envelope, error) {
 	if len(token) < 32 || len(token) > 512 {
 		return Envelope{}, ErrInvalidToken
 	}
 	if !agentVersionPattern.MatchString(agentVersion) {
 		return Envelope{}, ErrInvalidAgentVersion
+	}
+	if !agentArtifactPattern.MatchString(agentArtifact) {
+		return Envelope{}, ErrInvalidAgentArtifact
+	}
+	if len(agentCapabilities) > 16 {
+		return Envelope{}, ErrInvalidCapabilities
+	}
+	seenCapabilities := make(map[string]struct{}, len(agentCapabilities))
+	for _, capability := range agentCapabilities {
+		if !capabilityPattern.MatchString(capability) {
+			return Envelope{}, ErrInvalidCapabilities
+		}
+		if _, exists := seenCapabilities[capability]; exists {
+			return Envelope{}, ErrInvalidCapabilities
+		}
+		seenCapabilities[capability] = struct{}{}
 	}
 	if !validOSVersion(measurement.OSVersion) {
 		return Envelope{}, ErrInvalidOSVersion
@@ -110,15 +132,17 @@ func NewEnvelope(token, agentVersion string, measurement Measurement, now time.T
 	}
 
 	return Envelope{
-		Version:         2,
-		AgentVersion:    agentVersion,
-		OSVersion:       measurement.OSVersion,
-		SampleID:        strings.ToLower(sampleID),
-		SampleTime:      now.UTC().Format("2006-01-02T15:04:05Z"),
-		Token:           token,
-		Metrics:         measurement.Metrics,
-		Services:        measurement.Services,
-		ProcessSnapshot: measurement.ProcessSnapshot,
+		Version:           2,
+		AgentVersion:      agentVersion,
+		AgentArtifact:     agentArtifact,
+		AgentCapabilities: append([]string(nil), agentCapabilities...),
+		OSVersion:         measurement.OSVersion,
+		SampleID:          strings.ToLower(sampleID),
+		SampleTime:        now.UTC().Format("2006-01-02T15:04:05Z"),
+		Token:             token,
+		Metrics:           measurement.Metrics,
+		Services:          measurement.Services,
+		ProcessSnapshot:   measurement.ProcessSnapshot,
 	}, nil
 }
 

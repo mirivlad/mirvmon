@@ -50,6 +50,7 @@ type Dependencies struct {
 	Config    config.Config
 	Version   string
 	Commit    string
+	Artifact  string
 	Now       func() time.Time
 	SampleID  func() (string, error)
 }
@@ -62,6 +63,7 @@ type Runner struct {
 	config         config.Config
 	version        string
 	commit         string
+	artifact       string
 	now            func() time.Time
 	sampleID       func() (string, error)
 	health         health.Store
@@ -87,6 +89,7 @@ func New(dependencies Dependencies) (*Runner, error) {
 		config:    dependencies.Config,
 		version:   dependencies.Version,
 		commit:    dependencies.Commit,
+		artifact:  dependencies.Artifact,
 		now:       dependencies.Now,
 		sampleID:  dependencies.SampleID,
 		health:    health.New(dependencies.Config.QueuePath),
@@ -174,7 +177,15 @@ func (runner *Runner) collectAndFlush(context context.Context) error {
 	if err != nil {
 		return err
 	}
-	envelope, err := protocol.NewEnvelope(runner.config.Token, runner.version, measurement, runner.now(), sampleID)
+	envelope, err := protocol.NewEnvelope(
+		runner.config.Token,
+		runner.version,
+		runner.artifact,
+		[]string{"self_update_v1"},
+		measurement,
+		runner.now(),
+		sampleID,
+	)
 	if err != nil {
 		return err
 	}

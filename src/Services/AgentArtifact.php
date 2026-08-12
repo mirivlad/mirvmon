@@ -11,6 +11,7 @@ final readonly class AgentArtifact
         public string $filename,
         public string $path,
         public string $sha256,
+        public int $size,
         public string $contentType
     ) {
     }

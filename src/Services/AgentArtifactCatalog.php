@@ -16,7 +16,10 @@ final class AgentArtifactCatalog
     ];
 
     /** @param array<string, AgentArtifact> $artifacts */
-    private function __construct(private readonly array $artifacts)
+    private function __construct(
+        private readonly string $version,
+        private readonly array $artifacts
+    )
     {
     }
 
@@ -35,7 +38,9 @@ final class AgentArtifactCatalog
         }
         if (
             !is_array($manifest)
-            || array_keys($manifest) !== ['artifacts']
+            || array_keys($manifest) !== ['version', 'artifacts']
+            || !is_string($manifest['version'])
+            || preg_match('/^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$/', $manifest['version']) !== 1
             || !is_array($manifest['artifacts'])
             || array_keys($manifest['artifacts']) !== array_keys(self::FILENAMES)
         ) {
@@ -45,28 +50,36 @@ final class AgentArtifactCatalog
         $artifacts = [];
         foreach (self::FILENAMES as $key => $expectedFilename) {
             $value = $manifest['artifacts'][$key] ?? null;
-            if (!is_array($value) || array_keys($value) !== ['filename', 'sha256', 'content_type']) {
+            if (!is_array($value) || array_keys($value) !== ['filename', 'sha256', 'size', 'content_type']) {
                 throw new RuntimeException('Native agent artifact manifest is invalid.');
             }
             $filename = $value['filename'] ?? null;
             $checksum = $value['sha256'] ?? null;
+            $size = $value['size'] ?? null;
             $contentType = $value['content_type'] ?? null;
             if (
                 $filename !== $expectedFilename
                 || !is_string($checksum)
                 || preg_match('/^[a-f0-9]{64}$/', $checksum) !== 1
+                || !is_int($size)
+                || $size < 1
                 || $contentType !== 'application/octet-stream'
             ) {
                 throw new RuntimeException('Native agent artifact manifest is invalid.');
             }
             $path = rtrim($directory, '/') . '/' . $filename;
-            if (!is_file($path) || !hash_equals($checksum, hash_file('sha256', $path) ?: '')) {
+            if (!is_file($path) || filesize($path) !== $size || !hash_equals($checksum, hash_file('sha256', $path) ?: '')) {
                 throw new RuntimeException('Native agent artifact checksum is invalid.');
             }
-            $artifacts[$key] = new AgentArtifact($key, $filename, $path, $checksum, $contentType);
+            $artifacts[$key] = new AgentArtifact($key, $filename, $path, $checksum, $size, $contentType);
         }
 
-        return new self($artifacts);
+        return new self($manifest['version'], $artifacts);
+    }
+
+    public function version(): string
+    {
+        return $this->version;
     }
 
     public function require(string $key): AgentArtifact

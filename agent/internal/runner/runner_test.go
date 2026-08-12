@@ -169,9 +169,10 @@ func newTestRunner(t *testing.T, queue *recordingQueue, api *fakeAPI) *Runner {
 			Enabled:         true,
 			QueueLimit:      1000,
 		},
-		Version: "1.2.0",
-		Commit:  "0123456789abcdef",
-		Now:     func() time.Time { return time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC) },
+		Version:  "1.2.0",
+		Commit:   "0123456789abcdef",
+		Artifact: "linux-amd64",
+		Now:      func() time.Time { return time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC) },
 		SampleID: func() (string, error) {
 			return "018f47a2-8e4c-7d0a-8d8b-45de8fd746a1", nil
 		},
