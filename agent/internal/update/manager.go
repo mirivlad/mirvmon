@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -39,8 +40,13 @@ func (manager Manager) Process(
 	if err != nil {
 		return err
 	}
-	if !accepted && state.State != StateAccepted && state.State != StateDownloading {
-		return report(context, command, state.State, state.ErrorCode)
+	if !accepted {
+		if err := report(context, command, state.State, state.ErrorCode); err != nil {
+			return err
+		}
+		if state.State == StateAwaitingRestart || state.State == StateSucceeded || state.State == StateFailed {
+			return nil
+		}
 	}
 	if accepted {
 		if err := report(context, command, StateAccepted, ""); err != nil {
@@ -54,6 +60,7 @@ func (manager Manager) Process(
 		if err := report(context, command, StateDownloading, ""); err != nil {
 			return err
 		}
+		state.State = StateDownloading
 	}
 	directory := filepath.Dir(manager.Store.Path())
 	suffix := ""
@@ -61,14 +68,24 @@ func (manager Manager) Process(
 		suffix = ".exe"
 	}
 	stagedPath := filepath.Join(directory, "update-staged"+suffix)
-	if err := manager.Downloader.Stage(context, command, stagedPath); err != nil {
-		return manager.fail(context, command, report, errorCode(err), err)
+	if state.State == StateDownloading {
+		if err := manager.Downloader.Stage(context, command, stagedPath); err != nil {
+			return manager.fail(context, command, report, errorCode(err), err)
+		}
+		if err := manager.Store.Advance(command.ID, StateInstalling, ""); err != nil {
+			return err
+		}
+		if err := report(context, command, StateInstalling, ""); err != nil {
+			return err
+		}
+		state.State = StateInstalling
 	}
-	if err := manager.Store.Advance(command.ID, StateInstalling, ""); err != nil {
-		return err
+	if state.State != StateInstalling {
+		return ErrInvalidCommand
 	}
-	if err := report(context, command, StateInstalling, ""); err != nil {
-		return err
+	handoffPath := filepath.Join(directory, "update-handoff")
+	if marker, err := os.ReadFile(handoffPath); err == nil && string(marker) == command.ID {
+		return nil
 	}
 	requestPath := filepath.Join(directory, "update-request.json")
 	contents, err := json.Marshal(command)
@@ -81,12 +98,15 @@ func (manager Manager) Process(
 	if manager.Handoff != nil {
 		if err := manager.Handoff(requestPath); err != nil {
 			if errors.Is(err, ErrRestartRequired) {
+				if writeErr := atomicfile.Write(handoffPath, []byte(command.ID), 0600); writeErr != nil {
+					return writeErr
+				}
 				return err
 			}
 			return manager.fail(context, command, report, "handoff_failed", err)
 		}
 	}
-	return nil
+	return atomicfile.Write(handoffPath, []byte(command.ID), 0600)
 }
 
 func (manager Manager) fail(

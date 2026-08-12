@@ -14,8 +14,21 @@ func TestExecuteVersionDoesNotExposeConfiguration(t *testing.T) {
 	if code != exitSuccess {
 		t.Fatalf("exit=%d stderr=%s", code, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "dev unknown") || strings.Contains(stdout.String(), "token") {
+	if !strings.Contains(stdout.String(), "dev unknown") ||
+		!strings.Contains(stdout.String(), "development") ||
+		strings.Contains(stdout.String(), "token") {
 		t.Fatalf("unexpected version output: %q", stdout.String())
+	}
+}
+
+func TestExecuteApplyUpdateRejectsIncompleteArguments(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := execute([]string{"apply-update", "--request", "/tmp/request.json"}, &stdout, &stderr)
+	if code != exitInvalid {
+		t.Fatalf("exit=%d stderr=%s", code, stderr.String())
+	}
+	if strings.Contains(stderr.String(), "/tmp/request.json") {
+		t.Fatalf("arguments leaked: %q", stderr.String())
 	}
 }
 
