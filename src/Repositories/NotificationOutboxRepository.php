@@ -741,7 +741,10 @@ final class NotificationOutboxRepository
         return (int) $statement->fetchColumn();
     }
 
-    /** @param list<int> $ids @return array{string, array<string, int>} */
+    /**
+     * @param list<int> $ids
+     * @return array{0: string, 1: array<string, int>}
+     */
     private function idsWhere(array $ids): array
     {
         $parameters = [];
