@@ -206,6 +206,38 @@ final class MetricsValidatorTest extends TestCase
         $validator->validate($payload);
     }
 
+    public function testAgentUpdateIdentityIsOptionalStrictAndBounded(): void
+    {
+        $payload = $this->validPayload();
+        $envelope = $this->validator->validate($payload, $this->now);
+        self::assertNull($envelope->agentArtifact);
+        self::assertSame([], $envelope->agentCapabilities);
+
+        $payload['agent_artifact'] = 'windows-legacy-amd64';
+        $payload['agent_capabilities'] = ['self_update_v1'];
+        $envelope = $this->validator->validate($payload, $this->now);
+        self::assertSame('windows-legacy-amd64', $envelope->agentArtifact);
+        self::assertSame(['self_update_v1'], $envelope->agentCapabilities);
+
+        foreach ([
+            ['artifact' => '../linux', 'capabilities' => ['self_update_v1']],
+            ['artifact' => 'linux-amd64', 'capabilities' => ['self_update_v1', 'self_update_v1']],
+            ['artifact' => 'linux-amd64', 'capabilities' => ['BAD']],
+        ] as $invalid) {
+            $payload['agent_artifact'] = $invalid['artifact'];
+            $payload['agent_capabilities'] = $invalid['capabilities'];
+            try {
+                $this->validator->validate($payload, $this->now);
+                self::fail('Expected invalid agent update identity.');
+            } catch (MetricsValidationException $exception) {
+                self::assertContains($exception->errorCode, [
+                    'invalid_agent_artifact',
+                    'invalid_agent_capabilities',
+                ]);
+            }
+        }
+    }
+
     public function testOperatingSystemVersionIsOptionalNormalizedAndBounded(): void
     {
         $payload = $this->validPayload();

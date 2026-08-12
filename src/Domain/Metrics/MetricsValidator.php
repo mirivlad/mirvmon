@@ -20,6 +20,8 @@ final class MetricsValidator
         'process_snapshot',
         'agent_version',
         'os_version',
+        'agent_artifact',
+        'agent_capabilities',
     ];
     private const SERVICE_FIELDS = [
         'name',
@@ -92,6 +94,10 @@ final class MetricsValidator
         }
 
         $agentVersion = $this->agentVersion($payload['agent_version'] ?? null);
+        $agentArtifact = $this->agentArtifact($payload['agent_artifact'] ?? null);
+        $agentCapabilities = $this->agentCapabilities(
+            $payload['agent_capabilities'] ?? []
+        );
 
         $osVersion = $this->osVersion($payload['os_version'] ?? null);
         $metrics = $this->metrics($payload['metrics'] ?? null);
@@ -107,7 +113,9 @@ final class MetricsValidator
             $services,
             $snapshot,
             $agentVersion,
-            $osVersion
+            $osVersion,
+            $agentArtifact,
+            $agentCapabilities
         );
     }
 
@@ -127,6 +135,42 @@ final class MetricsValidator
         }
 
         return $value;
+    }
+
+    private function agentArtifact(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        if (
+            !is_string($value)
+            || preg_match('/^[a-z0-9][a-z0-9-]{0,63}$/', $value) !== 1
+        ) {
+            throw new MetricsValidationException('invalid_agent_artifact');
+        }
+
+        return $value;
+    }
+
+    /** @return list<string> */
+    private function agentCapabilities(mixed $value): array
+    {
+        if (!is_array($value) || !array_is_list($value) || count($value) > 16) {
+            throw new MetricsValidationException('invalid_agent_capabilities');
+        }
+        $capabilities = [];
+        foreach ($value as $capability) {
+            if (
+                !is_string($capability)
+                || preg_match('/^[a-z][a-z0-9_]{0,63}$/', $capability) !== 1
+                || isset($capabilities[$capability])
+            ) {
+                throw new MetricsValidationException('invalid_agent_capabilities');
+            }
+            $capabilities[$capability] = true;
+        }
+
+        return array_keys($capabilities);
     }
 
     /**

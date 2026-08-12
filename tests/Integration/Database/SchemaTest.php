@@ -187,7 +187,7 @@ final class SchemaTest extends TestCase
         self::assertSame([], $migrator->migrate());
 
         $count = self::$pdo?->query('SELECT count(*) FROM schema_migrations')->fetchColumn();
-        self::assertSame('14', (string) $count);
+        self::assertSame('15', (string) $count);
     }
 
     public function testReportedOperatingSystemColumnIsNullable(): void
@@ -200,5 +200,25 @@ final class SchemaTest extends TestCase
                AND column_name = 'os_version'"
         )->fetch(PDO::FETCH_NUM);
         self::assertSame(['YES', 255], $column);
+    }
+
+    public function testAgentSelfUpdateSchemaHasBoundedCommandState(): void
+    {
+        $columns = self::$pdo?->query(
+            "SELECT column_name
+             FROM information_schema.columns
+             WHERE table_schema = 'public'
+               AND table_name = 'servers'
+               AND column_name IN ('agent_artifact', 'agent_capabilities')
+             ORDER BY column_name"
+        )->fetchAll(PDO::FETCH_COLUMN);
+        self::assertSame(['agent_artifact', 'agent_capabilities'], $columns);
+
+        self::assertSame('agent_update_commands', self::$pdo?->query(
+            "SELECT table_name
+             FROM information_schema.tables
+             WHERE table_schema = 'public'
+               AND table_name = 'agent_update_commands'"
+        )->fetchColumn());
     }
 }

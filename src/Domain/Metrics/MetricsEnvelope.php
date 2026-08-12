@@ -21,6 +21,7 @@ final readonly class MetricsEnvelope
      *     top_cpu: list<array{pid: int, name: string, command: string, value: float}>,
      *     top_memory: list<array{pid: int, name: string, command: string, value: float}>
      * }|null $processSnapshot
+     * @param list<string> $agentCapabilities
      */
     public function __construct(
         public int $version,
@@ -31,7 +32,9 @@ final readonly class MetricsEnvelope
         public array $services,
         public ?array $processSnapshot,
         public ?string $agentVersion = null,
-        public ?string $osVersion = null
+        public ?string $osVersion = null,
+        public ?string $agentArtifact = null,
+        public array $agentCapabilities = []
     ) {
     }
 }

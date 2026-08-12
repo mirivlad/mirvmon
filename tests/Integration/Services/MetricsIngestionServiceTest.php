@@ -317,7 +317,10 @@ final class MetricsIngestionServiceTest extends TestCase
                 ]],
                 'top_memory' => [],
             ],
-            '2.0.0'
+            '2.0.0',
+            null,
+            'linux-amd64',
+            ['self_update_v1']
         );
 
         $this->ingestion->ingest($envelope);
@@ -326,6 +329,11 @@ final class MetricsIngestionServiceTest extends TestCase
         self::assertSame('2.0.0', (string) self::$pdo?->query(
             'SELECT agent_version FROM servers WHERE id = ' . $this->serverId
         )->fetchColumn());
+        $identity = self::$pdo?->query(
+            'SELECT agent_artifact, agent_capabilities::text
+             FROM servers WHERE id = ' . $this->serverId
+        )->fetch(PDO::FETCH_NUM);
+        self::assertSame(['linux-amd64', '["self_update_v1"]'], $identity);
         self::assertSame(1, $this->tableCount('metric_samples'));
         self::assertStringContainsString(
             '"top_cpu"',
