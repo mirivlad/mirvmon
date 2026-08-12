@@ -22,6 +22,7 @@ final class AdminNotificationControllerTest extends TestCase
     private static ?PDO $pdo = null;
     private AdminController $controller;
     private Twig $twig;
+    private NotificationOutboxRepository $outbox;
 
     public static function setUpBeforeClass(): void
     {
@@ -53,11 +54,12 @@ final class AdminNotificationControllerTest extends TestCase
             self::$pdo,
             new SecretCipher(str_repeat('a', 32))
         );
+        $this->outbox = new NotificationOutboxRepository(self::$pdo);
         $this->controller = new AdminController(
             self::$pdo,
             $this->twig,
             $settings,
-            new NotificationOutboxRepository(self::$pdo),
+            $this->outbox,
             new WorkerHeartbeatRepository(self::$pdo)
         );
     }
@@ -194,6 +196,64 @@ final class AdminNotificationControllerTest extends TestCase
         self::assertSame(302, $response->getStatusCode());
         self::assertSame('/admin/notifications', $response->getHeaderLine('Location'));
         self::assertSame(['pending' => 3], $outbox->statusCounts());
+    }
+
+    public function testOutboxFiltersAndDeletesOnlyMatchingJobs(): void
+    {
+        $deadId = $this->seedQueueJob('email', 'dead', 'smtp_timeout');
+        $pendingId = $this->seedQueueJob('telegram', 'pending', null);
+
+        $filters = $this->outbox->filters([
+            'status' => ['dead'],
+            'channel' => 'email',
+            'error' => 'timeout',
+        ]);
+
+        self::assertSame(
+            [$deadId],
+            array_column($this->outbox->page($filters, 1)['jobs'], 'id')
+        );
+        self::assertSame(1, $this->outbox->deleteMatching($filters));
+        self::assertSame(
+            $pendingId,
+            (int) self::$pdo?->query(
+                'SELECT id FROM notification_outbox WHERE id = ' . $pendingId
+            )->fetchColumn()
+        );
+    }
+
+    private function seedQueueJob(
+        string $channel,
+        string $status,
+        ?string $error
+    ): int {
+        $statement = self::$pdo?->prepare(
+            'INSERT INTO notification_outbox (
+                channel,
+                recipient,
+                event_type,
+                payload,
+                status,
+                last_error
+             ) VALUES (
+                :channel,
+                :recipient,
+                :event_type,
+                CAST(:payload AS jsonb),
+                :status,
+                :last_error
+             ) RETURNING id'
+        );
+        $statement?->execute([
+            'channel' => $channel,
+            'recipient' => 'test@example.net',
+            'event_type' => 'test',
+            'payload' => json_encode(['message' => 'safe'], JSON_THROW_ON_ERROR),
+            'status' => $status,
+            'last_error' => $error,
+        ]);
+
+        return (int) $statement?->fetchColumn();
     }
 
     /** @return array<string, mixed> */

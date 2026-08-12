@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Repositories;
 
+use DateTimeImmutable;
 use JsonException;
 use PDO;
 use RuntimeException;
@@ -469,6 +470,326 @@ final class NotificationOutboxRepository
         unset($job);
 
         return $jobs;
+    }
+
+    /**
+     * Normalize the supported notification-queue filters before they reach
+     * dynamic SQL. Unknown values intentionally become empty filters.
+     *
+     * @param array<string, mixed> $input
+     * @return array{
+     *     statuses:list<string>,
+     *     channel:?string,
+     *     server_id:?int,
+     *     from:?string,
+     *     to:?string,
+     *     error:?string
+     * }
+     */
+    public function filters(array $input): array
+    {
+        $statusInput = $input['status'] ?? [];
+        if (!is_array($statusInput)) {
+            $statusInput = [$statusInput];
+        }
+        $statuses = [];
+        foreach ($statusInput as $status) {
+            if (
+                is_string($status)
+                && in_array(
+                    $status,
+                    ['pending', 'processing', 'sent', 'failed', 'dead'],
+                    true
+                )
+                && !in_array($status, $statuses, true)
+            ) {
+                $statuses[] = $status;
+            }
+        }
+
+        $channel = $input['channel'] ?? null;
+        $serverId = filter_var(
+            $input['server'] ?? null,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1]]
+        );
+
+        return [
+            'statuses' => $statuses,
+            'channel' => is_string($channel)
+                && in_array($channel, ['email', 'telegram'], true)
+                ? $channel
+                : null,
+            'server_id' => $serverId === false ? null : $serverId,
+            'from' => $this->dateBoundary($input['from'] ?? null, false),
+            'to' => $this->dateBoundary($input['to'] ?? null, true),
+            'error' => $this->substring($input['error'] ?? null),
+        ];
+    }
+
+    /**
+     * @param array{
+     *     statuses:list<string>,
+     *     channel:?string,
+     *     server_id:?int,
+     *     from:?string,
+     *     to:?string,
+     *     error:?string
+     * } $filters
+     * @return array{jobs:list<array<string, mixed>>,total:int,pages:int}
+     */
+    public function page(array $filters, int $page, int $perPage = 25): array
+    {
+        if ($perPage < 1 || $perPage > 100) {
+            throw new RuntimeException('Outbox page size must be between 1 and 100.');
+        }
+
+        [$where, $parameters] = $this->whereClause($filters);
+        $total = $this->countWhere($where, $parameters);
+        $pages = max(1, (int) ceil($total / $perPage));
+        $page = max(1, min($page, $pages));
+
+        $statement = $this->pdo->prepare(
+            'SELECT
+                jobs.id,
+                jobs.channel,
+                jobs.recipient,
+                jobs.event_type,
+                jobs.payload::text AS payload_json,
+                jobs.status,
+                jobs.attempts,
+                jobs.last_error,
+                jobs.created_at,
+                jobs.available_at,
+                jobs.sent_at,
+                servers.name AS server_name
+             FROM notification_outbox AS jobs
+             LEFT JOIN servers ON servers.id = jobs.server_id'
+            . $where
+            . ' ORDER BY jobs.id DESC
+                LIMIT :limit OFFSET :offset'
+        );
+        foreach ($parameters as $name => $value) {
+            $statement->bindValue($name, $value);
+        }
+        $statement->bindValue('limit', $perPage, PDO::PARAM_INT);
+        $statement->bindValue('offset', ($page - 1) * $perPage, PDO::PARAM_INT);
+        $statement->execute();
+
+        $jobs = $statement->fetchAll();
+        foreach ($jobs as &$job) {
+            $job['id'] = (int) $job['id'];
+            $job['attempts'] = (int) $job['attempts'];
+            try {
+                $job['payload_pretty'] = json_encode(
+                    json_decode(
+                        (string) $job['payload_json'],
+                        true,
+                        512,
+                        JSON_THROW_ON_ERROR
+                    ),
+                    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+                );
+            } catch (JsonException) {
+                $job['payload_pretty'] = '{}';
+            }
+            unset($job['payload_json']);
+        }
+        unset($job);
+
+        return ['jobs' => $jobs, 'total' => $total, 'pages' => $pages];
+    }
+
+    /**
+     * @param array{
+     *     statuses:list<string>,
+     *     channel:?string,
+     *     server_id:?int,
+     *     from:?string,
+     *     to:?string,
+     *     error:?string
+     * } $filters
+     */
+    public function countMatching(array $filters): int
+    {
+        [$where, $parameters] = $this->whereClause($filters);
+
+        return $this->countWhere($where, $parameters);
+    }
+
+    /** @param list<int> $ids */
+    public function retryByIds(array $ids): int
+    {
+        [$where, $parameters] = $this->idsWhere($ids);
+        if ($where === '') {
+            return 0;
+        }
+        $statement = $this->pdo->prepare(
+            "UPDATE notification_outbox
+             SET
+                status = 'pending',
+                attempts = 0,
+                available_at = CURRENT_TIMESTAMP,
+                locked_at = NULL,
+                last_error = NULL
+             WHERE status IN ('failed', 'dead')" . $where
+        );
+        $statement->execute($parameters);
+
+        return $statement->rowCount();
+    }
+
+    /** @param list<int> $ids */
+    public function deleteByIds(array $ids): int
+    {
+        [$where, $parameters] = $this->idsWhere($ids);
+        if ($where === '') {
+            return 0;
+        }
+        $statement = $this->pdo->prepare(
+            'DELETE FROM notification_outbox WHERE TRUE' . $where
+        );
+        $statement->execute($parameters);
+
+        return $statement->rowCount();
+    }
+
+    /**
+     * @param array{
+     *     statuses:list<string>,
+     *     channel:?string,
+     *     server_id:?int,
+     *     from:?string,
+     *     to:?string,
+     *     error:?string
+     * } $filters
+     */
+    public function deleteMatching(array $filters): int
+    {
+        [$where, $parameters] = $this->whereClause($filters);
+        $statement = $this->pdo->prepare(
+            'DELETE FROM notification_outbox AS jobs' . $where
+        );
+        $statement->execute($parameters);
+
+        return $statement->rowCount();
+    }
+
+    /**
+     * @param array{
+     *     statuses:list<string>,
+     *     channel:?string,
+     *     server_id:?int,
+     *     from:?string,
+     *     to:?string,
+     *     error:?string
+     * } $filters
+     * @return array{string, array<string, mixed>}
+     */
+    private function whereClause(array $filters): array
+    {
+        $conditions = [];
+        $parameters = [];
+        foreach ($filters['statuses'] as $index => $status) {
+            $name = 'status_' . $index;
+            $conditions[] = 'jobs.status = :' . $name;
+            $parameters[$name] = $status;
+        }
+        if ($filters['statuses'] !== []) {
+            $statusConditions = array_splice(
+                $conditions,
+                0,
+                count($filters['statuses'])
+            );
+            $conditions[] = '(' . implode(' OR ', $statusConditions) . ')';
+        }
+        if ($filters['channel'] !== null) {
+            $conditions[] = 'jobs.channel = :channel';
+            $parameters['channel'] = $filters['channel'];
+        }
+        if ($filters['server_id'] !== null) {
+            $conditions[] = 'jobs.server_id = :server_id';
+            $parameters['server_id'] = $filters['server_id'];
+        }
+        if ($filters['from'] !== null) {
+            $conditions[] = 'jobs.created_at >= CAST(:from AS timestamptz)';
+            $parameters['from'] = $filters['from'];
+        }
+        if ($filters['to'] !== null) {
+            $conditions[] = 'jobs.created_at < CAST(:to AS timestamptz)';
+            $parameters['to'] = $filters['to'];
+        }
+        if ($filters['error'] !== null) {
+            $conditions[] = "jobs.last_error ILIKE :error ESCAPE E'\\\\'";
+            $parameters['error'] = '%' . $this->escapeLike($filters['error']) . '%';
+        }
+
+        return [
+            $conditions === [] ? '' : ' WHERE ' . implode(' AND ', $conditions),
+            $parameters,
+        ];
+    }
+
+    /** @param array<string, mixed> $parameters */
+    private function countWhere(string $where, array $parameters): int
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT count(*) FROM notification_outbox AS jobs' . $where
+        );
+        $statement->execute($parameters);
+
+        return (int) $statement->fetchColumn();
+    }
+
+    /** @param list<int> $ids @return array{string, array<string, int>} */
+    private function idsWhere(array $ids): array
+    {
+        $parameters = [];
+        foreach (array_values(array_unique($ids)) as $index => $id) {
+            if ($id > 0) {
+                $parameters['id_' . $index] = $id;
+            }
+        }
+        if ($parameters === []) {
+            return ['', []];
+        }
+
+        return [
+            ' AND jobs.id IN (:' . implode(', :', array_keys($parameters)) . ')',
+            $parameters,
+        ];
+    }
+
+    private function dateBoundary(mixed $value, bool $end): ?string
+    {
+        if (
+            !is_string($value)
+            || preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) !== 1
+        ) {
+            return null;
+        }
+        try {
+            $date = new DateTimeImmutable($value . 'T00:00:00+00:00');
+        } catch (Throwable) {
+            return null;
+        }
+
+        return ($end ? $date->modify('+1 day') : $date)->format(DATE_ATOM);
+    }
+
+    private function substring(mixed $value): ?string
+    {
+        if (!is_string($value)) {
+            return null;
+        }
+        $value = trim($value);
+
+        return $value === '' ? null : substr($value, 0, 200);
+    }
+
+    private function escapeLike(string $value): string
+    {
+        return strtr($value, ['\\' => '\\\\', '%' => '\\%', '_' => '\\_']);
     }
 
     /** @return array<string, int> Job count per status. */
