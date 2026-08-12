@@ -24,6 +24,13 @@ func TestImportPreservesIdentityUnknownConfigAndQueueOrder(t *testing.T) {
 	if string(raw["custom_setting"]) != `{"keep":true}` {
 		t.Fatalf("unknown config lost: %s", raw["custom_setting"])
 	}
+	var queuePath string
+	if err := json.Unmarshal(raw["queue_path"], &queuePath); err != nil {
+		t.Fatal(err)
+	}
+	if queuePath != filepath.Join(filepath.Dir(request.OutputQueue), "permanent-queue.json") {
+		t.Fatalf("queue path = %q, want permanent queue path", queuePath)
+	}
 	if got := queueIDs(t, request.OutputQueue); !reflect.DeepEqual(got, []string{"one", "two"}) {
 		t.Fatalf("ids=%v", got)
 	}
@@ -62,7 +69,7 @@ func fixtureRequest(t *testing.T, kind string) Request {
         "api_url":"https://new.example/api/v1/metrics",
         "config_url":"https://new.example/api/v1/agent/config",
         "token":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        "queue_path":"` + filepath.Join(directory, "output-queue.json") + `",
+        "queue_path":"` + filepath.Join(directory, "permanent-queue.json") + `",
         "interval_seconds":60,
         "verify_tls":true
     }`

@@ -28,6 +28,10 @@ final class AgentInstallerServiceTest extends TestCase
             $script
         );
         self::assertStringContainsString('migrate --source-config', $script);
+        self::assertStringContainsString('rm -rf "$INSTALL_DIR/current"', $script);
+        self::assertStringContainsString('rm -rf "$INSTALL_DIR/releases"', $script);
+        self::assertStringContainsString('rm -rf "$INSTALL_DIR/venv"', $script);
+        self::assertStringContainsString('rm -f "$INSTALL_DIR/agent.py" "$INSTALL_DIR/agent-launcher"', $script);
         self::assertStringContainsString('User=mirvmon-agent', $script);
         self::assertStringContainsString('ExecStart=/opt/mirvmon-agent/mirvmon-agent run', $script);
         self::assertStringNotContainsString('python', mb_strtolower($script));
