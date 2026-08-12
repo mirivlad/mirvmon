@@ -130,6 +130,7 @@ func executeConfigured(arguments []string, _ io.Writer, stderr io.Writer) int {
 		Config:    configuration,
 		Version:   buildinfo.Version,
 		Commit:    buildinfo.Commit,
+		Artifact:  buildinfo.Artifact,
 		Now:       now,
 		SampleID:  protocol.NewSampleID,
 	})

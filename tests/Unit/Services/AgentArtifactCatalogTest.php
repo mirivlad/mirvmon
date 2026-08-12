@@ -22,7 +22,9 @@ final class AgentArtifactCatalogTest extends TestCase
         $catalog = AgentArtifactCatalog::load($directory);
         $artifact = $catalog->require('linux-amd64');
 
+        self::assertSame('v0.4.3', $catalog->version());
         self::assertSame(hash('sha256', 'linux'), $artifact->sha256);
+        self::assertSame(strlen('linux'), $artifact->size);
         self::assertSame($directory . '/mirvmon-agent-linux-amd64', $artifact->path);
 
         $this->expectException(RuntimeException::class);
@@ -67,12 +69,13 @@ final class AgentArtifactCatalogTest extends TestCase
         foreach ($overrides as $key => $value) {
             $artifacts[$key] = $value;
         }
-        $manifest = ['artifacts' => []];
+        $manifest = ['version' => 'v0.4.3', 'artifacts' => []];
         foreach ($artifacts as $key => $artifact) {
             file_put_contents($directory . '/' . $artifact['filename'], $artifact['content']);
             $manifest['artifacts'][$key] = [
                 'filename' => $artifact['filename'],
                 'sha256' => hash('sha256', $artifact['content']),
+                'size' => strlen($artifact['content']),
                 'content_type' => 'application/octet-stream',
             ];
         }

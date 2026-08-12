@@ -22,6 +22,8 @@ func TestNewEnvelopePreservesProtocolV2(t *testing.T) {
 	envelope, err := NewEnvelope(
 		testToken,
 		"1.2.0",
+		"linux-amd64",
+		[]string{"self_update_v1"},
 		measurement,
 		time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC),
 		"018f47a2-8e4c-7d0a-8d8b-45de8fd746a1",
@@ -42,6 +44,8 @@ func TestNewEnvelopePreservesProtocolV2(t *testing.T) {
 	}
 	for _, field := range [][]byte{
 		[]byte(`"agent_version":"1.2.0"`),
+		[]byte(`"agent_artifact":"linux-amd64"`),
+		[]byte(`"agent_capabilities":["self_update_v1"]`),
 		[]byte(`"os_version":"NethServer 7.9.2009"`),
 		[]byte(`"sample_time":"2026-08-12T12:00:00Z"`),
 	} {
@@ -57,7 +61,7 @@ func TestNewEnvelopeRejectsInvalidFieldsAndLimits(t *testing.T) {
 		OSVersion: "Windows 7\nsecret",
 		Metrics:   map[string]float64{"cpu_load": 1},
 	}
-	_, err := NewEnvelope(testToken, "1.2.0", measurement, time.Now(), validID)
+	_, err := NewEnvelope(testToken, "1.2.0", "linux-amd64", []string{"self_update_v1"}, measurement, time.Now(), validID)
 	if !errors.Is(err, ErrInvalidOSVersion) {
 		t.Fatalf("got %v", err)
 	}
@@ -66,12 +70,12 @@ func TestNewEnvelopeRejectsInvalidFieldsAndLimits(t *testing.T) {
 	for i := 0; i < 101; i++ {
 		measurement.Metrics[fmt.Sprintf("metric_%d", i)] = float64(i)
 	}
-	_, err = NewEnvelope(testToken, "1.2.0", measurement, time.Now(), validID)
+	_, err = NewEnvelope(testToken, "1.2.0", "linux-amd64", []string{"self_update_v1"}, measurement, time.Now(), validID)
 	if !errors.Is(err, ErrTooManyMetrics) {
 		t.Fatalf("got %v", err)
 	}
 
-	_, err = NewEnvelope(testToken, "bad version!", Measurement{
+	_, err = NewEnvelope(testToken, "bad version!", "linux-amd64", []string{"self_update_v1"}, Measurement{
 		OSVersion: "Windows 7 SP1",
 		Metrics:   map[string]float64{"cpu_load": 1},
 	}, time.Now(), validID)
@@ -79,7 +83,7 @@ func TestNewEnvelopeRejectsInvalidFieldsAndLimits(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 
-	_, err = NewEnvelope(testToken, "1.2.0", Measurement{
+	_, err = NewEnvelope(testToken, "1.2.0", "linux-amd64", []string{"self_update_v1"}, Measurement{
 		OSVersion: "Windows 7 SP1",
 		Metrics:   map[string]float64{"cpu_load": math.NaN()},
 	}, time.Now(), validID)

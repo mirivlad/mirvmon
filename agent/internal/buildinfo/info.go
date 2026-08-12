@@ -2,6 +2,7 @@
 package buildinfo
 
 var (
-	Version = "dev"
-	Commit  = "unknown"
+	Version  = "dev"
+	Commit   = "unknown"
+	Artifact = "development"
 )
