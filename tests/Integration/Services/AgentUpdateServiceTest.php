@@ -85,6 +85,57 @@ final class AgentUpdateServiceTest extends TestCase
         self::assertSame('linux-amd64', $delivery['artifact'] ?? null);
     }
 
+    public function testPollReplacesAndDeliversObsoletePendingCommand(): void
+    {
+        $repository = new AgentUpdateRepository(self::$pdo);
+        $obsolete = $repository->create(
+            $this->serverId,
+            'v0.4.2',
+            'linux-amd64',
+            null
+        );
+
+        $delivery = $this->service->commandForServer($this->serverId);
+
+        self::assertNotNull($delivery);
+        self::assertNotSame($obsolete['id'], $delivery['id']);
+        self::assertSame('v0.4.3', $delivery['target_version']);
+        self::assertSame('linux-amd64', $delivery['artifact']);
+
+        $old = self::$pdo?->prepare(
+            'SELECT state, error_code
+             FROM agent_update_commands
+             WHERE id = CAST(:id AS uuid)'
+        );
+        $old?->execute(['id' => $obsolete['id']]);
+        self::assertSame(
+            ['state' => 'failed', 'error_code' => 'target_superseded'],
+            $old?->fetch()
+        );
+        self::assertSame(
+            $delivery['id'],
+            $repository->activeForServer($this->serverId)['id'] ?? null
+        );
+    }
+
+    public function testPollDoesNotReplaceAcknowledgedObsoleteCommand(): void
+    {
+        $repository = new AgentUpdateRepository(self::$pdo);
+        $obsolete = $repository->create(
+            $this->serverId,
+            'v0.4.2',
+            'linux-amd64',
+            null
+        );
+        $repository->advance($obsolete['id'], $this->serverId, 'accepted');
+
+        self::assertNull($this->service->commandForServer($this->serverId));
+        self::assertSame(
+            $obsolete['id'],
+            $repository->activeForServer($this->serverId)['id'] ?? null
+        );
+    }
+
     public function testBatchStatusUsesTheSameEligibilityModel(): void
     {
         $statuses = $this->service->statusesForServers([$this->serverId]);

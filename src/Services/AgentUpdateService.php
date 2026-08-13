@@ -149,15 +149,25 @@ final class AgentUpdateService
         if ($command === null) {
             return null;
         }
-        if (
-            $command['target_version'] !== $this->artifacts->version()
-            || !is_string($command['target_artifact'])
-        ) {
+        if (!is_string($command['target_artifact'])) {
             return null;
         }
         try {
             $artifact = $this->artifacts->require($command['target_artifact']);
         } catch (RuntimeException) {
+            return null;
+        }
+        if ($command['target_version'] !== $this->artifacts->version()) {
+            $command = $this->commands->replacePendingTarget(
+                $serverId,
+                $this->artifacts->version(),
+                $artifact->key
+            );
+        }
+        if (
+            $command === null
+            || $command['target_version'] !== $this->artifacts->version()
+        ) {
             return null;
         }
 
