@@ -10,6 +10,7 @@ use App\Database\Migrator;
 use App\Services\AgentArtifactCatalog;
 use App\Services\AgentCredentialIssuer;
 use App\Services\AgentInstallerService;
+use App\Services\LegacyWindowsPackageService;
 use App\Services\AgentUpdateService;
 use App\Services\AgentVersionService;
 use App\Repositories\AgentUpdateRepository;
@@ -64,6 +65,9 @@ final class AgentControllerTest extends TestCase
             new PublicUrlResolver(''),
             $this->issuer,
             new AgentInstallerService(),
+            new LegacyWindowsPackageService(
+                dirname(__DIR__, 3) . '/resources/agent/windows-legacy'
+            ),
             static fn (): AgentArtifactCatalog => $artifacts,
             static fn (): AgentUpdateService => $updates
         );
@@ -130,6 +134,64 @@ final class AgentControllerTest extends TestCase
             ['artifact' => '../../.env']
         );
         self::assertSame(404, $forbidden->getStatusCode());
+    }
+
+    public function testLegacyWindowsPackageIsSelfContainedAndConsumesCredential(): void
+    {
+        $installerToken = $this->issuer->issueInstaller($this->serverId);
+        $request = (new ServerRequestFactory())->createServerRequest(
+            'GET',
+            'https://download.example/agent/install-legacy.zip?token=' . $installerToken
+        );
+
+        $response = $this->controller->generateLegacyWindowsPackage(
+            $request,
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame('application/zip', $response->getHeaderLine('Content-Type'));
+        self::assertSame(
+            'attachment; filename="mirvmon-agent-windows-legacy-amd64.zip"',
+            $response->getHeaderLine('Content-Disposition')
+        );
+        self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
+        self::assertSame('no-referrer', $response->getHeaderLine('Referrer-Policy'));
+        self::assertStringStartsWith('PK', (string) $response->getBody());
+
+        $reused = $this->controller->generateLegacyWindowsPackage(
+            $request,
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+        self::assertSame(403, $reused->getStatusCode());
+    }
+
+    public function testLegacyWindowsScriptRoutesRemainPackageAliases(): void
+    {
+        foreach ([
+            'generateLegacyWindowsInstallScript' => '/agent/install-legacy.ps1',
+            'generateLegacyWindowsBatScript' => '/agent/install-legacy.bat',
+        ] as $method => $path) {
+            $installerToken = $this->issuer->issueInstaller($this->serverId);
+            $request = (new ServerRequestFactory())->createServerRequest(
+                'GET',
+                'https://download.example' . $path . '?token=' . $installerToken
+            );
+            $response = $this->controller->{$method}(
+                $request,
+                (new ResponseFactory())->createResponse(),
+                []
+            );
+
+            self::assertSame(200, $response->getStatusCode());
+            self::assertSame('application/zip', $response->getHeaderLine('Content-Type'));
+            self::assertSame(
+                'attachment; filename="mirvmon-agent-windows-legacy-amd64.zip"',
+                $response->getHeaderLine('Content-Disposition')
+            );
+        }
     }
 
     public function testAgentCanPullOnlyItsOwnConfigurationWithBearerToken(): void

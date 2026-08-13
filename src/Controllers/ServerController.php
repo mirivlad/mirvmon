@@ -447,8 +447,7 @@ final class ServerController
      *     linux: string,
      *     powershell: string,
      *     batch: string,
-     *     legacy_powershell: string,
-     *     legacy_batch: string
+     *     legacy_zip: string
      * }
      */
     private function installerTokens(int $serverId): array
@@ -457,8 +456,7 @@ final class ServerController
             'linux' => $this->credentials->issueInstaller($serverId),
             'powershell' => $this->credentials->issueInstaller($serverId),
             'batch' => $this->credentials->issueInstaller($serverId),
-            'legacy_powershell' => $this->credentials->issueInstaller($serverId),
-            'legacy_batch' => $this->credentials->issueInstaller($serverId),
+            'legacy_zip' => $this->credentials->issueInstaller($serverId),
         ];
     }
 
@@ -477,8 +475,7 @@ final class ServerController
      *     linux: string,
      *     powershell: string,
      *     batch: string,
-     *     legacy_powershell: string,
-     *     legacy_batch: string
+     *     legacy_zip: string
      * } $tokens
      */
     private function createdResponse(
