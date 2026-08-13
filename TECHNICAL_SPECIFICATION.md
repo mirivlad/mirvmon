@@ -80,6 +80,15 @@ notifications. Запоздалый допустимый sample записыва
 - Windows Server 2012 R2+ и Windows 10+ используют Go 1.26.5; Windows 7 SP1
   x64 и Server 2008 R2 x64 — Go 1.20.14; Windows Server 2008 без R2 и x86
   системы исключены;
+- legacy Windows installer поставляется одним ZIP с локальными BAT, PS1,
+  catalog-verified EXE и ASCII/no-BOM config; PowerShell 2.0/CLR 2.0 не
+  выполняют сетевую загрузку;
+- legacy installer назначает ACL через `*S-1-5-18` и
+  `*S-1-5-32-544`, проверяет exit code всех критических native programs и
+  сохраняет старый runtime неизменным до успешных `check` и `migrate`;
+- commit legacy-установки сохраняет timestamped backups, проверяет Windows
+  service `Running` через WMI и выполняет rollback файлов/service metadata при
+  post-commit ошибке;
 - старые EOL ОС поддерживаются только как compatibility target агента и не
   считаются безопасными production platform;
 - конфигурация и queue записываются атомарно с ограниченными правами;
