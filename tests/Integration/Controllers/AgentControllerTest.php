@@ -108,6 +108,61 @@ final class AgentControllerTest extends TestCase
         self::assertSame(403, $reused->getStatusCode());
     }
 
+    public function testWindowsActivationConsumesInstallerCredentialAndReturnsProtectedConfig(): void
+    {
+        $installerToken = $this->issuer->issueInstaller($this->serverId);
+        $request = (new ServerRequestFactory())
+            ->createServerRequest(
+                'POST',
+                'https://download.example/api/v1/agent/install'
+            )
+            ->withHeader('Authorization', 'Bearer ' . $installerToken);
+
+        $response = $this->controller->activateInstaller(
+            $request,
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
+        $config = json_decode((string) $response->getBody(), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame('https://download.example/api/v1/metrics', $config['api_url']);
+        self::assertSame(
+            'https://download.example/api/v1/agent/config',
+            $config['config_url']
+        );
+        self::assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $config['token']);
+        self::assertSame('%PROGRAMDATA%\\MirvMon\\Agent\\queue.json', $config['queue_path']);
+        self::assertStringNotContainsString($installerToken, (string) $response->getBody());
+
+        $reused = $this->controller->activateInstaller(
+            $request,
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+        self::assertSame(401, $reused->getStatusCode());
+        self::assertSame(
+            ['error' => ['code' => 'invalid_token']],
+            json_decode((string) $reused->getBody(), true)
+        );
+    }
+
+    public function testWindowsActivationRejectsMissingCredential(): void
+    {
+        $response = $this->controller->activateInstaller(
+            (new ServerRequestFactory())->createServerRequest(
+                'POST',
+                'https://download.example/api/v1/agent/install'
+            ),
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+
+        self::assertSame(401, $response->getStatusCode());
+        self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
+    }
+
     public function testNativeArtifactIsPublicAndStrictlyAllowlisted(): void
     {
         $request = (new ServerRequestFactory())->createServerRequest(

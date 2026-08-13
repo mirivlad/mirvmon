@@ -81,4 +81,23 @@ final class AgentCredentialIssuerTest extends TestCase
         $this->expectException(RuntimeException::class);
         $this->issuer->exchange($firstInstaller);
     }
+
+    public function testInstallerCredentialCanBeValidatedWithoutConsumption(): void
+    {
+        $installer = $this->issuer->issueInstaller($this->serverId);
+
+        self::assertTrue($this->issuer->validateInstaller($installer));
+        self::assertTrue($this->issuer->validateInstaller($installer));
+        self::assertSame(
+            '0',
+            (string) self::$pdo?->query(
+                'SELECT count(*) FROM installer_tokens WHERE consumed_at IS NOT NULL'
+            )->fetchColumn()
+        );
+
+        $this->issuer->exchange($installer);
+
+        self::assertFalse($this->issuer->validateInstaller($installer));
+        self::assertFalse($this->issuer->validateInstaller('not-a-token'));
+    }
 }

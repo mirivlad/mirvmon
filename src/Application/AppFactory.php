@@ -241,6 +241,10 @@ final class AppFactory
             self::controller($container, AgentController::class, 'getAgentConfig')
         );
         $app->post(
+            '/api/v1/agent/install',
+            self::controller($container, AgentController::class, 'activateInstaller')
+        );
+        $app->post(
             '/api/v1/agent/update/{command}/status',
             self::controller($container, AgentUpdateController::class, 'reportStatus')
         );
@@ -283,6 +287,7 @@ final class AppFactory
                 '/agent/install-legacy.ps1',
                 '/agent/install-legacy.bat',
                 '/api/v1/agent/config',
+                '/api/v1/agent/install',
                 '/api/v1/agent/update/*/status',
             ]
         ));

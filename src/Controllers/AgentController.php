@@ -270,6 +270,40 @@ final class AgentController
     }
 
     /** @param array<string, string> $args */
+    public function activateInstaller(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        $installerToken = $this->bearerToken($request);
+        if ($installerToken === null) {
+            return $this->jsonError($response, 401, 'invalid_token')
+                ->withHeader('Cache-Control', 'no-store');
+        }
+
+        try {
+            $credential = $this->credentials->exchange($installerToken);
+            $baseUrl = $this->urlResolver->resolve($request);
+        } catch (Throwable) {
+            return $this->jsonError($response, 401, 'invalid_token')
+                ->withHeader('Cache-Control', 'no-store');
+        }
+
+        return $this->json($response, [
+            'api_url' => $baseUrl . '/api/v1/metrics',
+            'config_url' => $baseUrl . '/api/v1/agent/config',
+            'token' => $credential->token,
+            'interval_seconds' => 60,
+            'verify_tls' => true,
+            'queue_path' => '%PROGRAMDATA%\\MirvMon\\Agent\\queue.json',
+            'collect_process_commands' => false,
+            'enabled' => true,
+            'monitor_services' => [],
+            'queue_limit' => 1000,
+        ])->withHeader('Cache-Control', 'no-store');
+    }
+
+    /** @param array<string, string> $args */
     public function getConfig(
         Request $request,
         Response $response,
