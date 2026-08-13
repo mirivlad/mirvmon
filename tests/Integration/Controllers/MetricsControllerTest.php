@@ -11,6 +11,7 @@ use App\Domain\Metrics\MetricsValidator;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\AgentUpdateRepository;
 use App\Services\MetricsIngestionService;
+use App\Services\AgentVersionService;
 use App\Services\ThresholdEvaluator;
 use PDO;
 use PHPUnit\Framework\TestCase;
@@ -64,7 +65,8 @@ final class MetricsControllerTest extends TestCase
                 self::$pdo,
                 new ThresholdEvaluator(),
                 $outbox,
-                new AgentUpdateRepository(self::$pdo)
+                new AgentUpdateRepository(self::$pdo),
+                new AgentVersionService()
             )
         );
     }

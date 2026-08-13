@@ -195,38 +195,28 @@ final class AgentUpdateRepository
         );
     }
 
-    public function completeForReportedIdentity(
-        int $serverId,
-        string $reportedVersion,
-        string $reportedArtifact
-    ): bool {
-        $statement = $this->pdo->prepare(
-            "UPDATE agent_update_commands
-             SET state = 'succeeded',
-                 error_code = NULL,
-                 completed_at = CURRENT_TIMESTAMP,
-                 updated_at = CURRENT_TIMESTAMP
-             WHERE id = (
-                SELECT id
-                FROM agent_update_commands
-                WHERE server_id = :server_id
-                  AND target_version = :reported_version
-                  AND target_artifact = :reported_artifact
-                ORDER BY
-                    CASE WHEN state NOT IN ('succeeded', 'failed') THEN 0 ELSE 1 END,
-                    created_at DESC,
-                    id DESC
-                LIMIT 1
-             )
-               AND state <> 'succeeded'"
-        );
-        $statement->execute([
-            'server_id' => $serverId,
-            'reported_version' => $reportedVersion,
-            'reported_artifact' => $reportedArtifact,
-        ]);
+    public function complete(string $id, int $serverId): bool
+    {
+        return $this->withLockedCommand(
+            $id,
+            $serverId,
+            function (array $command): bool {
+                if ($command['state'] === 'succeeded') {
+                    return true;
+                }
+                $statement = $this->pdo->prepare(
+                    "UPDATE agent_update_commands
+                     SET state = 'succeeded',
+                         error_code = NULL,
+                         completed_at = CURRENT_TIMESTAMP,
+                         updated_at = CURRENT_TIMESTAMP
+                     WHERE id = CAST(:id AS uuid)"
+                );
+                $statement->execute(['id' => $command['id']]);
 
-        return $statement->rowCount() === 1;
+                return $statement->rowCount() === 1;
+            }
+        );
     }
 
     /** @param callable(array<string, mixed>): bool $callback */

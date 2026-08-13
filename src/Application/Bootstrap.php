@@ -143,7 +143,8 @@ final class Bootstrap
                     $container->get(PDO::class),
                     $container->get(ThresholdEvaluator::class),
                     $container->get(NotificationOutboxRepository::class),
-                    $container->get(AgentUpdateRepository::class)
+                    $container->get(AgentUpdateRepository::class),
+                    $container->get(AgentVersionService::class)
                 )
         );
         $container->set(

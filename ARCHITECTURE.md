@@ -164,7 +164,7 @@ R2 — Go 1.20.14 x64 binary. Сервер динамически собирае
 сервера; она хранится в `agent_update_commands` и возвращается агенту при его
 обычном outbound config poll. Состояния монотонны: `pending`, `accepted`,
 `downloading`, `installing`, `awaiting_restart`, затем `succeeded` либо
-`failed`. Последующий envelope с точными target version и artifact является
+`failed`. Последующий envelope с target version (либо более новой) и точным artifact является
 авторитетным подтверждением результата и завершает команду как `succeeded` из
 любой стадии, в том числе после ручной установки. При старте уже установленной
 target version агент не повторяет обновление, а завершает локальный stale state

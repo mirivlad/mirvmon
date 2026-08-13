@@ -109,7 +109,7 @@ final class AgentUpdateRepositoryTest extends TestCase
         $this->repository->advance($command['id'], $this->serverId, 'downloading');
     }
 
-    public function testReportedIdentityCompletesMatchingCommand(): void
+    public function testCompleteTerminalizesAnActiveCommand(): void
     {
         $command = $this->repository->create(
             $this->serverId,
@@ -118,30 +118,17 @@ final class AgentUpdateRepositoryTest extends TestCase
             null
         );
         $this->repository->advance($command['id'], $this->serverId, 'accepted');
-        self::assertFalse($this->repository->completeForReportedIdentity(
-            $this->serverId,
-            'v0.4.4',
-            'linux-amd64'
-        ));
         $this->repository->advance($command['id'], $this->serverId, 'downloading');
-        $this->repository->advance($command['id'], $this->serverId, 'installing');
-        $this->repository->advance($command['id'], $this->serverId, 'awaiting_restart');
-        self::assertFalse($this->repository->completeForReportedIdentity(
-            $this->serverId,
-            'v0.4.4',
-            'linux-amd64'
-        ));
-        self::assertTrue($this->repository->completeForReportedIdentity(
-            $this->serverId,
-            'v0.4.3',
-            'linux-amd64'
+        self::assertTrue($this->repository->complete(
+            $command['id'],
+            $this->serverId
         ));
         self::assertSame('succeeded', $this->repository->latestForServer(
             $this->serverId
         )['state'] ?? null);
     }
 
-    public function testReportedIdentityCompletesPendingCommandAfterManualInstall(): void
+    public function testLateProgressAfterCompletionIsIdempotent(): void
     {
         $command = $this->repository->create(
             $this->serverId,
@@ -150,15 +137,9 @@ final class AgentUpdateRepositoryTest extends TestCase
             null
         );
 
-        self::assertFalse($this->repository->completeForReportedIdentity(
-            $this->serverId,
-            'v0.4.3',
-            'windows-amd64'
-        ));
-        self::assertTrue($this->repository->completeForReportedIdentity(
-            $this->serverId,
-            'v0.4.3',
-            'linux-amd64'
+        self::assertTrue($this->repository->complete(
+            $command['id'],
+            $this->serverId
         ));
         self::assertSame('succeeded', $this->repository->latestForServer(
             $this->serverId
@@ -175,7 +156,7 @@ final class AgentUpdateRepositoryTest extends TestCase
         ));
     }
 
-    public function testReportedIdentityCompletesOnlyLatestMatchingAttempt(): void
+    public function testCompleteChangesOnlyTheSelectedAttempt(): void
     {
         $failed = $this->repository->create(
             $this->serverId,
@@ -195,10 +176,9 @@ final class AgentUpdateRepositoryTest extends TestCase
             null
         );
 
-        self::assertTrue($this->repository->completeForReportedIdentity(
-            $this->serverId,
-            'v0.4.3',
-            'linux-amd64'
+        self::assertTrue($this->repository->complete(
+            $active['id'],
+            $this->serverId
         ));
         $failedState = self::$pdo?->prepare(
             'SELECT state FROM agent_update_commands WHERE id = CAST(:id AS uuid)'

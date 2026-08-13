@@ -10,6 +10,7 @@ use App\Domain\Metrics\MetricsEnvelope;
 use App\Repositories\AgentUpdateRepository;
 use App\Repositories\NotificationOutboxRepository;
 use App\Services\MetricsIngestionService;
+use App\Services\AgentVersionService;
 use App\Services\ThresholdEvaluator;
 use DateTimeImmutable;
 use PDO;
@@ -63,7 +64,8 @@ final class MetricsIngestionServiceTest extends TestCase
             self::$pdo,
             new ThresholdEvaluator(),
             new NotificationOutboxRepository(self::$pdo),
-            new AgentUpdateRepository(self::$pdo)
+            new AgentUpdateRepository(self::$pdo),
+            new AgentVersionService()
         );
     }
 
@@ -385,7 +387,7 @@ final class MetricsIngestionServiceTest extends TestCase
         );
     }
 
-    public function testTargetMetricsCompletePendingUpdateAfterManualInstall(): void
+    public function testNewerMatchingMetricsCompletePendingUpdateAfterManualInstall(): void
     {
         self::$pdo?->prepare(
             "INSERT INTO agent_update_commands (
@@ -397,15 +399,36 @@ final class MetricsIngestionServiceTest extends TestCase
                 'linux-amd64'
              )"
         )->execute(['server_id' => $this->serverId]);
-        $envelope = new MetricsEnvelope(
+        $wrongArtifact = new MetricsEnvelope(
             2,
             '50000000-0000-4000-8000-000000000002',
+            new DateTimeImmutable('2026-07-30T11:58:00Z'),
+            $this->token,
+            ['cpu_load' => 9],
+            [],
+            null,
+            'v0.4.4',
+            'Windows Server 2022',
+            'windows-amd64',
+            ['self_update_v1']
+        );
+        $this->ingestion->ingest($wrongArtifact);
+        self::assertSame(
+            'pending',
+            (string) self::$pdo?->query(
+                "SELECT state FROM agent_update_commands
+                 WHERE id = '50000000-0000-4000-8000-000000000001'"
+            )->fetchColumn()
+        );
+        $envelope = new MetricsEnvelope(
+            2,
+            '50000000-0000-4000-8000-000000000003',
             new DateTimeImmutable('2026-07-30T11:59:00Z'),
             $this->token,
             ['cpu_load' => 10],
             [],
             null,
-            'v0.4.3',
+            'v0.4.4',
             'NethServer 7.9.2009',
             'linux-amd64',
             ['self_update_v1']
