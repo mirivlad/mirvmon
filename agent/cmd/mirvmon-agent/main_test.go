@@ -111,3 +111,18 @@ func TestExecuteActivateRejectsInvalidArgumentsWithoutLeakingThem(t *testing.T) 
 		t.Fatalf("activation argument leaked: %q", stderr.String())
 	}
 }
+
+func TestExecuteInstallWindowsRejectsIncompleteArgumentsWithoutLeakingThem(t *testing.T) {
+	secret := strings.Repeat("a", 64)
+	var stdout, stderr bytes.Buffer
+	code := execute([]string{"install-windows", "--bootstrap", secret}, &stdout, &stderr)
+	if code != exitInvalid {
+		t.Fatalf("exit=%d stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "invalid installation arguments") {
+		t.Fatalf("wrong installer error: %q", stderr.String())
+	}
+	if strings.Contains(stderr.String(), secret) {
+		t.Fatalf("installer argument leaked: %q", stderr.String())
+	}
+}

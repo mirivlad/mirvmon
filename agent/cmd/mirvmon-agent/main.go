@@ -21,6 +21,7 @@ import (
 	"github.com/mirivlad/mirvmon/agent/internal/runner"
 	"github.com/mirivlad/mirvmon/agent/internal/transport"
 	"github.com/mirivlad/mirvmon/agent/internal/update"
+	"github.com/mirivlad/mirvmon/agent/internal/wininstall"
 )
 
 const (
@@ -36,7 +37,7 @@ func main() {
 
 func execute(arguments []string, stdout, stderr io.Writer) int {
 	if len(arguments) == 0 {
-		fmt.Fprintln(stderr, "usage: mirvmon-agent <run|check|once|migrate|activate|apply-update|version>")
+		fmt.Fprintln(stderr, "usage: mirvmon-agent <run|check|once|migrate|activate|install-windows|apply-update|version>")
 		return exitInvalid
 	}
 	switch arguments[0] {
@@ -53,12 +54,58 @@ func execute(arguments []string, stdout, stderr io.Writer) int {
 		return executeMigrate(arguments[1:], stderr)
 	case "activate":
 		return executeActivate(arguments[1:], stderr)
+	case "install-windows":
+		return executeInstallWindows(arguments[1:], stdout, stderr)
 	case "apply-update":
 		return executeApply(arguments[1:], stderr)
 	default:
 		fmt.Fprintln(stderr, "unknown command")
 		return exitInvalid
 	}
+}
+
+func executeInstallWindows(arguments []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("install-windows", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	bootstrapPath := flags.String("bootstrap", "", "protected installer bootstrap")
+	expectedVersion := flags.String("expected-version", "", "selected release version")
+	expectedArtifact := flags.String("expected-artifact", "", "selected artifact key")
+	expectedSHA256 := flags.String("expected-sha256", "", "selected artifact digest")
+	expectedSize := flags.Int64("expected-size", 0, "selected artifact size")
+	if err := flags.Parse(arguments); err != nil || *bootstrapPath == "" || *expectedVersion == "" ||
+		*expectedArtifact == "" || *expectedSHA256 == "" || *expectedSize < 1 || flags.NArg() != 0 {
+		fmt.Fprintln(stderr, "invalid installation arguments")
+		return exitInvalid
+	}
+	installDir, stateDir, err := wininstall.DefaultDirectories()
+	if err != nil {
+		fmt.Fprintln(stderr, "Windows installation unavailable")
+		return exitRuntime
+	}
+	executablePath, err := os.Executable()
+	if err != nil {
+		fmt.Fprintln(stderr, "Windows installation unavailable")
+		return exitRuntime
+	}
+	err = wininstall.Install(context.Background(), wininstall.Request{
+		BootstrapPath:    *bootstrapPath,
+		ExecutablePath:   executablePath,
+		ExpectedVersion:  *expectedVersion,
+		ExpectedArtifact: *expectedArtifact,
+		ExpectedSHA256:   *expectedSHA256,
+		ExpectedSize:     *expectedSize,
+		CurrentVersion:   buildinfo.Version,
+		CurrentArtifact:  buildinfo.Artifact,
+		InstallDir:       installDir,
+		StateDir:         stateDir,
+		Platform:         wininstall.NewPlatform(),
+	})
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return exitRuntime
+	}
+	fmt.Fprintln(stdout, "MirvMon agent installed and MirvMonAgent is running.")
+	return exitSuccess
 }
 
 func executeActivate(arguments []string, stderr io.Writer) int {
