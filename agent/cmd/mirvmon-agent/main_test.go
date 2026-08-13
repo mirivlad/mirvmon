@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,5 +72,42 @@ func TestExecuteRejectsUnknownCommandWithoutLeakingArguments(t *testing.T) {
 	}
 	if strings.Contains(stderr.String(), "aaaaaaaa") {
 		t.Fatalf("invalid arguments leaked: %q", stderr.String())
+	}
+}
+
+func TestExecuteActivateWritesConfiguration(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Authorization") != "Bearer "+strings.Repeat("a", 64) {
+			t.Fatal("installer credential missing")
+		}
+		_, _ = writer.Write([]byte(`{"api_url":"https://monitor.example/api/v1/metrics","config_url":"https://monitor.example/api/v1/agent/config","token":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","queue_path":"%PROGRAMDATA%\\MirvMon\\Agent\\queue.json","interval_seconds":60,"verify_tls":true,"enabled":true,"monitor_services":[],"queue_limit":1000}`))
+	}))
+	defer server.Close()
+	directory := t.TempDir()
+	bootstrap := filepath.Join(directory, "bootstrap.json")
+	output := filepath.Join(directory, "config.json")
+	if err := os.WriteFile(bootstrap, []byte(`{"base_url":"`+server.URL+`","installer_credential":"`+strings.Repeat("a", 64)+`"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	code := execute([]string{"activate", "--bootstrap", bootstrap, "--output-config", output}, &stdout, &stderr)
+	if code != exitSuccess {
+		t.Fatalf("exit=%d stderr=%s", code, stderr.String())
+	}
+	contents, err := os.ReadFile(output)
+	if err != nil || !strings.Contains(string(contents), strings.Repeat("b", 64)) {
+		t.Fatalf("configuration not written: %s err=%v", contents, err)
+	}
+}
+
+func TestExecuteActivateRejectsInvalidArgumentsWithoutLeakingThem(t *testing.T) {
+	secret := strings.Repeat("a", 64)
+	var stdout, stderr bytes.Buffer
+	code := execute([]string{"activate", "--bootstrap", secret}, &stdout, &stderr)
+	if code != exitInvalid {
+		t.Fatalf("exit=%d stderr=%s", code, stderr.String())
+	}
+	if strings.Contains(stderr.String(), secret) {
+		t.Fatalf("activation argument leaked: %q", stderr.String())
 	}
 }

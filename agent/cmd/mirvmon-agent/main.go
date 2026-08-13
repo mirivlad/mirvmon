@@ -14,6 +14,7 @@ import (
 	"github.com/mirivlad/mirvmon/agent/internal/buildinfo"
 	"github.com/mirivlad/mirvmon/agent/internal/collector"
 	"github.com/mirivlad/mirvmon/agent/internal/config"
+	"github.com/mirivlad/mirvmon/agent/internal/enroll"
 	"github.com/mirivlad/mirvmon/agent/internal/migrate"
 	"github.com/mirivlad/mirvmon/agent/internal/protocol"
 	"github.com/mirivlad/mirvmon/agent/internal/queue"
@@ -35,7 +36,7 @@ func main() {
 
 func execute(arguments []string, stdout, stderr io.Writer) int {
 	if len(arguments) == 0 {
-		fmt.Fprintln(stderr, "usage: mirvmon-agent <run|check|once|migrate|apply-update|version>")
+		fmt.Fprintln(stderr, "usage: mirvmon-agent <run|check|once|migrate|activate|apply-update|version>")
 		return exitInvalid
 	}
 	switch arguments[0] {
@@ -50,12 +51,33 @@ func execute(arguments []string, stdout, stderr io.Writer) int {
 		return executeConfigured(arguments, stdout, stderr)
 	case "migrate":
 		return executeMigrate(arguments[1:], stderr)
+	case "activate":
+		return executeActivate(arguments[1:], stderr)
 	case "apply-update":
 		return executeApply(arguments[1:], stderr)
 	default:
 		fmt.Fprintln(stderr, "unknown command")
 		return exitInvalid
 	}
+}
+
+func executeActivate(arguments []string, stderr io.Writer) int {
+	flags := flag.NewFlagSet("activate", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	bootstrapPath := flags.String("bootstrap", "", "protected installer bootstrap")
+	outputConfig := flags.String("output-config", "", "staged native configuration")
+	if err := flags.Parse(arguments); err != nil || *bootstrapPath == "" || *outputConfig == "" || flags.NArg() != 0 {
+		fmt.Fprintln(stderr, "invalid activation arguments")
+		return exitInvalid
+	}
+	if err := enroll.Activate(context.Background(), enroll.Request{
+		BootstrapPath: *bootstrapPath,
+		OutputConfig:  *outputConfig,
+	}); err != nil {
+		fmt.Fprintln(stderr, "agent activation failed")
+		return exitRuntime
+	}
+	return exitSuccess
 }
 
 func executeApply(arguments []string, stderr io.Writer) int {
