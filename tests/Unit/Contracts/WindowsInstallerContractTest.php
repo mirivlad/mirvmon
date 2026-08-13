@@ -45,12 +45,28 @@ final class WindowsInstallerContractTest extends TestCase
         }
         self::assertStringContainsString('InitPluginsDir', $this->nsis);
         self::assertLessThan(
-            strpos($this->nsis, 'SetOutPath "$PLUGINSDIR"'),
+            strpos($this->nsis, 'SetOutPath "$PrivatePayload"'),
             strpos($this->nsis, 'InitPluginsDir')
         );
         self::assertLessThan(
             strpos($this->nsis, 'nsExec::ExecToLog'),
             strpos($this->nsis, '${AtLeastWin10}')
+        );
+    }
+
+    public function testNsisProtectsPayloadDirectoryBeforeExtractingCredential(): void
+    {
+        self::assertStringContainsString('$SYSDIR\icacls.exe', $this->nsis);
+        self::assertStringContainsString('/inheritance:r', $this->nsis);
+        self::assertStringContainsString('*S-1-5-18:', $this->nsis);
+        self::assertStringContainsString('*S-1-5-32-544:', $this->nsis);
+        self::assertLessThan(
+            strpos($this->nsis, 'File /oname=bootstrap.json'),
+            strpos($this->nsis, '$SYSDIR\icacls.exe')
+        );
+        self::assertLessThan(
+            strpos($this->nsis, 'File /oname=bootstrap.json'),
+            strpos($this->nsis, 'Pop $0')
         );
     }
 }
