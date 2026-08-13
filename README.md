@@ -244,7 +244,9 @@ envelope с target version (либо более новой) и совпадаю�
 
 Если контейнер мониторинга обновился, пока команда ещё находится в `pending`,
 следующий config poll атомарно помечает прежнюю команду как
-`target_superseded` и выдаёт одну новую команду для текущей версии каталога.
+`target_superseded`, но не выдаёт автоматически новый UUID: агент мог локально
+принять прежнюю команду до недоставленного HTTP-report. После локальной очистки
+администратор явно нажимает «Повторить обновление».
 Команды, уже подтверждённые агентом (`accepted` и далее), автоматически не
 заменяются.
 
@@ -274,19 +276,18 @@ sudo cat /var/lib/mirvmon-agent/update-state.json
 ```
 
 Если binary сообщает `v0.4.5`, а JSON содержит target `v0.4.5` и state
-`awaiting_restart`, остановите оба unit, переместите только служебные файлы
+`awaiting_restart`, остановите agent, path и one-shot updater, переместите только служебные файлы
 обновления в recoverable backup и снова запустите unit:
 
 ```bash
-sudo systemctl stop mirvmon-agent-update.path mirvmon-agent.service
-sudo install -d -m 0700 /var/lib/mirvmon-agent/recovery-v045
-sudo sh -c 'for file in update-state.json update-request.json update-handoff update-staged; do if [ -e "/var/lib/mirvmon-agent/$file" ]; then mv "/var/lib/mirvmon-agent/$file" /var/lib/mirvmon-agent/recovery-v045/; fi; done'
+sudo systemctl stop mirvmon-agent-update.path mirvmon-agent-update.service mirvmon-agent.service
+sudo sh -c 'recovery_dir="/var/lib/mirvmon-agent/recovery-v045-$(date -u +%Y%m%dT%H%M%SZ)"; install -d -m 0700 "$recovery_dir"; for file in update-state.json update-request.json update-handoff update-staged; do if [ -e "/var/lib/mirvmon-agent/$file" ]; then mv "/var/lib/mirvmon-agent/$file" "$recovery_dir/"; fi; done; printf "Backup: %s\n" "$recovery_dir"'
 sudo systemctl start mirvmon-agent-update.path mirvmon-agent.service
 ```
 
-Permanent token, config и metrics queue не затрагиваются. На следующем
-config poll сервер заменит старую `pending`-команду командой для актуальной
-версии, после чего обновление продолжится автоматически.
+Permanent token, config и metrics queue не затрагиваются. Обновите страницу
+сервера и нажмите «Повторить обновление»: будет создана команда для актуальной
+версии.
 
 ### Протокол отправки
 

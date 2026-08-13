@@ -203,8 +203,9 @@ LocalSystem service и helper в `%ProgramData%\MirvMon\Agent`. В update-ком
 
 Если update-команда ещё не была подтверждена агентом и её target version
 устарела после redeploy, первый config poll атомарно завершает её с
-`target_superseded` и создаёт команду для текущего catalog artifact. Уже
-подтверждённые стадии (`accepted` и далее) сохраняются без замены. Для
+`target_superseded`, но не создаёт автоматически новый UUID. После local
+cleanup администратор явно повторяет обновление; уже подтверждённые стадии
+(`accepted` и далее) сохраняются без изменения. Для
 однократного восстановления Linux v0.4.5 со stale `awaiting_restart` используйте
 recoverable процедуру из раздела «Удалённое обновление агента» в `README.md`;
 она не меняет permanent token, config или metrics queue.

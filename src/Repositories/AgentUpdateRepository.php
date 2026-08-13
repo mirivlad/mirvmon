@@ -81,98 +81,31 @@ final class AgentUpdateRepository
         return is_array($row) ? $this->normalize($row) : null;
     }
 
-    /** @return array<string, mixed>|null */
-    public function replacePendingTarget(
-        int $serverId,
-        string $targetVersion,
-        string $targetArtifact
-    ): ?array {
-        $ownsTransaction = !$this->pdo->inTransaction();
-        if ($ownsTransaction) {
-            $this->pdo->beginTransaction();
-        }
-        try {
-            $statement = $this->pdo->prepare(
-                "SELECT *
-                 FROM agent_update_commands
-                 WHERE server_id = :server_id
-                   AND state NOT IN ('succeeded', 'failed')
-                 ORDER BY created_at DESC
-                 LIMIT 1
-                 FOR UPDATE"
-            );
-            $statement->execute(['server_id' => $serverId]);
-            $row = $statement->fetch();
-            if (!is_array($row)) {
-                if ($ownsTransaction) {
-                    $this->pdo->commit();
+    public function supersedePending(string $id, int $serverId): bool
+    {
+        return $this->withLockedCommand(
+            $id,
+            $serverId,
+            function (array $command): bool {
+                if ($command['state'] === 'failed') {
+                    return $command['error_code'] === 'target_superseded';
                 }
-
-                return null;
-            }
-            $command = $this->normalize($row);
-            if (
-                $command['state'] !== 'pending'
-                || (
-                    $command['target_version'] === $targetVersion
-                    && $command['target_artifact'] === $targetArtifact
-                )
-            ) {
-                if ($ownsTransaction) {
-                    $this->pdo->commit();
+                if ($command['state'] !== 'pending') {
+                    return false;
                 }
+                $statement = $this->pdo->prepare(
+                    "UPDATE agent_update_commands
+                     SET state = 'failed',
+                         error_code = 'target_superseded',
+                         completed_at = CURRENT_TIMESTAMP,
+                         updated_at = CURRENT_TIMESTAMP
+                     WHERE id = CAST(:id AS uuid)"
+                );
+                $statement->execute(['id' => $command['id']]);
 
-                return $command;
+                return $statement->rowCount() === 1;
             }
-
-            $statement = $this->pdo->prepare(
-                "UPDATE agent_update_commands
-                 SET state = 'failed',
-                     error_code = 'target_superseded',
-                     completed_at = CURRENT_TIMESTAMP,
-                     updated_at = CURRENT_TIMESTAMP
-                 WHERE id = CAST(:id AS uuid)"
-            );
-            $statement->execute(['id' => $command['id']]);
-
-            $statement = $this->pdo->prepare(
-                "INSERT INTO agent_update_commands (
-                    id,
-                    server_id,
-                    target_version,
-                    target_artifact,
-                    requested_by
-                 ) VALUES (
-                    CAST(:id AS uuid),
-                    :server_id,
-                    :target_version,
-                    :target_artifact,
-                    :requested_by
-                 )
-                 RETURNING *"
-            );
-            $statement->execute([
-                'id' => $this->uuidV4(),
-                'server_id' => $serverId,
-                'target_version' => $targetVersion,
-                'target_artifact' => $targetArtifact,
-                'requested_by' => $command['requested_by'],
-            ]);
-            $replacement = $statement->fetch();
-            if (!is_array($replacement)) {
-                throw new InvalidArgumentException('Cannot replace update command.');
-            }
-            if ($ownsTransaction) {
-                $this->pdo->commit();
-            }
-
-            return $this->normalize($replacement);
-        } catch (Throwable $exception) {
-            if ($ownsTransaction && $this->pdo->inTransaction()) {
-                $this->pdo->rollBack();
-            }
-            throw $exception;
-        }
+        );
     }
 
     /** @return array<string, mixed>|null */

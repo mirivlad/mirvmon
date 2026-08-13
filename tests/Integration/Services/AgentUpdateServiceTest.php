@@ -85,7 +85,7 @@ final class AgentUpdateServiceTest extends TestCase
         self::assertSame('linux-amd64', $delivery['artifact'] ?? null);
     }
 
-    public function testPollReplacesAndDeliversObsoletePendingCommand(): void
+    public function testPollTerminalizesObsoletePendingCommandWithoutReplacingIt(): void
     {
         $repository = new AgentUpdateRepository(self::$pdo);
         $obsolete = $repository->create(
@@ -97,10 +97,7 @@ final class AgentUpdateServiceTest extends TestCase
 
         $delivery = $this->service->commandForServer($this->serverId);
 
-        self::assertNotNull($delivery);
-        self::assertNotSame($obsolete['id'], $delivery['id']);
-        self::assertSame('v0.4.3', $delivery['target_version']);
-        self::assertSame('linux-amd64', $delivery['artifact']);
+        self::assertNull($delivery);
 
         $old = self::$pdo?->prepare(
             'SELECT state, error_code
@@ -112,10 +109,16 @@ final class AgentUpdateServiceTest extends TestCase
             ['state' => 'failed', 'error_code' => 'target_superseded'],
             $old?->fetch()
         );
+        self::assertNull($repository->activeForServer($this->serverId));
         self::assertSame(
-            $delivery['id'],
-            $repository->activeForServer($this->serverId)['id'] ?? null
+            'failed',
+            $this->service->statusForServer($this->serverId)['state']
         );
+
+        $retry = $this->service->request($this->serverId, null);
+        $retryDelivery = $this->service->commandForServer($this->serverId);
+        self::assertSame($retry['id'], $retryDelivery['id'] ?? null);
+        self::assertSame('v0.4.3', $retryDelivery['target_version'] ?? null);
     }
 
     public function testPollDoesNotReplaceAcknowledgedObsoleteCommand(): void
