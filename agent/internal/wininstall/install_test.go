@@ -67,6 +67,147 @@ func TestInstallRollsBackWhenCommitFailsWithoutLeakingSecrets(t *testing.T) {
 	}
 }
 
+func TestInstallDoesNotRollbackBeforeExistingAgentIsFrozen(t *testing.T) {
+	tests := []struct {
+		name string
+		fail string
+	}{
+		{name: "validate", fail: "validate"},
+		{name: "protect stage", fail: "protect-stage"},
+		{name: "snapshot", fail: "snapshot"},
+		{name: "protect installed paths", fail: "protect"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := successfulRequest(t)
+			var events []string
+			request.Platform = &recordingPlatform{
+				events: &events, fail: test.fail, failure: errors.New("failure"),
+			}
+
+			if err := Install(context.Background(), request); err == nil {
+				t.Fatal("Install succeeded")
+			}
+			if slicesContain(events, "freeze") || slicesContain(events, "rollback") {
+				t.Fatalf("existing runtime was touched before commit: %v", events)
+			}
+		})
+	}
+}
+
+func TestInstallRollsBackEveryPlatformFailureAfterFreeze(t *testing.T) {
+	for _, step := range []string{"freeze", "install", "service", "start", "verify", "delete-task"} {
+		t.Run(step, func(t *testing.T) {
+			request := successfulRequest(t)
+			var events []string
+			request.Platform = &recordingPlatform{
+				events: &events, fail: step, failure: errors.New("failure"),
+			}
+
+			err := Install(context.Background(), request)
+			if err == nil {
+				t.Fatal("Install succeeded")
+			}
+			if got := events[len(events)-1]; got != "rollback" {
+				t.Fatalf("last event=%q events=%v", got, events)
+			}
+		})
+	}
+}
+
+func TestInstallRollsBackWhenQuiescedMigrationFails(t *testing.T) {
+	request := successfulRequest(t)
+	var events []string
+	request.Platform = &recordingPlatform{events: &events}
+	migrations := 0
+	request.Migrate = func(paths Paths) error {
+		migrations++
+		if migrations == 2 {
+			return errors.New("quiesced migration failed")
+		}
+		return writeStaged(paths, request.StateDir)
+	}
+
+	err := Install(context.Background(), request)
+	if err == nil || err.Error() != "windows installation failed at migrate-commit" {
+		t.Fatalf("error=%v", err)
+	}
+	if got := events[len(events)-1]; got != "rollback" {
+		t.Fatalf("last event=%q events=%v", got, events)
+	}
+}
+
+func TestInstallRejectsBuildIdentityBeforePlatformMutation(t *testing.T) {
+	request := fixtureRequest(t, t.TempDir())
+	request.CurrentArtifact = "windows-legacy-amd64"
+	var events []string
+	request.Platform = &recordingPlatform{events: &events}
+
+	err := Install(context.Background(), request)
+	if err == nil || err.Error() != "windows installation failed at arguments" {
+		t.Fatalf("error=%v", err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("platform was called: %v", events)
+	}
+}
+
+func TestSetSourcesPrefersNativeQueueAndFallsBackToLegacyQueue(t *testing.T) {
+	directory := t.TempDir()
+	request := fixtureRequest(t, directory)
+	paths, err := request.makePaths()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(paths.StageDir)
+	if err := os.MkdirAll(request.StateDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.LegacyQueue, []byte("legacy"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	request.setSources(&paths)
+	if paths.SourceQueue != paths.LegacyQueue {
+		t.Fatalf("source queue=%q want legacy=%q", paths.SourceQueue, paths.LegacyQueue)
+	}
+	if err := os.WriteFile(paths.InstalledQueue, []byte("native"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	request.setSources(&paths)
+	if paths.SourceQueue != paths.InstalledQueue {
+		t.Fatalf("source queue=%q want native=%q", paths.SourceQueue, paths.InstalledQueue)
+	}
+}
+
+func successfulRequest(t *testing.T) Request {
+	t.Helper()
+	request := fixtureRequest(t, t.TempDir())
+	request.Activate = func(_ context.Context, _, output string) error {
+		return os.WriteFile(output, []byte(validConfig(filepath.Join(request.StateDir, "queue.json"))), 0600)
+	}
+	request.Migrate = func(paths Paths) error {
+		return writeStaged(paths, request.StateDir)
+	}
+	return request
+}
+
+func writeStaged(paths Paths, stateDir string) error {
+	if err := os.WriteFile(paths.StagedConfig, []byte(validConfig(filepath.Join(stateDir, "queue.json"))), 0600); err != nil {
+		return err
+	}
+	return os.WriteFile(paths.StagedQueue, []byte("[]"), 0600)
+}
+
+func slicesContain(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
 func fixtureRequest(t *testing.T, directory string) Request {
 	t.Helper()
 	self := filepath.Join(directory, "selected-agent.exe")
