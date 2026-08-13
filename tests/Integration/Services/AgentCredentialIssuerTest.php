@@ -100,4 +100,16 @@ final class AgentCredentialIssuerTest extends TestCase
         self::assertFalse($this->issuer->validateInstaller($installer));
         self::assertFalse($this->issuer->validateInstaller('not-a-token'));
     }
+
+    public function testExpiredInstallerCredentialCannotBeValidatedOrExchanged(): void
+    {
+        $installer = $this->issuer->issueInstaller($this->serverId);
+        self::$pdo?->exec(
+            "UPDATE installer_tokens SET expires_at = CURRENT_TIMESTAMP - INTERVAL '1 second'"
+        );
+
+        self::assertFalse($this->issuer->validateInstaller($installer));
+        $this->expectException(RuntimeException::class);
+        $this->issuer->exchange($installer);
+    }
 }

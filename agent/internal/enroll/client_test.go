@@ -18,6 +18,7 @@ const (
 )
 
 func TestActivateExchangesCredentialAndWritesValidatedConfig(t *testing.T) {
+	t.Setenv("PROGRAMDATA", `C:\ProgramData`)
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost || request.URL.Path != "/api/v1/agent/install" {
 			t.Fatalf("unexpected request %s %s", request.Method, request.URL.Path)
@@ -47,7 +48,7 @@ func TestActivateExchangesCredentialAndWritesValidatedConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if configuration.Token != permanentToken || configuration.QueuePath != `%PROGRAMDATA%\MirvMon\Agent\queue.json` {
+	if configuration.Token != permanentToken || configuration.QueuePath != `C:\ProgramData\MirvMon\Agent\queue.json` {
 		t.Fatalf("unexpected configuration: %#v", configuration)
 	}
 }
@@ -119,6 +120,36 @@ func TestActivateRejectsTrailingJSON(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("Activate accepted trailing JSON")
+	}
+}
+
+func TestActivateRejectsTrailingBootstrapJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		_, _ = writer.Write([]byte(validConfiguration(permanentToken)))
+	}))
+	defer server.Close()
+	directory := t.TempDir()
+	bootstrapPath := filepath.Join(directory, "bootstrap.json")
+	writeBootstrap(t, bootstrapPath, server.URL, installerCredential)
+	file, err := os.OpenFile(bootstrapPath, os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.WriteString(`{}`); err != nil {
+		_ = file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	err = Activate(context.Background(), Request{
+		BootstrapPath: bootstrapPath,
+		OutputConfig:  filepath.Join(directory, "config.json"),
+		HTTPClient:    server.Client(),
+	})
+	if err == nil {
+		t.Fatal("Activate accepted trailing bootstrap JSON")
 	}
 }
 

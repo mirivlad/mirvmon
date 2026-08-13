@@ -34,6 +34,8 @@ final class WindowsInstallerContractTest extends TestCase
         self::assertNotFalse($commit);
         self::assertLessThan($activation, $selection);
         self::assertLessThan($commit, $activation);
+        self::assertStringContainsString('$env:ProgramW6432', $this->powerShell);
+        self::assertStringContainsString('Join-Path $ProgramFilesRoot', $this->powerShell);
     }
 
     public function testPowerShellStaysInsidePs2BoundaryAndUsesNativeTlsActivation(): void
@@ -89,6 +91,20 @@ final class WindowsInstallerContractTest extends TestCase
         self::assertStringContainsString('Wait-ServiceRunning', $this->powerShell);
         self::assertStringContainsString('function Rollback-Installation', $this->powerShell);
         self::assertStringContainsString("schtasks.exe' @('/Delete'", $this->powerShell);
+        self::assertMatchesRegularExpression(
+            '/if \(\$LegacyTaskExists -and \$LegacyTaskWasEnabled\)[\s\S]*?disable-old-task[\s\S]*?\}\s*if \(\$LegacyTaskExists\) \{[\s\S]*?stop-old-task/',
+            $this->powerShell
+        );
+        self::assertStringContainsString('function Wait-LegacyTaskStopped', $this->powerShell);
+        self::assertStringContainsString('Wait-LegacyTaskStopped 20', $this->powerShell);
+        self::assertLessThan(
+            $this->position("'commit-migrate-state'"),
+            $this->position('Wait-LegacyTaskStopped 20')
+        );
+        self::assertMatchesRegularExpression(
+            '/\$LegacyTaskWasEnabled -or \$LegacyTaskWasRunning[\s\S]*?rollback-enable-old-task[\s\S]*?if \(\$LegacyTaskExists -and \$LegacyTaskWasRunning\)[\s\S]*?rollback-start-old-task[\s\S]*?if \(\$LegacyTaskExists -and \(-not \$LegacyTaskWasEnabled\)\)[\s\S]*?rollback-disable-old-task/',
+            $this->powerShell
+        );
     }
 
     public function testNsisIsAnElevatedSelfContainedWrapper(): void
@@ -102,6 +118,20 @@ final class WindowsInstallerContractTest extends TestCase
         self::assertStringContainsString('mirvmon-install.ps1', $this->nsis);
         self::assertStringContainsString('SetErrorLevel', $this->nsis);
         self::assertStringNotContainsString('INSTALLER_CREDENTIAL', $this->nsis);
+        self::assertStringContainsString('InitPluginsDir', $this->nsis);
+        self::assertLessThan(
+            strpos($this->nsis, 'SetOutPath "$PLUGINSDIR"'),
+            strpos($this->nsis, 'InitPluginsDir')
+        );
+    }
+
+    public function testActivatedAbsoluteQueuePathIsRewrittenForStaging(): void
+    {
+        self::assertStringContainsString(
+            '$ServerConfigText.Replace($AbsoluteQueueJson, $PreflightQueueJson)',
+            $this->powerShell
+        );
+        self::assertStringNotContainsString('$FinalQueueJson', $this->powerShell);
     }
 
     private function position(string $needle): int

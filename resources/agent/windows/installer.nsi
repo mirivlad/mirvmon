@@ -21,6 +21,7 @@ BrandingText "MirvMon"
 
 Section "Install MirvMon Agent"
   SetShellVarContext all
+  InitPluginsDir
   SetOutPath "$PLUGINSDIR"
   File /oname=mirvmon-install.ps1 "${PAYLOAD_DIR}/mirvmon-install.ps1"
   File /oname=mirvmon-agent-modern.exe "${PAYLOAD_DIR}/mirvmon-agent-modern.exe"
