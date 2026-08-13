@@ -145,8 +145,14 @@ state разделены между `Program Files` и `ProgramData`.
 
 Linux runtime — статический Go 1.26.5 x64 binary. Windows modern использует ту
 же версию Go, а Windows 7 SP1 и Server 2008 R2 — Go 1.20.14 x64 binary.
-Installer сначала проверяет binary и мигрирует старые configuration/queue в
-staging, после чего заменяет state и регистрирует systemd либо Windows service.
+Legacy Windows получает персонализированный ZIP с локальными BAT, PS1, EXE и
+ASCII/no-BOM server config; target host не выполняет сетевой bootstrap. Старые
+legacy BAT/PS1 URL являются aliases этого ZIP. Installer сначала проверяет
+manifest size/SHA-256 и binary identity, выполняет `check`, мигрирует старые
+configuration/queue в staging и проверяет результат. Только после этого он
+останавливает старый runtime, переключает state и регистрирует либо
+перенастраивает Windows service. Запуск проверяется через WMI, а post-commit
+ошибка восстанавливает service metadata и файлы из transaction rollback copy.
 
 Начиная с `v0.4.3`, envelope также сообщает точный artifact key и capability
 `self_update_v1`. Администратор создаёт одну typed-команду обновления для одного

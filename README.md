@@ -143,7 +143,7 @@ docker compose -f docker/docker-compose.yml logs -f db
 ## Установка агента
 
 Добавьте сервер в веб-интерфейсе и скачайте один из одноразовых установщиков:
-Linux shell, PowerShell, BAT или отдельный установщик для Windows 7 и
+Linux shell, PowerShell, BAT или отдельный ZIP-пакет для Windows 7 и
 Server 2008 R2. Ссылка действует один час и передаёт installer credential, а
 не постоянный ключ агента. Обычные загрузки используют действующий ключ; его
 отзыв выполняется только явным действием администратора. Постоянный ключ не
@@ -181,11 +181,24 @@ sudo journalctl -u mirvmon-agent -f
 
 ### Windows 7 и Server 2008 R2
 
-Для этих систем доступны `/agent/install-legacy.bat` и
-`/agent/install-legacy.ps1`. Они совместимы с PowerShell 2.0, скачивают
-нативный x64-бинарник Go 1.20.14 через `Net.WebClient` и регистрируют Windows
-service `MirvMonAgent`. Агент собирает те же метрики, службы, процессы,
-версию ОС и получает удалённую конфигурацию, что и современная Windows-сборка.
+Скачайте `/agent/install-legacy.zip`, распакуйте каталог и запустите
+`install.bat` от имени Administrator. Пакет содержит читаемые BAT и PowerShell
+2.0 script, персональный `server-config.json` и нативный x64-бинарник Go
+1.20.14. Установщик не обращается к сети: старый CLR/TLS stack, WebClient,
+BITS, `certutil` и современный PowerShell не требуются. Старые URL
+`/agent/install-legacy.bat` и `/agent/install-legacy.ps1` сохранены как aliases
+и также возвращают полный ZIP.
+
+До остановки прежнего агента installer проверяет размер, SHA-256, version и
+artifact identity нового EXE, выполняет `check`, мигрирует config/queue в
+staging и повторно проверяет итоговый config. Затем он сохраняет backups с
+суффиксом `.legacy-<timestamp>`, переключает службу и подтверждает состояние
+`Running`. Ошибка после переключения запускает rollback; ошибка проверки или
+миграции вообще не изменяет работающий старый агент. ACL назначаются по
+well-known SID и не зависят от языка Windows.
+
+Агент собирает те же метрики, службы, процессы, версию ОС и получает удалённую
+конфигурацию, что и современная Windows-сборка.
 
 Сервис постоянно работает под LocalSystem; недоставленные замеры хранятся в
 `%ProgramData%\MirvMon\Agent\queue.json` (до 1000) и досылаются следующим

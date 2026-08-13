@@ -134,6 +134,42 @@ Windows Server 2012 R2+ и Windows 10+ используют Go 1.26.5. Windows 7
 совместимый с PowerShell 2.0 installer. Windows Server 2008 без R2 и 32-bit
 платформы не поддерживаются.
 
+Для Windows 7/Server 2008 R2 скачайте во вкладке «Агент» файл
+`mirvmon-agent-windows-legacy-amd64.zip`, полностью распакуйте его и запустите
+`install.bat` от имени Administrator. Все четыре файла должны оставаться рядом:
+
+```text
+mirvmon-agent-windows-legacy-amd64/
+  install.bat
+  mirvmon-install-legacy.ps1
+  mirvmon-agent.exe
+  server-config.json
+```
+
+BAT только проверяет elevation и запускает соседний PS1. Установка полностью
+локальная и не требует рабочего TLS 1.2 в PowerShell/.NET. Успешное завершение
+сообщает, что `MirvMonAgent` находится в состоянии `Running`. Предыдущие config,
+queue и установленный EXE, если он существовал, сохраняются рядом с суффиксом
+`.legacy-YYYYMMDDHHMMSS`. При ошибке до переключения старый агент не
+останавливается; при ошибке запуска выполняется rollback.
+
+### Проверка на целевой legacy Windows
+
+Автоматическая сборка Go 1.20.14 и проверка PowerShell 2.0 contract не заменяют
+runtime-тест на Windows Server 2008 R2 SP1 x64. Перед production rollout
+проверьте последовательно:
+
+1. clean install из каталога с пробелами и `sc.exe query MirvMonAgent`;
+2. получение метрик и remote config текущим server API;
+3. повторный запуск того же типа пакета;
+4. переход со старого Python config/JSON queue;
+5. переход с PowerShell `queue.txt`;
+6. испорченный bundled EXE и невалидный config — старый агент продолжает
+   работать, его service/task и файлы не изменены;
+7. наличие timestamped backups и отсутствие двух одновременно работающих
+   агентов;
+8. последующее обновление capable native agent из вкладки «Агент».
+
 Все установщики создают native service, сохраняют configuration и bounded queue
 в защищённых каталогах и перед переключением импортируют state старого
 Python/PowerShell агента в отдельные файлы. При неудаче исходные state files
@@ -192,5 +228,5 @@ docker compose --env-file .env -f docker/docker-compose.yml exec -T db \
 
 Прикладное ядро не зависит от FrankenPHP. Для запуска через nginx + PHP-FPM
 нужны PHP 8.5, Composer dependencies и расширения `pdo_pgsql`, `curl`, `intl`,
-`sodium`. Эта схема не является основным Portainer deployment и должна
+`sodium`, `zip`. Эта схема не является основным Portainer deployment и должна
 сохранять те же environment variables и public root `public/`.
