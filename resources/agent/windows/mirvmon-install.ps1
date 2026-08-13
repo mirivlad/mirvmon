@@ -17,7 +17,11 @@ $PackageModernAgentPath = Join-Path $InstallerDir 'mirvmon-agent-modern.exe'
 $PackageLegacyAgentPath = Join-Path $InstallerDir 'mirvmon-agent-legacy.exe'
 $PackageBootstrapPath = Join-Path $InstallerDir 'bootstrap.json'
 $PackageAgentPath = ''
-$InstallDir = Join-Path $env:ProgramFiles 'MirvMon\Agent'
+$ProgramFilesRoot = $env:ProgramW6432
+if ([string]::IsNullOrEmpty($ProgramFilesRoot)) {
+    $ProgramFilesRoot = $env:ProgramFiles
+}
+$InstallDir = Join-Path $ProgramFilesRoot 'MirvMon\Agent'
 $StateDir = Join-Path $env:ProgramData 'MirvMon\Agent'
 $InstalledAgentPath = Join-Path $InstallDir 'mirvmon-agent.exe'
 $ConfigPath = Join-Path $StateDir 'config.json'
@@ -37,7 +41,7 @@ $CreatedService = $false
 $OriginalService = $null
 $LegacyTaskExists = $false
 $LegacyTaskWasEnabled = $false
-$LegacyTaskDisabled = $false
+$LegacyTaskWasRunning = $false
 $SourceConfigPath = ''
 $SourceQueuePath = ''
 $HadInstalledAgent = $false
@@ -221,6 +225,31 @@ function Test-LegacyTaskEnabled {
     }
 }
 
+function Test-LegacyTaskRunning {
+    $Scheduler = New-Object -ComObject 'Schedule.Service'
+    try {
+        $Scheduler.Connect()
+        $Folder = $Scheduler.GetFolder('\')
+        $Task = $Folder.GetTask($LegacyTaskName)
+        return ([int] $Task.State -eq 4)
+    } finally {
+        if ($Task -ne $null) { [void] [Runtime.InteropServices.Marshal]::ReleaseComObject($Task) }
+        if ($Folder -ne $null) { [void] [Runtime.InteropServices.Marshal]::ReleaseComObject($Folder) }
+        if ($Scheduler -ne $null) { [void] [Runtime.InteropServices.Marshal]::ReleaseComObject($Scheduler) }
+    }
+}
+
+function Wait-LegacyTaskStopped {
+    param([int]$Attempts)
+    for ($Attempt = 0; $Attempt -lt $Attempts; $Attempt++) {
+        if (-not (Test-LegacyTaskRunning)) {
+            return $true
+        }
+        Start-Sleep -Seconds 1
+    }
+    return $false
+}
+
 function Invoke-StagedMigration {
     param([string]$MigrateStage, [string]$CheckStage)
     Invoke-NativeRequired $MigrateStage $StageAgentPath $MigrateArguments | Out-Null
@@ -288,13 +317,18 @@ function Rollback-Installation {
             Invoke-NativeRequired 'rollback-delete-service' 'sc.exe' @('delete', $ServiceName) | Out-Null
         }
 
-        if ($LegacyTaskExists -and $LegacyTaskWasEnabled) {
-            if ($LegacyTaskDisabled) {
-                Invoke-NativeRequired 'rollback-enable-old-task' 'schtasks.exe' @(
-                    '/Change', '/TN', $LegacyTaskName, '/Enable'
-                ) | Out-Null
-            }
+        if ($LegacyTaskExists -and ($LegacyTaskWasEnabled -or $LegacyTaskWasRunning)) {
+            Invoke-NativeRequired 'rollback-enable-old-task' 'schtasks.exe' @(
+                '/Change', '/TN', $LegacyTaskName, '/Enable'
+            ) | Out-Null
+        }
+        if ($LegacyTaskExists -and $LegacyTaskWasRunning) {
             Invoke-NativeRequired 'rollback-start-old-task' 'schtasks.exe' @('/Run', '/TN', $LegacyTaskName) | Out-Null
+        }
+        if ($LegacyTaskExists -and (-not $LegacyTaskWasEnabled)) {
+            Invoke-NativeRequired 'rollback-disable-old-task' 'schtasks.exe' @(
+                '/Change', '/TN', $LegacyTaskName, '/Disable'
+            ) | Out-Null
         }
     } catch {
         Write-Host ('[MirvMon] Rollback error: ' + $_.Exception.Message) -ForegroundColor Red
@@ -306,6 +340,7 @@ function Commit-Installation {
     $script:LegacyTaskExists = Test-LegacyTask
     if ($LegacyTaskExists) {
         $script:LegacyTaskWasEnabled = Test-LegacyTaskEnabled
+        $script:LegacyTaskWasRunning = Test-LegacyTaskRunning
     }
     $script:HadInstalledAgent = Test-Path -LiteralPath $InstalledAgentPath
     $script:HadConfig = Test-Path -LiteralPath $ConfigPath
@@ -330,8 +365,12 @@ function Commit-Installation {
         Invoke-NativeRequired 'disable-old-task' 'schtasks.exe' @(
             '/Change', '/TN', $LegacyTaskName, '/Disable'
         ) | Out-Null
-        $script:LegacyTaskDisabled = $true
+    }
+    if ($LegacyTaskExists) {
         Invoke-NativeAllowed 'stop-old-task' 'schtasks.exe' @('/End', '/TN', $LegacyTaskName) @(0, 1) | Out-Null
+        if (-not (Wait-LegacyTaskStopped 20)) {
+            throw 'stop-old-task: MirvMon Agent scheduled task did not stop.'
+        }
     }
     if (($OriginalService -ne $null) -and ($OriginalService.State -ne 'Stopped')) {
         Invoke-NativeRequired 'stop-old-service' 'sc.exe' @('stop', $ServiceName) | Out-Null
@@ -427,10 +466,9 @@ try {
     Invoke-NativeRequired 'activate' $StageAgentPath @('activate', '--bootstrap', $StageBootstrapPath, '--output-config', $StageServerConfigPath) | Out-Null
 
     $ServerConfigText = [IO.File]::ReadAllText($StageServerConfigPath)
-    $FinalQueueJson = '%PROGRAMDATA%\\MirvMon\\Agent\\queue.json'
     $AbsoluteQueueJson = $QueuePath.Replace('\', '\\')
     $PreflightQueueJson = $StageQueuePath.Replace('\', '\\')
-    $PreflightConfigText = $ServerConfigText.Replace($FinalQueueJson, $PreflightQueueJson)
+    $PreflightConfigText = $ServerConfigText.Replace($AbsoluteQueueJson, $PreflightQueueJson)
     if ($PreflightConfigText -eq $ServerConfigText) {
         throw 'check-server-config: queue path placeholder was not found.'
     }
