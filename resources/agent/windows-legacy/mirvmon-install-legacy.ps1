@@ -109,10 +109,10 @@ function Get-FileSha256 {
         try {
             $Hash = $Hasher.ComputeHash($Stream)
         } finally {
-            $Hasher.Dispose()
+            $Hasher.Clear()
         }
     } finally {
-        $Stream.Dispose()
+        $Stream.Close()
     }
     $Builder = New-Object Text.StringBuilder
     foreach ($Byte in $Hash) {
