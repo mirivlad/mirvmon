@@ -62,5 +62,6 @@ final class RouteSecurityContractTest extends TestCase
         self::assertArrayNotHasKey('/test', $routes);
         self::assertArrayNotHasKey('/api/status', $routes);
         self::assertSame(['GET'], $routes['/api/v1/agent/{id}/processes'] ?? null);
+        self::assertSame(['POST'], $routes['/api/v1/agent/install'] ?? null);
     }
 }

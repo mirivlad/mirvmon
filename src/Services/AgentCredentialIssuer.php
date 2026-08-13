@@ -98,6 +98,26 @@ final class AgentCredentialIssuer
         }
     }
 
+    public function validateInstaller(string $installerToken): bool
+    {
+        if (preg_match('/^[a-f0-9]{64}$/', $installerToken) !== 1) {
+            return false;
+        }
+
+        $statement = $this->pdo->prepare(
+            'SELECT 1
+             FROM installer_tokens
+             WHERE token_hash = :token_hash
+               AND consumed_at IS NULL
+               AND expires_at > CURRENT_TIMESTAMP'
+        );
+        $statement->execute([
+            'token_hash' => hash('sha256', $installerToken),
+        ]);
+
+        return $statement->fetchColumn() !== false;
+    }
+
     public function rotate(int $serverId): void
     {
         if ($serverId < 1) {
