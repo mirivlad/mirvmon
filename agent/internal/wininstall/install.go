@@ -128,7 +128,7 @@ func Install(ctx context.Context, request Request) error {
 		return stageError("snapshot")
 	}
 	if request.Platform.Protect(paths) != nil {
-		return rollbackError(request.Platform, paths, snapshot, "protect")
+		return stageError("protect")
 	}
 	if request.Platform.Freeze(snapshot) != nil {
 		return rollbackError(request.Platform, paths, snapshot, "freeze")
