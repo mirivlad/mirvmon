@@ -75,12 +75,19 @@ SH
             'installer_credential' => $credential,
         ], $bootstrap);
 
-        $script = (string) file_get_contents($this->directory . '/captured/mirvmon-install.ps1');
-        self::assertStringContainsString("\$ExpectedVersion = 'v0.4.5'", $script);
-        self::assertStringContainsString(hash('sha256', 'modern-agent'), $script);
-        self::assertStringContainsString(hash('sha256', 'legacy-agent'), $script);
-        self::assertStringNotContainsString($credential, $script);
-        self::assertStringNotContainsString($credential, (string) file_get_contents($this->directory . '/argv.txt'));
+        $payloadFiles = array_values(array_diff(scandir($this->directory . '/captured') ?: [], ['.', '..']));
+        sort($payloadFiles);
+        self::assertSame([
+            'bootstrap.json',
+            'mirvmon-agent-legacy.exe',
+            'mirvmon-agent-modern.exe',
+        ], $payloadFiles);
+
+        $arguments = (string) file_get_contents($this->directory . '/argv.txt');
+        self::assertStringContainsString('-DEXPECTED_VERSION=v0.4.5', $arguments);
+        self::assertStringContainsString('-DMODERN_SHA256=' . hash('sha256', 'modern-agent'), $arguments);
+        self::assertStringContainsString('-DLEGACY_SHA256=' . hash('sha256', 'legacy-agent'), $arguments);
+        self::assertStringNotContainsString($credential, $arguments);
     }
 
     public function testRejectsCompilerFailureWithoutLeavingPrivatePayload(): void
