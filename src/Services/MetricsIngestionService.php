@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Domain\Metrics\AgentAuthenticationException;
 use App\Domain\Metrics\MetricsEnvelope;
+use App\Repositories\AgentUpdateRepository;
 use App\Repositories\NotificationOutboxRepository;
 use DateTimeImmutable;
 use JsonException;
@@ -18,7 +19,8 @@ final class MetricsIngestionService
     public function __construct(
         private readonly PDO $pdo,
         private readonly ThresholdEvaluator $thresholdEvaluator,
-        private readonly NotificationOutboxRepository $outbox
+        private readonly NotificationOutboxRepository $outbox,
+        private readonly AgentUpdateRepository $agentUpdates
     ) {
     }
 
@@ -269,21 +271,12 @@ final class MetricsIngestionService
             ),
         ]);
 
-        if ($envelope->agentVersion !== null) {
-            $complete = $this->pdo->prepare(
-                "UPDATE agent_update_commands
-                 SET state = 'succeeded',
-                     error_code = NULL,
-                     completed_at = CURRENT_TIMESTAMP,
-                     updated_at = CURRENT_TIMESTAMP
-                 WHERE server_id = :server_id
-                   AND target_version = :agent_version
-                   AND state = 'awaiting_restart'"
+        if ($envelope->agentVersion !== null && $envelope->agentArtifact !== null) {
+            $this->agentUpdates->completeForReportedIdentity(
+                $serverId,
+                $envelope->agentVersion,
+                $envelope->agentArtifact
             );
-            $complete->execute([
-                'server_id' => $serverId,
-                'agent_version' => $envelope->agentVersion,
-            ]);
         }
 
         $token = $this->pdo->prepare(

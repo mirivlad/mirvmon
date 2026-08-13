@@ -9,6 +9,7 @@ use App\Database\ConnectionFactory;
 use App\Database\Migrator;
 use App\Domain\Metrics\MetricsValidator;
 use App\Repositories\NotificationOutboxRepository;
+use App\Repositories\AgentUpdateRepository;
 use App\Services\MetricsIngestionService;
 use App\Services\ThresholdEvaluator;
 use PDO;
@@ -62,7 +63,8 @@ final class MetricsControllerTest extends TestCase
             new MetricsIngestionService(
                 self::$pdo,
                 new ThresholdEvaluator(),
-                $outbox
+                $outbox,
+                new AgentUpdateRepository(self::$pdo)
             )
         );
     }

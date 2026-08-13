@@ -33,7 +33,16 @@ func (manager Manager) Process(
 	command Command,
 	report Reporter,
 ) error {
-	if command.Artifact != manager.Artifact || !isUpgrade(manager.InstalledVersion, command.TargetVersion) {
+	if command.Artifact != manager.Artifact {
+		return ErrInvalidCommand
+	}
+	if err := manager.Store.ReconcileInstalled(manager.InstalledVersion, manager.Artifact); err != nil {
+		return err
+	}
+	if command.TargetVersion == manager.InstalledVersion || isUpgrade(command.TargetVersion, manager.InstalledVersion) {
+		return nil
+	}
+	if !isUpgrade(manager.InstalledVersion, command.TargetVersion) {
 		return ErrInvalidCommand
 	}
 	state, accepted, err := manager.Store.Accept(command)

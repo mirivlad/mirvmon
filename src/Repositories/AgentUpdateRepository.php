@@ -140,6 +140,9 @@ final class AgentUpdateRepository
                 if ($command['state'] === $state) {
                     return true;
                 }
+                if ($command['state'] === 'succeeded') {
+                    return true;
+                }
                 $expected = self::NEXT_STATE[(string) $command['state']] ?? null;
                 if ($expected !== $state) {
                     throw new InvalidArgumentException('Invalid update transition.');
@@ -168,8 +171,11 @@ final class AgentUpdateRepository
             $id,
             $serverId,
             function (array $command) use ($errorCode): bool {
-                if (in_array($command['state'], ['succeeded', 'failed'], true)) {
-                    return false;
+                if ($command['state'] === 'succeeded') {
+                    return true;
+                }
+                if ($command['state'] === 'failed') {
+                    return $command['error_code'] === $errorCode;
                 }
                 $statement = $this->pdo->prepare(
                     "UPDATE agent_update_commands
@@ -189,9 +195,10 @@ final class AgentUpdateRepository
         );
     }
 
-    public function completeForReportedVersion(
+    public function completeForReportedIdentity(
         int $serverId,
-        string $reportedVersion
+        string $reportedVersion,
+        string $reportedArtifact
     ): bool {
         $statement = $this->pdo->prepare(
             "UPDATE agent_update_commands
@@ -199,13 +206,24 @@ final class AgentUpdateRepository
                  error_code = NULL,
                  completed_at = CURRENT_TIMESTAMP,
                  updated_at = CURRENT_TIMESTAMP
-             WHERE server_id = :server_id
-               AND target_version = :reported_version
-               AND state = 'awaiting_restart'"
+             WHERE id = (
+                SELECT id
+                FROM agent_update_commands
+                WHERE server_id = :server_id
+                  AND target_version = :reported_version
+                  AND target_artifact = :reported_artifact
+                ORDER BY
+                    CASE WHEN state NOT IN ('succeeded', 'failed') THEN 0 ELSE 1 END,
+                    created_at DESC,
+                    id DESC
+                LIMIT 1
+             )
+               AND state <> 'succeeded'"
         );
         $statement->execute([
             'server_id' => $serverId,
             'reported_version' => $reportedVersion,
+            'reported_artifact' => $reportedArtifact,
         ]);
 
         return $statement->rowCount() === 1;

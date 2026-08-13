@@ -139,3 +139,95 @@ func TestManagerRemovesRequestWhenHandoffMarkerCannotBePublished(t *testing.T) {
 		t.Fatalf("request remains after marker failure: %v", err)
 	}
 }
+
+func TestManagerAllowsMetricsWhenCommandTargetIsAlreadyInstalled(t *testing.T) {
+	directory := t.TempDir()
+	command := testCommand()
+	store := NewStore(filepath.Join(directory, "queue.json"))
+	if _, accepted, err := store.Accept(command); err != nil || !accepted {
+		t.Fatalf("accept=%v err=%v", accepted, err)
+	}
+	if err := store.Advance(command.ID, StateDownloading, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Advance(command.ID, StateInstalling, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Advance(command.ID, StateAwaitingRestart, ""); err != nil {
+		t.Fatal(err)
+	}
+	manager := Manager{
+		Store:            store,
+		InstalledVersion: command.TargetVersion,
+		Artifact:         command.Artifact,
+	}
+	reports := 0
+
+	if err := manager.Process(context.Background(), command, func(context.Context, Command, string, string) error {
+		reports++
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	state, err := store.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.State != StateSucceeded {
+		t.Fatalf("state=%q want=%q", state.State, StateSucceeded)
+	}
+	if reports != 0 {
+		t.Fatalf("reports=%d, already installed command must wait for metrics reconciliation", reports)
+	}
+}
+
+func TestManagerReconcilesPreviousLocalCommandBeforeNextUpdate(t *testing.T) {
+	directory := t.TempDir()
+	previous := testCommand()
+	store := NewStore(filepath.Join(directory, "queue.json"))
+	if _, accepted, err := store.Accept(previous); err != nil || !accepted {
+		t.Fatalf("accept=%v err=%v", accepted, err)
+	}
+	for _, state := range []string{StateDownloading, StateInstalling, StateAwaitingRestart} {
+		if err := store.Advance(previous.ID, state, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	next := previous
+	next.ID = "30000000-0000-4000-8000-000000000003"
+	next.TargetVersion = "v0.4.4"
+	payload := []byte("v0.4.4-agent")
+	digest := sha256.Sum256(payload)
+	next.SHA256 = hex.EncodeToString(digest[:])
+	next.Size = int64(len(payload))
+	server := httptest.NewTLSServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		_, _ = response.Write(payload)
+	}))
+	defer server.Close()
+	handoffs := 0
+	manager := Manager{
+		Store: store,
+		Downloader: Downloader{
+			ConfigURL: server.URL + "/api/v1/agent/config",
+			Artifact:  next.Artifact,
+			Client:    server.Client(),
+		},
+		InstalledVersion: previous.TargetVersion,
+		Artifact:         next.Artifact,
+		Handoff:          func(string) error { handoffs++; return nil },
+	}
+
+	if err := manager.Process(context.Background(), next, func(context.Context, Command, string, string) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if handoffs != 1 {
+		t.Fatalf("handoffs=%d", handoffs)
+	}
+	state, err := store.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Command.ID != next.ID || state.State != StateInstalling {
+		t.Fatalf("state=%#v", state)
+	}
+}
