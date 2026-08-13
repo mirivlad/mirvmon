@@ -154,6 +154,11 @@ queue, applies protected SID-based ACLs, and creates or reconfigures the quoted
 rollback rather than deleting the service first. Paths containing spaces are
 always quoted in the SCM `binPath`.
 
+An enabled legacy scheduled task is disabled before it is stopped, so it cannot
+start again during the switch. After the old runtime is quiescent, migration
+and staged-config validation run once more to capture queue entries written
+since preflight; only that refreshed state is copied to the final paths.
+
 ### Start, verify, and cleanup
 
 The installer starts `MirvMonAgent` and polls service state through WMI until it
