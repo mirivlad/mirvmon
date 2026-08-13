@@ -90,7 +90,15 @@ func DefaultDirectories() (string, string, error) {
 }
 
 func (windowsPlatform) Validate(request Request) error {
-	if runtime.GOARCH != "amd64" || !windows.GetCurrentProcessToken().IsElevated() {
+	if runtime.GOARCH != "amd64" {
+		return errors.New("elevated x64 process required")
+	}
+	var token windows.Token
+	if err := windows.OpenProcessToken(windows.CurrentProcess(), windows.TOKEN_QUERY, &token); err != nil {
+		return err
+	}
+	defer token.Close()
+	if !token.IsElevated() {
 		return errors.New("elevated x64 process required")
 	}
 	if filepath.Clean(filepath.Dir(request.BootstrapPath)) != filepath.Clean(filepath.Dir(request.ExecutablePath)) {

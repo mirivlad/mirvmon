@@ -10,10 +10,14 @@ final class WindowsInstallerContractTest extends TestCase
 {
     private string $nsis;
 
+    private string $windowsPlatform;
+
     protected function setUp(): void
     {
         $path = dirname(__DIR__, 3) . '/resources/agent/windows/installer.nsi';
         $this->nsis = (string) file_get_contents($path);
+        $platformPath = dirname(__DIR__, 3) . '/agent/internal/wininstall/platform_windows.go';
+        $this->windowsPlatform = (string) file_get_contents($platformPath);
     }
 
     public function testNsisSelectsOneNativeX64AgentAndRunsItsInstallerCommand(): void
@@ -68,5 +72,13 @@ final class WindowsInstallerContractTest extends TestCase
             strpos($this->nsis, 'File /oname=bootstrap.json'),
             strpos($this->nsis, 'Pop $0')
         );
+    }
+
+    public function testLegacyElevationCheckUsesARealProcessToken(): void
+    {
+        self::assertStringContainsString('windows.OpenProcessToken(', $this->windowsPlatform);
+        self::assertStringContainsString('windows.CurrentProcess()', $this->windowsPlatform);
+        self::assertStringContainsString('defer token.Close()', $this->windowsPlatform);
+        self::assertStringNotContainsString('windows.GetCurrentProcessToken()', $this->windowsPlatform);
     }
 }
