@@ -27,6 +27,8 @@ $InstallationSucceeded = $false
 $CreatedService = $false
 $OriginalService = $null
 $LegacyTaskExists = $false
+$LegacyTaskWasEnabled = $false
+$LegacyTaskDisabled = $false
 $SourceConfigPath = ''
 $SourceQueuePath = ''
 $HadInstalledAgent = $false
@@ -157,6 +159,33 @@ function Test-LegacyTask {
     throw ('detect-old-task: schtasks.exe failed with exit code ' + $ExitCode)
 }
 
+function Test-LegacyTaskEnabled {
+    $Scheduler = New-Object -ComObject 'Schedule.Service'
+    try {
+        $Scheduler.Connect()
+        $Folder = $Scheduler.GetFolder('\')
+        $Task = $Folder.GetTask($LegacyTaskName)
+        return [bool] $Task.Enabled
+    } finally {
+        if ($Task -ne $null) { [void] [Runtime.InteropServices.Marshal]::ReleaseComObject($Task) }
+        if ($Folder -ne $null) { [void] [Runtime.InteropServices.Marshal]::ReleaseComObject($Folder) }
+        if ($Scheduler -ne $null) { [void] [Runtime.InteropServices.Marshal]::ReleaseComObject($Scheduler) }
+    }
+}
+
+function Invoke-StagedMigration {
+    param([string]$MigrateStage, [string]$CheckStage)
+    Invoke-NativeRequired $MigrateStage $StageAgentPath $MigrateArguments | Out-Null
+
+    $MigratedConfigText = [IO.File]::ReadAllText($StageConfigPath)
+    $StageCheckConfigText = $MigratedConfigText.Replace($AbsoluteQueueJson, $PreflightQueueJson)
+    if ($StageCheckConfigText -eq $MigratedConfigText) {
+        throw ($CheckStage + ': queue path placeholder was not found.')
+    }
+    Set-Content -LiteralPath $StageCheckConfigPath -Value $StageCheckConfigText -Encoding ASCII
+    Invoke-NativeRequired $CheckStage $StageAgentPath @('check', '--config', $StageCheckConfigPath) | Out-Null
+}
+
 function Get-ScStartMode {
     param([string]$WmiStartMode)
     if ($WmiStartMode -eq 'Auto') { return 'auto' }
@@ -211,7 +240,12 @@ function Rollback-Installation {
             Invoke-NativeRequired 'rollback-delete-service' 'sc.exe' @('delete', $ServiceName) | Out-Null
         }
 
-        if ($LegacyTaskExists) {
+        if ($LegacyTaskExists -and $LegacyTaskWasEnabled) {
+            if ($LegacyTaskDisabled) {
+                Invoke-NativeRequired 'rollback-enable-old-task' 'schtasks.exe' @(
+                    '/Change', '/TN', $LegacyTaskName, '/Enable'
+                ) | Out-Null
+            }
             Invoke-NativeRequired 'rollback-start-old-task' 'schtasks.exe' @('/Run', '/TN', $LegacyTaskName) | Out-Null
         }
     } catch {
@@ -222,6 +256,9 @@ function Rollback-Installation {
 function Commit-Installation {
     $script:OriginalService = Get-AgentService
     $script:LegacyTaskExists = Test-LegacyTask
+    if ($LegacyTaskExists) {
+        $script:LegacyTaskWasEnabled = Test-LegacyTaskEnabled
+    }
     $script:HadInstalledAgent = Test-Path -LiteralPath $InstalledAgentPath
     $script:HadConfig = Test-Path -LiteralPath $ConfigPath
     $script:HadQueue = Test-Path -LiteralPath $QueuePath
@@ -241,15 +278,21 @@ function Commit-Installation {
     if ($SourceQueuePath -ne '') { Copy-Item -LiteralPath $SourceQueuePath -Destination ($SourceQueuePath + '.legacy-' + $Timestamp) -Force }
 
     $script:CommitStarted = $true
+    if ($LegacyTaskExists -and $LegacyTaskWasEnabled) {
+        Invoke-NativeRequired 'disable-old-task' 'schtasks.exe' @(
+            '/Change', '/TN', $LegacyTaskName, '/Disable'
+        ) | Out-Null
+        $script:LegacyTaskDisabled = $true
+        Invoke-NativeAllowed 'stop-old-task' 'schtasks.exe' @('/End', '/TN', $LegacyTaskName) @(0, 1) | Out-Null
+    }
     if (($OriginalService -ne $null) -and ($OriginalService.State -ne 'Stopped')) {
         Invoke-NativeRequired 'stop-old-service' 'sc.exe' @('stop', $ServiceName) | Out-Null
         if (-not (Wait-ServiceState 'Stopped' 20)) {
             throw 'stop-old-service: MirvMonAgent did not stop.'
         }
     }
-    if ($LegacyTaskExists) {
-        Invoke-NativeAllowed 'stop-old-task' 'schtasks.exe' @('/End', '/TN', $LegacyTaskName) @(0, 1) | Out-Null
-    }
+
+    Invoke-StagedMigration 'commit-migrate-state' 'commit-check-migrated-config'
 
     Copy-Item -LiteralPath $StageAgentPath -Destination $InstalledAgentPath -Force
     Copy-Item -LiteralPath $StageConfigPath -Destination $ConfigPath -Force
@@ -368,15 +411,7 @@ try {
     if ($SourceQueuePath -ne '') {
         $MigrateArguments += @('--source-queue', $SourceQueuePath)
     }
-    Invoke-NativeRequired 'migrate-state' $StageAgentPath $MigrateArguments | Out-Null
-
-    $MigratedConfigText = [IO.File]::ReadAllText($StageConfigPath)
-    $StageCheckConfigText = $MigratedConfigText.Replace($AbsoluteQueueJson, $PreflightQueueJson)
-    if ($StageCheckConfigText -eq $MigratedConfigText) {
-        throw 'check-migrated-config: queue path placeholder was not found.'
-    }
-    Set-Content -LiteralPath $StageCheckConfigPath -Value $StageCheckConfigText -Encoding ASCII
-    Invoke-NativeRequired 'check-migrated-config' $StageAgentPath @('check', '--config', $StageCheckConfigPath) | Out-Null
+    Invoke-StagedMigration 'migrate-state' 'check-migrated-config'
 
     Write-Stage 'Installing the validated native agent.'
     Commit-Installation
