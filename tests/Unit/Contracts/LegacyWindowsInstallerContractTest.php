@@ -61,6 +61,13 @@ final class LegacyWindowsInstallerContractTest extends TestCase
         );
     }
 
+    public function testClr2CleanupUsesMethodsVisibleToPowerShell2(): void
+    {
+        self::assertStringNotContainsString('.Dispose()', $this->powerShell);
+        self::assertStringContainsString('$Hasher.Clear()', $this->powerShell);
+        self::assertStringContainsString('$Stream.Close()', $this->powerShell);
+    }
+
     public function testAclUsesOnlyWellKnownSidSyntaxAndNativeExitChecks(): void
     {
         self::assertStringNotContainsString("'SYSTEM:", $this->powerShell);
