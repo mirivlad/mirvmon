@@ -242,6 +242,12 @@ Legacy-сборка собирает те же метрики, службы, п�
 envelope с target version (либо более новой) и совпадающим artifact завершает ожидающую команду в UI;
 локальное состояние предыдущего обновления также переводится в terminal.
 
+Если контейнер мониторинга обновился, пока команда ещё находится в `pending`,
+следующий config poll атомарно помечает прежнюю команду как
+`target_superseded` и выдаёт одну новую команду для текущей версии каталога.
+Команды, уже подтверждённые агентом (`accepted` и далее), автоматически не
+заменяются.
+
 На Linux непривилегированный агент только подготавливает файл; root-owned
 `mirvmon-agent-update.path` запускает ограниченный one-shot updater. На Windows
 защищённая копия текущего LocalSystem-бинарника выполняет замену после остановки
@@ -254,6 +260,33 @@ service. На обеих платформах прежний бинарник с
 sudo systemctl status mirvmon-agent-update.path mirvmon-agent-update.service
 sudo journalctl -u mirvmon-agent-update.service -n 100 --no-pager
 ```
+
+#### Однократное восстановление Linux-агента v0.4.5
+
+У v0.4.5 локальный update state мог остаться в `awaiting_restart` уже после
+успешной установки и блокировать принятие следующей команды. После redeploy
+MirvMon v0.4.8 сначала проверьте, что узел действительно имеет именно это
+состояние:
+
+```bash
+sudo /opt/mirvmon-agent/mirvmon-agent version
+sudo cat /var/lib/mirvmon-agent/update-state.json
+```
+
+Если binary сообщает `v0.4.5`, а JSON содержит target `v0.4.5` и state
+`awaiting_restart`, остановите оба unit, переместите только служебные файлы
+обновления в recoverable backup и снова запустите unit:
+
+```bash
+sudo systemctl stop mirvmon-agent-update.path mirvmon-agent.service
+sudo install -d -m 0700 /var/lib/mirvmon-agent/recovery-v045
+sudo sh -c 'for file in update-state.json update-request.json update-handoff update-staged; do if [ -e "/var/lib/mirvmon-agent/$file" ]; then mv "/var/lib/mirvmon-agent/$file" /var/lib/mirvmon-agent/recovery-v045/; fi; done'
+sudo systemctl start mirvmon-agent-update.path mirvmon-agent.service
+```
+
+Permanent token, config и metrics queue не затрагиваются. На следующем
+config poll сервер заменит старую `pending`-команду командой для актуальной
+версии, после чего обновление продолжится автоматически.
 
 ### Протокол отправки
 

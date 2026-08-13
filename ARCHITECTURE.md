@@ -170,6 +170,13 @@ R2 — Go 1.20.14 x64 binary. Сервер динамически собирае
 target version агент не повторяет обновление, а завершает локальный stale state
 и продолжает отправку метрик.
 
+Config poll дополнительно устраняет устаревшую активную команду, которую агент
+ещё не подтвердил: repository под row lock переводит старый `pending` в
+`failed/target_superseded` и в той же транзакции создаёт единственный `pending`
+для текущей catalog version с тем же artifact и `requested_by`. Состояния
+`accepted` и далее сервер не заменяет, потому что обновление уже могло начаться
+на наблюдаемом узле.
+
 Команда содержит UUID, target version, allowlisted artifact key, размер и
 SHA-256. URL и исполняемый текст отсутствуют. Public artifact скачивается с
 того же origin без permanent token; Bearer используется только для config и
