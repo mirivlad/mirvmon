@@ -63,5 +63,15 @@ final class RouteSecurityContractTest extends TestCase
         self::assertArrayNotHasKey('/api/status', $routes);
         self::assertSame(['GET'], $routes['/api/v1/agent/{id}/processes'] ?? null);
         self::assertSame(['POST'], $routes['/api/v1/agent/install'] ?? null);
+        self::assertSame(['GET'], $routes['/agent/install.exe'] ?? null);
+        foreach ([
+            '/agent/install.ps1',
+            '/agent/install.bat',
+            '/agent/install-legacy.zip',
+            '/agent/install-legacy.ps1',
+            '/agent/install-legacy.bat',
+        ] as $removedInstaller) {
+            self::assertArrayNotHasKey($removedInstaller, $routes);
+        }
     }
 }

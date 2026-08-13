@@ -86,7 +86,7 @@ final class ServerControllerTest extends TestCase
 
         self::assertSame(200, $response->getStatusCode());
         self::assertSame(
-            '4',
+            '2',
             (string) self::$pdo?->query(
                 'SELECT count(*) FROM installer_tokens'
             )->fetchColumn()
@@ -99,11 +99,11 @@ final class ServerControllerTest extends TestCase
         );
         $html = (string) $response->getBody();
         self::assertStringContainsString('/agent/install.sh?token=', $html);
-        self::assertStringContainsString('/agent/install.ps1?token=', $html);
-        self::assertStringContainsString('/agent/install.bat?token=', $html);
-        self::assertStringContainsString('/agent/install-legacy.zip?token=', $html);
-        self::assertStringNotContainsString('/agent/install-legacy.ps1?token=', $html);
-        self::assertStringNotContainsString('/agent/install-legacy.bat?token=', $html);
+        self::assertStringContainsString('/agent/install.exe?token=', $html);
+        self::assertStringNotContainsString('/agent/install.ps1?token=', $html);
+        self::assertStringNotContainsString('/agent/install.bat?token=', $html);
+        self::assertStringNotContainsString('/agent/install-legacy', $html);
+        self::assertSame(2, substr_count($html, 'href="/agent/install'));
     }
 
     public function testLegacyAgentTokenRequiresExplicitRotationBeforeDownloadingInstallers(): void

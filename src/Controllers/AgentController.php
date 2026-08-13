@@ -8,7 +8,7 @@ use App\Services\AgentCredential;
 use App\Services\AgentCredentialIssuer;
 use App\Services\AgentArtifactCatalog;
 use App\Services\AgentInstallerService;
-use App\Services\LegacyWindowsPackageService;
+use App\Services\WindowsInstallerPackageService;
 use App\Services\AgentUpdateService;
 use App\Services\PublicUrlResolver;
 use Closure;
@@ -26,7 +26,7 @@ final class AgentController
         private readonly PublicUrlResolver $urlResolver,
         private readonly AgentCredentialIssuer $credentials,
         private readonly AgentInstallerService $installers,
-        private readonly LegacyWindowsPackageService $legacyWindowsPackages,
+        private readonly WindowsInstallerPackageService $windowsPackages,
         /** @var Closure(): AgentArtifactCatalog */
         private readonly Closure $artifactCatalog,
         /** @var Closure(): AgentUpdateService */
@@ -64,100 +64,27 @@ final class AgentController
     }
 
     /** @param array<string, string> $args */
-    public function generateWindowsInstallScript(
+    public function generateWindowsInstaller(
         Request $request,
         Response $response,
         array $args
     ): Response {
-        $credential = $this->exchangeInstallerCredential($request);
-        if ($credential === null) {
+        $installerToken = $request->getQueryParams()['token'] ?? null;
+        if (
+            !is_string($installerToken)
+            || !$this->credentials->validateInstaller($installerToken)
+        ) {
             return $this->plainError($response, 403, 'Invalid or expired installer token.');
         }
 
         try {
-            $script = $this->installers->windowsPowerShell(
+            $package = $this->windowsPackages->build(
                 $this->urlResolver->resolve($request),
-                $credential->token
-            );
-        } catch (Throwable) {
-            return $this->plainError($response, 400, 'Invalid public service URL.');
-        }
-
-        return $this->download(
-            $response,
-            $script,
-            'text/plain; charset=UTF-8',
-            'mirvmon-install.ps1',
-            secret: true
-        );
-    }
-
-    /** @param array<string, string> $args */
-    public function generateWindowsBatScript(
-        Request $request,
-        Response $response,
-        array $args
-    ): Response {
-        $credential = $this->exchangeInstallerCredential($request);
-        if ($credential === null) {
-            return $this->plainError($response, 403, 'Invalid or expired installer token.');
-        }
-
-        try {
-            $script = $this->installers->windowsBatch(
-                $this->urlResolver->resolve($request),
-                $credential->token
-            );
-        } catch (Throwable) {
-            return $this->plainError($response, 400, 'Invalid public service URL.');
-        }
-
-        return $this->download(
-            $response,
-            $script,
-            'application/x-msdos-program',
-            'mirvmon-install.bat',
-            secret: true
-        );
-    }
-
-    /** @param array<string, string> $args */
-    public function generateLegacyWindowsInstallScript(
-        Request $request,
-        Response $response,
-        array $args
-    ): Response {
-        return $this->generateLegacyWindowsPackage($request, $response, $args);
-    }
-
-    /** @param array<string, string> $args */
-    public function generateLegacyWindowsBatScript(
-        Request $request,
-        Response $response,
-        array $args
-    ): Response {
-        return $this->generateLegacyWindowsPackage($request, $response, $args);
-    }
-
-    /** @param array<string, string> $args */
-    public function generateLegacyWindowsPackage(
-        Request $request,
-        Response $response,
-        array $args
-    ): Response {
-        $credential = $this->exchangeInstallerCredential($request);
-        if ($credential === null) {
-            return $this->plainError($response, 403, 'Invalid or expired installer token.');
-        }
-
-        try {
-            $package = $this->legacyWindowsPackages->build(
-                $this->urlResolver->resolve($request),
-                $credential->token,
+                $installerToken,
                 ($this->artifactCatalog)()
             );
         } catch (Throwable) {
-            return $this->plainError($response, 400, 'Cannot build legacy Windows package.');
+            return $this->plainError($response, 400, 'Cannot build Windows installer.');
         }
 
         return $this->download(
