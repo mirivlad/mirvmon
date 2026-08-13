@@ -6,9 +6,9 @@ namespace Tests\Unit\Contracts;
 
 use PHPUnit\Framework\TestCase;
 
-final class LegacyWindowsReleaseContractTest extends TestCase
+final class WindowsReleaseContractTest extends TestCase
 {
-    public function testZipExtensionIsRequiredInEveryPhpRuntime(): void
+    public function testNsisCompilerIsRequiredInRuntimeAndCi(): void
     {
         $root = dirname(__DIR__, 3);
         $composer = (string) file_get_contents($root . '/composer.json');
@@ -16,10 +16,10 @@ final class LegacyWindowsReleaseContractTest extends TestCase
         $entrypoint = (string) file_get_contents($root . '/docker/entrypoint.sh');
         $ci = (string) file_get_contents($root . '/.github/workflows/ci.yml');
 
-        self::assertStringContainsString('"ext-zip": "*"', $composer);
-        self::assertMatchesRegularExpression('/install-php-extensions[\s\S]*?\n\s+zip\b/', $dockerfile);
-        self::assertStringContainsString('"zip"', $entrypoint);
-        self::assertMatchesRegularExpression('/extensions: [^\n]*\bzip\b/', $ci);
+        self::assertStringNotContainsString('"ext-zip": "*"', $composer);
+        self::assertMatchesRegularExpression('/apt-get install[\s\S]*?\n\s+nsis\b/', $dockerfile);
+        self::assertStringContainsString('command -v makensis', $entrypoint);
+        self::assertMatchesRegularExpression('/apt-get install[^\n]*\bnsis\b/', $ci);
     }
 
     public function testLegacyBuildKeepsItsSupportedGoBoundary(): void
