@@ -116,6 +116,27 @@ SH
         );
     }
 
+    public function testRealNsisCompilerProducesWindowsExecutableWhenAvailable(): void
+    {
+        $compiler = '/usr/bin/makensis';
+        if (!is_executable($compiler)) {
+            self::markTestSkipped('NSIS is not installed in this development environment.');
+        }
+
+        $package = (new WindowsInstallerPackageService(
+            dirname(__DIR__, 3) . '/resources/agent/windows',
+            $compiler,
+            $this->directory . '/real-work'
+        ))->build(
+            'https://monitor.example',
+            str_repeat('e', 64),
+            AgentArtifactCatalog::load($this->artifactDirectory)
+        );
+
+        self::assertStringStartsWith('MZ', $package->contents);
+        self::assertGreaterThan(1024, strlen($package->contents));
+    }
+
     private function service(): WindowsInstallerPackageService
     {
         return new WindowsInstallerPackageService(

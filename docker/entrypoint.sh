@@ -54,7 +54,7 @@ if (version_compare(PHP_VERSION, "8.5.0", "<")) {
     fwrite(STDERR, "PHP 8.5 or newer is required.\n");
     exit(1);
 }
-foreach (["curl", "gd", "intl", "pcntl", "pdo_pgsql", "sodium", "zip"] as $extension) {
+foreach (["curl", "gd", "intl", "pcntl", "pdo_pgsql", "sodium"] as $extension) {
     if (!extension_loaded($extension)) {
         fwrite(STDERR, "Missing PHP extension: {$extension}\n");
         exit(1);
@@ -66,6 +66,11 @@ if ($key === false || strlen($key) !== SODIUM_CRYPTO_SECRETBOX_KEYBYTES) {
     exit(1);
 }
 '
+
+if ! command -v makensis >/dev/null 2>&1; then
+    echo "Missing Windows installer compiler: makensis" >&2
+    exit 1
+fi
 
 attempt=1
 max_attempts="${DB_STARTUP_ATTEMPTS:-60}"

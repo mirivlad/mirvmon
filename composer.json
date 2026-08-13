@@ -13,7 +13,6 @@
         "ext-pdo_pgsql": "*",
         "ext-curl": "*",
         "ext-sodium": "*",
-        "ext-zip": "*",
         "slim/csrf": "^1.5"
     },
     "require-dev": {
