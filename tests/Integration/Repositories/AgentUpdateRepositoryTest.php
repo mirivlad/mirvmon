@@ -89,7 +89,7 @@ final class AgentUpdateRepositoryTest extends TestCase
         self::assertNotSame($command['id'], $retry['id']);
     }
 
-    public function testObsoletePendingCommandIsReplacedExactlyOnce(): void
+    public function testPendingCommandCanBeSupersededExactlyOnce(): void
     {
         $command = $this->repository->create(
             $this->serverId,
@@ -98,21 +98,13 @@ final class AgentUpdateRepositoryTest extends TestCase
             $this->userId
         );
 
-        $replacement = $this->repository->replacePendingTarget(
-            $this->serverId,
-            'v0.4.8',
-            'linux-amd64'
-        );
-
-        self::assertNotNull($replacement);
-        self::assertNotSame($command['id'], $replacement['id']);
-        self::assertSame('v0.4.8', $replacement['target_version']);
-        self::assertSame('linux-amd64', $replacement['target_artifact']);
-        self::assertSame($this->userId, $replacement['requested_by']);
-        self::assertSame('pending', $replacement['state']);
+        self::assertTrue($this->repository->supersedePending(
+            $command['id'],
+            $this->serverId
+        ));
 
         $old = self::$pdo?->prepare(
-            'SELECT state, error_code, completed_at
+            'SELECT state, error_code, requested_by, completed_at
              FROM agent_update_commands
              WHERE id = CAST(:id AS uuid)'
         );
@@ -121,14 +113,14 @@ final class AgentUpdateRepositoryTest extends TestCase
         self::assertIsArray($old);
         self::assertSame('failed', $old['state']);
         self::assertSame('target_superseded', $old['error_code']);
+        self::assertSame($this->userId, (int) $old['requested_by']);
         self::assertNotNull($old['completed_at']);
 
-        $repeated = $this->repository->replacePendingTarget(
-            $this->serverId,
-            'v0.4.8',
-            'linux-amd64'
-        );
-        self::assertSame($replacement['id'], $repeated['id'] ?? null);
+        self::assertNull($this->repository->activeForServer($this->serverId));
+        self::assertTrue($this->repository->supersedePending(
+            $command['id'],
+            $this->serverId
+        ));
     }
 
     public function testAcknowledgedCommandIsNotReplaced(): void
@@ -141,15 +133,13 @@ final class AgentUpdateRepositoryTest extends TestCase
         );
         $this->repository->advance($command['id'], $this->serverId, 'accepted');
 
-        $result = $this->repository->replacePendingTarget(
-            $this->serverId,
-            'v0.4.8',
-            'linux-amd64'
-        );
-
-        self::assertSame($command['id'], $result['id'] ?? null);
-        self::assertSame('v0.4.6', $result['target_version'] ?? null);
-        self::assertSame('accepted', $result['state'] ?? null);
+        self::assertFalse($this->repository->supersedePending(
+            $command['id'],
+            $this->serverId
+        ));
+        self::assertSame('accepted', $this->repository->activeForServer(
+            $this->serverId
+        )['state'] ?? null);
     }
 
     public function testTransitionsAreMonotonicAndMetricsCompleteExactVersion(): void

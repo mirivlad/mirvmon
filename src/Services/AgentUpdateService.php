@@ -158,16 +158,7 @@ final class AgentUpdateService
             return null;
         }
         if ($command['target_version'] !== $this->artifacts->version()) {
-            $command = $this->commands->replacePendingTarget(
-                $serverId,
-                $this->artifacts->version(),
-                $artifact->key
-            );
-        }
-        if (
-            $command === null
-            || $command['target_version'] !== $this->artifacts->version()
-        ) {
+            $this->commands->supersedePending((string) $command['id'], $serverId);
             return null;
         }
 

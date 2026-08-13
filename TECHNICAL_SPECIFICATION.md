@@ -115,10 +115,11 @@ notifications. Запоздалый допустимый sample записыва
   завершает любую незакрытую стадию, включая ручную установку target version;
 - уже установленная target version не прерывает metrics cycle, а stale local
   update state переводится в terminal перед следующим обновлением;
-- при config poll устаревшая команда заменяется текущей catalog version только
-  в состоянии `pending`: старый row атомарно завершается с
-  `target_superseded`, сохраняются artifact и `requested_by`, а состояния
-  `accepted` и далее автоматически не заменяются.
+- при config poll устаревшая команда атомарно завершается только в состоянии
+  `pending`: row получает
+  `target_superseded`, но новый UUID автоматически не создаётся; после local
+  cleanup требуется явный retry администратора, а состояния `accepted` и далее
+  автоматически не меняются.
 
 ### Алерты и уведомления
 
