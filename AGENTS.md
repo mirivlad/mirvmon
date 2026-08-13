@@ -18,11 +18,13 @@ MirvMon — self-hosted система push-мониторинга сервер�
 - PostgreSQL 17 + TimescaleDB 2.28;
 - FrankenPHP в classic mode как основной HTTP adapter;
 - внешний nginx завершает TLS;
-- Go 1.26.5 для современного агента и Go 1.20.14 для Windows 7/Server 2008 R2;
+- Go 1.26.5 для современного агента и Go 1.20.14 для Windows 7/8/8.1 и
+  Server 2008 R2/2012/2012 R2;
 - production Compose содержит ровно два сервиса: `app` и `db`.
 
 Расширение `gd` и пакет `fonts-dejavu-core` нужны для графика в уведомлении:
-подписи на кириллице рисуются TrueType-шрифтом. Проверка расширений при старте
+подписи на кириллице рисуются TrueType-шрифтом. NSIS 3 (`makensis`) собирает
+персонализированный Windows EXE. Проверка runtime-зависимостей при старте
 находится в `docker/entrypoint.sh`.
 
 FrankenPHP — только способ запуска. Прикладной код должен использовать
@@ -90,13 +92,10 @@ Telegram и SMTP настраиваются в `/admin/notifications`. Telegram 
 - `GET /agent/binaries/{artifact}` — публичная раздача проверенного нативного
   артефакта (`linux-amd64`, `windows-amd64`, `windows-legacy-amd64`);
 - `GET /agent/install.sh?token=...` — одноразовый Linux installer;
-- `GET /agent/install.ps1?token=...` — одноразовый PowerShell installer;
-- `GET /agent/install.bat?token=...` — одноразовый BAT installer;
-- `GET /agent/install-legacy.zip?token=...` — самодостаточный ZIP для x64
-  Windows 7 SP1 и Server 2008 R2 с локальными BAT, PowerShell 2.0 script и Go
-  1.20 native agent;
-- `GET /agent/install-legacy.ps1?token=...` и
-  `GET /agent/install-legacy.bat?token=...` — совместимые aliases того же ZIP;
+- `GET /agent/install.exe?token=...` — единый персонализированный неподписанный
+  Windows x64 installer с автоматическим выбором modern/legacy agent;
+- `POST /api/v1/agent/install` — одноразовый обмен installer Bearer credential
+  на постоянную конфигурацию выбранным нативным Windows agent;
 - `GET /livez` — только HTTP runtime;
 - `GET /readyz` — приложение и БД.
 

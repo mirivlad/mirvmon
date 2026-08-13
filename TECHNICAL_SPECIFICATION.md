@@ -77,12 +77,14 @@ notifications. Запоздалый допустимый sample записыва
   режимом `0600` и переживает restart;
 - Linux installer поддерживает systemd x64 Debian 11+, Ubuntu 20.04+,
   CentOS/RHEL/Oracle Linux 7+, AlmaLinux/Rocky Linux 8+ и NethServer 7;
-- Windows Server 2012 R2+ и Windows 10+ используют Go 1.26.5; Windows 7 SP1
-  x64 и Server 2008 R2 x64 — Go 1.20.14; Windows Server 2008 без R2 и x86
-  системы исключены;
-- legacy Windows installer поставляется одним ZIP с локальными BAT, PS1,
-  catalog-verified EXE и ASCII/no-BOM config; PowerShell 2.0/CLR 2.0 не
-  выполняют сетевую загрузку;
+- Windows 10/11 и Server 2016/2019/2022/2025 используют Go 1.26.5; Windows 7
+  SP1/8/8.1 и Server 2008 R2 SP1/2012/2012 R2 — Go 1.20.14; Windows Server
+  2008 без R2 и x86 системы исключены;
+- единый неподписанный Windows EXE собирается NSIS на сервере и содержит обе
+  catalog-verified x64-сборки, PowerShell 2.0-compatible transaction script и
+  одноразовый часовой credential, но не permanent agent token;
+- выбранный нативный EXE получает конфигурацию через HTTPS; PowerShell
+  2.0/CLR 2.0 сетевую загрузку не выполняют;
 - legacy installer назначает ACL через `*S-1-5-18` и
   `*S-1-5-32-544`, проверяет exit code всех критических native programs и
   сохраняет старый runtime неизменным до успешных `check` и `migrate`;

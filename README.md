@@ -155,10 +155,11 @@ proxy. В исходниках нет предустановленного до�
 
 Все агентские сборки — только x64. Linux-сборка Go 1.26.5 поддерживает Debian
 11+, Ubuntu 20.04+, RHEL/CentOS 7+, Oracle Linux 7+, AlmaLinux/Rocky Linux 8+,
-NethServer 7 и их современные преемники с systemd. Windows-сборка Go 1.26.5
-предназначена для Windows Server 2012 R2+ и Windows 10+. Отдельная сборка Go
-1.20.14 поддерживает Windows 7 SP1 x64 и Windows Server 2008 R2 x64. Windows
-Server 2008 без R2 и любые 32-битные системы не поддерживаются.
+NethServer 7 и их современные преемники с systemd. Windows 10/11 и Windows
+Server 2016/2019/2022/2025 используют сборку Go 1.26.5. Для Windows 7 SP1,
+8, 8.1 и Windows Server 2008 R2 SP1, 2012, 2012 R2 используется сборка Go
+1.20.14. Windows Server 2008 без R2 и любые 32-битные системы не
+поддерживаются.
 
 Установщик скачивает один проверяемый нативный бинарник, создаёт пользователя
 `mirvmon-agent` на Linux, записывает конфигурацию `/etc/mirvmon-agent/config.json`
@@ -179,15 +180,20 @@ sudo journalctl -u mirvmon-agent -f
 `NO_PROXY` в systemd unit override. TLS certificate verification включена по
 умолчанию; агент использует системный CA store.
 
-### Windows 7 и Server 2008 R2
+### Windows x64
 
-Скачайте `/agent/install-legacy.zip`, распакуйте каталог и запустите
-`install.bat` от имени Administrator. Пакет содержит читаемые BAT и PowerShell
-2.0 script, персональный `server-config.json` и нативный x64-бинарник Go
-1.20.14. Установщик не обращается к сети: старый CLR/TLS stack, WebClient,
-BITS, `certutil` и современный PowerShell не требуются. Старые URL
-`/agent/install-legacy.bat` и `/agent/install-legacy.ps1` сохранены как aliases
-и также возвращают полный ZIP.
+Во вкладке «Агент» скачайте единый персонализированный
+`MirvMon-Agent-Setup.exe` и запустите его от имени Administrator. Установщик
+содержит обе Windows-сборки и сам выбирает совместимую по данным WMI. EXE не
+подписан: Windows может показать SmartScreen/Unknown publisher, поэтому запуск
+нужно подтвердить вручную.
+
+Permanent agent token в EXE не встраивается. Внутри находится одноразовый
+installer credential со сроком действия один час. После проверки ОС выбранный
+нативный агент обменивает его по HTTPS на конфигурацию; только успешный обмен
+погашает credential. Поэтому скачанный EXE нужно запустить до истечения часа.
+PowerShell 2.0 выполняет только локальную транзакцию установки и сам в сеть не
+обращается.
 
 До остановки прежнего агента installer проверяет размер, SHA-256, version и
 artifact identity нового EXE, выполняет `check`, мигрирует config/queue в
@@ -199,8 +205,8 @@ task и ещё раз мигрирует остановленную очеред
 миграции вообще не изменяет работающий старый агент. ACL назначаются по
 well-known SID и не зависят от языка Windows.
 
-Агент собирает те же метрики, службы, процессы, версию ОС и получает удалённую
-конфигурацию, что и современная Windows-сборка.
+Legacy-сборка собирает те же метрики, службы, процессы, версию ОС и получает
+удалённую конфигурацию, что и современная Windows-сборка.
 
 Сервис постоянно работает под LocalSystem; недоставленные замеры хранятся в
 `%ProgramData%\MirvMon\Agent\queue.json` (до 1000) и досылаются следующим
@@ -380,9 +386,10 @@ npm audit
 `npm run assets:sync`.
 
 CI в `.github/workflows/ci.yml` проверяет PHP 8.5 на TimescaleDB, PHPStan
-level 6, воспроизводимость frontend assets, Go 1.26.5 и Go 1.20.14, а также production
-Docker image. Release workflow публикует multi-arch image в GHCR, а Dependabot
-следит за Composer, npm, Docker и GitHub Actions.
+level 6, воспроизводимость frontend assets, Go 1.26.5 и Go 1.20.14, реальную
+NSIS-сборку Windows EXE, а также production Docker image. Release workflow
+публикует multi-arch image в GHCR, а Dependabot следит за Composer, npm, Docker
+и GitHub Actions.
 
 ## Дополнительная документация
 
