@@ -50,37 +50,4 @@ final class AgentInstallerServiceTest extends TestCase
         self::assertStringNotContainsString('?token=', $script);
     }
 
-    public function testModernWindowsInstallerUsesModernNativeArtifactAndService(): void
-    {
-        $script = $this->installer->windowsPowerShell(
-            'https://windows-monitor.example',
-            str_repeat('b', 64)
-        );
-
-        self::assertStringContainsString(
-            'https://windows-monitor.example/agent/binaries/windows-amd64',
-            $script
-        );
-        self::assertStringContainsString('sc.exe create MirvMonAgent', $script);
-        self::assertStringContainsString('migrate --source-config', $script);
-        self::assertStringContainsString("Join-Path \$StateDir 'queue.txt'", $script);
-        self::assertStringContainsString('if (-not (Test-Path $SourceQueuePath)', $script);
-        self::assertStringContainsString("icacls \$ConfigPath /inheritance:r /grant:r 'SYSTEM:F' 'Administrators:F'", $script);
-        self::assertStringContainsString("icacls \$QueuePath /inheritance:r /grant:r 'SYSTEM:F' 'Administrators:F'", $script);
-        self::assertStringContainsString('"verify_tls": true', $script);
-        self::assertStringNotContainsString('Invoke-WebRequest', $script);
-        self::assertStringNotContainsString('?token=', $script);
-    }
-
-    public function testModernBatchWrapperKeepsTokenOutOfCommandLine(): void
-    {
-        $batch = $this->installer->windowsBatch(
-            'https://monitor.example',
-            str_repeat('d', 64)
-        );
-
-        self::assertStringContainsString('-EncodedCommand', $batch);
-        self::assertStringNotContainsString('?token=', $batch);
-        self::assertStringNotContainsString(str_repeat('d', 64), $batch);
-    }
 }

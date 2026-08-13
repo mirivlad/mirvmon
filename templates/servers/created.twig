@@ -16,14 +16,8 @@
                         <a href="/agent/install.sh?token={{ installer_tokens.linux|url_encode }}" class="btn btn-primary">
                             <i class="fab fa-linux"></i> Агент для Linux
                         </a>
-                        <a href="/agent/install.ps1?token={{ installer_tokens.powershell|url_encode }}" class="btn btn-info">
-                            <i class="fab fa-windows"></i> PowerShell
-                        </a>
-                        <a href="/agent/install.bat?token={{ installer_tokens.batch|url_encode }}" class="btn btn-outline-info">
-                            <i class="fab fa-windows"></i> BAT
-                        </a>
-                        <a href="/agent/install-legacy.zip?token={{ installer_tokens.legacy_zip|url_encode }}" class="btn btn-warning">
-                            <i class="fab fa-windows"></i> Windows 7 / 2008 R2 x64 (ZIP)
+                        <a href="/agent/install.exe?token={{ installer_tokens.windows|url_encode }}" class="btn btn-info">
+                            <i class="fab fa-windows"></i> Агент для Windows x64
                         </a>
                     </div>
                 </div>
@@ -46,39 +40,23 @@
                     
                     <div class="card mb-3">
                         <div class="card-header">
-                            <i class="fab fa-windows"></i> Windows Server 2012+
+                            <i class="fab fa-windows"></i> Windows x64
                         </div>
                         <div class="card-body">
                             <ol class="mb-0">
-                                <li>Скачайте скрипт <code>install.ps1</code></li>
-                                <li>Запустите PowerShell <strong>от имени Администратора</strong></li>
-                                <li>Выполните: <code>Set-ExecutionPolicy Bypass -Scope Process -Force; .\install.ps1</code></li>
+                                <li>Скачайте <code>MirvMon-Agent-Setup.exe</code></li>
+                                <li>Запустите файл <strong>от имени Администратора</strong></li>
+                                <li>Подтвердите запуск неподписанного установщика</li>
                             </ol>
                         </div>
                     </div>
 
-                    <div class="card">
-                        <div class="card-header">
-                            <i class="fab fa-windows"></i> Windows 7 SP1 / Server 2008 R2
-                        </div>
-                        <div class="card-body">
-                            <p class="mb-2">
-                                Этот установщик совместим с PowerShell 2.0 и
-                                разворачивает нативный x64 агент Go 1.20.14.
-                                Python не требуется.
-                            </p>
-                            <ol class="mb-2">
-                                <li>Скачайте и распакуйте <code>mirvmon-agent-windows-legacy-amd64.zip</code></li>
-                                <li>Запустите <code>install.bat</code> <strong>от имени Администратора</strong></li>
-                            </ol>
-                            <p class="mb-0 text-muted small">
-                                После установки Windows service «MirvMonAgent»
-                                постоянно собирает CPU, память, диски, сеть,
-                                аптайм, службы и процессы, а также получает
-                                удалённую конфигурацию.
-                            </p>
-                        </div>
-                    </div>
+                    <p class="text-muted small">
+                        Поддерживаются Windows 7 SP1, 8, 8.1, 10, 11 и Windows
+                        Server 2008 R2 SP1, 2012, 2012 R2, 2016, 2019, 2022,
+                        2025 — только x64. Установщик сам выберет совместимую
+                        сборку агента, перенесёт конфигурацию и очередь.
+                    </p>
                 </div>
                 
                 <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">

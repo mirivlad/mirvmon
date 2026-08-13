@@ -445,18 +445,14 @@ final class ServerController
     /**
      * @return array{
      *     linux: string,
-     *     powershell: string,
-     *     batch: string,
-     *     legacy_zip: string
+     *     windows: string
      * }
      */
     private function installerTokens(int $serverId): array
     {
         return [
             'linux' => $this->credentials->issueInstaller($serverId),
-            'powershell' => $this->credentials->issueInstaller($serverId),
-            'batch' => $this->credentials->issueInstaller($serverId),
-            'legacy_zip' => $this->credentials->issueInstaller($serverId),
+            'windows' => $this->credentials->issueInstaller($serverId),
         ];
     }
 
@@ -473,9 +469,7 @@ final class ServerController
     /**
      * @param array{
      *     linux: string,
-     *     powershell: string,
-     *     batch: string,
-     *     legacy_zip: string
+     *     windows: string
      * } $tokens
      */
     private function createdResponse(
