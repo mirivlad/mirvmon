@@ -22,11 +22,8 @@
                         <a href="/agent/install.bat?token={{ installer_tokens.batch|url_encode }}" class="btn btn-outline-info">
                             <i class="fab fa-windows"></i> BAT
                         </a>
-                        <a href="/agent/install-legacy.bat?token={{ installer_tokens.legacy_batch|url_encode }}" class="btn btn-warning">
-                            <i class="fab fa-windows"></i> Windows 7 / 2008 R2 x64 (BAT)
-                        </a>
-                        <a href="/agent/install-legacy.ps1?token={{ installer_tokens.legacy_powershell|url_encode }}" class="btn btn-outline-warning">
-                            <i class="fab fa-windows"></i> Windows 7 / 2008 R2 x64 (PS1)
+                        <a href="/agent/install-legacy.zip?token={{ installer_tokens.legacy_zip|url_encode }}" class="btn btn-warning">
+                            <i class="fab fa-windows"></i> Windows 7 / 2008 R2 x64 (ZIP)
                         </a>
                     </div>
                 </div>
@@ -71,8 +68,8 @@
                                 Python не требуется.
                             </p>
                             <ol class="mb-2">
-                                <li>Скачайте <code>mirvmon-install-legacy.bat</code></li>
-                                <li>Запустите <strong>от имени Администратора</strong></li>
+                                <li>Скачайте и распакуйте <code>mirvmon-agent-windows-legacy-amd64.zip</code></li>
+                                <li>Запустите <code>install.bat</code> <strong>от имени Администратора</strong></li>
                             </ol>
                             <p class="mb-0 text-muted small">
                                 После установки Windows service «MirvMonAgent»

@@ -72,35 +72,15 @@ final class AgentInstallerServiceTest extends TestCase
         self::assertStringNotContainsString('?token=', $script);
     }
 
-    public function testLegacyWindowsInstallerUsesLegacyNativeArtifactWithoutNewPowerShellApis(): void
+    public function testModernBatchWrapperKeepsTokenOutOfCommandLine(): void
     {
-        $script = $this->installer->windowsLegacyPowerShell(
-            'https://legacy-monitor.example',
-            str_repeat('c', 64)
+        $batch = $this->installer->windowsBatch(
+            'https://monitor.example',
+            str_repeat('d', 64)
         );
 
-        self::assertStringContainsString(
-            'https://legacy-monitor.example/agent/binaries/windows-legacy-amd64',
-            $script
-        );
-        self::assertStringContainsString('New-Object Net.WebClient', $script);
-        self::assertStringContainsString('sc.exe create MirvMonAgent', $script);
-        foreach (['Invoke-WebRequest', 'ConvertTo-Json', 'Register-ScheduledTask', 'Get-CimInstance'] as $unavailable) {
-            self::assertStringNotContainsString($unavailable, $script);
-        }
-        self::assertStringNotContainsString('python', mb_strtolower($script));
-    }
-
-    public function testBatchWrappersKeepTokensOutOfCommandLine(): void
-    {
-        foreach ([
-            $this->installer->windowsBatch('https://monitor.example', str_repeat('d', 64)),
-            $this->installer->windowsLegacyBatch('https://monitor.example', str_repeat('e', 64)),
-        ] as $batch) {
-            self::assertStringContainsString('-EncodedCommand', $batch);
-            self::assertStringNotContainsString('?token=', $batch);
-            self::assertStringNotContainsString(str_repeat('d', 64), $batch);
-            self::assertStringNotContainsString(str_repeat('e', 64), $batch);
-        }
+        self::assertStringContainsString('-EncodedCommand', $batch);
+        self::assertStringNotContainsString('?token=', $batch);
+        self::assertStringNotContainsString(str_repeat('d', 64), $batch);
     }
 }

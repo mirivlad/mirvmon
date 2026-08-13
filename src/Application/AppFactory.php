@@ -80,6 +80,10 @@ final class AppFactory
             self::controller($container, AgentController::class, 'generateWindowsBatScript')
         );
         $app->get(
+            '/agent/install-legacy.zip',
+            self::controller($container, AgentController::class, 'generateLegacyWindowsPackage')
+        );
+        $app->get(
             '/agent/install-legacy.ps1',
             self::controller($container, AgentController::class, 'generateLegacyWindowsInstallScript')
         );
@@ -275,6 +279,7 @@ final class AppFactory
                 '/agent/install.sh',
                 '/agent/install.ps1',
                 '/agent/install.bat',
+                '/agent/install-legacy.zip',
                 '/agent/install-legacy.ps1',
                 '/agent/install-legacy.bat',
                 '/api/v1/agent/config',

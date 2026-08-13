@@ -29,6 +29,7 @@ use App\Security\SecretCipher;
 use App\Services\AgentCredentialIssuer;
 use App\Services\AgentArtifactCatalog;
 use App\Services\AgentInstallerService;
+use App\Services\LegacyWindowsPackageService;
 use App\Services\AgentUpdateService;
 use App\Services\AgentVersionService;
 use App\Services\MetricsIngestionService;
@@ -153,6 +154,12 @@ final class Bootstrap
         $container->set(
             AgentInstallerService::class,
             static fn (): AgentInstallerService => new AgentInstallerService()
+        );
+        $container->set(
+            LegacyWindowsPackageService::class,
+            static fn (): LegacyWindowsPackageService => new LegacyWindowsPackageService(
+                dirname(__DIR__, 2) . '/resources/agent/windows-legacy'
+            )
         );
         $container->set(
             AgentArtifactCatalog::class,
@@ -285,6 +292,7 @@ final class Bootstrap
                 $container->get(PublicUrlResolver::class),
                 $container->get(AgentCredentialIssuer::class),
                 $container->get(AgentInstallerService::class),
+                $container->get(LegacyWindowsPackageService::class),
                 static fn (): AgentArtifactCatalog => $container->get(AgentArtifactCatalog::class),
                 static fn (): AgentUpdateService => $container->get(AgentUpdateService::class)
             )

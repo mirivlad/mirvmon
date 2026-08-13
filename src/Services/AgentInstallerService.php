@@ -170,16 +170,6 @@ SH
         return $this->batchWrapper($this->windowsPowerShell($baseUrl, $agentToken));
     }
 
-    public function windowsLegacyPowerShell(string $baseUrl, string $agentToken): string
-    {
-        return $this->windowsScript($baseUrl, $agentToken, 'windows-legacy-amd64');
-    }
-
-    public function windowsLegacyBatch(string $baseUrl, string $agentToken): string
-    {
-        return $this->batchWrapper($this->windowsLegacyPowerShell($baseUrl, $agentToken));
-    }
-
     private function windowsScript(string $baseUrl, string $agentToken, string $artifact): string
     {
         $this->assertInputs($baseUrl, $agentToken);
