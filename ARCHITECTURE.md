@@ -131,26 +131,29 @@ credential в HTTPS body на публичный `POST /api/v1/metrics`.
 определяется по текущему запросу после trusted-proxy normalization. В коде нет
 предустановленного домена.
 
-Для Linux, PowerShell и BAT создаются независимые installer credentials:
-каждый одноразовый и действует один час. Credential выдаёт текущий permanent
-agent token и не меняет его. Новый token создаётся только после явного отзыва
-администратором; тогда прежний сразу становится недействительным. Исходники
-агента публичны и скачиваются без credential; permanent token хранится на
-сервере только как SHA-256 hash и никогда не попадает в query string.
+Для Linux и Windows создаются независимые installer credentials: каждый
+одноразовый и действует один час. Linux погашает credential при выдаче скрипта.
+Windows EXE можно повторно скачать в течение срока действия; credential
+погашает только нативный `POST /api/v1/agent/install` после проверки целевой ОС.
+Ответ содержит текущий permanent agent token и не меняет его. Новый token
+создаётся только после явного отзыва администратором; тогда прежний сразу
+становится недействительным. Permanent token хранится на сервере только как
+SHA-256 hash и никогда не попадает в query string или Windows EXE.
 
 Агент использует outbound HTTPS, стандартные proxy environment variables и
 локальную bounded persistent retry queue; входящий сетевой доступ ему не нужен.
 На Linux процесс работает под отдельным `mirvmon-agent`, на Windows code и
 state разделены между `Program Files` и `ProgramData`.
 
-Linux runtime — статический Go 1.26.5 x64 binary. Windows modern использует ту
-же версию Go, а Windows 7 SP1 и Server 2008 R2 — Go 1.20.14 x64 binary.
-Legacy Windows получает персонализированный ZIP с локальными BAT, PS1, EXE и
-ASCII/no-BOM server config; target host не выполняет сетевой bootstrap. Старые
-legacy BAT/PS1 URL являются aliases этого ZIP. Installer сначала проверяет
-manifest size/SHA-256 и binary identity, выполняет `check`, мигрирует старые
-configuration/queue в staging и проверяет результат. Только после этого он
-отключает от повторного запуска и останавливает старый runtime, повторяет
+Linux runtime — статический Go 1.26.5 x64 binary. Windows 10/11 и Server 2016+
+используют ту же версию Go; Windows 7 SP1/8/8.1 и Server 2008 R2 SP1/2012/2012
+R2 — Go 1.20.14 x64 binary. Сервер динамически собирает неподписанный
+персонализированный NSIS EXE с обеими catalog-verified сборками, локальным
+PowerShell 2.0-compatible transaction script и короткоживущим credential.
+Installer выбирает binary через WMI, нативно получает конфигурацию по HTTPS,
+проверяет manifest size/SHA-256 и binary identity, выполняет `check`, мигрирует
+старые configuration/queue в staging и проверяет результат. Только после этого
+он отключает от повторного запуска и останавливает старый runtime, повторяет
 миграцию уже неподвижной очереди, переключает state и регистрирует либо
 перенастраивает Windows service. Запуск проверяется через WMI, а post-commit
 ошибка восстанавливает service metadata и файлы из transaction rollback copy.

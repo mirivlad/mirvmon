@@ -129,37 +129,40 @@ curl --fail http://127.0.0.1:8080/readyz
 AlmaLinux/Rocky Linux 8+ и NethServer 7. Он не требует Python, пакетного
 менеджера или сторонних репозиториев: нужен только `curl` либо `wget`.
 
-Windows Server 2012 R2+ и Windows 10+ используют Go 1.26.5. Windows 7 SP1 x64
-и Windows Server 2008 R2 x64 используют отдельную сборку Go 1.20.14 и
-совместимый с PowerShell 2.0 installer. Windows Server 2008 без R2 и 32-bit
-платформы не поддерживаются.
+Windows 10/11 и Windows Server 2016/2019/2022/2025 используют Go 1.26.5.
+Windows 7 SP1, 8, 8.1 и Windows Server 2008 R2 SP1, 2012, 2012 R2 используют
+отдельную сборку Go 1.20.14. Windows Server 2008 без R2 и 32-bit платформы не
+поддерживаются.
 
-Для Windows 7/Server 2008 R2 скачайте во вкладке «Агент» файл
-`mirvmon-agent-windows-legacy-amd64.zip`, полностью распакуйте его и запустите
-`install.bat` от имени Administrator. Все четыре файла должны оставаться рядом:
+Для любой поддерживаемой Windows скачайте во вкладке «Агент» единый файл
+`MirvMon-Agent-Setup.exe` и запустите его от имени Administrator. Установщик не
+подписан, поэтому Windows может потребовать явного подтверждения запуска. Он
+определяет версию ОС через WMI и извлекает нужную из двух встроенных x64-сборок.
 
-```text
-mirvmon-agent-windows-legacy-amd64/
-  install.bat
-  mirvmon-install-legacy.ps1
-  mirvmon-agent.exe
-  server-config.json
-```
-
-BAT только проверяет elevation и запускает соседний PS1. Установка полностью
-локальная и не требует рабочего TLS 1.2 в PowerShell/.NET. Успешное завершение
+Permanent agent token в установщик не помещается. EXE содержит одноразовый
+installer credential, действующий один час; выбранный нативный агент обменивает
+его по HTTPS на конфигурацию непосредственно перед изменением системы.
+PowerShell, включая версию 2.0, сеть не использует. Успешное завершение
 сообщает, что `MirvMonAgent` находится в состоянии `Running`. Предыдущие config,
-queue и установленный EXE, если он существовал, сохраняются рядом с суффиксом
+queue и установленный EXE сохраняются рядом с суффиксом
 `.legacy-YYYYMMDDHHMMSS`. При ошибке до переключения старый агент не
 останавливается; при ошибке запуска выполняется rollback.
 
-### Проверка на целевой legacy Windows
+### Проверка на целевой Windows
 
-Автоматическая сборка Go 1.20.14 и проверка PowerShell 2.0 contract не заменяют
-runtime-тест на Windows Server 2008 R2 SP1 x64. Перед production rollout
-проверьте последовательно:
+Автоматическая сборка обеих Go-версий, реальная компиляция NSIS и проверка
+PowerShell 2.0 contract не заменяют runtime-тесты на Windows Server 2008 R2
+SP1 x64 и современной Windows x64. Перед production rollout проверьте
+чек-лист как минимум на трёх границах матрицы:
 
-1. clean install из каталога с пробелами и `sc.exe query MirvMonAgent`;
+- Windows 7 SP1 или Server 2008 R2 SP1;
+- Windows 8.1 или Server 2012 R2;
+- Windows 11 или Server 2022.
+
+На каждой выбранной системе проверьте последовательно:
+
+1. UAC/предупреждение о неподписанном издателе, clean install из каталога с
+   пробелами и `sc.exe query MirvMonAgent`;
 2. получение метрик и remote config текущим server API;
 3. повторный запуск того же типа пакета;
 4. переход со старого Python config/JSON queue;
@@ -227,6 +230,7 @@ docker compose --env-file .env -f docker/docker-compose.yml exec -T db \
 ## Альтернативный HTTP runtime
 
 Прикладное ядро не зависит от FrankenPHP. Для запуска через nginx + PHP-FPM
-нужны PHP 8.5, Composer dependencies и расширения `pdo_pgsql`, `curl`, `intl`,
-`sodium`, `zip`. Эта схема не является основным Portainer deployment и должна
-сохранять те же environment variables и public root `public/`.
+нужны PHP 8.5, Composer dependencies, расширения `pdo_pgsql`, `curl`, `intl`,
+`sodium` и исполняемый `makensis` (NSIS 3). Эта схема не является основным
+Portainer deployment и должна сохранять те же environment variables и public
+root `public/`.
