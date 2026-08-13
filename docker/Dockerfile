@@ -120,6 +120,7 @@ RUN apt-get update \
         opcache \
         pcntl \
         pdo_pgsql \
+        zip \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
