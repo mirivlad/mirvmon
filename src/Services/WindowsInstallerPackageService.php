@@ -35,12 +35,6 @@ final class WindowsInstallerPackageService
 
         $modern = $catalog->require('windows-amd64');
         $legacy = $catalog->require('windows-legacy-amd64');
-        $powerShell = $this->renderPowerShell(
-            $this->readTemplate('mirvmon-install.ps1'),
-            $catalog->version(),
-            $modern,
-            $legacy
-        );
         $nsisPath = $this->templatePath('installer.nsi');
         $root = $this->temporaryRoot ?? sys_get_temp_dir();
         if (!is_dir($root) && !mkdir($root, 0700, true) && !is_dir($root)) {
@@ -59,7 +53,6 @@ final class WindowsInstallerPackageService
                 $baseUrl,
                 $installerCredential
             ));
-            $this->writePrivate($payloadDirectory . '/mirvmon-install.ps1', $powerShell);
             $this->copyArtifact($modern, $payloadDirectory . '/mirvmon-agent-modern.exe');
             $this->copyArtifact($legacy, $payloadDirectory . '/mirvmon-agent-legacy.exe');
 
@@ -67,7 +60,10 @@ final class WindowsInstallerPackageService
                 $payloadDirectory,
                 $outputPath,
                 $nsisPath,
-                $logPath
+                $logPath,
+                $catalog->version(),
+                $modern,
+                $legacy
             );
             if ($exitCode !== 0) {
                 throw new RuntimeException('Cannot compile Windows installer.');
@@ -91,16 +87,6 @@ final class WindowsInstallerPackageService
         }
     }
 
-    private function readTemplate(string $filename): string
-    {
-        $path = $this->templatePath($filename);
-        $contents = file_get_contents($path);
-        if ($contents === false || $contents === '') {
-            throw new RuntimeException('Windows installer template is unavailable.');
-        }
-        return $contents;
-    }
-
     private function templatePath(string $filename): string
     {
         $path = rtrim($this->templateDirectory, '/') . '/' . $filename;
@@ -108,28 +94,6 @@ final class WindowsInstallerPackageService
             throw new RuntimeException('Windows installer template is unavailable.');
         }
         return $path;
-    }
-
-    private function renderPowerShell(
-        string $template,
-        string $version,
-        AgentArtifact $modern,
-        AgentArtifact $legacy
-    ): string {
-        $values = [
-            '__EXPECTED_VERSION__' => $version,
-            '__MODERN_SHA256__' => $modern->sha256,
-            '__MODERN_SIZE__' => (string) $modern->size,
-            '__LEGACY_SHA256__' => $legacy->sha256,
-            '__LEGACY_SIZE__' => (string) $legacy->size,
-        ];
-        foreach ($values as $placeholder => $value) {
-            if (substr_count($template, $placeholder) !== 1) {
-                throw new RuntimeException('Windows installer template is invalid.');
-            }
-            $template = str_replace($placeholder, $value, $template);
-        }
-        return $template;
     }
 
     private function bootstrap(string $baseUrl, string $credential): string
@@ -162,13 +126,21 @@ final class WindowsInstallerPackageService
         string $payloadDirectory,
         string $outputPath,
         string $nsisPath,
-        string $logPath
+        string $logPath,
+        string $version,
+        AgentArtifact $modern,
+        AgentArtifact $legacy
     ): int {
         $process = proc_open([
             $this->compiler,
             '-V2',
             '-DPAYLOAD_DIR=' . $payloadDirectory,
             '-DOUTPUT_FILE=' . $outputPath,
+            '-DEXPECTED_VERSION=' . $version,
+            '-DMODERN_SHA256=' . $modern->sha256,
+            '-DMODERN_SIZE=' . $modern->size,
+            '-DLEGACY_SHA256=' . $legacy->sha256,
+            '-DLEGACY_SIZE=' . $legacy->size,
             $nsisPath,
         ], [
             0 => ['file', '/dev/null', 'r'],

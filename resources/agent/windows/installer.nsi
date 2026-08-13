@@ -1,5 +1,7 @@
 Unicode true
 !include LogicLib.nsh
+!include WinVer.nsh
+!include x64.nsh
 ManifestSupportedOS all
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
@@ -13,22 +15,63 @@ ShowInstDetails show
 !ifndef OUTPUT_FILE
   !error "OUTPUT_FILE is required"
 !endif
+!ifndef EXPECTED_VERSION
+  !error "EXPECTED_VERSION is required"
+!endif
+!ifndef MODERN_SHA256
+  !error "MODERN_SHA256 is required"
+!endif
+!ifndef MODERN_SIZE
+  !error "MODERN_SIZE is required"
+!endif
+!ifndef LEGACY_SHA256
+  !error "LEGACY_SHA256 is required"
+!endif
+!ifndef LEGACY_SIZE
+  !error "LEGACY_SIZE is required"
+!endif
 
 Name "MirvMon Agent"
 OutFile "${OUTPUT_FILE}"
 InstallDir "$PROGRAMFILES64\MirvMon\Agent"
 BrandingText "MirvMon"
 
+Var SelectedAgent
+Var SelectedArtifact
+Var SelectedSHA256
+Var SelectedSize
+
 Section "Install MirvMon Agent"
   SetShellVarContext all
   InitPluginsDir
   SetOutPath "$PLUGINSDIR"
-  File /oname=mirvmon-install.ps1 "${PAYLOAD_DIR}/mirvmon-install.ps1"
   File /oname=mirvmon-agent-modern.exe "${PAYLOAD_DIR}/mirvmon-agent-modern.exe"
   File /oname=mirvmon-agent-legacy.exe "${PAYLOAD_DIR}/mirvmon-agent-legacy.exe"
   File /oname=bootstrap.json "${PAYLOAD_DIR}/bootstrap.json"
 
-  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\mirvmon-install.ps1"'
+  ${IfNot} ${RunningX64}
+    MessageBox MB_ICONSTOP "MirvMon Agent supports only x64 Windows."
+    SetErrorLevel 2
+    Abort
+  ${EndIf}
+
+  ${If} ${AtLeastWin10}
+    StrCpy $SelectedAgent "$PLUGINSDIR\mirvmon-agent-modern.exe"
+    StrCpy $SelectedArtifact "windows-amd64"
+    StrCpy $SelectedSHA256 "${MODERN_SHA256}"
+    StrCpy $SelectedSize "${MODERN_SIZE}"
+  ${ElseIf} ${AtLeastWin7}
+    StrCpy $SelectedAgent "$PLUGINSDIR\mirvmon-agent-legacy.exe"
+    StrCpy $SelectedArtifact "windows-legacy-amd64"
+    StrCpy $SelectedSHA256 "${LEGACY_SHA256}"
+    StrCpy $SelectedSize "${LEGACY_SIZE}"
+  ${Else}
+    MessageBox MB_ICONSTOP "This Windows version is not supported by MirvMon Agent."
+    SetErrorLevel 2
+    Abort
+  ${EndIf}
+
+  nsExec::ExecToLog /OEM '"$SelectedAgent" install-windows --bootstrap "$PLUGINSDIR\bootstrap.json" --expected-version "${EXPECTED_VERSION}" --expected-artifact "$SelectedArtifact" --expected-sha256 "$SelectedSHA256" --expected-size "$SelectedSize"'
   Pop $0
   ${If} $0 != 0
     MessageBox MB_ICONSTOP "MirvMon Agent installation failed. Review the installation log above."
