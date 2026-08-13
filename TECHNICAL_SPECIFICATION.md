@@ -81,15 +81,16 @@ notifications. Запоздалый допустимый sample записыва
   SP1/8/8.1 и Server 2008 R2 SP1/2012/2012 R2 — Go 1.20.14; Windows Server
   2008 без R2 и x86 системы исключены;
 - единый неподписанный Windows EXE собирается NSIS на сервере и содержит обе
-  catalog-verified x64-сборки, PowerShell 2.0-compatible transaction script и
-  одноразовый часовой credential, но не permanent agent token;
-- выбранный нативный EXE получает конфигурацию через HTTPS; PowerShell
-  2.0/CLR 2.0 сетевую загрузку не выполняют;
-- legacy installer назначает ACL через `*S-1-5-18` и
-  `*S-1-5-32-544`, проверяет exit code всех критических native programs и
+  catalog-verified x64-сборки, защищённый `bootstrap.json` и одноразовый
+  часовой credential, но не permanent agent token и не PowerShell/BAT;
+- NSIS выбирает совместимый EXE и напрямую вызывает `install-windows`;
+  выбранный Go-процесс получает конфигурацию через HTTPS и выполняет всю
+  локальную транзакцию;
+- native installer назначает ACL через well-known SID `S-1-5-18` и
+  `S-1-5-32-544`, проверяет все критические Windows API/native operations и
   сохраняет старый runtime неизменным до успешных `check` и `migrate`;
 - commit legacy-установки сохраняет timestamped backups, проверяет Windows
-  service `Running` через WMI и выполняет rollback файлов/service metadata при
+  service `Running` через SCM и выполняет rollback файлов/service metadata при
   post-commit ошибке;
 - старые EOL ОС поддерживаются только как compatibility target агента и не
   считаются безопасными production platform;

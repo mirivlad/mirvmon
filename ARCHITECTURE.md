@@ -148,14 +148,15 @@ state разделены между `Program Files` и `ProgramData`.
 Linux runtime — статический Go 1.26.5 x64 binary. Windows 10/11 и Server 2016+
 используют ту же версию Go; Windows 7 SP1/8/8.1 и Server 2008 R2 SP1/2012/2012
 R2 — Go 1.20.14 x64 binary. Сервер динамически собирает неподписанный
-персонализированный NSIS EXE с обеими catalog-verified сборками, локальным
-PowerShell 2.0-compatible transaction script и короткоживущим credential.
-Installer выбирает binary через WMI, нативно получает конфигурацию по HTTPS,
-проверяет manifest size/SHA-256 и binary identity, выполняет `check`, мигрирует
+персонализированный NSIS EXE с обеими catalog-verified сборками,
+`bootstrap.json` и короткоживущим credential. Скриптов в пакете нет. NSIS
+выбирает binary по версии Windows и напрямую запускает его `install-windows`;
+выбранный Go-процесс нативно проверяет точную версию ОС, получает конфигурацию
+по HTTPS, проверяет manifest size/SHA-256 и binary identity, мигрирует
 старые configuration/queue в staging и проверяет результат. Только после этого
 он отключает от повторного запуска и останавливает старый runtime, повторяет
 миграцию уже неподвижной очереди, переключает state и регистрирует либо
-перенастраивает Windows service. Запуск проверяется через WMI, а post-commit
+перенастраивает Windows service через SCM. Запуск проверяется через SCM, а post-commit
 ошибка восстанавливает service metadata и файлы из transaction rollback copy.
 
 Начиная с `v0.4.3`, envelope также сообщает точный artifact key и capability
