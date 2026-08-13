@@ -150,7 +150,8 @@ ASCII/no-BOM server config; target host не выполняет сетевой b
 legacy BAT/PS1 URL являются aliases этого ZIP. Installer сначала проверяет
 manifest size/SHA-256 и binary identity, выполняет `check`, мигрирует старые
 configuration/queue в staging и проверяет результат. Только после этого он
-останавливает старый runtime, переключает state и регистрирует либо
+отключает от повторного запуска и останавливает старый runtime, повторяет
+миграцию уже неподвижной очереди, переключает state и регистрирует либо
 перенастраивает Windows service. Запуск проверяется через WMI, а post-commit
 ошибка восстанавливает service metadata и файлы из transaction rollback copy.
 
