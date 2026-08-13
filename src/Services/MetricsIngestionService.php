@@ -20,7 +20,8 @@ final class MetricsIngestionService
         private readonly PDO $pdo,
         private readonly ThresholdEvaluator $thresholdEvaluator,
         private readonly NotificationOutboxRepository $outbox,
-        private readonly AgentUpdateRepository $agentUpdates
+        private readonly AgentUpdateRepository $agentUpdates,
+        private readonly AgentVersionService $agentVersions
     ) {
     }
 
@@ -272,7 +273,7 @@ final class MetricsIngestionService
         ]);
 
         if ($envelope->agentVersion !== null && $envelope->agentArtifact !== null) {
-            $this->agentUpdates->completeForReportedIdentity(
+            $this->reconcileAgentUpdate(
                 $serverId,
                 $envelope->agentVersion,
                 $envelope->agentArtifact
@@ -285,6 +286,34 @@ final class MetricsIngestionService
              WHERE server_id = :server_id'
         );
         $token->execute(['server_id' => $serverId]);
+    }
+
+    private function reconcileAgentUpdate(
+        int $serverId,
+        string $reportedVersion,
+        string $reportedArtifact
+    ): void {
+        $command = $this->agentUpdates->activeForServer($serverId)
+            ?? $this->agentUpdates->latestForServer($serverId);
+        if (
+            !is_array($command)
+            || $command['state'] === 'succeeded'
+            || $command['target_artifact'] !== $reportedArtifact
+            || !is_string($command['target_version'])
+            || (
+                $command['target_version'] !== $reportedVersion
+                && !$this->agentVersions->isUpgrade(
+                    $command['target_version'],
+                    $reportedVersion
+                )
+            )
+        ) {
+            return;
+        }
+        $this->agentUpdates->complete(
+            (string) $command['id'],
+            $serverId
+        );
     }
 
     private function storeProcessSnapshot(

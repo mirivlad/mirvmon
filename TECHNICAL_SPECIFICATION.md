@@ -111,7 +111,7 @@ notifications. Запоздалый допустимый sample записыва
 - Linux применяет замену root one-shot unit, Windows — trusted LocalSystem
   helper; config, token и metrics queue остаются неизменными;
 - startup/health failure восстанавливает `.previous`; успех подтверждается
-  новым metrics envelope с точными target version и artifact; это подтверждение
+  новым metrics envelope с target version (либо более новой) и точным artifact; это подтверждение
   завершает любую незакрытую стадию, включая ручную установку target version;
 - уже установленная target version не прерывает metrics cycle, а stale local
   update state переводится в terminal перед следующим обновлением.
