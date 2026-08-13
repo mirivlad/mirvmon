@@ -54,7 +54,7 @@ if (version_compare(PHP_VERSION, "8.5.0", "<")) {
     fwrite(STDERR, "PHP 8.5 or newer is required.\n");
     exit(1);
 }
-foreach (["curl", "gd", "intl", "pcntl", "pdo_pgsql", "sodium"] as $extension) {
+foreach (["curl", "gd", "intl", "pcntl", "pdo_pgsql", "sodium", "zip"] as $extension) {
     if (!extension_loaded($extension)) {
         fwrite(STDERR, "Missing PHP extension: {$extension}\n");
         exit(1);
