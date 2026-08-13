@@ -99,6 +99,22 @@ final class LegacyWindowsInstallerContractTest extends TestCase
         self::assertStringContainsString("schtasks.exe' @('/Delete'", $this->powerShell);
     }
 
+    public function testCommitFreezesAndRefreshesLegacyQueueBeforeReplacingFiles(): void
+    {
+        $stopTask = $this->position("'stop-old-task'");
+        $disableTask = $this->position("'disable-old-task'");
+        $finalMigration = $this->position("'commit-migrate-state'");
+        $replaceAgent = $this->position(
+            'Copy-Item -LiteralPath $StageAgentPath -Destination $InstalledAgentPath'
+        );
+
+        self::assertLessThan($stopTask, $disableTask);
+        self::assertLessThan($finalMigration, $disableTask);
+        self::assertLessThan($replaceAgent, $finalMigration);
+        self::assertStringContainsString('$LegacyTaskWasEnabled', $this->powerShell);
+        self::assertStringContainsString("'rollback-enable-old-task'", $this->powerShell);
+    }
+
     private function position(string $needle): int
     {
         $position = strpos($this->powerShell, $needle);
