@@ -114,7 +114,11 @@ notifications. Запоздалый допустимый sample записыва
   новым metrics envelope с target version (либо более новой) и точным artifact; это подтверждение
   завершает любую незакрытую стадию, включая ручную установку target version;
 - уже установленная target version не прерывает metrics cycle, а stale local
-  update state переводится в terminal перед следующим обновлением.
+  update state переводится в terminal перед следующим обновлением;
+- при config poll устаревшая команда заменяется текущей catalog version только
+  в состоянии `pending`: старый row атомарно завершается с
+  `target_superseded`, сохраняются artifact и `requested_by`, а состояния
+  `accepted` и далее автоматически не заменяются.
 
 ### Алерты и уведомления
 
