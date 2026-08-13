@@ -123,6 +123,27 @@ func (store Store) Read() (State, error) {
 	return state, nil
 }
 
+// ReconcileInstalled terminalizes stale local progress once this host already
+// runs the command target (or a newer build of the same artifact).
+func (store Store) ReconcileInstalled(version, artifact string) error {
+	state, err := store.Read()
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if state.State == StateSucceeded || state.State == StateFailed || state.Command.Artifact != artifact {
+		return nil
+	}
+	if state.Command.TargetVersion != version && !isUpgrade(state.Command.TargetVersion, version) {
+		return nil
+	}
+	state.State = StateSucceeded
+	state.ErrorCode = ""
+	return store.write(state)
+}
+
 func (store Store) write(state State) error {
 	contents, err := json.Marshal(state)
 	if err != nil {

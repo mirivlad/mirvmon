@@ -7,6 +7,7 @@ namespace Tests\Integration\Services;
 use App\Database\ConnectionFactory;
 use App\Database\Migrator;
 use App\Domain\Metrics\MetricsEnvelope;
+use App\Repositories\AgentUpdateRepository;
 use App\Repositories\NotificationOutboxRepository;
 use App\Services\MetricsIngestionService;
 use App\Services\ThresholdEvaluator;
@@ -61,7 +62,8 @@ final class MetricsIngestionServiceTest extends TestCase
         $this->ingestion = new MetricsIngestionService(
             self::$pdo,
             new ThresholdEvaluator(),
-            new NotificationOutboxRepository(self::$pdo)
+            new NotificationOutboxRepository(self::$pdo),
+            new AgentUpdateRepository(self::$pdo)
         );
     }
 
@@ -379,6 +381,43 @@ final class MetricsIngestionServiceTest extends TestCase
             'Windows Server 2008 R2 SP1 (build 7601)',
             (string) self::$pdo?->query(
                 'SELECT os_version FROM servers WHERE id = ' . $this->serverId
+            )->fetchColumn()
+        );
+    }
+
+    public function testTargetMetricsCompletePendingUpdateAfterManualInstall(): void
+    {
+        self::$pdo?->prepare(
+            "INSERT INTO agent_update_commands (
+                id, server_id, target_version, target_artifact
+             ) VALUES (
+                '50000000-0000-4000-8000-000000000001',
+                :server_id,
+                'v0.4.3',
+                'linux-amd64'
+             )"
+        )->execute(['server_id' => $this->serverId]);
+        $envelope = new MetricsEnvelope(
+            2,
+            '50000000-0000-4000-8000-000000000002',
+            new DateTimeImmutable('2026-07-30T11:59:00Z'),
+            $this->token,
+            ['cpu_load' => 10],
+            [],
+            null,
+            'v0.4.3',
+            'NethServer 7.9.2009',
+            'linux-amd64',
+            ['self_update_v1']
+        );
+
+        $this->ingestion->ingest($envelope);
+
+        self::assertSame(
+            'succeeded',
+            (string) self::$pdo?->query(
+                "SELECT state FROM agent_update_commands
+                 WHERE id = '50000000-0000-4000-8000-000000000001'"
             )->fetchColumn()
         );
     }

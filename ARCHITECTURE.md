@@ -164,8 +164,11 @@ R2 — Go 1.20.14 x64 binary. Сервер динамически собирае
 сервера; она хранится в `agent_update_commands` и возвращается агенту при его
 обычном outbound config poll. Состояния монотонны: `pending`, `accepted`,
 `downloading`, `installing`, `awaiting_restart`, затем `succeeded` либо
-`failed`. Только последующий envelope с точной target version завершает команду
-как `succeeded`.
+`failed`. Последующий envelope с точными target version и artifact является
+авторитетным подтверждением результата и завершает команду как `succeeded` из
+любой стадии, в том числе после ручной установки. При старте уже установленной
+target version агент не повторяет обновление, а завершает локальный stale state
+и продолжает отправку метрик.
 
 Команда содержит UUID, target version, allowlisted artifact key, размер и
 SHA-256. URL и исполняемый текст отсутствуют. Public artifact скачивается с

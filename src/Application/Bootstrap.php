@@ -142,7 +142,8 @@ final class Bootstrap
                 new MetricsIngestionService(
                     $container->get(PDO::class),
                     $container->get(ThresholdEvaluator::class),
-                    $container->get(NotificationOutboxRepository::class)
+                    $container->get(NotificationOutboxRepository::class),
+                    $container->get(AgentUpdateRepository::class)
                 )
         );
         $container->set(
