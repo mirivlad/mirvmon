@@ -40,11 +40,22 @@ Var SelectedAgent
 Var SelectedArtifact
 Var SelectedSHA256
 Var SelectedSize
+Var PrivatePayload
 
 Section "Install MirvMon Agent"
   SetShellVarContext all
   InitPluginsDir
-  SetOutPath "$PLUGINSDIR"
+  StrCpy $PrivatePayload "$PLUGINSDIR\payload"
+  CreateDirectory "$PrivatePayload"
+  nsExec::ExecToStack /OEM '"$SYSDIR\icacls.exe" "$PrivatePayload" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F'
+  Pop $0
+  Pop $1
+  ${If} $0 != 0
+    MessageBox MB_ICONSTOP "MirvMon Agent cannot protect its temporary payload."
+    SetErrorLevel $0
+    Abort
+  ${EndIf}
+  SetOutPath "$PrivatePayload"
   File /oname=mirvmon-agent-modern.exe "${PAYLOAD_DIR}/mirvmon-agent-modern.exe"
   File /oname=mirvmon-agent-legacy.exe "${PAYLOAD_DIR}/mirvmon-agent-legacy.exe"
   File /oname=bootstrap.json "${PAYLOAD_DIR}/bootstrap.json"
@@ -56,12 +67,12 @@ Section "Install MirvMon Agent"
   ${EndIf}
 
   ${If} ${AtLeastWin10}
-    StrCpy $SelectedAgent "$PLUGINSDIR\mirvmon-agent-modern.exe"
+    StrCpy $SelectedAgent "$PrivatePayload\mirvmon-agent-modern.exe"
     StrCpy $SelectedArtifact "windows-amd64"
     StrCpy $SelectedSHA256 "${MODERN_SHA256}"
     StrCpy $SelectedSize "${MODERN_SIZE}"
   ${ElseIf} ${AtLeastWin7}
-    StrCpy $SelectedAgent "$PLUGINSDIR\mirvmon-agent-legacy.exe"
+    StrCpy $SelectedAgent "$PrivatePayload\mirvmon-agent-legacy.exe"
     StrCpy $SelectedArtifact "windows-legacy-amd64"
     StrCpy $SelectedSHA256 "${LEGACY_SHA256}"
     StrCpy $SelectedSize "${LEGACY_SIZE}"
@@ -71,7 +82,7 @@ Section "Install MirvMon Agent"
     Abort
   ${EndIf}
 
-  nsExec::ExecToLog /OEM '"$SelectedAgent" install-windows --bootstrap "$PLUGINSDIR\bootstrap.json" --expected-version "${EXPECTED_VERSION}" --expected-artifact "$SelectedArtifact" --expected-sha256 "$SelectedSHA256" --expected-size "$SelectedSize"'
+  nsExec::ExecToLog /OEM '"$SelectedAgent" install-windows --bootstrap "$PrivatePayload\bootstrap.json" --expected-version "${EXPECTED_VERSION}" --expected-artifact "$SelectedArtifact" --expected-sha256 "$SelectedSHA256" --expected-size "$SelectedSize"'
   Pop $0
   ${If} $0 != 0
     MessageBox MB_ICONSTOP "MirvMon Agent installation failed. Review the installation log above."
