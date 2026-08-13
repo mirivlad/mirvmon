@@ -30,7 +30,7 @@ RUN set -eux; \
         -o /tmp/mirvmon-agent-windows-amd64.exe ./cmd/mirvmon-agent; \
     cmp /out/mirvmon-agent-windows-amd64.exe /tmp/mirvmon-agent-windows-amd64.exe
 
-FROM golang:1.20.14-bookworm@sha256:9fa9101141c01e9440216d32eb2b380b3c3079bea07aeab3546020cc91b3662c AS agent-legacy
+FROM golang:1.26.4-bookworm@sha256:b305420a68d0f229d91eb3b3ed9e519fcf2cf5461da4bef997bf927e8c0bfd2b AS agent-legacy
 
 ARG APP_VERSION
 
