@@ -2,12 +2,27 @@ package tlsroots
 
 import (
 	"crypto/tls"
-	"crypto/x509"
-	"encoding/pem"
 	"testing"
+
+	rootcerts "github.com/gwatts/rootcerts"
 )
 
 func TestEmbeddedRootsAreValidAndTLS12OrNewer(t *testing.T) {
+	embedded := rootcerts.CertsByTrust(rootcerts.ServerTrustedDelegator)
+	if len(embedded) < 100 {
+		t.Fatalf("unexpectedly small embedded server trust store: %d", len(embedded))
+	}
+	foundISRG := false
+	for _, certificate := range embedded {
+		if certificate.Label == "ISRG Root X1" {
+			foundISRG = true
+			break
+		}
+	}
+	if !foundISRG {
+		t.Fatal("embedded Mozilla trust store is missing ISRG Root X1")
+	}
+
 	configuration, err := TLSConfig()
 	if err != nil {
 		t.Fatal(err)
@@ -17,33 +32,5 @@ func TestEmbeddedRootsAreValidAndTLS12OrNewer(t *testing.T) {
 	}
 	if configuration.RootCAs == nil {
 		t.Fatal("root pool is nil")
-	}
-
-	remaining := embeddedRoots
-	commonNames := map[string]bool{}
-	count := 0
-	for len(remaining) > 0 {
-		block, rest := pem.Decode(remaining)
-		if block == nil {
-			break
-		}
-		remaining = rest
-		if block.Type != "CERTIFICATE" {
-			continue
-		}
-		certificate, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			t.Fatal(err)
-		}
-		commonNames[certificate.Subject.CommonName] = true
-		count++
-	}
-	if count != 2 {
-		t.Fatalf("unexpected embedded root count: %d", count)
-	}
-	for _, name := range []string{"ISRG Root X1", "ISRG Root X2"} {
-		if !commonNames[name] {
-			t.Fatalf("missing embedded root %q", name)
-		}
 	}
 }
