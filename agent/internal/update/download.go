@@ -11,9 +11,14 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"time"
+
+	"github.com/mirivlad/mirvmon/agent/internal/tlsroots"
 )
 
 var ErrChecksumMismatch = errors.New("update checksum mismatch")
+
+const downloadTimeout = 60 * time.Second
 
 // Downloader stages one fixed same-origin artifact and never sends credentials
 // to the public binary endpoint.
@@ -48,9 +53,16 @@ func (downloader Downloader) Stage(
 	request.Header.Set("Accept", "application/octet-stream")
 	client := downloader.Client
 	if client == nil {
-		client = http.DefaultClient
+		transport, tlsErr := tlsroots.Transport()
+		if tlsErr != nil {
+			return fmt.Errorf("initialize update TLS: %w", tlsErr)
+		}
+		client = &http.Client{Transport: transport, Timeout: downloadTimeout}
 	}
 	safeClient := *client
+	if safeClient.Timeout == 0 || safeClient.Timeout > downloadTimeout {
+		safeClient.Timeout = downloadTimeout
+	}
 	safeClient.CheckRedirect = func(*http.Request, []*http.Request) error {
 		return errors.New("update redirect refused")
 	}

@@ -110,6 +110,7 @@ USER root
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+        ca-certificates \
         curl \
         fonts-dejavu-core \
         nsis \
@@ -143,6 +144,11 @@ COPY --from=vendor /usr/bin/composer /usr/local/bin/composer
 COPY docker/Caddyfile /etc/frankenphp/Caddyfile
 COPY docker/php.ini /usr/local/etc/php/conf.d/zz-mirvmon.ini
 COPY docker/supervisord.conf /etc/supervisor/conf.d/mirvmon.conf
+
+# The generated legacy installer must not depend on the target host's stale
+# CA store. Replace the small source-tree bootstrap fallback with the complete
+# CA bundle from this freshly built release image.
+RUN install -m 0644 /etc/ssl/certs/ca-certificates.crt /app/agent/internal/tlsroots/roots.pem
 
 RUN chmod 0555 \
         /app/docker/entrypoint.sh \
