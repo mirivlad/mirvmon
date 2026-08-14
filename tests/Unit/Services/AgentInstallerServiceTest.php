@@ -33,6 +33,16 @@ final class AgentInstallerServiceTest extends TestCase
         self::assertStringContainsString('rm -rf "$INSTALL_DIR/venv"', $script);
         self::assertStringContainsString('rm -f "$INSTALL_DIR/agent.py" "$INSTALL_DIR/agent-launcher"', $script);
 
+        // The installer carries its own fallback trust roots, so bootstrap
+        // downloads do not depend on a legacy host having a current CA store.
+        self::assertStringContainsString("CA_BUNDLE=\"$STAGING_DIR/ca-bundle.pem\"", $script);
+        self::assertStringContainsString('MIRVMON_CA_BUNDLE', $script);
+        self::assertStringContainsString('# ISRG Root X1', $script);
+        self::assertStringContainsString('# ISRG Root X2', $script);
+        self::assertStringContainsString('--cacert "$CA_BUNDLE"', $script);
+        self::assertStringContainsString('--ca-certificate="$CA_BUNDLE"', $script);
+        self::assertStringNotContainsString('--insecure', $script);
+
         // systemd remains supported, but only when it is actually PID 1.
         self::assertStringContainsString('/proc/1/comm', $script);
         self::assertStringContainsString("= 'systemd'", $script);
