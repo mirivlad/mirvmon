@@ -1,6 +1,6 @@
 // Package tlsroots provides the agent's TLS trust configuration.
 //
-// Current system roots are retained when available, and the current Mozilla
+// Current system roots are retained when available, and a pinned Mozilla
 // server trust store is appended so legacy hosts with stale CA stores can
 // authenticate public MirvMon HTTPS endpoints without disabling verification.
 package tlsroots
