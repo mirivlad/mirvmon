@@ -4,7 +4,6 @@ package transport
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"github.com/mirivlad/mirvmon/agent/internal/config"
+	"github.com/mirivlad/mirvmon/agent/internal/tlsroots"
 	"github.com/mirivlad/mirvmon/agent/internal/update"
 )
 
@@ -84,12 +84,12 @@ func New(configuration config.Config, options ...Option) *Client {
 
 	transport := settings.roundTripper
 	if transport == nil {
-		transport = &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			TLSClientConfig: &tls.Config{
-				MinVersion: tls.VersionTLS12,
-			},
+		defaultTransport, err := tlsroots.Transport()
+		if err != nil {
+			client.initErr = err
+			return client
 		}
+		transport = defaultTransport
 	}
 	client.http = &http.Client{
 		Transport: transport,

@@ -5,7 +5,6 @@ package enroll
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io"
@@ -19,6 +18,7 @@ import (
 	"time"
 
 	"github.com/mirivlad/mirvmon/agent/internal/config"
+	"github.com/mirivlad/mirvmon/agent/internal/tlsroots"
 )
 
 const (
@@ -62,7 +62,10 @@ func Activate(ctx context.Context, request Request) error {
 		return errors.New("invalid activation bootstrap")
 	}
 
-	httpClient := activationClient(request.HTTPClient)
+	httpClient, err := activationClient(request.HTTPClient)
+	if err != nil {
+		return errors.New("activation request failed")
+	}
 	httpRequest, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
@@ -89,16 +92,13 @@ func Activate(ctx context.Context, request Request) error {
 	return nil
 }
 
-func activationClient(provided *http.Client) *http.Client {
+func activationClient(provided *http.Client) (*http.Client, error) {
 	if provided == nil {
-		provided = &http.Client{
-			Transport: &http.Transport{
-				Proxy: http.ProxyFromEnvironment,
-				TLSClientConfig: &tls.Config{
-					MinVersion: tls.VersionTLS12,
-				},
-			},
+		transport, err := tlsroots.Transport()
+		if err != nil {
+			return nil, err
 		}
+		provided = &http.Client{Transport: transport}
 	}
 	client := *provided
 	if client.Timeout == 0 || client.Timeout > requestTimeout {
@@ -107,7 +107,7 @@ func activationClient(provided *http.Client) *http.Client {
 	client.CheckRedirect = func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
-	return &client
+	return &client, nil
 }
 
 func validateBaseURL(value string) (string, error) {

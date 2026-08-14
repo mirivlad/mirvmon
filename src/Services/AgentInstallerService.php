@@ -14,7 +14,7 @@ final class AgentInstallerService
         $this->assertInputs($baseUrl, $agentToken);
 
         return str_replace(
-            ['__BASE_URL__', '__CONFIG__'],
+            ['__BASE_URL__', '__CONFIG__', '__CA_BUNDLE__'],
             [
                 $baseUrl,
                 $this->configJson(
@@ -22,6 +22,7 @@ final class AgentInstallerService
                     $agentToken,
                     '/var/lib/mirvmon-agent/queue.json'
                 ),
+                $this->caBundle(),
             ],
             <<<'SH'
 #!/bin/sh
@@ -81,10 +82,16 @@ STAGING_DIR="$INSTALL_DIR/.staging-$$"
 mkdir "$STAGING_DIR"
 trap 'rm -rf "$STAGING_DIR"' EXIT HUP INT TERM
 
+CA_BUNDLE="$STAGING_DIR/ca-bundle.pem"
+cat > "$CA_BUNDLE" <<'MIRVMON_CA_BUNDLE'
+__CA_BUNDLE__
+MIRVMON_CA_BUNDLE
+chmod 0600 "$CA_BUNDLE"
+
 if command -v curl >/dev/null 2>&1; then
-    curl --fail --silent --show-error --location "$ARTIFACT_URL" -o "$STAGING_DIR/mirvmon-agent"
+    curl --fail --silent --show-error --location --cacert "$CA_BUNDLE" "$ARTIFACT_URL" -o "$STAGING_DIR/mirvmon-agent"
 elif command -v wget >/dev/null 2>&1; then
-    wget -qO "$STAGING_DIR/mirvmon-agent" "$ARTIFACT_URL"
+    wget --ca-certificate="$CA_BUNDLE" -qO "$STAGING_DIR/mirvmon-agent" "$ARTIFACT_URL"
 else
     fail 'curl or wget is required to download the native agent.'
 fi
@@ -324,6 +331,17 @@ SH
         if (preg_match('/^[a-f0-9]{64}$/', $agentToken) !== 1) {
             throw new RuntimeException('Invalid agent token.');
         }
+    }
+
+    private function caBundle(): string
+    {
+        $path = dirname(__DIR__, 2) . '/agent/internal/tlsroots/roots.pem';
+        $contents = @file_get_contents($path);
+        if (!is_string($contents) || trim($contents) === '') {
+            throw new RuntimeException('Cannot load the embedded agent CA bundle.');
+        }
+
+        return rtrim($contents, "\r\n");
     }
 
     private function configJson(string $baseUrl, string $agentToken, string $queuePath): string
