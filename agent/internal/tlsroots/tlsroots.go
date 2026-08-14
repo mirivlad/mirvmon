@@ -1,35 +1,43 @@
 // Package tlsroots provides the agent's TLS trust configuration.
 //
-// Current system roots are retained when available, and MirvMon's embedded
-// fallback roots are appended so legacy hosts with stale CA stores can still
-// authenticate the MirvMon HTTPS endpoint without disabling verification.
+// Current system roots are retained when available, and the current Mozilla
+// server trust store is appended so legacy hosts with stale CA stores can
+// authenticate public MirvMon HTTPS endpoints without disabling verification.
 package tlsroots
 
 import (
 	"crypto/tls"
 	"crypto/x509"
-	_ "embed"
 	"errors"
+	"fmt"
 	"net/http"
+
+	rootcerts "github.com/gwatts/rootcerts"
 )
 
-var errInvalidEmbeddedRoots = errors.New("invalid embedded TLS root bundle")
-
-//go:embed roots.pem
-var embeddedRoots []byte
+var errInvalidEmbeddedRoots = errors.New("embedded TLS root bundle is empty")
 
 // TLSConfig returns a TLS 1.2+ configuration backed by the host trust store
-// plus MirvMon's embedded fallback roots. If the platform trust store cannot be
-// loaded, the embedded roots remain sufficient for supported MirvMon HTTPS
-// deployments.
+// plus the embedded Mozilla server-trusted roots. If the platform trust store
+// cannot be loaded, the embedded roots remain sufficient for public HTTPS.
 func TLSConfig() (*tls.Config, error) {
 	roots, err := x509.SystemCertPool()
 	if err != nil || roots == nil {
 		roots = x509.NewCertPool()
 	}
-	if !roots.AppendCertsFromPEM(embeddedRoots) {
+
+	embedded := rootcerts.CertsByTrust(rootcerts.ServerTrustedDelegator)
+	if len(embedded) == 0 {
 		return nil, errInvalidEmbeddedRoots
 	}
+	for _, root := range embedded {
+		certificate, err := x509.ParseCertificate(root.DER)
+		if err != nil {
+			return nil, fmt.Errorf("parse embedded TLS root %q: %w", root.Label, err)
+		}
+		roots.AddCert(certificate)
+	}
+
 	return &tls.Config{
 		MinVersion: tls.VersionTLS12,
 		RootCAs:    roots,
