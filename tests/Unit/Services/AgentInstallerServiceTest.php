@@ -35,7 +35,7 @@ final class AgentInstallerServiceTest extends TestCase
 
         // The installer carries its own fallback trust roots, so bootstrap
         // downloads do not depend on a legacy host having a current CA store.
-        self::assertStringContainsString("CA_BUNDLE=\"$STAGING_DIR/ca-bundle.pem\"", $script);
+        self::assertStringContainsString('CA_BUNDLE="$STAGING_DIR/ca-bundle.pem"', $script);
         self::assertStringContainsString('MIRVMON_CA_BUNDLE', $script);
         self::assertStringContainsString('# ISRG Root X1', $script);
         self::assertStringContainsString('# ISRG Root X2', $script);
