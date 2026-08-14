@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/StackExchange/wmi v1.2.1
-	github.com/gwatts/rootcerts v0.0.0-20260801205809-d711a5bdf9bd
+	github.com/gwatts/rootcerts v0.0.0-20260601182702-1fd2cec8fc17
 	golang.org/x/sys v0.30.0
 )
 
