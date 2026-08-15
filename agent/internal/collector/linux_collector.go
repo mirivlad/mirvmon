@@ -110,28 +110,26 @@ func (collector *linuxCollector) collectMetrics() (map[string]float64, error) {
 	if err != nil {
 		return nil, err
 	}
-	load, err := collector.collectLoadAverage()
-	if err != nil {
-		return nil, err
-	}
 	required := map[string]float64{
 		"cpu_load":           rates["cpu_load"],
 		"ram_used":           memory["ram_used"],
 		"ram_total_gb":       memory["ram_total_gb"],
 		"uptime":             uptime,
-		"load_1":             load["load_1"],
-		"load_5":             load["load_5"],
-		"load_15":            load["load_15"],
 		"disk_used":          disks["disk_used"],
 		"disk_used_root":     disks["disk_used_root"],
 		"disk_total_gb_root": disks["disk_total_gb_root"],
 	}
-	optional := make(map[string]float64, len(rates)+len(disks)+1)
+	optional := make(map[string]float64, len(rates)+len(disks)+4)
 	for name, value := range rates {
 		optional[name] = value
 	}
 	for name, value := range disks {
 		optional[name] = value
+	}
+	if load, loadErr := collector.collectLoadAverage(); loadErr == nil {
+		for name, value := range load {
+			optional[name] = value
+		}
 	}
 	if temperature, ok := collector.collectTemperature(); ok {
 		optional["temp_system"] = temperature
