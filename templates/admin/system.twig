@@ -139,7 +139,7 @@
                                 </div>
                                 {% if worker.last_tick_at %}
                                     <div class="small text-muted">{{ t('system.worker.last_signal') }}: {{ worker.last_tick_at|date('d.m.Y H:i:s') }} · {{ t('system.worker.seconds_ago', {seconds: worker.seconds_since_tick}) }}</div>
-                                    <div class="small text-muted">{{ t('system.worker.started') }}: {{ worker.started_at|date('d.m.Y H:i:s') }}</div>
+                                    <div class="small text-muted">{{ t('system.worker.first_signal') }}: {{ worker.started_at|date('d.m.Y H:i:s') }}</div>
                                 {% else %}
                                     <div class="small text-muted">{{ t('system.worker.never') }}</div>
                                 {% endif %}
@@ -223,7 +223,7 @@
             {% else %}
                 <div class="table-responsive">
                     <table class="table table-sm align-middle mb-0">
-                        <thead><tr><th>{{ t('common.name') }}</th><th>{{ t('server.metrics.used', {value: '%'}) }}</th><th>{{ t('server.metrics.total', {value: 'GB'}) }}</th></tr></thead>
+                        <thead><tr><th>{{ t('common.name') }}</th><th>{{ t('system.host.disk_used') }}</th><th>{{ t('system.host.disk_total') }}</th></tr></thead>
                         <tbody>
                         {% for disk in system.host.disks %}
                             <tr><td><code>{{ disk.name }}</code></td><td>{{ disk.used_percent|round(1) }}%</td><td>{{ disk.total_gb is null ? '—' : disk.total_gb|round(1) ~ ' GB' }}</td></tr>
