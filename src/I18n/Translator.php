@@ -67,9 +67,7 @@ final class Translator
         ];
     }
 
-    /**
-     * @param array<string, scalar|Stringable|null> $parameters
-     */
+    /** @param array<string, scalar|Stringable|null> $parameters */
     public function trans(string $key, array $parameters = []): string
     {
         $catalog = $this->catalog($this->locale);
@@ -114,23 +112,38 @@ final class Translator
             return $this->catalogs[$locale];
         }
 
-        $path = rtrim($this->translationsPath, DIRECTORY_SEPARATOR)
-            . DIRECTORY_SEPARATOR . $locale . '.php';
-        if (!is_file($path)) {
+        $root = rtrim($this->translationsPath, DIRECTORY_SEPARATOR);
+        $primary = $root . DIRECTORY_SEPARATOR . $locale . '.php';
+        if (!is_file($primary)) {
             throw new RuntimeException('Translation catalog not found: ' . $locale);
         }
 
-        $catalog = require $path;
-        if (!is_array($catalog)) {
-            throw new RuntimeException('Invalid translation catalog: ' . $locale);
+        $paths = [$primary];
+        $fragments = glob($root . DIRECTORY_SEPARATOR . $locale . '.*.php');
+        if (is_array($fragments)) {
+            sort($fragments, SORT_STRING);
+            foreach ($fragments as $fragment) {
+                if ($fragment !== $primary) {
+                    $paths[] = $fragment;
+                }
+            }
         }
 
         $normalized = [];
-        foreach ($catalog as $key => $message) {
-            if (!is_string($key) || !is_string($message)) {
-                throw new RuntimeException('Translation catalog must contain string keys and values.');
+        foreach ($paths as $path) {
+            $catalog = require $path;
+            if (!is_array($catalog)) {
+                throw new RuntimeException('Invalid translation catalog: ' . basename($path));
             }
-            $normalized[$key] = $message;
+            foreach ($catalog as $key => $message) {
+                if (!is_string($key) || !is_string($message)) {
+                    throw new RuntimeException('Translation catalog must contain string keys and values.');
+                }
+                if (array_key_exists($key, $normalized)) {
+                    throw new RuntimeException('Duplicate translation key: ' . $key);
+                }
+                $normalized[$key] = $message;
+            }
         }
 
         return $this->catalogs[$locale] = $normalized;
