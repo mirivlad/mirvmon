@@ -1,4 +1,5 @@
 {% extends "layout.twig" %}
+{% set page_title = group.name %}
 
 {% block content %}
 <div class="row">
@@ -9,71 +10,50 @@
                 {% if group.description %}<small class="text-muted">- {{ group.description }}</small>{% endif %}
             </h2>
             <div>
-                {% include "partials/action-button.twig" with {href: '/groups/' ~ group.id ~ '/edit', icon: 'fa-edit', label: 'Редактировать', class: 'btn-outline-primary'} %}
-                {% include "partials/action-button.twig" with {href: '/groups', icon: 'fa-arrow-left', label: 'Назад к группам', class: 'btn-outline-secondary'} %}
+                {% include "partials/action-button.twig" with {href: '/groups/' ~ group.id ~ '/edit', icon: 'fa-edit', label: t('common.edit'), class: 'btn-outline-primary'} %}
+                {% include "partials/action-button.twig" with {href: '/groups', icon: 'fa-arrow-left', label: t('groups.back'), class: 'btn-outline-secondary'} %}
             </div>
         </div>
 
         <div class="card mb-3">
             <div class="card-body">
-                <h4>Информация о группе</h4>
-                <p><strong>Описание:</strong> {{ group.description|default('Нет описания') }}</p>
-                <p><strong>Цвет:</strong>
+                <h4>{{ t('groups.info') }}</h4>
+                <p><strong>{{ t('common.description') }}:</strong> {{ group.description|default(t('groups.no_description')) }}</p>
+                <p><strong>{{ t('groups.column.color') }}:</strong>
                     {% if group.color %}
                     <span class="badge" style="background-color: {{ group.color }}">{{ group.color }}</span>
-                    {% else %}
-                    Не указан
-                    {% endif %}
+                    {% else %}{{ t('common.not_set') }}{% endif %}
                 </p>
-                <p><strong>Серверов в группе:</strong> {{ servers|length }}</p>
+                <p><strong>{{ t('groups.servers_in_group', {count: servers|length}) }}</strong></p>
             </div>
         </div>
 
         <div class="card">
             <div class="card-header">
-                <h4 class="mb-0"><i class="fas fa-server"></i> Серверы в группе</h4>
+                <h4 class="mb-0"><i class="fas fa-server"></i> {{ t('groups.servers_title') }}</h4>
             </div>
             <div class="card-body">
                 {% if servers|length > 0 %}
                 <div class="table-responsive">
                     <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th>Название</th>
-                                <th>Адрес</th>
-                                <th>Последние метрики</th>
-                                <th>Статус</th>
-                                <th>Действия</th>
-                            </tr>
-                        </thead>
+                        <thead><tr>
+                            <th>{{ t('common.name') }}</th>
+                            <th>{{ t('common.address') }}</th>
+                            <th>{{ t('servers.column.last_metrics') }}</th>
+                            <th>{{ t('common.status') }}</th>
+                            <th>{{ t('common.actions') }}</th>
+                        </tr></thead>
                         <tbody>
                             {% for server in servers %}
                             <tr>
-                                <td>
-                                    <strong>{{ server.name }}</strong>
-                                </td>
+                                <td><strong>{{ server.name }}</strong></td>
                                 <td>{{ server.address|default('-') }}</td>
+                                <td>{% if server.last_metrics_at %}{{ server.last_metrics_at|date('d.m.Y H:i:s') }}{% else %}{{ t('common.no_data') }}{% endif %}</td>
                                 <td>
-                                    {% if server.last_metrics_at %}
-                                        {{ server.last_metrics_at|date('d.m.Y H:i:s') }}
-                                    {% else %}
-                                        Нет данных
-                                    {% endif %}
+                                    {% set status_class = server.status == 'online' ? 'success' : (server.status == 'warning' ? 'warning text-dark' : (server.status == 'critical' ? 'danger' : 'secondary')) %}
+                                    <span class="badge bg-{{ status_class }}">{{ t('status.' ~ server.status) }}</span>
                                 </td>
-                                <td>
-                                    {% if server.status == 'online' %}
-                                        <span class="badge bg-success">В норме</span>
-                                    {% elseif server.status == 'warning' %}
-                                        <span class="badge bg-warning text-dark">Внимание</span>
-                                    {% elseif server.status == 'critical' %}
-                                        <span class="badge bg-danger">Критично</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">Нет данных</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% include "partials/action-button.twig" with {href: '/servers/' ~ server.id, icon: 'fa-eye', label: 'Просмотр', class: 'btn-primary'} %}
-                                </td>
+                                <td>{% include "partials/action-button.twig" with {href: '/servers/' ~ server.id, icon: 'fa-eye', label: t('common.view'), class: 'btn-primary'} %}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -82,10 +62,8 @@
                 {% else %}
                 <div class="text-center py-5">
                     <i class="fas fa-server fa-3x text-muted mb-3"></i>
-                    <p class="lead">В этой группе пока нет серверов</p>
-                    <a href="/servers/create" class="btn btn-primary">
-                        <i class="fas fa-plus"></i> Добавить сервер
-                    </a>
+                    <p class="lead">{{ t('groups.empty_group') }}</p>
+                    <a href="/servers/create" class="btn btn-primary"><i class="fas fa-plus"></i> {{ t('servers.add') }}</a>
                 </div>
                 {% endif %}
             </div>
