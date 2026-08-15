@@ -14,12 +14,17 @@ final class ServerPresentationContractTest extends TestCase
         $partial = (string) file_get_contents(
             $root . '/templates/partials/server-status-icon.twig'
         );
+        $layout = (string) file_get_contents($root . '/templates/layout.twig');
 
+        self::assertStringContainsString('server-status-emblem', $partial);
+        self::assertStringContainsString('color: #fff !important', $layout);
+        self::assertStringContainsString('border-radius: 50% !important', $layout);
         foreach (['online', 'warning', 'critical', 'offline'] as $status) {
-            self::assertStringContainsString($status . ': \'var(--app-', $partial);
+            $expected = $status === 'online'
+                ? 'background: var(--app-online) !important'
+                : '.server-status-' . $status . ' .server-status-emblem';
+            self::assertStringContainsString($expected, $layout);
         }
-        self::assertStringContainsString('color:#fff', $partial);
-        self::assertStringContainsString('border-radius:50%', $partial);
 
         foreach ([
             'templates/dashboard.twig',
