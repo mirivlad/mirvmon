@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.11
+
+- Server liveness and offline/recovery notifications now use the MirvMon-side
+  timestamp of the last authenticated agent contact instead of the agent's
+  `sample_time`, so clock skew on a monitored host cannot cause false offline
+  transitions.
+- Metric timestamps remain agent-provided and continue to control metric history
+  and current-value ordering independently from connectivity state.
+
 ## 0.3.5
 
 - Multi-architecture GHCR publication now runs only after all release-tag CI
