@@ -181,9 +181,13 @@ final class DashboardMetricServiceTest extends TestCase
     {
         self::$pdo?->prepare(
             "INSERT INTO metric_names (name, unit, description)
-             VALUES (:name, :unit, :name)
+             VALUES (:name, :unit, :description)
              ON CONFLICT (name) DO NOTHING"
-        )->execute(['name' => $name, 'unit' => $unit]);
+        )->execute([
+            'name' => $name,
+            'unit' => $unit,
+            'description' => $name,
+        ]);
         $statement = self::$pdo?->prepare('SELECT id FROM metric_names WHERE name = :name');
         $statement?->execute(['name' => $name]);
 
