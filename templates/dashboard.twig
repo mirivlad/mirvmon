@@ -1,59 +1,57 @@
 {% extends "layout.twig" %}
-
+{% set page_title = t('dashboard.title') %}
 {% set status_labels = {
-    'online': 'В норме',
-    'warning': 'Внимание',
-    'critical': 'Критично',
-    'offline': 'Нет данных'
+    'online': t('status.online'),
+    'warning': t('status.warning'),
+    'critical': t('status.critical'),
+    'offline': t('status.offline')
 } %}
 {% block content %}
 <header class="dashboard-heading">
     <div>
-        <p class="page-eyebrow">Обзор инфраструктуры</p>
-        <h1>Состояние систем</h1>
-        <p class="page-subtitle">
-            Актуальные метрики, доступность и активные алерты в одном представлении.
-        </p>
+        <p class="page-eyebrow">{{ t('dashboard.eyebrow') }}</p>
+        <h1>{{ t('dashboard.title') }}</h1>
+        <p class="page-subtitle">{{ t('dashboard.subtitle') }}</p>
     </div>
     <a href="/servers/create" class="btn btn-primary dashboard-add-button">
         <i class="fas fa-plus" aria-hidden="true"></i>
-        Добавить сервер
+        {{ t('dashboard.add_server') }}
     </a>
 </header>
 
-<section class="summary-grid" aria-label="Сводка состояния">
+<section class="summary-grid" aria-label="{{ t('dashboard.title') }}">
     <article class="summary-card summary-card-total">
         <span class="summary-icon" aria-hidden="true"><i class="fas fa-server"></i></span>
         <div>
-            <span class="summary-label">Всего серверов</span>
+            <span class="summary-label">{{ t('dashboard.summary.total') }}</span>
             <strong class="summary-value" data-summary="total">{{ stats.total_servers }}</strong>
         </div>
     </article>
     <article class="summary-card summary-card-online">
         <span class="summary-icon" aria-hidden="true"><i class="fas fa-circle-check"></i></span>
         <div>
-            <span class="summary-label">В норме</span>
+            <span class="summary-label">{{ t('dashboard.summary.online') }}</span>
             <strong class="summary-value" data-summary="online">{{ stats.online_servers }}</strong>
         </div>
     </article>
     <article class="summary-card summary-card-warning">
         <span class="summary-icon" aria-hidden="true"><i class="fas fa-triangle-exclamation"></i></span>
         <div>
-            <span class="summary-label">Внимание</span>
+            <span class="summary-label">{{ t('dashboard.summary.warning') }}</span>
             <strong class="summary-value" data-summary="warning">{{ stats.warning_servers }}</strong>
         </div>
     </article>
     <article class="summary-card summary-card-critical">
         <span class="summary-icon" aria-hidden="true"><i class="fas fa-circle-exclamation"></i></span>
         <div>
-            <span class="summary-label">Критично</span>
+            <span class="summary-label">{{ t('dashboard.summary.critical') }}</span>
             <strong class="summary-value" data-summary="critical">{{ stats.critical_servers }}</strong>
         </div>
     </article>
     <article class="summary-card summary-card-offline">
         <span class="summary-icon" aria-hidden="true"><i class="fas fa-plug-circle-xmark"></i></span>
         <div>
-            <span class="summary-label">Нет данных</span>
+            <span class="summary-label">{{ t('dashboard.summary.offline') }}</span>
             <strong class="summary-value" data-summary="offline">{{ stats.offline_servers }}</strong>
         </div>
     </article>
@@ -61,44 +59,45 @@
 
 {% if groups|length == 0 %}
 <section class="empty-state">
-    <span class="empty-state-icon" aria-hidden="true">
-        <i class="fas fa-server"></i>
-    </span>
-    <h2>Добавьте первый сервер</h2>
-    <p>MirvMon покажет состояние сразу после первого пакета метрик от агента.</p>
+    <span class="empty-state-icon" aria-hidden="true"><i class="fas fa-server"></i></span>
+    <h2>{{ t('dashboard.empty.heading') }}</h2>
+    <p>{{ t('dashboard.empty.text') }}</p>
     <a href="/servers/create" class="btn btn-primary">
         <i class="fas fa-plus" aria-hidden="true"></i>
-        Добавить сервер
+        {{ t('dashboard.add_server') }}
     </a>
 </section>
 {% else %}
-<section class="dashboard-toolbar" aria-label="Фильтры серверов">
+<section class="dashboard-toolbar" aria-label="{{ t('common.filter') }}">
     <div class="dashboard-search">
-        <label class="visually-hidden" for="dashboard-search">Поиск сервера</label>
+        <label class="visually-hidden" for="dashboard-search">{{ t('common.search') }}</label>
         <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
         <input id="dashboard-search" type="search" class="form-control"
-               placeholder="Найти сервер…" autocomplete="off">
+               placeholder="{{ t('dashboard.search.placeholder') }}" autocomplete="off">
     </div>
     <div>
-        <label class="visually-hidden" for="dashboard-status-filter">Статус</label>
+        <label class="visually-hidden" for="dashboard-status-filter">{{ t('common.status') }}</label>
         <select id="dashboard-status-filter" class="form-select">
-            <option value="all">Все статусы</option>
-            <option value="online">В норме</option>
-            <option value="warning">Внимание</option>
-            <option value="critical">Критично</option>
-            <option value="offline">Нет данных</option>
+            <option value="all">{{ t('dashboard.filter.all_statuses') }}</option>
+            <option value="online">{{ t('status.online') }}</option>
+            <option value="warning">{{ t('status.warning') }}</option>
+            <option value="critical">{{ t('status.critical') }}</option>
+            <option value="offline">{{ t('status.offline') }}</option>
         </select>
     </div>
     <div>
-        <label class="visually-hidden" for="dashboard-sort">Сортировка</label>
+        <label class="visually-hidden" for="dashboard-sort">{{ t('common.filter') }}</label>
         <select id="dashboard-sort" class="form-select">
-            <option value="name">По имени</option>
-            <option value="status">По статусу</option>
-            <option value="updated">По обновлению</option>
+            <option value="name">{{ t('dashboard.sort.name') }}</option>
+            <option value="status">{{ t('dashboard.sort.status') }}</option>
+            <option value="updated">{{ t('dashboard.sort.updated') }}</option>
         </select>
     </div>
-    <span class="dashboard-result-count" id="dashboard-result-count">
-        Показано: {{ stats.total_servers }}
+    <span class="dashboard-result-count" id="dashboard-result-count"
+          data-count-template="{{ t('dashboard.shown', {count: '__COUNT__'}) }}"
+          data-no-updates="{{ t('dashboard.no_updates') }}"
+          data-locale="{{ current_locale() }}">
+        {{ t('dashboard.shown', {count: stats.total_servers}) }}
     </span>
 </section>
 
@@ -116,9 +115,7 @@
                 <span>{{ group.name }}</span>
             </span>
             <span class="dashboard-group-meta">
-                <span class="dashboard-group-count" data-group-count>
-                    {{ group.servers|length }}
-                </span>
+                <span class="dashboard-group-count" data-group-count>{{ group.servers|length }}</span>
                 <i class="fas fa-chevron-up dashboard-group-chevron" aria-hidden="true"></i>
             </span>
         </button>
@@ -143,11 +140,8 @@
                                     icon_id: 'status-icon-' ~ server.id
                                 } %}
                                 <div class="server-title-wrap">
-                                    <h3 class="server-name" title="{{ server.name }}">
-                                        {{ server.name }}
-                                    </h3>
-                                    <span class="server-status-label"
-                                          id="status-label-{{ server.id }}">
+                                    <h3 class="server-name" title="{{ server.name }}">{{ server.name }}</h3>
+                                    <span class="server-status-label" id="status-label-{{ server.id }}">
                                         {{ status_labels[server.status] }}
                                     </span>
                                 </div>
@@ -156,13 +150,13 @@
                                   class="server-alert-count{% if server.active_alerts == 0 %} d-none{% endif %}">
                                 <i class="fas fa-bell" aria-hidden="true"></i>
                                 <span>{{ server.active_alerts }}</span>
-                                <span class="visually-hidden">активных алертов</span>
+                                <span class="visually-hidden">{{ t('nav.alerts') }}</span>
                             </span>
                         </div>
 
                         <dl class="server-metrics">
                             <div class="server-metric">
-                                <dt>CPU</dt>
+                                <dt>{{ t('dashboard.metric.cpu') }}</dt>
                                 <dd id="cpu-val-{{ server.id }}">
                                     {% if server.latest_metrics['cpu_load'] is defined %}
                                         {{ server.latest_metrics['cpu_load'].value|round(1) }}%
@@ -170,7 +164,7 @@
                                 </dd>
                             </div>
                             <div class="server-metric">
-                                <dt>RAM</dt>
+                                <dt>{{ t('dashboard.metric.ram') }}</dt>
                                 <dd id="ram-val-{{ server.id }}">
                                     {% if server.latest_metrics['ram_used'] is defined %}
                                         {{ server.latest_metrics['ram_used'].value|round(1) }}%
@@ -178,7 +172,7 @@
                                 </dd>
                             </div>
                             <div class="server-metric">
-                                <dt>Диск</dt>
+                                <dt>{{ t('dashboard.metric.disk') }}</dt>
                                 <dd id="disk-val-{{ server.id }}">
                                     {% if disk_metric is not null %}
                                         {{ disk_metric.value|round(1) }}%
@@ -193,27 +187,24 @@
                                 <i class="fas fa-clock" aria-hidden="true"></i>
                                 {% set uptime_sec = server.latest_metrics['uptime'].value %}
                                 {% if uptime_sec >= 86400 %}
-                                    {{ (uptime_sec / 86400)|round(0, 'floor') }} д
-                                    {{ ((uptime_sec % 86400) / 3600)|round(0, 'floor') }} ч
+                                    {{ (uptime_sec / 86400)|round(0, 'floor') }} {{ t('common.days') }}
+                                    {{ ((uptime_sec % 86400) / 3600)|round(0, 'floor') }} {{ t('common.hours') }}
                                 {% elseif uptime_sec >= 3600 %}
-                                    {{ (uptime_sec / 3600)|round(0, 'floor') }} ч
-                                    {{ ((uptime_sec % 3600) / 60)|round(0, 'floor') }} мин
+                                    {{ (uptime_sec / 3600)|round(0, 'floor') }} {{ t('common.hours') }}
+                                    {{ ((uptime_sec % 3600) / 60)|round(0, 'floor') }} {{ t('common.minutes') }}
                                 {% else %}
-                                    {{ (uptime_sec / 60)|round(0, 'floor') }} мин
+                                    {{ (uptime_sec / 60)|round(0, 'floor') }} {{ t('common.minutes') }}
                                 {% endif %}
                             </span>
                             {% else %}
-                            <span class="server-uptime">Uptime: —</span>
+                            <span class="server-uptime">{{ t('dashboard.uptime', {value: '—'}) }}</span>
                             {% endif %}
-                            <time class="server-updated-at"
-                                  id="updated-at-{{ server.id }}"
-                                  {% if server.last_metrics_at %}
-                                  datetime="{{ server.last_metrics_at|date('c') }}"
-                                  {% endif %}>
+                            <time class="server-updated-at" id="updated-at-{{ server.id }}"
+                                  {% if server.last_metrics_at %}datetime="{{ server.last_metrics_at|date('c') }}"{% endif %}>
                                 {% if server.seconds_since_update is not null %}
-                                    {{ server.seconds_since_update }} сек. назад
+                                    {{ t('dashboard.updated_seconds', {seconds: server.seconds_since_update}) }}
                                 {% else %}
-                                    обновлений нет
+                                    {{ t('dashboard.no_updates') }}
                                 {% endif %}
                             </time>
                         </div>
@@ -227,11 +218,9 @@
 </div>
 
 <section id="dashboard-no-results" class="empty-state empty-state-compact" hidden>
-    <span class="empty-state-icon" aria-hidden="true">
-        <i class="fas fa-magnifying-glass"></i>
-    </span>
-    <h2>Серверы не найдены</h2>
-    <p>Измените строку поиска или фильтр статуса.</p>
+    <span class="empty-state-icon" aria-hidden="true"><i class="fas fa-magnifying-glass"></i></span>
+    <h2>{{ t('dashboard.no_results.heading') }}</h2>
+    <p>{{ t('dashboard.no_results.text') }}</p>
 </section>
 
 <p class="visually-hidden" id="dashboard-live-region" aria-live="polite"></p>
