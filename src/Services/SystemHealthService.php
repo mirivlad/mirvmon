@@ -159,9 +159,16 @@ final class SystemHealthService
     /** @return array{status:string,items:list<array<string,mixed>>} */
     private function workerDiagnostics(): array
     {
-        $byName = [];
-        foreach ($this->heartbeats->all() as $heartbeat) {
-            $byName[$heartbeat['worker']] = $heartbeat;
+        try {
+            $byName = [];
+            foreach ($this->heartbeats->all() as $heartbeat) {
+                $byName[$heartbeat['worker']] = $heartbeat;
+            }
+        } catch (Throwable) {
+            return [
+                'status' => 'critical',
+                'items' => [],
+            ];
         }
 
         $items = [];
@@ -203,19 +210,74 @@ final class SystemHealthService
     /** @return array<string, mixed> */
     private function queueDiagnostics(): array
     {
-        $diagnostics = $this->outbox->diagnostics();
-        $counts = $diagnostics['counts'];
-        $status = 'ok';
-        if ($diagnostics['stale_processing'] > 0 || $diagnostics['overdue_ready'] > 0) {
-            $status = 'critical';
-        } elseif ($counts['failed'] > 0 || $counts['dead'] > 0) {
-            $status = 'warning';
-        }
+        try {
+            $rawCounts = $this->outbox->statusCounts();
+            $counts = [
+                'pending' => (int) ($rawCounts['pending'] ?? 0),
+                'processing' => (int) ($rawCounts['processing'] ?? 0),
+                'sent' => (int) ($rawCounts['sent'] ?? 0),
+                'failed' => (int) ($rawCounts['failed'] ?? 0),
+                'dead' => (int) ($rawCounts['dead'] ?? 0),
+            ];
+            $row = $this->pdo->query(
+                <<<'SQL'
+                SELECT
+                    COUNT(*) FILTER (
+                        WHERE status = 'processing'
+                          AND locked_at IS NOT NULL
+                          AND locked_at < CURRENT_TIMESTAMP - INTERVAL '5 minutes'
+                    ) AS stale_processing,
+                    COUNT(*) FILTER (
+                        WHERE status IN ('pending', 'failed')
+                          AND available_at <= CURRENT_TIMESTAMP - INTERVAL '2 minutes'
+                    ) AS overdue_ready,
+                    CAST(EXTRACT(EPOCH FROM (
+                        CURRENT_TIMESTAMP - MIN(created_at) FILTER (
+                            WHERE status IN ('pending', 'failed')
+                              AND available_at <= CURRENT_TIMESTAMP
+                        )
+                    )) AS integer) AS oldest_ready_seconds
+                FROM notification_outbox
+                SQL
+            )?->fetch();
+            if (!is_array($row)) {
+                throw new RuntimeException('Queue diagnostics query returned no row.');
+            }
 
-        return [
-            'status' => $status,
-            ...$diagnostics,
-        ];
+            $staleProcessing = (int) $row['stale_processing'];
+            $overdueReady = (int) $row['overdue_ready'];
+            $oldestReady = $row['oldest_ready_seconds'] === null
+                ? null
+                : (int) $row['oldest_ready_seconds'];
+            $status = 'ok';
+            if ($staleProcessing > 0 || $overdueReady > 0) {
+                $status = 'critical';
+            } elseif ($counts['failed'] > 0 || $counts['dead'] > 0) {
+                $status = 'warning';
+            }
+
+            return [
+                'status' => $status,
+                'counts' => $counts,
+                'stale_processing' => $staleProcessing,
+                'overdue_ready' => $overdueReady,
+                'oldest_ready_seconds' => $oldestReady,
+            ];
+        } catch (Throwable) {
+            return [
+                'status' => 'critical',
+                'counts' => [
+                    'pending' => 0,
+                    'processing' => 0,
+                    'sent' => 0,
+                    'failed' => 0,
+                    'dead' => 0,
+                ],
+                'stale_processing' => 0,
+                'overdue_ready' => 0,
+                'oldest_ready_seconds' => null,
+            ];
+        }
     }
 
     /** @return array<string, mixed> */
@@ -233,7 +295,18 @@ final class SystemHealthService
             ];
         }
 
-        $server = $this->servers->find($serverId);
+        try {
+            $server = $this->servers->find($serverId);
+        } catch (Throwable) {
+            return [
+                'configured' => true,
+                'status' => 'unknown',
+                'server_id' => $serverId,
+                'server' => null,
+                'metrics' => [],
+                'disks' => [],
+            ];
+        }
         if ($server === null) {
             return [
                 'configured' => true,
@@ -270,7 +343,12 @@ final class SystemHealthService
             ];
         }
 
-        $latest = $this->metrics->latestValues($serverId);
+        try {
+            $latest = $this->metrics->latestValues($serverId);
+        } catch (Throwable) {
+            $latest = [];
+            $status = $this->worst([$status, 'warning']);
+        }
         $disks = [];
         foreach ($latest as $name => $metric) {
             if ($name === 'disk_used' || !str_starts_with($name, 'disk_used_')) {
