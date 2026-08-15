@@ -1,17 +1,19 @@
 {% set platform = server.platform|default({
     family: 'unknown',
     icon_class: 'fas fa-server',
-    tooltip: 'ОС не сообщена'
+    tooltip: ''
 }) %}
+{% set reported_os = server.os_version|default('')|trim %}
+{% set platform_text = reported_os ?: (platform.family == 'windows' ? 'Windows' : (platform.family == 'linux' ? 'Linux' : t('common.unknown'))) %}
 {% set status_text = {
-    online: 'в норме',
-    warning: 'требует внимания',
-    critical: 'критическое состояние',
-    offline: 'нет актуальных данных'
-}[server.status]|default('состояние неизвестно') %}
+    online: t('status.online_tooltip'),
+    warning: t('status.warning_tooltip'),
+    critical: t('status.critical_tooltip'),
+    offline: t('status.offline_tooltip')
+}[server.status]|default(t('status.unknown_tooltip')) %}
 <span class="{{ icon_container_class|default('server-platform-icon') }} server-status-emblem"
-      aria-label="{{ platform.tooltip }}, {{ status_text }}"
-      title="{{ platform.tooltip }}" data-bs-toggle="tooltip">
+      aria-label="{{ platform_text }}, {{ status_text }}"
+      title="{{ platform_text }}" data-bs-toggle="tooltip">
     <i{% if icon_id|default('') %} id="{{ icon_id }}"{% endif %}
        class="{{ platform.icon_class }}" aria-hidden="true"></i>
 </span>
