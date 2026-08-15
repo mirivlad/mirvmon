@@ -21,6 +21,7 @@ final class SchemaTest extends TestCase
         self::assertFileExists(dirname(__DIR__, 3) . '/migrations/004_alert_state_invariants.sql');
         self::assertFileExists(dirname(__DIR__, 3) . '/migrations/005_notification_dead_letters.sql');
         self::assertFileExists(dirname(__DIR__, 3) . '/migrations/006_notification_delivery.sql');
+        self::assertFileExists(dirname(__DIR__, 3) . '/migrations/016_dashboard_widgets_and_availability.sql');
 
         if (getenv('TEST_DB_HOST') === false) {
             self::markTestSkipped('Set TEST_DB_* to run the TimescaleDB integration suite.');
@@ -187,7 +188,23 @@ final class SchemaTest extends TestCase
         self::assertSame([], $migrator->migrate());
 
         $count = self::$pdo?->query('SELECT count(*) FROM schema_migrations')->fetchColumn();
-        self::assertSame('15', (string) $count);
+        self::assertSame('16', (string) $count);
+    }
+
+    public function testAvailabilitySchemaExists(): void
+    {
+        $tables = self::$pdo?->query(
+            "SELECT table_name
+             FROM information_schema.tables
+             WHERE table_schema = 'public'
+               AND table_name IN ('server_availability_events', 'server_availability_state')
+             ORDER BY table_name"
+        )->fetchAll(PDO::FETCH_COLUMN);
+
+        self::assertSame([
+            'server_availability_events',
+            'server_availability_state',
+        ], $tables);
     }
 
     public function testReportedOperatingSystemColumnIsNullable(): void

@@ -71,7 +71,7 @@ func TestLinuxCollectorCollectsFixtureHostState(t *testing.T) {
 	for _, name := range []string{
 		"cpu_load", "ram_used", "ram_total_gb", "uptime", "disk_used",
 		"disk_used_root", "disk_total_gb_root", "disk_read_sda", "disk_write_sda",
-		"net_in_eth0", "net_out_eth0", "temperature",
+		"net_in_eth0", "net_out_eth0", "temp_system",
 	} {
 		if _, ok := measurement.Metrics[name]; !ok {
 			t.Errorf("missing %s from %#v", name, measurement.Metrics)

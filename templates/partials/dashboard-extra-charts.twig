@@ -1,0 +1,154 @@
+{% if diskIoCharts is defined or uptimeChart is defined or availabilityChart is defined %}
+<script nonce="__MIRVMON_CSP_NONCE__">
+document.addEventListener('DOMContentLoaded', function() {
+    const metricsPane = document.getElementById('metrics');
+    if (!metricsPane || typeof Chart === 'undefined') {
+        return;
+    }
+
+    const makeCard = function(title, icon, subtitle) {
+        const card = document.createElement('div');
+        card.className = 'card mb-4';
+        const header = document.createElement('div');
+        header.className = 'card-header d-flex justify-content-between align-items-center gap-3';
+        const heading = document.createElement('h6');
+        heading.className = 'mb-0';
+        heading.innerHTML = '<i class="fas ' + icon + ' me-1"></i>' + title;
+        header.appendChild(heading);
+        if (subtitle) {
+            const meta = document.createElement('div');
+            meta.className = 'small text-muted text-end';
+            meta.textContent = subtitle;
+            header.appendChild(meta);
+        }
+        const body = document.createElement('div');
+        body.className = 'card-body';
+        const chartBox = document.createElement('div');
+        chartBox.style.height = '260px';
+        const canvas = document.createElement('canvas');
+        chartBox.appendChild(canvas);
+        body.appendChild(chartBox);
+        card.appendChild(header);
+        card.appendChild(body);
+        metricsPane.appendChild(card);
+        return canvas;
+    };
+
+    const diskIoCharts = {{ diskIoCharts|default([])|json_encode|raw }};
+    diskIoCharts.forEach(function(chart) {
+        const canvas = makeCard(chart.title, 'fa-hard-drive', null);
+        canvas.id = 'chart-io-' + chart.id;
+        createLineChart(
+            canvas.id,
+            chart.labels,
+            chart.datasets.map(function(dataset) {
+                return {
+                    label: dataset.label,
+                    data: dataset.values,
+                    borderColor: dataset.color,
+                    backgroundColor: dataset.color + '22',
+                    fill: false,
+                    tension: 0.2,
+                    pointRadius: 0,
+                    borderWidth: 2
+                };
+            }),
+            chart.unit || 'B/s',
+            null
+        );
+    });
+
+    const uptimeChart = {{ uptimeChart|default([])|json_encode|raw }};
+    if (uptimeChart.values && uptimeChart.values.length > 0) {
+        const canvas = makeCard(
+            uptimeChart.title || 'Аптайм ОС',
+            'fa-clock-rotate-left',
+            uptimeChart.lastText ? 'Сейчас: ' + uptimeChart.lastText : null
+        );
+        canvas.id = 'chart-uptime';
+        createLineChart(
+            canvas.id,
+            uptimeChart.labels,
+            [{
+                label: 'Аптайм',
+                data: uptimeChart.values,
+                borderColor: '#6f42c1',
+                backgroundColor: '#6f42c122',
+                fill: true,
+                tension: 0.1,
+                pointRadius: 0,
+                borderWidth: 2
+            }],
+            'uptime',
+            null
+        );
+    }
+
+    const availabilityChart = {{ availabilityChart|default([])|json_encode|raw }};
+    if (availabilityChart.known && availabilityChart.values && availabilityChart.values.length > 0) {
+        const subtitle = 'Доступность: ' + availabilityChart.availabilityPercent +
+            '% · простой: ' + availabilityChart.downtimeText +
+            ' · отключений: ' + availabilityChart.outages;
+        const canvas = makeCard('Доступность', 'fa-signal', subtitle);
+        canvas.id = 'chart-availability';
+        const chart = new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: availabilityChart.labels,
+                datasets: [{
+                    label: 'Состояние',
+                    data: availabilityChart.values,
+                    borderColor: '#198754',
+                    backgroundColor: '#19875422',
+                    stepped: true,
+                    fill: true,
+                    pointRadius: 0,
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.parsed.y >= 0.5 ? 'Онлайн' : 'Оффлайн';
+                            }
+                        }
+                    },
+                    zoom: {
+                        zoom: {
+                            wheel: { enabled: true },
+                            pinch: { enabled: true },
+                            drag: { enabled: true },
+                            mode: 'x'
+                        },
+                        pan: { enabled: true, mode: 'x' }
+                    }
+                },
+                scales: {
+                    y: {
+                        min: -0.1,
+                        max: 1.1,
+                        ticks: {
+                            stepSize: 1,
+                            callback: function(value) {
+                                if (Number(value) === 1) return 'Онлайн';
+                                if (Number(value) === 0) return 'Оффлайн';
+                                return '';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        if (typeof managedCharts !== 'undefined') {
+            managedCharts.push(chart);
+        }
+    }
+});
+</script>
+{% endif %}
