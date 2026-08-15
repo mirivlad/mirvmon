@@ -6,6 +6,22 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+- Fixed the GHCR release workflow so four-component hotfix tags such as
+  `v0.4.15.2` run the full release pipeline, publish amd64/arm64 images, update
+  `latest`, and refresh the matching `0`, `0.4`, and `0.4.15` aliases.
+
+## 0.4.15.1
+
+- Restored the PHPStan iterable annotations that were lost when PHPDoc blocks
+  were compacted during the localization refactor.
+- Registered Twig translation functions before rendering instead of mutating
+  Twig extensions from request middleware, and kept direct controller/test
+  construction compatible with the default Russian translator.
+- Updated localization contract tests and notification validation wiring so the
+  full PHP, frontend, agent, amd64, and arm64 CI matrix is green again.
+
+## 0.4.15
+
 - Added a first-class localization layer for Twig, PHP and dynamic browser UI.
 - MirvMon now ships Russian and English catalogs; Russian remains the default.
 - Added a global interface-language selector under Settings, persisted in
