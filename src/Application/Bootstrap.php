@@ -17,6 +17,7 @@ use App\Controllers\LanguageController;
 use App\Controllers\ServerController;
 use App\Controllers\ServerDetailController;
 use App\Controllers\SetupController;
+use App\Controllers\SystemController;
 use App\Database\ConnectionFactory;
 use App\Domain\Metrics\MetricsValidator;
 use App\I18n\Translator;
@@ -39,6 +40,7 @@ use App\Services\MetricsIngestionService;
 use App\Services\PublicUrlResolver;
 use App\Services\ServerPlatformService;
 use App\Services\ServerStatusService;
+use App\Services\SystemHealthService;
 use App\Services\ThresholdEvaluator;
 use App\Services\WindowsInstallerPackageService;
 use DateTimeZone;
@@ -146,6 +148,25 @@ final class Bootstrap
                 new NotificationOutboxRepository($container->get(PDO::class))
         );
         $container->set(
+            WorkerHeartbeatRepository::class,
+            static fn (Container $container): WorkerHeartbeatRepository =>
+                new WorkerHeartbeatRepository($container->get(PDO::class))
+        );
+        $container->set(
+            SystemHealthService::class,
+            static fn (Container $container): SystemHealthService => new SystemHealthService(
+                $container->get(PDO::class),
+                $container->get(AppSettingsRepository::class),
+                $container->get(ServerRepository::class),
+                $container->get(MetricRepository::class),
+                $container->get(WorkerHeartbeatRepository::class),
+                $container->get(NotificationOutboxRepository::class),
+                $container->get(ServerStatusService::class),
+                (string) ($settings['app_version'] ?? 'development'),
+                (string) ($settings['app_env'] ?? 'production')
+            )
+        );
+        $container->set(
             MetricsIngestionService::class,
             static fn (Container $container): MetricsIngestionService =>
                 new MetricsIngestionService(
@@ -234,7 +255,9 @@ final class Bootstrap
             static fn (Container $container): DashboardController => new DashboardController(
                 $container->get(Twig::class),
                 $container->get(ServerRepository::class),
-                $container->get(ServerStatusService::class)
+                $container->get(ServerStatusService::class),
+                $container->get(Translator::class),
+                $container->get(SystemHealthService::class)
             )
         );
         $container->set(
@@ -280,11 +303,6 @@ final class Bootstrap
             )
         );
         $container->set(
-            WorkerHeartbeatRepository::class,
-            static fn (Container $container): WorkerHeartbeatRepository =>
-                new WorkerHeartbeatRepository($container->get(PDO::class))
-        );
-        $container->set(
             AdminController::class,
             static fn (Container $container): AdminController => new AdminController(
                 $container->get(PDO::class),
@@ -292,6 +310,16 @@ final class Bootstrap
                 $container->get(NotificationSettingsRepository::class),
                 $container->get(NotificationOutboxRepository::class),
                 $container->get(WorkerHeartbeatRepository::class),
+                $container->get(Translator::class)
+            )
+        );
+        $container->set(
+            SystemController::class,
+            static fn (Container $container): SystemController => new SystemController(
+                $container->get(PDO::class),
+                $container->get(Twig::class),
+                $container->get(AppSettingsRepository::class),
+                $container->get(SystemHealthService::class),
                 $container->get(Translator::class)
             )
         );
