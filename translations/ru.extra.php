@@ -1,0 +1,50 @@
+<?php
+
+declare(strict_types=1);
+
+return [
+    'groups.icon' => 'Иконка (Font Awesome)',
+    'groups.icon_help' => 'Выберите иконку или введите вручную',
+    'groups.color_help' => 'Выберите цвет для обозначения группы',
+
+    'servers.created.success' => 'Сервер «{name}» успешно добавлен!',
+    'servers.created.download_hint' => 'Скачайте один подходящий установщик. Каждая ссылка одноразовая и действует один час.',
+    'servers.created.linux_agent' => 'Агент для Linux',
+    'servers.created.windows_agent' => 'Агент для Windows x64',
+    'servers.created.installation' => 'Инструкция по установке',
+    'servers.created.linux.step1' => 'Скачайте скрипт install.sh',
+    'servers.created.linux.step2' => 'Загрузите его на сервер',
+    'servers.created.linux.step3' => 'Сделайте исполняемым и запустите от root',
+    'servers.created.windows.step1' => 'Скачайте MirvMon-Agent-Setup.exe',
+    'servers.created.windows.step2' => 'Запустите файл от имени администратора',
+    'servers.created.windows.step3' => 'Подтвердите запуск неподписанного установщика',
+    'servers.created.windows.support' => 'Поддерживаются Windows 7 SP1, 8, 8.1, 10, 11 и Windows Server 2008 R2 SP1, 2012, 2012 R2, 2016, 2019, 2022, 2025 — только x64. Установщик сам выберет совместимую сборку агента, перенесёт конфигурацию и очередь.',
+    'servers.created.to_list' => 'К списку серверов',
+    'servers.created.open' => 'Открыть сервер',
+
+    'agent.version.title' => 'Версия агента',
+    'agent.version.installed' => 'Установлена',
+    'agent.version.available' => 'Доступна',
+    'agent.version.not_reported' => 'не сообщена',
+    'agent.state.succeeded' => 'Обновление установлено',
+    'agent.manual_help' => 'Этот агент ещё не поддерживает удалённое обновление. Один раз установите актуальную версию вручную.',
+    'agent.management.title' => 'Управление агентом мониторинга',
+    'agent.management.help' => 'Выдача установщиков не меняет действующий ключ агента. Отзыв ключа немедленно отключает прежний агент и потребует новой установки.',
+    'agent.management.legacy_token' => 'Этот ключ создан предыдущей версией MirvMon. Его значение хранится только в конфигурации агента, поэтому для выдачи нового установщика сначала явно отзовите ключ.',
+    'agent.management.download_installers' => 'Скачать установщики',
+    'agent.management.revoke_key' => 'Отозвать ключ',
+    'agent.management.create_key' => 'Создать ключ',
+    'agent.management.revoke_title' => 'Отозвать ключ агента?',
+    'agent.management.revoke_body' => 'Текущий ключ немедленно перестанет приниматься. Скачайте и установите новый installer на сервере.',
+    'agent.management.revoke_submit' => 'Отозвать и создать установщики',
+    'agent.error.checksum_mismatch' => 'Контрольная сумма файла не совпала.',
+    'agent.error.identity_mismatch' => 'Скачанный агент сообщил другую версию или платформу.',
+    'agent.error.download_failed' => 'Не удалось скачать файл обновления.',
+    'agent.error.handoff_failed' => 'Не удалось запустить системный помощник обновления.',
+    'agent.error.apply_failed' => 'Новая версия не запустилась; выполнен откат.',
+    'agent.error.target_superseded' => 'Запрошенная версия устарела. Очистите stale-состояние агента и повторите обновление.',
+    'agent.error.update_failed' => 'Обновление завершилось ошибкой.',
+
+    'flash.saved' => 'Изменения сохранены',
+    'flash.operation_failed' => 'Не удалось выполнить операцию',
+];
