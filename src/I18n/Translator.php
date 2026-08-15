@@ -17,18 +17,26 @@ final class Translator
     public const SUPPORTED_LOCALES = ['ru', 'en'];
 
     private string $locale = self::DEFAULT_LOCALE;
+    private readonly string $translationsPath;
 
     /** @var array<string, array<string, string>> */
     private array $catalogs = [];
 
     public function __construct(
-        private readonly AppSettingsRepository $settings,
-        private readonly string $translationsPath
+        private readonly ?AppSettingsRepository $settings = null,
+        ?string $translationsPath = null
     ) {
+        $this->translationsPath = $translationsPath
+            ?? dirname(__DIR__, 2) . '/translations';
     }
 
     public function refreshLocale(): void
     {
+        if ($this->settings === null) {
+            $this->locale = self::DEFAULT_LOCALE;
+            return;
+        }
+
         try {
             $stored = $this->settings->get('ui_language', self::DEFAULT_LOCALE);
         } catch (Throwable) {
@@ -101,7 +109,6 @@ final class Translator
         if (!$this->isSupported($locale)) {
             throw new RuntimeException('Unsupported locale: ' . $locale);
         }
-
         return $this->catalog($locale);
     }
 

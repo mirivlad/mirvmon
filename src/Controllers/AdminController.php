@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\I18n\Translator;
+use App\I18n\TwigTranslation;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\NotificationSettingsRepository;
 use App\Repositories\WorkerHeartbeatRepository;
@@ -26,8 +27,9 @@ final class AdminController
         private readonly NotificationSettingsRepository $notificationSettings,
         private readonly NotificationOutboxRepository $notificationOutbox,
         private readonly WorkerHeartbeatRepository $heartbeats,
-        private readonly Translator $translator
+        private readonly Translator $translator = new Translator()
     ) {
+        TwigTranslation::register($this->twig->getEnvironment(), $this->translator);
     }
 
     /** @param array<string, string> $args */
@@ -416,7 +418,8 @@ final class AdminController
         return $this->redirect($response, '/admin/defaults');
     }
 
-    /** @param array<string, mixed> $body
+    /**
+     * @param array<string, mixed> $body
      * @return array{user_id:?int,username:string,email:?string,password:string,role:'admin'|'user',telegram_chat_id:?string,email_for_alerts:?string}
      */
     private function validatedUserInput(array $body): array
@@ -538,7 +541,10 @@ final class AdminController
         ]);
     }
 
-    /** @param array<string, mixed> $body @return array<string, int|float> */
+    /**
+     * @param array<string, mixed> $body
+     * @return array<string, int|float>
+     */
     private function validatedDefaults(array $body): array
     {
         $offlineTimeout = filter_var(
@@ -654,7 +660,8 @@ final class AdminController
         return '/admin/notifications/queue' . ($query === [] ? '' : '?' . http_build_query($query));
     }
 
-    /** @param array{statuses:list<string>,channel:?string,server_id:?int,from:?string,to:?string,error:?string} $filters
+    /**
+     * @param array{statuses:list<string>,channel:?string,server_id:?int,from:?string,to:?string,error:?string} $filters
      * @return list<array{name:string,value:string|int}>
      */
     private function queueFilterFields(array $filters): array

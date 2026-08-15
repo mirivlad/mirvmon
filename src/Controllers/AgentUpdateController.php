@@ -14,7 +14,7 @@ final class AgentUpdateController
 {
     public function __construct(
         private readonly AgentUpdateService $updates,
-        private readonly Translator $translator
+        private readonly Translator $translator = new Translator()
     ) {
     }
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Templates;
 
+use App\I18n\Translator;
+use App\I18n\TwigTranslation;
 use PHPUnit\Framework\TestCase;
 use Twig\Environment;
 use Twig\Loader\FilesystemLoader;
@@ -17,6 +19,7 @@ final class AgentManagementTemplateTest extends TestCase
         $this->twig = new Environment(new FilesystemLoader(
             dirname(__DIR__, 3) . '/templates'
         ));
+        TwigTranslation::register($this->twig, new Translator());
     }
 
     public function testAdministratorCanRequestAvailableUpdate(): void
