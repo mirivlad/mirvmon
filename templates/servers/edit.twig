@@ -1,54 +1,50 @@
 {% extends "layout.twig" %}
+{% set page_title = t('servers.edit.title', {name: server.name}) %}
 
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-8">
         <div class="card">
             <div class="card-header">
-                <h3><i class="fas fa-edit"></i> Редактировать сервер "{{ server.name }}"</h3>
+                <h3><i class="fas fa-edit"></i> {{ t('servers.edit.title', {name: server.name}) }}</h3>
             </div>
             <div class="card-body">
                 <form method="post" action="/servers/{{ server.id }}">
                     {% include "partials/csrf.twig" %}
-                    
+
                     <div class="mb-3">
-                        <label for="name" class="form-label">Название сервера *</label>
+                        <label for="name" class="form-label">{{ t('servers.form.name') }}</label>
                         <input type="text" class="form-control" id="name" name="name" value="{{ server.name }}" required>
-                        <small class="form-text text-muted">Укажите понятное название сервера</small>
+                        <small class="form-text text-muted">{{ t('servers.form.name_help') }}</small>
                     </div>
-                    
+
                     <div class="mb-3">
-                        <label for="address" class="form-label">Адрес сервера</label>
-                        <input type="text" class="form-control" id="address" name="address" value="{{ server.address|default('') }}" placeholder="IP или домен">
-                        <small class="form-text text-muted">IP-адрес или доменное имя сервера (не обязательно)</small>
+                        <label for="address" class="form-label">{{ t('servers.form.address') }}</label>
+                        <input type="text" class="form-control" id="address" name="address" value="{{ server.address|default('') }}" placeholder="IP / DNS">
+                        <small class="form-text text-muted">{{ t('servers.form.address_help') }}</small>
                     </div>
-                    
+
                     <div class="mb-3">
-                        <label for="group_id" class="form-label">Группа</label>
+                        <label for="group_id" class="form-label">{{ t('servers.form.group') }}</label>
                         <select class="form-select" id="group_id" name="group_id">
-                            <option value="">Не выбрана</option>
+                            <option value="">{{ t('servers.form.group_none') }}</option>
                             {% for group in groups %}
                             <option value="{{ group.id }}" {% if server.group_id == group.id %}selected{% endif %}>{{ group.name }}</option>
                             {% endfor %}
                         </select>
-                        <small class="form-text text-muted">Выберите группу для объединения серверов</small>
+                        <small class="form-text text-muted">{{ t('servers.form.group_help') }}</small>
                     </div>
-                    
+
                     <div class="mb-3">
-                        <label for="description" class="form-label">Описание</label>
+                        <label for="description" class="form-label">{{ t('servers.form.description') }}</label>
                         <textarea class="form-control" id="description" name="description" rows="3">{{ server.description|default('') }}</textarea>
-                        <small class="form-text text-muted">Дополнительная информация о сервере</small>
+                        <small class="form-text text-muted">{{ t('servers.form.description_help') }}</small>
                     </div>
 
                     {% if display_groups|length > 0 %}
                     <hr>
-                    <h5 class="mb-3"><i class="fas fa-chart-line"></i> Отображаемые метрики</h5>
-                    <p class="text-muted small">
-                        Здесь показаны только элементы, которые MirvMon действительно умеет отображать.
-                        Служебные метрики (общий объём RAM/дисков) подключаются автоматически,
-                        а парные направления сети и дискового I/O объединены в один график.
-                    </p>
-
+                    <h5 class="mb-3"><i class="fas fa-chart-line"></i> {{ t('servers.form.display_metrics') }}</h5>
+                    <p class="text-muted small">{{ t('servers.form.display_metrics_help') }}</p>
                     {% for displayGroup in display_groups %}
                     <div class="mb-3">
                         <div class="fw-semibold small text-muted text-uppercase mb-2">{{ displayGroup.name }}</div>
@@ -57,12 +53,10 @@
                             <div class="col-md-6 col-lg-4 mb-2">
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox"
-                                           name="display_widgets[]"
-                                           id="widget_{{ option.id }}" value="{{ option.id }}"
+                                           name="display_widgets[]" id="widget_{{ option.id }}" value="{{ option.id }}"
                                            {% if option.id in selected_widgets %}checked{% endif %}>
                                     <label class="form-check-label" for="widget_{{ option.id }}">
-                                        {{ option.label }}
-                                        {% if option.unit %}<span class="text-muted">({{ option.unit }})</span>{% endif %}
+                                        {{ option.label }}{% if option.unit %} <span class="text-muted">({{ option.unit }})</span>{% endif %}
                                     </label>
                                 </div>
                             </div>
@@ -73,30 +67,26 @@
                     {% endif %}
 
                     <hr>
-
-                    <h5 class="mb-3"><i class="fas fa-wifi"></i> Настройки мониторинга недоступности</h5>
-
+                    <h5 class="mb-3"><i class="fas fa-wifi"></i> {{ t('servers.form.offline_settings') }}</h5>
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="offline_timeout" class="form-label">Таймаут offline</label>
+                                <label for="offline_timeout" class="form-label">{{ t('servers.form.offline_timeout') }}</label>
                                 <div class="input-group">
                                     <input type="number" class="form-control" id="offline_timeout" name="offline_timeout"
                                            value="{{ server.offline_timeout_seconds|default(300) }}" min="0" max="86400">
-                                    <span class="input-group-text">секунд</span>
+                                    <span class="input-group-text">{{ t('common.seconds') }}</span>
                                 </div>
-                                <small class="form-text text-muted">Сервер будет считаться offline если агент не связывался с MirvMon N секунд (0 = выключено)</small>
+                                <small class="form-text text-muted">{{ t('servers.form.offline_timeout_help') }}</small>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label class="form-label">Уведомления</label>
+                                <label class="form-label">{{ t('servers.form.notifications') }}</label>
                                 <div class="form-check form-switch mt-2">
                                     <input class="form-check-input" type="checkbox" name="notify_on_offline" id="notify_on_offline"
                                            value="1" {% if server.notify_on_offline|default(1) %}checked{% endif %}>
-                                    <label class="form-check-label" for="notify_on_offline">
-                                        Уведомлять при offline
-                                    </label>
+                                    <label class="form-check-label" for="notify_on_offline">{{ t('servers.form.notify_offline') }}</label>
                                 </div>
                             </div>
                         </div>
@@ -104,52 +94,36 @@
 
                     <div class="row">
                         <div class="col-12">
-                            <label class="form-label">Персональные получатели</label>
-                            <p class="form-text mt-0">
-                                Оставьте пустым, чтобы уведомления об этом сервере уходили
-                                общим получателям из <a href="/admin/notifications">настроек уведомлений</a>.
-                                Заполненное поле полностью заменяет общее значение — так
-                                конкретный сервер закрепляется за конкретным человеком.
-                            </p>
+                            <label class="form-label">{{ t('servers.form.personal_recipients') }}</label>
+                            <p class="form-text mt-0">{{ t('servers.form.personal_recipients_help') }}</p>
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="notification_telegram_chat_id" class="form-label">Telegram Chat ID</label>
-                                <input type="text" class="form-control"
-                                       id="notification_telegram_chat_id"
-                                       name="notification_telegram_chat_id"
-                                       value="{{ server.notification_telegram_chat_id|default('') }}"
-                                       placeholder="-1001234567890" maxlength="100">
+                                <label for="notification_telegram_chat_id" class="form-label">{{ t('servers.form.telegram_chat_id') }}</label>
+                                <input type="text" class="form-control" id="notification_telegram_chat_id" name="notification_telegram_chat_id"
+                                       value="{{ server.notification_telegram_chat_id|default('') }}" placeholder="-1001234567890" maxlength="100">
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="notification_emails" class="form-label">Адреса email</label>
-                                <input type="text" class="form-control"
-                                       id="notification_emails"
-                                       name="notification_emails"
-                                       value="{{ server_notification_emails|default([])|join(', ') }}"
-                                       placeholder="ivan@example.net, ops@example.net">
+                                <label for="notification_emails" class="form-label">{{ t('servers.form.email_addresses') }}</label>
+                                <input type="text" class="form-control" id="notification_emails" name="notification_emails"
+                                       value="{{ server_notification_emails|default([])|join(', ') }}" placeholder="ivan@example.net, ops@example.net">
                             </div>
                         </div>
                     </div>
 
                     {% if server.last_offline_alert_at %}
                     <div class="alert alert-info small">
-                        <i class="fas fa-clock"></i> Последний offline алерт: {{ server.last_offline_alert_at|date('d.m.Y H:i:s') }}
+                        <i class="fas fa-clock"></i> {{ t('servers.form.last_offline_alert', {time: server.last_offline_alert_at|date('d.m.Y H:i:s')}) }}
                     </div>
                     {% endif %}
 
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                        <a href="/servers" class="btn btn-secondary me-md-2">
-                            <i class="fas fa-arrow-left"></i> Назад
-                        </a>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save"></i> Сохранить изменения
-                        </button>
+                        <a href="/servers" class="btn btn-secondary me-md-2"><i class="fas fa-arrow-left"></i> {{ t('common.back') }}</a>
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> {{ t('servers.form.save') }}</button>
                     </div>
                 </form>
-                
             </div>
         </div>
     </div>
