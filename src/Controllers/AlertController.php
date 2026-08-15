@@ -17,13 +17,16 @@ use Throwable;
 
 final class AlertController
 {
+    private readonly IncidentRepository $incidents;
+
     public function __construct(
         private readonly PDO $pdo,
         private readonly Twig $twig,
         private readonly NotificationOutboxRepository $outbox,
-        private readonly IncidentRepository $incidents,
-        private readonly Translator $translator = new Translator()
+        private readonly Translator $translator = new Translator(),
+        ?IncidentRepository $incidents = null
     ) {
+        $this->incidents = $incidents ?? new IncidentRepository($this->pdo);
         TwigTranslation::register($this->twig->getEnvironment(), $this->translator);
     }
 
@@ -85,7 +88,7 @@ final class AlertController
             $statement->execute([
                 'id' => $alertId,
                 'user_id' => $userId === false ? null : $userId,
-                'username' => is_string($username) ? mb_substr($username, 0, 80) : null,
+                'username' => is_string($username) ? substr($username, 0, 80) : null,
             ]);
             $resolved = $statement->rowCount() === 1;
             if ($resolved) {
