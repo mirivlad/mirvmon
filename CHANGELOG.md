@@ -6,6 +6,21 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+- Added a first-class localization layer for Twig, PHP and dynamic browser UI.
+- MirvMon now ships Russian and English catalogs; Russian remains the default.
+- Added a global interface-language selector under Settings, persisted in
+  `app_settings`, with a safe fallback to Russian for missing locale settings.
+- Localized the main navigation, authentication/setup, dashboard, servers,
+  groups, alerts, agent-management, notification, queue and user-management
+  screens together with interactive agent-update/dashboard text.
+- Human-facing validation, administration feedback and HTML error pages use the
+  selected language while API/protocol enum and error codes remain stable and
+  language-neutral.
+- Added localization contract tests that require exact key parity between all
+  bundled Russian and English catalog fragments.
+
+## 0.4.14
+
 - Server list agent updates can now be started directly from the Agent column
   without opening each server detail page.
 - Agent update state is refreshed in place while commands are pending, accepted,
@@ -23,6 +38,8 @@ Git history. Until a release tag is created, current work stays under
 - The server overview only renders the temperature panel when at least one
   temperature metric is selected; selected temperature metrics with no samples
   still show an explicit no-data message.
+- Reconstructed the historical changelog from the repository tag boundaries and
+  Git history, and added the release-oriented roadmap.
 
 ## 0.4.13
 

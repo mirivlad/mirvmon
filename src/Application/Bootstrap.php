@@ -13,30 +13,33 @@ use App\Controllers\Api\MetricsController;
 use App\Controllers\AuthController;
 use App\Controllers\DashboardController;
 use App\Controllers\GroupController;
+use App\Controllers\LanguageController;
 use App\Controllers\ServerController;
 use App\Controllers\ServerDetailController;
 use App\Controllers\SetupController;
 use App\Database\ConnectionFactory;
 use App\Domain\Metrics\MetricsValidator;
-use App\Repositories\MaintenanceWindowRepository;
+use App\I18n\Translator;
 use App\Repositories\AgentUpdateRepository;
+use App\Repositories\AppSettingsRepository;
+use App\Repositories\MaintenanceWindowRepository;
 use App\Repositories\MetricRepository;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\NotificationSettingsRepository;
 use App\Repositories\ServerRepository;
 use App\Repositories\WorkerHeartbeatRepository;
 use App\Security\SecretCipher;
-use App\Services\AgentCredentialIssuer;
 use App\Services\AgentArtifactCatalog;
+use App\Services\AgentCredentialIssuer;
 use App\Services\AgentInstallerService;
-use App\Services\WindowsInstallerPackageService;
 use App\Services\AgentUpdateService;
 use App\Services\AgentVersionService;
 use App\Services\MetricsIngestionService;
 use App\Services\PublicUrlResolver;
-use App\Services\ServerStatusService;
 use App\Services\ServerPlatformService;
+use App\Services\ServerStatusService;
 use App\Services\ThresholdEvaluator;
+use App\Services\WindowsInstallerPackageService;
 use DateTimeZone;
 use PDO;
 use RuntimeException;
@@ -70,6 +73,7 @@ final class Bootstrap
             'app_version' => self::environment('APP_VERSION', 'development'),
             'public_base_url' => self::environment('PUBLIC_BASE_URL'),
             'templates_path' => dirname(__DIR__, 2) . '/templates',
+            'translations_path' => dirname(__DIR__, 2) . '/translations',
             'twig_cache' => self::environment('APP_ENV', 'production') === 'production'
                 ? dirname(__DIR__, 2) . '/var/cache/twig'
                 : false,
@@ -98,6 +102,18 @@ final class Bootstrap
         $container->set(PDO::class, $pdo);
         $container->set(Twig::class, $twig);
         $container->set(
+            AppSettingsRepository::class,
+            static fn (Container $container): AppSettingsRepository =>
+                new AppSettingsRepository($container->get(PDO::class))
+        );
+        $container->set(
+            Translator::class,
+            static fn (Container $container): Translator => new Translator(
+                $container->get(AppSettingsRepository::class),
+                (string) ($settings['translations_path'] ?? dirname(__DIR__, 2) . '/translations')
+            )
+        );
+        $container->set(
             ServerRepository::class,
             static fn (Container $container): ServerRepository => new ServerRepository(
                 $container->get(PDO::class)
@@ -116,21 +132,16 @@ final class Bootstrap
         );
         $container->set(
             ServerPlatformService::class,
-            static fn (): ServerPlatformService => new ServerPlatformService()
+            static fn (Container $container): ServerPlatformService =>
+                new ServerPlatformService($container->get(Translator::class))
         );
         $container->set(
             ServerStatusService::class,
             static fn (Container $container): ServerStatusService =>
                 new ServerStatusService($container->get(ServerPlatformService::class))
         );
-        $container->set(
-            MetricsValidator::class,
-            static fn (): MetricsValidator => new MetricsValidator()
-        );
-        $container->set(
-            ThresholdEvaluator::class,
-            static fn (): ThresholdEvaluator => new ThresholdEvaluator()
-        );
+        $container->set(MetricsValidator::class, static fn (): MetricsValidator => new MetricsValidator());
+        $container->set(ThresholdEvaluator::class, static fn (): ThresholdEvaluator => new ThresholdEvaluator());
         $container->set(
             NotificationOutboxRepository::class,
             static fn (Container $container): NotificationOutboxRepository =>
@@ -153,10 +164,7 @@ final class Bootstrap
                 (string) ($settings['public_base_url'] ?? '')
             )
         );
-        $container->set(
-            AgentInstallerService::class,
-            static fn (): AgentInstallerService => new AgentInstallerService()
-        );
+        $container->set(AgentInstallerService::class, static fn (): AgentInstallerService => new AgentInstallerService());
         $container->set(
             WindowsInstallerPackageService::class,
             static fn (): WindowsInstallerPackageService => new WindowsInstallerPackageService(
@@ -174,10 +182,7 @@ final class Bootstrap
             static fn (Container $container): AgentUpdateRepository =>
                 new AgentUpdateRepository($container->get(PDO::class))
         );
-        $container->set(
-            AgentVersionService::class,
-            static fn (): AgentVersionService => new AgentVersionService()
-        );
+        $container->set(AgentVersionService::class, static fn (): AgentVersionService => new AgentVersionService());
         $container->set(
             AgentUpdateService::class,
             static fn (Container $container): AgentUpdateService => new AgentUpdateService(
@@ -197,10 +202,7 @@ final class Bootstrap
             static fn (Container $container): AgentCredentialIssuer =>
                 new AgentCredentialIssuer($container->get(PDO::class), $applicationKey)
         );
-        $container->set(
-            SecretCipher::class,
-            static fn (): SecretCipher => new SecretCipher($applicationKey)
-        );
+        $container->set(SecretCipher::class, static fn (): SecretCipher => new SecretCipher($applicationKey));
         $container->set(
             NotificationSettingsRepository::class,
             static fn (Container $container): NotificationSettingsRepository =>
@@ -215,7 +217,8 @@ final class Bootstrap
             static fn (Container $container): AuthController => new AuthController(
                 $container->get(PDO::class),
                 $container->get(Twig::class),
-                $applicationKey
+                $applicationKey,
+                $container->get(Translator::class)
             )
         );
         $container->set(
@@ -223,7 +226,8 @@ final class Bootstrap
             static fn (Container $container): SetupController => new SetupController(
                 $container->get(PDO::class),
                 $container->get(Twig::class),
-                (string) $settings['setup_token']
+                (string) $settings['setup_token'],
+                $container->get(Translator::class)
             )
         );
         $container->set(
@@ -239,7 +243,8 @@ final class Bootstrap
             static fn (Container $container): GroupController => new GroupController(
                 $container->get(PDO::class),
                 $container->get(Twig::class),
-                $container->get(ServerStatusService::class)
+                $container->get(ServerStatusService::class),
+                $container->get(Translator::class)
             )
         );
         $container->set(
@@ -249,7 +254,8 @@ final class Bootstrap
                 $container->get(Twig::class),
                 $container->get(AgentCredentialIssuer::class),
                 $container->get(AgentUpdateService::class),
-                $container->get(ServerStatusService::class)
+                $container->get(ServerStatusService::class),
+                $container->get(Translator::class)
             )
         );
         $container->set(
@@ -261,7 +267,8 @@ final class Bootstrap
                 $container->get(MetricRepository::class),
                 $container->get(MaintenanceWindowRepository::class),
                 $container->get(AgentUpdateService::class),
-                $container->get(ServerStatusService::class)
+                $container->get(ServerStatusService::class),
+                $container->get(Translator::class)
             )
         );
         $container->set(
@@ -269,7 +276,8 @@ final class Bootstrap
             static fn (Container $container): AlertController => new AlertController(
                 $container->get(PDO::class),
                 $container->get(Twig::class),
-                $container->get(NotificationOutboxRepository::class)
+                $container->get(NotificationOutboxRepository::class),
+                $container->get(Translator::class)
             )
         );
         $container->set(
@@ -284,7 +292,15 @@ final class Bootstrap
                 $container->get(Twig::class),
                 $container->get(NotificationSettingsRepository::class),
                 $container->get(NotificationOutboxRepository::class),
-                $container->get(WorkerHeartbeatRepository::class)
+                $container->get(WorkerHeartbeatRepository::class),
+                $container->get(Translator::class)
+            )
+        );
+        $container->set(
+            LanguageController::class,
+            static fn (Container $container): LanguageController => new LanguageController(
+                $container->get(AppSettingsRepository::class),
+                $container->get(Translator::class)
             )
         );
         $container->set(
@@ -302,7 +318,10 @@ final class Bootstrap
         $container->set(
             AgentUpdateController::class,
             static fn (Container $container): AgentUpdateController =>
-                new AgentUpdateController($container->get(AgentUpdateService::class))
+                new AgentUpdateController(
+                    $container->get(AgentUpdateService::class),
+                    $container->get(Translator::class)
+                )
         );
         $container->set(
             MetricsController::class,

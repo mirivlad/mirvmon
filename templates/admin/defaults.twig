@@ -1,14 +1,49 @@
 {% extends "layout.twig" %}
+{% set page_title = t('settings.title') %}
 
 {% block content %}
 <header class="d-flex flex-wrap gap-3 justify-content-between align-items-end mb-4">
     <div>
-        <p class="page-eyebrow">Настройки</p>
-        <h1 class="h2 mb-1">Параметры по умолчанию</h1>
-        <p class="text-muted mb-0">
-            Эти значения применяются к новым серверам и незаполненным порогам.
-        </p>
+        <p class="page-eyebrow">{{ t('settings.eyebrow') }}</p>
+        <h1 class="h2 mb-1">{{ t('settings.title') }}</h1>
+        <p class="text-muted mb-0">{{ t('settings.subtitle') }}</p>
     </div>
+</header>
+
+<section class="card mb-4">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-lg-8">
+                <h2 class="h5 mb-2">
+                    <i class="fas fa-language me-2" aria-hidden="true"></i>
+                    {{ t('settings.language.title') }}
+                </h2>
+                <p class="text-muted mb-0">{{ t('settings.language.help') }}</p>
+            </div>
+            <div class="col-lg-4">
+                <form method="post" action="/admin/language" class="d-flex gap-2 align-items-end">
+                    {% include "partials/csrf.twig" %}
+                    <div class="flex-grow-1">
+                        <label for="ui_language" class="form-label">{{ t('settings.language.label') }}</label>
+                        <select class="form-select" id="ui_language" name="ui_language">
+                            {% for code, label in supported_locales() %}
+                                <option value="{{ code }}" {% if current_locale() == code %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary text-nowrap">
+                        <i class="fas fa-floppy-disk me-1" aria-hidden="true"></i>
+                        {{ t('settings.language.save') }}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+
+<header class="mb-3">
+    <h2 class="h4 mb-1">{{ t('settings.defaults.title') }}</h2>
+    <p class="text-muted mb-0">{{ t('settings.defaults.subtitle') }}</p>
 </header>
 
 <form method="post" action="/admin/defaults/save">
@@ -20,10 +55,10 @@
                 <div class="card-body">
                     <h2 class="h5 mb-3">
                         <i class="fas fa-plug-circle-xmark me-2" aria-hidden="true"></i>
-                        Недоступность агента
+                        {{ t('settings.defaults.offline.title') }}
                     </h2>
                     <label for="default_offline_timeout" class="form-label">
-                        Таймаут без метрик
+                        {{ t('settings.defaults.offline_timeout') }}
                     </label>
                     <div class="input-group">
                         <input type="number" class="form-control"
@@ -31,13 +66,9 @@
                                name="default_offline_timeout"
                                value="{{ settings.default_offline_timeout|default(300) }}"
                                min="30" max="86400" required>
-                        <span class="input-group-text">сек.</span>
+                        <span class="input-group-text">{{ t('common.seconds') }}</span>
                     </div>
-                    <p class="form-text mb-0">
-                        После этого интервала сервер получает статус «Нет данных».
-                        Частота фоновой проверки задаётся переменной
-                        <code>OFFLINE_CHECK_INTERVAL</code> при развёртывании.
-                    </p>
+                    <p class="form-text mb-0">{{ t('settings.defaults.offline_help') }}</p>
                 </div>
             </section>
         </div>
@@ -47,12 +78,12 @@
                 <div class="card-body">
                     <h2 class="h5 mb-3">
                         <i class="fas fa-gauge-high me-2" aria-hidden="true"></i>
-                        Пороги метрик
+                        {{ t('settings.defaults.thresholds.title') }}
                     </h2>
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label for="default_warning_threshold" class="form-label">
-                                Warning threshold
+                                {{ t('settings.defaults.warning') }}
                             </label>
                             <div class="input-group">
                                 <input type="number" class="form-control"
@@ -65,7 +96,7 @@
                         </div>
                         <div class="col-md-6">
                             <label for="default_critical_threshold" class="form-label">
-                                Critical threshold
+                                {{ t('settings.defaults.critical') }}
                             </label>
                             <div class="input-group">
                                 <input type="number" class="form-control"
@@ -78,7 +109,7 @@
                         </div>
                         <div class="col-12">
                             <label for="default_duration_seconds" class="form-label">
-                                Минимальная длительность превышения
+                                {{ t('settings.defaults.duration') }}
                             </label>
                             <div class="input-group">
                                 <input type="number" class="form-control"
@@ -86,15 +117,13 @@
                                        name="default_duration_seconds"
                                        value="{{ settings.default_duration_seconds|default(0) }}"
                                        min="0" max="86400" required>
-                                <span class="input-group-text">сек.</span>
+                                <span class="input-group-text">{{ t('common.seconds') }}</span>
                             </div>
-                            <p class="form-text mb-0">
-                                Ноль создаёт алерт сразу после превышения порога.
-                            </p>
+                            <p class="form-text mb-0">{{ t('settings.defaults.duration_help') }}</p>
                         </div>
                         <div class="col-12">
                             <label for="default_recovery_duration_seconds" class="form-label">
-                                Минимальная длительность возврата ниже порога
+                                {{ t('settings.defaults.recovery') }}
                             </label>
                             <div class="input-group">
                                 <input type="number" class="form-control"
@@ -102,13 +131,9 @@
                                        name="default_recovery_duration_seconds"
                                        value="{{ settings.default_recovery_duration_seconds|default(300) }}"
                                        min="0" max="86400" required>
-                                <span class="input-group-text">сек.</span>
+                                <span class="input-group-text">{{ t('common.seconds') }}</span>
                             </div>
-                            <p class="form-text mb-0">
-                                Алерт снимается только после того, как метрика
-                                продержалась ниже порога всё это время. Ноль
-                                снимает алерт сразу.
-                            </p>
+                            <p class="form-text mb-0">{{ t('settings.defaults.recovery_help') }}</p>
                         </div>
                     </div>
                 </div>
@@ -119,9 +144,9 @@
     <div class="d-flex gap-2 mt-4">
         <button type="submit" class="btn btn-primary">
             <i class="fas fa-floppy-disk me-1" aria-hidden="true"></i>
-            Сохранить
+            {{ t('common.save') }}
         </button>
-        <a href="/" class="btn btn-outline-secondary">Отмена</a>
+        <a href="/" class="btn btn-outline-secondary">{{ t('common.cancel') }}</a>
     </div>
 </form>
 {% endblock %}

@@ -1,72 +1,65 @@
 {% extends "layout.twig" %}
+{% set page_title = t('queue.title') %}
 
 {% block content %}
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
     <div>
-        <h2 class="mb-1"><i class="fas fa-list-check"></i> Очередь уведомлений</h2>
-        <p class="text-muted mb-0">Задания доставки и причины, по которым они не были отправлены.</p>
+        <h2 class="mb-1"><i class="fas fa-list-check"></i> {{ t('queue.title') }}</h2>
+        <p class="text-muted mb-0">{{ t('queue.subtitle') }}</p>
     </div>
-    <a class="btn btn-outline-secondary" href="/admin/notifications">
-        <i class="fas fa-gear"></i> Настройки уведомлений
-    </a>
+    <a class="btn btn-outline-secondary" href="/admin/notifications"><i class="fas fa-gear"></i> {{ t('queue.settings') }}</a>
 </div>
 
-<div class="card mb-4">
-    <div class="card-body">
-        <form method="get" action="/admin/notifications/queue" class="row g-3">
-            <div class="col-12">
-                <label class="form-label d-block mb-1">Статусы</label>
-                {% for status in ['pending', 'processing', 'sent', 'failed', 'dead'] %}
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="checkbox" id="status_{{ status }}"
-                               name="status[]" value="{{ status }}"
-                               {% if status in filters.statuses %}checked{% endif %}>
-                        <label class="form-check-label" for="status_{{ status }}">{{ status }}</label>
-                    </div>
-                {% endfor %}
-            </div>
-            <div class="col-md-3">
-                <label class="form-label" for="channel">Канал</label>
-                <select class="form-select" id="channel" name="channel">
-                    <option value="">Все каналы</option>
-                    <option value="email" {% if filters.channel == 'email' %}selected{% endif %}>email</option>
-                    <option value="telegram" {% if filters.channel == 'telegram' %}selected{% endif %}>telegram</option>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label" for="server">Сервер</label>
-                <select class="form-select" id="server" name="server">
-                    <option value="">Все серверы</option>
-                    {% for server in servers %}
-                        <option value="{{ server.id }}" {% if filters.server_id == server.id %}selected{% endif %}>{{ server.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label" for="from">С даты</label>
-                <input class="form-control" type="date" id="from" name="from" value="{{ filters.from ? filters.from|slice(0, 10) : '' }}">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label" for="to">По дату</label>
-                <input class="form-control" type="date" id="to" name="to" value="{{ filters.to ? filters.to|slice(0, 10) : '' }}">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label" for="error">Ошибка</label>
-                <input class="form-control" type="search" id="error" name="error" value="{{ filters.error|default('') }}" maxlength="200">
-            </div>
-            <div class="col-12 d-flex gap-2">
-                <button class="btn btn-primary" type="submit"><i class="fas fa-filter"></i> Применить</button>
-                <a class="btn btn-outline-secondary" href="/admin/notifications/queue">Сбросить</a>
-            </div>
-        </form>
-    </div>
-</div>
+<div class="card mb-4"><div class="card-body">
+    <form method="get" action="/admin/notifications/queue" class="row g-3">
+        <div class="col-12">
+            <label class="form-label d-block mb-1">{{ t('queue.statuses') }}</label>
+            {% for status in ['pending', 'processing', 'sent', 'failed', 'dead'] %}
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" id="status_{{ status }}" name="status[]" value="{{ status }}" {% if status in filters.statuses %}checked{% endif %}>
+                    <label class="form-check-label" for="status_{{ status }}">{{ t('queue.status.' ~ status) }}</label>
+                </div>
+            {% endfor %}
+        </div>
+        <div class="col-md-3">
+            <label class="form-label" for="channel">{{ t('queue.channel') }}</label>
+            <select class="form-select" id="channel" name="channel">
+                <option value="">{{ t('queue.all_channels') }}</option>
+                <option value="email" {% if filters.channel == 'email' %}selected{% endif %}>Email</option>
+                <option value="telegram" {% if filters.channel == 'telegram' %}selected{% endif %}>Telegram</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label" for="server">{{ t('queue.server') }}</label>
+            <select class="form-select" id="server" name="server">
+                <option value="">{{ t('queue.all_servers') }}</option>
+                {% for server in servers %}<option value="{{ server.id }}" {% if filters.server_id == server.id %}selected{% endif %}>{{ server.name }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" for="from">{{ t('common.from') }}</label>
+            <input class="form-control" type="date" id="from" name="from" value="{{ filters.from ? filters.from|slice(0, 10) : '' }}">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" for="to">{{ t('common.to') }}</label>
+            <input class="form-control" type="date" id="to" name="to" value="{{ filters.to ? filters.to|slice(0, 10) : '' }}">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" for="error">{{ t('queue.error') }}</label>
+            <input class="form-control" type="search" id="error" name="error" value="{{ filters.error|default('') }}" maxlength="200">
+        </div>
+        <div class="col-12 d-flex gap-2">
+            <button class="btn btn-primary" type="submit"><i class="fas fa-filter"></i> {{ t('queue.apply') }}</button>
+            <a class="btn btn-outline-secondary" href="/admin/notifications/queue">{{ t('queue.reset') }}</a>
+        </div>
+    </form>
+</div></div>
 
 <div class="card mb-4">
     <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
         <div>
-            <h5 class="mb-0"><i class="fas fa-list"></i> Задания: {{ queue.total }}</h5>
-            {% for status, total in queue_counts %}<span class="badge bg-secondary me-1">{{ status }}: {{ total }}</span>{% endfor %}
+            <h5 class="mb-0"><i class="fas fa-list"></i> {{ t('queue.jobs', {count: queue.total}) }}</h5>
+            {% for status, total in queue_counts %}<span class="badge bg-secondary me-1">{{ t('queue.status.' ~ status) }}: {{ total }}</span>{% endfor %}
         </div>
         <div class="d-flex flex-wrap gap-2">
             <form method="post" action="/admin/notifications/queue/retry" class="d-inline">
@@ -77,7 +70,7 @@
                 <input type="hidden" name="from" value="{{ filters.from ? filters.from|slice(0, 10) : '' }}">
                 <input type="hidden" name="to" value="{{ filters.to ? filters.to|slice(0, 10) : '' }}">
                 <input type="hidden" name="error" value="{{ filters.error|default('') }}">
-                <button type="submit" class="btn btn-sm btn-outline-primary"><i class="fas fa-rotate-right"></i> Повторить неудачные</button>
+                <button type="submit" class="btn btn-sm btn-outline-primary"><i class="fas fa-rotate-right"></i> {{ t('queue.retry_failed') }}</button>
             </form>
             <form method="post" action="/admin/notifications/queue/delete" class="d-inline">
                 {% include "partials/csrf.twig" %}
@@ -88,33 +81,34 @@
                 <input type="hidden" name="to" value="{{ filters.to ? filters.to|slice(0, 10) : '' }}">
                 <input type="hidden" name="error" value="{{ filters.error|default('') }}">
                 <input type="hidden" name="confirm_delete" value="1">
-                <button type="submit" class="btn btn-sm btn-outline-danger"
-                        data-confirm="Удалить {{ queue.total }} заданий: {% if filters.statuses is empty %}все статусы{% else %}{{ filters.statuses|join(', ') }}{% endif %}?">
-                    <i class="fas fa-trash"></i> Очистить выбранное
+                <button type="submit" class="btn btn-sm btn-outline-danger" data-confirm="{{ t('queue.clear_selected') }}?">
+                    <i class="fas fa-trash"></i> {{ t('queue.clear_selected') }}
                 </button>
             </form>
         </div>
     </div>
     <div class="card-body">
         <div class="mb-3">
-            <span class="text-muted small me-2">Фоновые worker:</span>
+            <span class="text-muted small me-2">{{ t('queue.workers') }}</span>
             {% if heartbeats is empty %}
-                <span class="badge bg-danger">нет ни одного сигнала</span>
+                <span class="badge bg-danger">{{ t('queue.no_heartbeat') }}</span>
             {% else %}
                 {% for heartbeat in heartbeats %}
                     <span class="badge {% if heartbeat.stale %}bg-danger{% else %}bg-success{% endif %} me-1"
-                          data-bs-toggle="tooltip" title="Последний сигнал: {{ heartbeat.last_tick_at|date('d.m.Y H:i:s') }}">
-                        {{ heartbeat.worker }}: {% if heartbeat.stale %}молчит {{ heartbeat.seconds_since_tick }} с{% else %}жив{% endif %}
+                          data-bs-toggle="tooltip" title="{{ t('queue.last_signal', {time: heartbeat.last_tick_at|date('d.m.Y H:i:s')}) }}">
+                        {{ heartbeat.worker }}: {% if heartbeat.stale %}{{ t('queue.worker_stale', {seconds: heartbeat.seconds_since_tick}) }}{% else %}{{ t('queue.worker_alive') }}{% endif %}
                     </span>
                 {% endfor %}
             {% endif %}
         </div>
         {% if queue.jobs is empty %}
-            <p class="mb-0 text-muted">Подходящих заданий нет.</p>
+            <p class="mb-0 text-muted">{{ t('queue.empty') }}</p>
         {% else %}
             <div class="table-responsive">
                 <table class="table table-sm align-middle mb-0">
-                    <thead><tr><th>Создано</th><th>Канал</th><th>Получатель</th><th>Событие</th><th>Статус</th><th>Попытки</th><th>Отправлено</th><th>Действия</th></tr></thead>
+                    <thead><tr>
+                        <th>{{ t('queue.column.created') }}</th><th>{{ t('queue.column.channel') }}</th><th>{{ t('queue.column.recipient') }}</th><th>{{ t('queue.column.event') }}</th><th>{{ t('queue.column.status') }}</th><th>{{ t('queue.column.attempts') }}</th><th>{{ t('queue.column.sent') }}</th><th>{{ t('common.actions') }}</th>
+                    </tr></thead>
                     <tbody>
                     {% for job in queue.jobs %}
                         <tr>
@@ -122,13 +116,13 @@
                             <td>{{ job.channel }}</td>
                             <td class="small">{{ job.recipient|default('—') }}</td>
                             <td>{{ job.event_type }}{% if job.server_name %}<span class="text-muted"> / {{ job.server_name }}</span>{% endif %}</td>
-                            <td><span class="badge {% if job.status == 'sent' %}bg-success{% elseif job.status == 'dead' %}bg-danger{% elseif job.status == 'failed' %}bg-warning text-dark{% elseif job.status == 'processing' %}bg-info text-dark{% else %}bg-secondary{% endif %}">{{ job.status }}</span></td>
+                            <td><span class="badge {% if job.status == 'sent' %}bg-success{% elseif job.status == 'dead' %}bg-danger{% elseif job.status == 'failed' %}bg-warning text-dark{% elseif job.status == 'processing' %}bg-info text-dark{% else %}bg-secondary{% endif %}">{{ t('queue.status.' ~ job.status) }}</span></td>
                             <td>{{ job.attempts }}</td>
                             <td class="text-nowrap">{{ job.sent_at ? job.sent_at|date('d.m.Y H:i:s') : '—' }}</td>
                             <td class="text-nowrap">
-                                <button type="button" class="btn btn-sm btn-outline-info" aria-label="Просмотр" data-bs-toggle="modal" data-bs-target="#jobDetails{{ job.id }}" title="Просмотр"><i class="fas fa-eye" aria-hidden="true"></i></button>
-                                {% if job.status in ['failed', 'dead'] %}{% include "partials/action-button.twig" with {form_action: '/admin/notifications/queue/' ~ job.id ~ '/retry', icon: 'fa-rotate-right', label: 'Повторить', class: 'btn-outline-primary', hidden_fields: queue_filter_fields} %}{% endif %}
-                                {% include "partials/action-button.twig" with {form_action: '/admin/notifications/queue/' ~ job.id ~ '/delete', icon: 'fa-trash', label: 'Удалить', class: 'btn-outline-danger', confirm: 'Удалить это задание очереди?', hidden_fields: queue_filter_fields} %}
+                                <button type="button" class="btn btn-sm btn-outline-info" aria-label="{{ t('common.view') }}" data-bs-toggle="modal" data-bs-target="#jobDetails{{ job.id }}" title="{{ t('common.view') }}"><i class="fas fa-eye" aria-hidden="true"></i></button>
+                                {% if job.status in ['failed', 'dead'] %}{% include "partials/action-button.twig" with {form_action: '/admin/notifications/queue/' ~ job.id ~ '/retry', icon: 'fa-rotate-right', label: t('common.retry'), class: 'btn-outline-primary', hidden_fields: queue_filter_fields} %}{% endif %}
+                                {% include "partials/action-button.twig" with {form_action: '/admin/notifications/queue/' ~ job.id ~ '/delete', icon: 'fa-trash', label: t('common.delete'), class: 'btn-outline-danger', confirm: t('queue.delete_confirm'), hidden_fields: queue_filter_fields} %}
                             </td>
                         </tr>
                     {% endfor %}
@@ -137,21 +131,20 @@
             </div>
             {% if queue.pages > 1 %}
                 {% set page_separator = '?' in queue_url ? '&' : '?' %}
-                <nav class="mt-3" aria-label="Страницы очереди">
+                <nav class="mt-3" aria-label="{{ t('common.period') }}">
                     <ul class="pagination pagination-sm mb-0">
-                        <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-                            <a class="page-link" href="{{ queue_url }}{{ page_separator }}page={{ page - 1 }}">Назад</a>
-                        </li>
-                        <li class="page-item active"><span class="page-link">{{ page }} / {{ queue.pages }}</span></li>
-                        <li class="page-item {% if page >= queue.pages %}disabled{% endif %}">
-                            <a class="page-link" href="{{ queue_url }}{{ page_separator }}page={{ page + 1 }}">Вперёд</a>
-                        </li>
+                        <li class="page-item {% if page <= 1 %}disabled{% endif %}"><a class="page-link" href="{{ queue_url }}{{ page_separator }}page={{ page - 1 }}">{{ t('queue.previous') }}</a></li>
+                        <li class="page-item active"><span class="page-link">{{ t('queue.page', {page: page, pages: queue.pages}) }}</span></li>
+                        <li class="page-item {% if page >= queue.pages %}disabled{% endif %}"><a class="page-link" href="{{ queue_url }}{{ page_separator }}page={{ page + 1 }}">{{ t('queue.next') }}</a></li>
                     </ul>
                 </nav>
             {% endif %}
             {% for job in queue.jobs %}
                 <div class="modal fade" id="jobDetails{{ job.id }}" tabindex="-1" aria-labelledby="jobDetailsTitle{{ job.id }}" aria-hidden="true">
-                    <div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="jobDetailsTitle{{ job.id }}">Задание #{{ job.id }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button></div><div class="modal-body"><h6>Payload</h6><pre class="bg-light border rounded p-3 small">{{ job.payload_pretty }}</pre><h6>Ошибка</h6><pre class="bg-light border rounded p-3 small">{{ job.last_error|default('—') }}</pre></div></div></div>
+                    <div class="modal-dialog modal-lg"><div class="modal-content">
+                        <div class="modal-header"><h5 class="modal-title" id="jobDetailsTitle{{ job.id }}">{{ t('queue.job_title', {id: job.id}) }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ t('common.close') }}"></button></div>
+                        <div class="modal-body"><h6>{{ t('queue.payload') }}</h6><pre class="bg-light border rounded p-3 small">{{ job.payload_pretty }}</pre><h6>{{ t('queue.error') }}</h6><pre class="bg-light border rounded p-3 small">{{ job.last_error|default('—') }}</pre></div>
+                    </div></div>
                 </div>
             {% endfor %}
         {% endif %}

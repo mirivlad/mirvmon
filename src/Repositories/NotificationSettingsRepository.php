@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Repositories;
 
+use App\I18n\Translator;
 use App\Security\SecretCipher;
 use InvalidArgumentException;
 use PDO;
@@ -11,18 +12,12 @@ use RuntimeException;
 
 final class NotificationSettingsRepository
 {
-    private const PROXY_TYPES = [
-        'http',
-        'https',
-        'socks4',
-        'socks4a',
-        'socks5',
-        'socks5h',
-    ];
+    private const PROXY_TYPES = ['http', 'https', 'socks4', 'socks4a', 'socks5', 'socks5h'];
 
     public function __construct(
         private readonly PDO $pdo,
-        private readonly SecretCipher $cipher
+        private readonly SecretCipher $cipher,
+        private readonly ?Translator $translator = null
     ) {
     }
 
@@ -30,12 +25,9 @@ final class NotificationSettingsRepository
     public function getPublic(): array
     {
         $settings = $this->row();
-        $settings['has_smtp_password'] =
-            $settings['smtp_password_encrypted'] !== null;
-        $settings['has_telegram_bot_token'] =
-            $settings['telegram_bot_token_encrypted'] !== null;
-        $settings['has_telegram_proxy_password'] =
-            $settings['telegram_proxy_password_encrypted'] !== null;
+        $settings['has_smtp_password'] = $settings['smtp_password_encrypted'] !== null;
+        $settings['has_telegram_bot_token'] = $settings['telegram_bot_token_encrypted'] !== null;
+        $settings['has_telegram_proxy_password'] = $settings['telegram_proxy_password_encrypted'] !== null;
         unset(
             $settings['smtp_password_encrypted'],
             $settings['telegram_bot_token_encrypted'],
@@ -43,7 +35,6 @@ final class NotificationSettingsRepository
         );
         $this->normalizeBooleans($settings);
         $this->decodeRecipients($settings);
-
         return $settings;
     }
 
@@ -51,15 +42,9 @@ final class NotificationSettingsRepository
     public function getForDelivery(): array
     {
         $settings = $this->row();
-        $settings['smtp_password'] = $this->decryptDatabaseValue(
-            $settings['smtp_password_encrypted']
-        );
-        $settings['telegram_bot_token'] = $this->decryptDatabaseValue(
-            $settings['telegram_bot_token_encrypted']
-        );
-        $settings['telegram_proxy_password'] = $this->decryptDatabaseValue(
-            $settings['telegram_proxy_password_encrypted']
-        );
+        $settings['smtp_password'] = $this->decryptDatabaseValue($settings['smtp_password_encrypted']);
+        $settings['telegram_bot_token'] = $this->decryptDatabaseValue($settings['telegram_bot_token_encrypted']);
+        $settings['telegram_proxy_password'] = $this->decryptDatabaseValue($settings['telegram_proxy_password_encrypted']);
         unset(
             $settings['smtp_password_encrypted'],
             $settings['telegram_bot_token_encrypted'],
@@ -67,7 +52,6 @@ final class NotificationSettingsRepository
         );
         $this->normalizeBooleans($settings);
         $this->decodeRecipients($settings);
-
         return $settings;
     }
 
@@ -92,8 +76,7 @@ final class NotificationSettingsRepository
                 telegram_proxy_host = :telegram_proxy_host,
                 telegram_proxy_port = :telegram_proxy_port,
                 telegram_proxy_username = :telegram_proxy_username,
-                telegram_proxy_password_encrypted =
-                    :telegram_proxy_password_encrypted,
+                telegram_proxy_password_encrypted = :telegram_proxy_password_encrypted,
                 notify_on_warning = :notify_on_warning,
                 notify_on_critical = :notify_on_critical,
                 cooldown_seconds = :cooldown_seconds,
@@ -101,8 +84,6 @@ final class NotificationSettingsRepository
              WHERE id = 1'
         );
         foreach ($normalized as $column => $value) {
-            // PDOStatement::execute() would bind booleans as strings, and
-            // PostgreSQL rejects the empty string false becomes.
             $statement->bindValue(
                 $column,
                 $value,
@@ -112,11 +93,7 @@ final class NotificationSettingsRepository
         $statement->execute();
     }
 
-    /**
-     * @param array<string, mixed> $input
-     * @param array<string, mixed> $current
-     * @return array<string, mixed>
-     */
+    /** @param array<string, mixed> $input @param array<string, mixed> $current @return array<string, mixed> */
     private function normalize(array $input, array $current): array
     {
         $emailEnabled = $this->toBool($input['email_enabled'] ?? false);
@@ -128,41 +105,32 @@ final class NotificationSettingsRepository
         $smtpFrom = $this->nullableTrimmed($input['smtp_from_email'] ?? null);
         $smtpRecipients = $this->emailList($input['smtp_recipients'] ?? null);
         if (!in_array($smtpEncryption, ['tls', 'ssl', 'none'], true)) {
-            throw new InvalidArgumentException('Unsupported SMTP encryption.');
+            $this->invalid('notification.validation.smtp_encryption', 'Unsupported SMTP encryption.');
         }
         if ($smtpHost !== null) {
             $this->validateHost($smtpHost, 'SMTP');
         }
         if ($smtpFrom !== null && filter_var($smtpFrom, FILTER_VALIDATE_EMAIL) === false) {
-            throw new InvalidArgumentException('Invalid SMTP sender email.');
+            $this->invalid('notification.validation.smtp_sender', 'Invalid SMTP sender email.');
         }
         if ($emailEnabled && ($smtpHost === null || $smtpFrom === null || $smtpRecipients === [])) {
-            throw new InvalidArgumentException(
+            $this->invalid(
+                'notification.validation.email_required',
                 'Enabled email notifications require SMTP host, sender and recipient.'
             );
         }
 
-        $telegramChatId = $this->nullableTrimmed(
-            $input['telegram_chat_id'] ?? null
-        );
-        $proxyType = $this->nullableTrimmed(
-            $input['telegram_proxy_type'] ?? null
-        );
-        $proxyHost = $this->nullableTrimmed(
-            $input['telegram_proxy_host'] ?? null
-        );
-        $proxyPort = $proxyType === null
-            ? null
-            : $this->port($input['telegram_proxy_port'] ?? null, 'Telegram proxy');
-        $proxyUsername = $proxyType === null
-            ? null
-            : $this->nullableTrimmed($input['telegram_proxy_username'] ?? null);
+        $telegramChatId = $this->nullableTrimmed($input['telegram_chat_id'] ?? null);
+        $proxyType = $this->nullableTrimmed($input['telegram_proxy_type'] ?? null);
+        $proxyHost = $this->nullableTrimmed($input['telegram_proxy_host'] ?? null);
+        $proxyPort = $proxyType === null ? null : $this->port($input['telegram_proxy_port'] ?? null, 'Telegram proxy');
+        $proxyUsername = $proxyType === null ? null : $this->nullableTrimmed($input['telegram_proxy_username'] ?? null);
         if ($proxyType !== null) {
             if (!in_array($proxyType, self::PROXY_TYPES, true)) {
-                throw new InvalidArgumentException('Unsupported Telegram proxy type.');
+                $this->invalid('notification.validation.proxy_type', 'Unsupported Telegram proxy type.');
             }
             if ($proxyHost === null) {
-                throw new InvalidArgumentException('Telegram proxy host is required.');
+                $this->invalid('notification.validation.proxy_host_required', 'Telegram proxy host is required.');
             }
             $this->validateHost($proxyHost, 'Telegram proxy');
         } else {
@@ -191,7 +159,8 @@ final class NotificationSettingsRepository
             );
 
         if ($telegramEnabled && ($telegramChatId === null || $telegramToken === null)) {
-            throw new InvalidArgumentException(
+            $this->invalid(
+                'notification.validation.telegram_required',
                 'Enabled Telegram notifications require bot token and chat ID.'
             );
         }
@@ -214,12 +183,8 @@ final class NotificationSettingsRepository
             'telegram_proxy_username' => $proxyUsername,
             'telegram_proxy_password_encrypted' => $proxyPassword,
             'cooldown_seconds' => $this->cooldown($input['cooldown_seconds'] ?? 0),
-            'notify_on_warning' => $this->toBool(
-                $input['notify_on_warning'] ?? false
-            ),
-            'notify_on_critical' => $this->toBool(
-                $input['notify_on_critical'] ?? false
-            ),
+            'notify_on_warning' => $this->toBool($input['notify_on_warning'] ?? false),
+            'notify_on_critical' => $this->toBool($input['notify_on_critical'] ?? false),
         ];
     }
 
@@ -231,27 +196,20 @@ final class NotificationSettingsRepository
             ['options' => ['min_range' => 0, 'max_range' => 86400]]
         );
         if ($seconds === false) {
-            throw new InvalidArgumentException(
-                'Пауза между одинаковыми уведомлениями — от 0 до 86400 секунд.'
+            $this->invalid(
+                'notification.validation.cooldown',
+                'Notification cooldown must be between 0 and 86400 seconds.'
             );
         }
-
         return $seconds;
     }
 
-    /**
-     * Accepts the comma or newline separated list the form submits.
-     *
-     * @return list<string>
-     */
+    /** @return list<string> */
     private function emailList(mixed $value): array
     {
-        if (is_array($value)) {
-            $parts = $value;
-        } else {
-            $parts = preg_split('/[,;\r\n]+/', (string) ($value ?? '')) ?: [];
-        }
-
+        $parts = is_array($value)
+            ? $value
+            : (preg_split('/[,;\r\n]+/', (string) ($value ?? '')) ?: []);
         $emails = [];
         foreach ($parts as $part) {
             $email = trim((string) $part);
@@ -259,48 +217,41 @@ final class NotificationSettingsRepository
                 continue;
             }
             if (filter_var($email, FILTER_VALIDATE_EMAIL) === false || strlen($email) > 254) {
-                throw new InvalidArgumentException('Invalid SMTP recipient email.');
+                $this->invalid('notification.validation.recipient', 'Invalid SMTP recipient email.');
             }
             if (!in_array($email, $emails, true)) {
                 $emails[] = $email;
             }
         }
         if (count($emails) > 20) {
-            throw new InvalidArgumentException('Too many SMTP recipients.');
+            $this->invalid('notification.validation.too_many_recipients', 'Too many SMTP recipients.');
         }
-
         return $emails;
     }
 
     /** @param array<string, mixed> $input */
-    private function secretValue(
-        array $input,
-        string $field,
-        string $clearField,
-        mixed $current
-    ): ?string {
+    private function secretValue(array $input, string $field, string $clearField, mixed $current): ?string
+    {
         if ($this->toBool($input[$clearField] ?? false)) {
             return null;
         }
         $value = trim((string) ($input[$field] ?? ''));
         if ($value !== '') {
             if (strlen($value) > 8192) {
-                throw new InvalidArgumentException('Secret is too long.');
+                $this->invalid('notification.validation.secret_too_long', 'Secret is too long.');
             }
             return $this->cipher->encrypt($value);
         }
-
         return $this->databaseBytes($current);
     }
 
     private function validateHost(string $host, string $label): void
     {
-        if (
-            strlen($host) > 255
-            || preg_match('/[\\s\\/?#@]/', $host) === 1
-            || str_contains($host, '://')
-        ) {
-            throw new InvalidArgumentException($label . ' host is invalid.');
+        if (strlen($host) > 255 || preg_match('/[\s\/?#@]/', $host) === 1 || str_contains($host, '://')) {
+            $key = $label === 'SMTP'
+                ? 'notification.validation.smtp_host'
+                : 'notification.validation.proxy_host';
+            $this->invalid($key, $label . ' host is invalid.');
         }
     }
 
@@ -312,37 +263,39 @@ final class NotificationSettingsRepository
             ['options' => ['min_range' => 1, 'max_range' => 65535]]
         );
         if ($port === false) {
-            throw new InvalidArgumentException($label . ' port is invalid.');
+            $key = $label === 'SMTP'
+                ? 'notification.validation.smtp_port'
+                : 'notification.validation.proxy_port';
+            $this->invalid($key, $label . ' port is invalid.');
         }
-
         return $port;
+    }
+
+    private function invalid(string $key, string $fallback): never
+    {
+        throw new InvalidArgumentException($this->translator?->trans($key) ?? $fallback);
     }
 
     private function nullableTrimmed(mixed $value): ?string
     {
         $trimmed = trim((string) ($value ?? ''));
-
         return $trimmed === '' ? null : $trimmed;
     }
 
     /** @return array<string, mixed> */
     private function row(): array
     {
-        $statement = $this->pdo->query(
-            'SELECT * FROM notification_settings WHERE id = 1'
-        );
+        $statement = $this->pdo->query('SELECT * FROM notification_settings WHERE id = 1');
         $row = $statement?->fetch();
         if (!is_array($row)) {
             throw new RuntimeException('Notification settings row is missing.');
         }
-
         return $row;
     }
 
     private function decryptDatabaseValue(mixed $value): string
     {
         $bytes = $this->databaseBytes($value);
-
         return $bytes === null ? '' : $this->cipher->decrypt($bytes);
     }
 
@@ -368,7 +321,6 @@ final class NotificationSettingsRepository
             }
             return $decoded;
         }
-
         return $value;
     }
 
@@ -390,22 +342,13 @@ final class NotificationSettingsRepository
     /** @param array<string, mixed> $settings */
     private function normalizeBooleans(array &$settings): void
     {
-        foreach ([
-            'email_enabled',
-            'telegram_enabled',
-            'notify_on_warning',
-            'notify_on_critical',
-        ] as $field) {
+        foreach (['email_enabled', 'telegram_enabled', 'notify_on_warning', 'notify_on_critical'] as $field) {
             $settings[$field] = $this->toBool($settings[$field]);
         }
     }
 
     private function toBool(mixed $value): bool
     {
-        return $value === true
-            || $value === 1
-            || $value === '1'
-            || $value === 't'
-            || $value === 'on';
+        return $value === true || $value === 1 || $value === '1' || $value === 't' || $value === 'on';
     }
 }

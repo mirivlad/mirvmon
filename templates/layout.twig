@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="{{ current_locale() }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="light">
-    <title>{{ title }} · MirvMon</title>
+    {% set effective_title = page_title|default(title)|default(t('app.name')) %}
+    <title>{{ effective_title }} · MirvMon</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="stylesheet" href="/vendor/bootstrap/bootstrap.min.css">
     <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css">
@@ -46,7 +47,7 @@
     {% if session.username %}
     <nav class="navbar navbar-expand-lg navbar-dark app-navbar">
         <div class="container-xl">
-            <a class="navbar-brand app-brand" href="/" aria-label="MirvMon — дашборд">
+            <a class="navbar-brand app-brand" href="/" aria-label="MirvMon — {{ t('nav.dashboard') }}">
                 <span class="app-brand-mark" aria-hidden="true">
                     <i class="fas fa-wave-square"></i>
                 </span>
@@ -56,7 +57,7 @@
             <button class="navbar-toggler" type="button"
                     data-bs-toggle="collapse" data-bs-target="#primaryNavigation"
                     aria-controls="primaryNavigation" aria-expanded="false"
-                    aria-label="Открыть навигацию">
+                    aria-label="{{ t('nav.open') }}">
                 <span class="navbar-toggler-icon"></span>
             </button>
 
@@ -65,25 +66,25 @@
                     <li class="nav-item">
                         <a class="nav-link" href="/">
                             <i class="fas fa-table-cells-large" aria-hidden="true"></i>
-                            Обзор
+                            {{ t('nav.dashboard') }}
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="/groups">
                             <i class="fas fa-layer-group" aria-hidden="true"></i>
-                            Группы
+                            {{ t('nav.groups') }}
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="/servers">
                             <i class="fas fa-server" aria-hidden="true"></i>
-                            Серверы
+                            {{ t('nav.servers') }}
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="/alerts">
                             <i class="fas fa-bell" aria-hidden="true"></i>
-                            Алерты
+                            {{ t('nav.alerts') }}
                         </a>
                     </li>
                     {% if session.role == 'admin' %}
@@ -92,32 +93,32 @@
                                 type="button" id="adminDropdown"
                                 data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="fas fa-gear" aria-hidden="true"></i>
-                            Настройки
+                            {{ t('nav.settings') }}
                         </button>
                         <ul class="dropdown-menu" aria-labelledby="adminDropdown">
                             <li>
                                 <a class="dropdown-item" href="/admin/users">
                                     <i class="fas fa-users" aria-hidden="true"></i>
-                                    Пользователи
+                                    {{ t('nav.users') }}
                                 </a>
                             </li>
                             <li>
                                 <a class="dropdown-item" href="/admin/notifications">
                                     <i class="fas fa-paper-plane" aria-hidden="true"></i>
-                                    Уведомления
+                                    {{ t('nav.notifications') }}
                                 </a>
                             </li>
                             <li>
                                 <a class="dropdown-item" href="/admin/notifications/queue">
                                     <i class="fas fa-list-check" aria-hidden="true"></i>
-                                    Очередь уведомлений
+                                    {{ t('nav.notification_queue') }}
                                 </a>
                             </li>
                             <li><hr class="dropdown-divider"></li>
                             <li>
                                 <a class="dropdown-item" href="/admin/defaults">
                                     <i class="fas fa-sliders" aria-hidden="true"></i>
-                                    Параметры
+                                    {{ t('nav.defaults') }}
                                 </a>
                             </li>
                         </ul>
@@ -139,7 +140,7 @@
                                 {% include "partials/csrf.twig" %}
                                 <button type="submit" class="dropdown-item">
                                     <i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i>
-                                    Выйти
+                                    {{ t('nav.logout') }}
                                 </button>
                             </form>
                         </li>
@@ -156,7 +157,7 @@
              role="alert">
             {{ session.flash_message|nl2br }}
             <button type="button" class="btn-close" data-bs-dismiss="alert"
-                    aria-label="Закрыть"></button>
+                    aria-label="{{ t('common.close') }}"></button>
         </div>
         {% endif %}
 
@@ -171,7 +172,7 @@
         <div class="container-xl">
             <span>MirvMon</span>
             <span aria-hidden="true">·</span>
-            <span>релиз {{ app_version }}</span>
+            <span>{{ t('app.release', {version: app_version}) }}</span>
             <span aria-hidden="true">·</span>
             <span>{{ 'now'|date('Y') }}</span>
         </div>
