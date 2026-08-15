@@ -19,10 +19,10 @@ final class RememberMeContractTest extends TestCase
 
         self::assertStringContainsString('name="remember_me"', $template);
         self::assertStringContainsString('Запомнить меня на 30 дней', $template);
-        self::assertStringContainsString("$body['remember_me']", $controller);
-        self::assertStringContainsString("$_SESSION['_remember_until']", $controller);
+        self::assertStringContainsString("\$body['remember_me']", $controller);
+        self::assertStringContainsString("\$_SESSION['_remember_until']", $controller);
         self::assertStringContainsString('REMEMBER_ME_SECONDS = 2592000', $middleware);
-        self::assertStringContainsString("$_SESSION['_remember_until']", $middleware);
+        self::assertStringContainsString("\$_SESSION['_remember_until']", $middleware);
         self::assertStringContainsString("'; Max-Age='", $middleware);
         self::assertStringContainsString("'; Expires='", $middleware);
     }
