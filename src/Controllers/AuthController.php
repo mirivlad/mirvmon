@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Middlewares\SessionSecurityMiddleware;
 use App\Middlewares\TrustedProxyMiddleware;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -55,6 +56,7 @@ final class AuthController
         $body = is_array($request->getParsedBody()) ? $request->getParsedBody() : [];
         $username = trim((string) ($body['username'] ?? ''));
         $password = (string) ($body['password'] ?? '');
+        $rememberMe = (string) ($body['remember_me'] ?? '') === '1';
         $sourceHash = $this->sourceHash($request);
         $attemptUsername = strlen($username) <= 80 ? $username : '__invalid__';
 
@@ -106,6 +108,11 @@ final class AuthController
         $_SESSION['user_id'] = (int) $user['id'];
         $_SESSION['username'] = (string) $user['username'];
         $_SESSION['role'] = (string) $user['role'];
+        if ($rememberMe) {
+            $_SESSION['_remember_until'] = time() + SessionSecurityMiddleware::REMEMBER_ME_SECONDS;
+        } else {
+            unset($_SESSION['_remember_until']);
+        }
         unset($_SESSION['flash_message'], $_SESSION['flash_type']);
 
         return $response->withHeader('Location', '/')->withStatus(302);

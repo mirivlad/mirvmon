@@ -13,6 +13,7 @@ use RuntimeException;
 final class SessionSecurityMiddleware implements MiddlewareInterface
 {
     public const STATELESS_ATTRIBUTE = 'mirvmon.stateless';
+    public const REMEMBER_ME_SECONDS = 2592000;
 
     /** @param list<string> $statelessPaths */
     public function __construct(
@@ -49,7 +50,8 @@ final class SessionSecurityMiddleware implements MiddlewareInterface
         ini_set('session.cookie_samesite', 'Lax');
         ini_set('session.gc_maxlifetime', (string) max(
             $this->idleTimeout,
-            $this->absoluteTimeout
+            $this->absoluteTimeout,
+            self::REMEMBER_ME_SECONDS
         ));
 
         $cookieSessionId = (string) ($request->getCookieParams()[$this->name] ?? '');
@@ -66,7 +68,14 @@ final class SessionSecurityMiddleware implements MiddlewareInterface
         $now = time();
         $createdAt = (int) ($_SESSION['_created_at'] ?? $now);
         $lastSeenAt = (int) ($_SESSION['_last_seen_at'] ?? $now);
-        if ($now - $lastSeenAt > $this->idleTimeout || $now - $createdAt > $this->absoluteTimeout) {
+        $rememberUntil = (int) ($_SESSION['_remember_until'] ?? 0);
+
+        $expired = $rememberUntil > 0
+            ? $rememberUntil <= $now
+            : $now - $lastSeenAt > $this->idleTimeout
+                || $now - $createdAt > $this->absoluteTimeout;
+
+        if ($expired) {
             $_SESSION = [];
             session_regenerate_id(true);
             $createdAt = $now;
@@ -78,6 +87,7 @@ final class SessionSecurityMiddleware implements MiddlewareInterface
             $response = $handler->handle($request);
             $destroyed = (bool) ($_SESSION['_destroyed'] ?? false);
             $sessionId = session_id();
+            $rememberUntil = (int) ($_SESSION['_remember_until'] ?? 0);
 
             if ($destroyed) {
                 $_SESSION = [];
@@ -89,7 +99,12 @@ final class SessionSecurityMiddleware implements MiddlewareInterface
             session_write_close();
 
             if ($cookieSessionId === '' || $sessionId !== $cookieSessionId) {
-                return $this->withSessionCookie($response, $request, $sessionId);
+                return $this->withSessionCookie(
+                    $response,
+                    $request,
+                    $sessionId,
+                    $rememberUntil
+                );
             }
 
             return $response;
@@ -122,10 +137,18 @@ final class SessionSecurityMiddleware implements MiddlewareInterface
     private function withSessionCookie(
         ResponseInterface $response,
         ServerRequestInterface $request,
-        string $sessionId
+        string $sessionId,
+        int $rememberUntil
     ): ResponseInterface {
         $cookie = rawurlencode($this->name) . '=' . rawurlencode($sessionId)
             . '; Path=/; HttpOnly; SameSite=Lax';
+
+        $now = time();
+        if ($rememberUntil > $now) {
+            $cookie .= '; Expires=' . gmdate('D, d M Y H:i:s', $rememberUntil) . ' GMT';
+            $cookie .= '; Max-Age=' . ($rememberUntil - $now);
+        }
+
         if ($this->isSecure($request)) {
             $cookie .= '; Secure';
         }

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.4.13
+
+- Added an optional "Remember me for 30 days" login mode. Remembered sessions
+  bypass the normal 30-minute idle and 12-hour absolute timeouts until their
+  fixed 30-day expiry, while logout still invalidates the session immediately.
+- Production PHP sessions are now stored under the persistent `app_data` volume,
+  so remembered logins survive MirvMon container and image restarts.
+- Multi-architecture GHCR publication now builds amd64 and arm64 images on
+  native GitHub-hosted runners, reuses per-architecture caches, and combines the
+  resulting digests into the same user-facing multi-arch tags without QEMU.
+
+## 0.4.12
+
 - Server metric display settings now expose only dashboard-capable metrics from
   recent agent samples, hiding stale legacy names and internal helper values.
 - Added paired disk I/O charts, grouped network choices, OS uptime history, and
