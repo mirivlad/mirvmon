@@ -6,6 +6,10 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+_No unreleased changes yet._
+
+## 0.4.16
+
 - Added the administrator-only **System / MirvMon** diagnostics page with
   separate application and monitoring-host health instead of folding both into
   one status.
@@ -251,6 +255,7 @@ Git history. Until a release tag is created, current work stays under
 
 - Linux installer rotation atomically replaces an existing agent configuration
   with the newly issued credential while preserving its persistent queue.
+
 ## 0.3.1
 
 - Extended the x86-64 Linux Python agent to CPython 3.6–3.14 without a
