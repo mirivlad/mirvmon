@@ -27,7 +27,9 @@ final class AgentUpdateController
             ['options' => ['min_range' => 1]]
         );
         if ($serverId === false) {
-            return $response->withStatus(400);
+            return $this->wantsJson($request)
+                ? $this->json($response, ['error' => 'invalid_server_id'], 400)
+                : $response->withStatus(400);
         }
         try {
             $this->updates->request(
@@ -35,14 +37,61 @@ final class AgentUpdateController
                 isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null
             );
         } catch (InvalidArgumentException) {
+            if ($this->wantsJson($request)) {
+                return $this->json(
+                    $response,
+                    ['error' => 'agent_update_not_available'],
+                    409
+                );
+            }
+
             return $response
                 ->withHeader('Location', '/servers/' . $serverId . '?tab=agent')
                 ->withStatus(303);
         }
 
+        if ($this->wantsJson($request)) {
+            return $this->json($response, [
+                'status' => $this->updates->statusForServer((int) $serverId),
+            ], 202);
+        }
+
         return $response
             ->withHeader('Location', '/servers/' . $serverId . '?tab=agent')
             ->withStatus(303);
+    }
+
+    /** @param array<string, string> $args */
+    public function statuses(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        $rawIds = $request->getQueryParams()['ids'] ?? '';
+        if (!is_string($rawIds)) {
+            return $this->json($response, ['error' => 'invalid_server_ids'], 422);
+        }
+        if ($rawIds === '') {
+            return $this->json($response, ['statuses' => []], 200);
+        }
+
+        $parts = explode(',', $rawIds);
+        if (count($parts) > 100) {
+            return $this->json($response, ['error' => 'too_many_server_ids'], 422);
+        }
+
+        $serverIds = [];
+        foreach ($parts as $part) {
+            if (preg_match('/^[1-9][0-9]*$/', $part) !== 1) {
+                return $this->json($response, ['error' => 'invalid_server_ids'], 422);
+            }
+            $serverIds[] = (int) $part;
+        }
+        $serverIds = array_values(array_unique($serverIds));
+
+        return $this->json($response, [
+            'statuses' => $this->updates->statusesForServers($serverIds),
+        ], 200);
     }
 
     /** @param array<string, string> $args */
@@ -83,6 +132,14 @@ final class AgentUpdateController
         }
 
         return $this->json($response, ['saved' => true], 200);
+    }
+
+    private function wantsJson(Request $request): bool
+    {
+        return str_contains(
+            strtolower($request->getHeaderLine('Accept')),
+            'application/json'
+        );
     }
 
     private function bearerToken(Request $request): ?string
