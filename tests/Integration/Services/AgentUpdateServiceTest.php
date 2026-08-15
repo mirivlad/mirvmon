@@ -121,6 +121,46 @@ final class AgentUpdateServiceTest extends TestCase
         self::assertSame('v0.4.3', $retryDelivery['target_version'] ?? null);
     }
 
+    public function testV0412CanRecoverFromObsoleteFourPartTargetThroughV0416(): void
+    {
+        self::$pdo?->prepare(
+            'UPDATE servers SET agent_version = :version WHERE id = :id'
+        )->execute(['version' => 'v0.4.12', 'id' => $this->serverId]);
+
+        $repository = new AgentUpdateRepository(self::$pdo);
+        $obsolete = $repository->create(
+            $this->serverId,
+            'v0.4.15.3',
+            'linux-amd64',
+            null
+        );
+        $bridge = new AgentUpdateService(
+            self::$pdo,
+            $repository,
+            new AgentVersionService(),
+            $this->catalog('v0.4.16')
+        );
+
+        self::assertNull($bridge->commandForServer($this->serverId));
+        $old = self::$pdo?->prepare(
+            'SELECT state, error_code FROM agent_update_commands WHERE id = CAST(:id AS uuid)'
+        );
+        $old?->execute(['id' => $obsolete['id']]);
+        self::assertSame(
+            ['state' => 'failed', 'error_code' => 'target_superseded'],
+            $old?->fetch()
+        );
+
+        $status = $bridge->statusForServer($this->serverId);
+        self::assertTrue($status['can_update']);
+        self::assertSame('v0.4.16', $status['available_version']);
+
+        $replacement = $bridge->request($this->serverId, null);
+        $delivery = $bridge->commandForServer($this->serverId);
+        self::assertSame($replacement['id'], $delivery['id'] ?? null);
+        self::assertSame('v0.4.16', $delivery['target_version'] ?? null);
+    }
+
     public function testPollDoesNotReplaceAcknowledgedObsoleteCommand(): void
     {
         $repository = new AgentUpdateRepository(self::$pdo);
@@ -178,11 +218,11 @@ final class AgentUpdateServiceTest extends TestCase
         ));
     }
 
-    private function catalog(): AgentArtifactCatalog
+    private function catalog(string $version = 'v0.4.3'): AgentArtifactCatalog
     {
         $directory = sys_get_temp_dir() . '/mirvmon-update-service-' . bin2hex(random_bytes(8));
         mkdir($directory, 0700, true);
-        $manifest = ['version' => 'v0.4.3', 'artifacts' => []];
+        $manifest = ['version' => $version, 'artifacts' => []];
         foreach ([
             'linux-amd64' => 'mirvmon-agent-linux-amd64',
             'windows-amd64' => 'mirvmon-agent-windows-amd64.exe',

@@ -17,6 +17,7 @@ use App\Controllers\LanguageController;
 use App\Controllers\ServerController;
 use App\Controllers\ServerDetailController;
 use App\Controllers\SetupController;
+use App\Controllers\SystemController;
 use App\Http\ErrorResponder;
 use App\I18n\Translator;
 use App\Middlewares\AdminMiddleware;
@@ -130,6 +131,8 @@ final class AppFactory
             $group->get('/defaults', self::controller($container, AdminController::class, 'defaultSettings'));
             $group->post('/defaults/save', self::controller($container, AdminController::class, 'saveDefaultSettings'));
             $group->post('/language', self::controller($container, LanguageController::class, 'save'));
+            $group->get('/system', self::controller($container, SystemController::class, 'index'));
+            $group->post('/system/host', self::controller($container, SystemController::class, 'saveHost'));
         });
         $administration->add($csrf)->add($admin)->add($auth);
 

@@ -6,6 +6,40 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+- Added the administrator-only **System / MirvMon** diagnostics page with
+  separate application and monitoring-host health instead of folding both into
+  one status.
+- Added PostgreSQL/TimescaleDB diagnostics with database availability, versions,
+  database size and a lightweight connection check.
+- Moved worker heartbeat visibility out of the notification queue and into system
+  diagnostics, where missing and stale notification/offline workers are reported
+  explicitly.
+- Added notification pipeline diagnostics with per-status queue counts, stale
+  processing leases, overdue ready jobs and the age of the oldest ready job.
+- Added a configurable **MirvMon host** selected from ordinary monitored servers;
+  CPU, RAM, uptime, load average and disk usage reuse the normal agent metrics
+  without Docker socket access or extra container privileges.
+- Added a compact MirvMon health indicator to the main dashboard and completed
+  the remaining dashboard localization wiring for the production translator and
+  the ungrouped-server label.
+- Linux native agents now report load averages when `/proc/loadavg` is available;
+  failure to read that optional source does not fail the complete measurement.
+- Locked in the legacy recovery path from native agent `v0.4.12`: a stale pending
+  four-component target is superseded after deploying `v0.4.16`, after which a
+  fresh three-component `v0.4.16` update command can be issued to the old updater.
+
+## 0.4.15.3
+
+- Extended release-version parsing through the PHP artifact catalog, server-side
+  version comparison and the native self-updater so four-component hotfix
+  versions such as `v0.4.15.3` are accepted consistently at runtime.
+- Restored agent configuration/server pages that had failed when a four-part
+  release version was embedded into the native-agent artifact manifest.
+- Improved production exception logging and made `APP_DEBUG` configurable from
+  the deployment environment without editing the Compose file.
+
+## 0.4.15.2
+
 - Fixed the GHCR release workflow so four-component hotfix tags such as
   `v0.4.15.2` run the full release pipeline, publish amd64/arm64 images, update
   `latest`, and refresh the matching `0`, `0.4`, and `0.4.15` aliases.
@@ -217,7 +251,6 @@ Git history. Until a release tag is created, current work stays under
 
 - Linux installer rotation atomically replaces an existing agent configuration
   with the newly issued credential while preserving its persistent queue.
-
 ## 0.3.1
 
 - Extended the x86-64 Linux Python agent to CPython 3.6–3.14 without a

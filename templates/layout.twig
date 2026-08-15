@@ -116,6 +116,12 @@
                             </li>
                             <li><hr class="dropdown-divider"></li>
                             <li>
+                                <a class="dropdown-item" href="/admin/system">
+                                    <i class="fas fa-heart-pulse" aria-hidden="true"></i>
+                                    {{ t('nav.system') }}
+                                </a>
+                            </li>
+                            <li>
                                 <a class="dropdown-item" href="/admin/defaults">
                                     <i class="fas fa-sliders" aria-hidden="true"></i>
                                     {{ t('nav.defaults') }}
@@ -159,6 +165,9 @@
             <button type="button" class="btn-close" data-bs-dismiss="alert"
                     aria-label="{{ t('common.close') }}"></button>
         </div>
+        {% endif %}
+        {% if system_health is defined %}
+            {% include 'partials/system-health-summary.twig' %}
         {% endif %}
 
         {% block content %}{% endblock %}
