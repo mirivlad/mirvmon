@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Domain\Metrics\MetricValueFormatter;
+use App\Repositories\AvailabilityRepository;
 use App\Repositories\MaintenanceWindowRepository;
 use App\Repositories\MetricRepository;
 use App\Repositories\ServerRepository;
@@ -107,12 +108,23 @@ final class ServerDetailController
             $currentMetrics
         );
         $networkCharts = $this->buildNetworkCharts($groupedMetrics, $displayMetrics);
+        $diskIoCharts = $this->buildDiskIoCharts($groupedMetrics, $displayMetrics);
         $temperatureChart = $this->buildTemperatureChart($groupedMetrics, $displayMetrics);
         $diskCharts = $this->buildDiskCharts(
             $groupedMetrics,
             $displayMetrics,
             $currentMetrics
         );
+        $uptimeChart = $this->buildUptimeChart($groupedMetrics, $displayMetrics);
+        $availabilityChart = [];
+        if ($this->isMetricSelected('availability', $displayMetrics)) {
+            $availability = (new AvailabilityRepository($this->pdo))->timeline(
+                $serverId,
+                $startDate,
+                $endDate
+            );
+            $availabilityChart = $this->buildAvailabilityChart($availability);
+        }
         $summaryCards = $this->buildSummaryCards(
             $groupedMetrics,
             $displayMetrics,
@@ -121,6 +133,17 @@ final class ServerDetailController
             $networkCharts,
             $currentMetrics
         );
+        if (($availabilityChart['known'] ?? false) === true) {
+            $summaryCards[] = [
+                'title' => 'Доступность за период',
+                'value' => $availabilityChart['availabilityPercent'] . '%',
+                'subtitle' => sprintf(
+                    'Простой: %s | отключений: %d',
+                    $availabilityChart['downtimeText'],
+                    $availabilityChart['outages']
+                ),
+            ];
+        }
 
         return $this->twig->render($response, 'servers/detail.twig', [
             'title' => 'Сервер: ' . $server['name'],
@@ -132,8 +155,11 @@ final class ServerDetailController
             'displayMetrics' => $displayMetrics,
             'simpleMetricCharts' => $simpleMetricCharts,
             'networkCharts' => $networkCharts,
+            'diskIoCharts' => $diskIoCharts,
             'temperatureChart' => $temperatureChart,
             'diskCharts' => $diskCharts,
+            'uptimeChart' => $uptimeChart,
+            'availabilityChart' => $availabilityChart,
             'summaryCards' => $summaryCards,
             'allMetricTypes' => $this->metrics->metricTypes($serverId),
             'existingThresholds' => $existingThresholds,
@@ -214,7 +240,7 @@ final class ServerDetailController
             $grouped[$point['name']][] = $point;
         }
 
-        $priority = ['cpu_load', 'ram_used', 'disk_used'];
+        $priority = ['cpu_load', 'ram_used', 'uptime', 'disk_used'];
         uksort($grouped, static function (string $left, string $right) use ($priority): int {
             $leftPriority = array_search($left, $priority, true);
             $rightPriority = array_search($right, $priority, true);
@@ -236,7 +262,7 @@ final class ServerDetailController
         $expanded = [];
 
         foreach ($displayMetrics as $metricName) {
-            if ($metricName === 'uptime') {
+            if ($metricName === 'availability') {
                 continue;
             }
 
@@ -373,6 +399,66 @@ final class ServerDetailController
     /**
      * @param GroupedMetrics $groupedMetrics
      * @param list<string>|null $displayMetrics
+     * @return list<Chart>
+     */
+    private function buildDiskIoCharts(array $groupedMetrics, ?array $displayMetrics): array
+    {
+        $devices = [];
+        foreach (array_keys($groupedMetrics) as $metricName) {
+            if (str_starts_with($metricName, 'disk_read_')) {
+                $devices[substr($metricName, strlen('disk_read_'))] = true;
+            }
+            if (str_starts_with($metricName, 'disk_write_')) {
+                $devices[substr($metricName, strlen('disk_write_'))] = true;
+            }
+        }
+
+        $charts = [];
+        foreach (array_keys($devices) as $device) {
+            $readMetric = 'disk_read_' . $device;
+            $writeMetric = 'disk_write_' . $device;
+            $showRead = $this->isMetricSelected($readMetric, $displayMetrics)
+                && !empty($groupedMetrics[$readMetric]);
+            $showWrite = $this->isMetricSelected($writeMetric, $displayMetrics)
+                && !empty($groupedMetrics[$writeMetric]);
+            if (!$showRead && !$showWrite) {
+                continue;
+            }
+
+            $baseSeries = $showRead ? $groupedMetrics[$readMetric] : $groupedMetrics[$writeMetric];
+            $datasets = [];
+            if ($showRead) {
+                $datasets[] = [
+                    'label' => 'Чтение',
+                    'color' => '#0d6efd',
+                    'values' => $this->extractValues($groupedMetrics[$readMetric]),
+                ];
+            }
+            if ($showWrite) {
+                $datasets[] = [
+                    'label' => 'Запись',
+                    'color' => '#fd7e14',
+                    'values' => $this->extractValues($groupedMetrics[$writeMetric]),
+                ];
+            }
+            $charts[] = [
+                'id' => $device,
+                'title' => 'Дисковый I/O: ' . $device,
+                'unit' => $baseSeries[0]['unit'] ?? 'B/s',
+                'labels' => $this->extractLabels($baseSeries),
+                'timestamps' => $this->extractTimestamps($baseSeries),
+                'datasets' => $datasets,
+            ];
+        }
+
+        usort($charts, fn ($a, $b) => strnatcasecmp($a['id'], $b['id']));
+
+        return $charts;
+    }
+
+    /**
+     * @param GroupedMetrics $groupedMetrics
+     * @param list<string>|null $displayMetrics
      * @return Chart
      */
     private function buildTemperatureChart(
@@ -473,6 +559,56 @@ final class ServerDetailController
         usort($charts, fn ($a, $b) => strnatcasecmp($a['title'], $b['title']));
 
         return $charts;
+    }
+
+    /**
+     * @param GroupedMetrics $groupedMetrics
+     * @param list<string>|null $displayMetrics
+     * @return Chart
+     */
+    private function buildUptimeChart(array $groupedMetrics, ?array $displayMetrics): array
+    {
+        if (!$this->isMetricSelected('uptime', $displayMetrics) || empty($groupedMetrics['uptime'])) {
+            return [];
+        }
+        $points = $groupedMetrics['uptime'];
+        $latest = $this->latestPoint($points);
+
+        return [
+            'title' => 'Аптайм ОС',
+            'unit' => 'uptime',
+            'labels' => $this->extractLabels($points),
+            'timestamps' => $this->extractTimestamps($points),
+            'values' => $this->extractValues($points),
+            'lastText' => $this->formatUptime($latest['value'] ?? null),
+            'lastTime' => $this->formatPointTime($latest),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $availability
+     * @return Chart
+     */
+    private function buildAvailabilityChart(array $availability): array
+    {
+        if (($availability['known'] ?? false) !== true) {
+            return ['known' => false, 'labels' => [], 'values' => []];
+        }
+        $labels = [];
+        $values = [];
+        foreach ($availability['points'] as $point) {
+            $labels[] = (new DateTimeImmutable((string) $point['time']))->format('d.m H:i');
+            $values[] = (int) $point['value'];
+        }
+
+        return [
+            'known' => true,
+            'labels' => $labels,
+            'values' => $values,
+            'availabilityPercent' => (float) ($availability['availability_percent'] ?? 0),
+            'downtimeText' => $this->formatUptime($availability['downtime_seconds'] ?? 0) ?? '0 мин',
+            'outages' => (int) ($availability['outages'] ?? 0),
+        ];
     }
 
     /**
@@ -709,6 +845,10 @@ final class ServerDetailController
 
         if ($metricName === 'ram_used') {
             return 'Использование RAM';
+        }
+
+        if ($metricName === 'temp_system') {
+            return 'Температура системы';
         }
 
         if (str_starts_with($metricName, 'temp_')) {

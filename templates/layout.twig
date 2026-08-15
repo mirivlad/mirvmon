@@ -129,6 +129,9 @@
         {% endif %}
 
         {% block content %}{% endblock %}
+        {% if diskIoCharts is defined or uptimeChart is defined or availabilityChart is defined %}
+            {% include 'partials/dashboard-extra-charts.twig' %}
+        {% endif %}
     </main>
 
     {% if session.username %}

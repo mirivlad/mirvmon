@@ -254,11 +254,22 @@ func (collector *linuxCollector) mountPoints() ([]string, error) {
 	mounts := make([]string, 0)
 	for _, line := range strings.Split(string(contents), "\n") {
 		fields := strings.Fields(line)
-		if len(fields) < 7 {
+		if len(fields) < 10 {
+			continue
+		}
+		separator := -1
+		for index, field := range fields {
+			if field == "-" {
+				separator = index
+				break
+			}
+		}
+		if separator < 0 || separator+1 >= len(fields) {
 			continue
 		}
 		mount := unescapeMount(fields[4])
-		if mount == "" || seen[mount] || skipMount(mount) {
+		filesystem := fields[separator+1]
+		if mount == "" || seen[mount] || skipMount(mount) || skipFilesystem(filesystem) {
 			continue
 		}
 		seen[mount] = true
@@ -339,6 +350,17 @@ func skipNetwork(name string) bool {
 
 func skipMount(mount string) bool {
 	return mount != "/" && (strings.HasPrefix(mount, "/proc") || strings.HasPrefix(mount, "/sys") || strings.HasPrefix(mount, "/dev"))
+}
+
+func skipFilesystem(filesystem string) bool {
+	switch filesystem {
+	case "proc", "sysfs", "devtmpfs", "devpts", "tmpfs", "cgroup", "cgroup2",
+		"pstore", "securityfs", "debugfs", "tracefs", "configfs", "fusectl",
+		"mqueue", "hugetlbfs", "binfmt_misc", "autofs", "rpc_pipefs", "nsfs":
+		return true
+	default:
+		return false
+	}
 }
 
 func unescapeMount(value string) string {

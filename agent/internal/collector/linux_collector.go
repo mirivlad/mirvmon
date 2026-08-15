@@ -127,7 +127,7 @@ func (collector *linuxCollector) collectMetrics() (map[string]float64, error) {
 		optional[name] = value
 	}
 	if temperature, ok := collector.collectTemperature(); ok {
-		optional["temperature"] = temperature
+		optional["temp_system"] = temperature
 	}
 	return boundedMetrics(required, optional), nil
 }

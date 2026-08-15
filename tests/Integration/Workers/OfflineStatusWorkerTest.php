@@ -85,6 +85,8 @@ final class OfflineStatusWorkerTest extends TestCase
         self::assertSame(0, $this->worker->runOnce($now));
         self::assertSame(1, $this->tableCount('alerts'));
         self::assertSame(1, $this->tableCount('notification_outbox'));
+        self::assertSame(1, $this->availabilityEventCount());
+        self::assertSame('offline', $this->availabilityState());
 
         $statement = self::$pdo?->prepare(
             'UPDATE agent_tokens SET last_used_at = :last_used_at WHERE server_id = :id'
@@ -102,6 +104,8 @@ final class OfflineStatusWorkerTest extends TestCase
             )->fetchColumn()
         );
         self::assertSame(2, $this->tableCount('notification_outbox'));
+        self::assertSame(2, $this->availabilityEventCount());
+        self::assertSame('online', $this->availabilityState());
     }
 
     public function testFreshMetricTimestampCannotMaskStaleAgentContact(): void
@@ -117,6 +121,51 @@ final class OfflineStatusWorkerTest extends TestCase
 
         self::assertSame(1, $this->worker->runOnce($now));
         self::assertSame(1, $this->tableCount('alerts'));
+        self::assertSame('offline', $this->availabilityState());
+    }
+
+    public function testAvailabilityIsRecordedWhenOfflineNotificationsAreDisabled(): void
+    {
+        self::$pdo?->prepare(
+            'UPDATE servers SET notify_on_offline = FALSE WHERE id = :id'
+        )->execute(['id' => $this->serverId]);
+
+        self::assertSame(0, $this->worker->runOnce(new DateTimeImmutable('2026-07-30T12:00:00Z')));
+        self::assertSame(0, $this->tableCount('alerts'));
+        self::assertSame(0, $this->tableCount('notification_outbox'));
+        self::assertSame('offline', $this->availabilityState());
+        self::assertSame(1, $this->availabilityEventCount());
+    }
+
+    public function testZeroOfflineTimeoutKeepsContactOnline(): void
+    {
+        self::$pdo?->prepare(
+            'UPDATE servers SET offline_timeout_seconds = 0 WHERE id = :id'
+        )->execute(['id' => $this->serverId]);
+
+        self::assertSame(0, $this->worker->runOnce(new DateTimeImmutable('2026-07-30T12:00:00Z')));
+        self::assertSame(0, $this->tableCount('alerts'));
+        self::assertSame('online', $this->availabilityState());
+    }
+
+    private function availabilityState(): string
+    {
+        $statement = self::$pdo?->prepare(
+            'SELECT state FROM server_availability_state WHERE server_id = :server_id'
+        );
+        $statement?->execute(['server_id' => $this->serverId]);
+
+        return (string) $statement?->fetchColumn();
+    }
+
+    private function availabilityEventCount(): int
+    {
+        $statement = self::$pdo?->prepare(
+            'SELECT count(*) FROM server_availability_events WHERE server_id = :server_id'
+        );
+        $statement?->execute(['server_id' => $this->serverId]);
+
+        return (int) $statement?->fetchColumn();
     }
 
     private function tableCount(string $table): int

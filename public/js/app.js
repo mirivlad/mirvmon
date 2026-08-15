@@ -12,11 +12,30 @@
         return String(Number(rounded.toFixed(2)));
     };
 
+    const formatDuration = (seconds) => {
+        let remaining = Math.max(0, Math.round(Number(seconds)));
+        const days = Math.floor(remaining / 86400);
+        remaining %= 86400;
+        const hours = Math.floor(remaining / 3600);
+        remaining %= 3600;
+        const minutes = Math.floor(remaining / 60);
+        if (days > 0) {
+            return days + ' д ' + hours + ' ч';
+        }
+        if (hours > 0) {
+            return hours + ' ч ' + minutes + ' мин';
+        }
+        return minutes + ' мин';
+    };
+
     // Keeps throughput readable: 12500000 B/s reads as 11.92 MB/s.
     const formatMetricValue = (value, unit) => {
         const numeric = Number(value);
         if (!Number.isFinite(numeric)) {
             return '—';
+        }
+        if (unit === 'uptime') {
+            return formatDuration(numeric);
         }
         if (unit !== 'B/s') {
             return trimNumber(numeric) + (unit || '');
@@ -31,7 +50,7 @@
         return trimNumber(scaled) + ' ' + RATE_UNITS[index];
     };
 
-    window.MirvMon = Object.assign(window.MirvMon || {}, { formatMetricValue });
+    window.MirvMon = Object.assign(window.MirvMon || {}, { formatMetricValue, formatDuration });
 
     document.addEventListener('submit', (event) => {
         const submitter = event.submitter;

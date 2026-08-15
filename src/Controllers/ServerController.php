@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Services\AgentCredentialIssuer;
 use App\Services\AgentUpdateService;
+use App\Services\DashboardMetricService;
 use App\Services\ServerStatusService;
 use InvalidArgumentException;
 use JsonException;
@@ -216,15 +217,11 @@ final class ServerController
             return $this->redirect($response, '/servers');
         }
 
-        $metrics = $this->pdo->prepare(
-            'SELECT DISTINCT metric_names.id, metric_names.name, metric_names.unit
-             FROM current_metric_values
-             INNER JOIN metric_names
-               ON metric_names.id = current_metric_values.metric_id
-             WHERE current_metric_values.server_id = :server_id
-             ORDER BY metric_names.name'
+        $savedMetrics = $this->decodeStringList($server['display_metrics'] ?? '[]');
+        $display = (new DashboardMetricService($this->pdo))->displayOptions(
+            $serverId,
+            $savedMetrics
         );
-        $metrics->execute(['server_id' => $serverId]);
         $agentToken = $this->pdo->prepare(
             'SELECT token_generation FROM agent_tokens WHERE server_id = :server_id'
         );
@@ -237,10 +234,8 @@ final class ServerController
             'groups' => $this->groups(),
             'has_agent_token' => $tokenGeneration !== false,
             'requires_token_rotation' => $tokenGeneration === null,
-            'allMetrics' => $metrics->fetchAll(),
-            'server_display_metrics' => $this->decodeStringList(
-                $server['display_metrics'] ?? '[]'
-            ),
+            'display_groups' => $display['groups'],
+            'selected_widgets' => $display['selected'],
             'server_notification_emails' => $this->decodeStringList(
                 $server['notification_emails'] ?? '[]'
             ),
@@ -265,21 +260,25 @@ final class ServerController
             FILTER_VALIDATE_INT,
             ['options' => ['min_range' => 0, 'max_range' => 86400]]
         );
-        $displayMetrics = $body['display_metrics'] ?? [];
+        $displayWidgets = $body['display_widgets'] ?? [];
         if (
             $name === ''
             || strlen($name) > 100
             || $timeout === false
-            || !is_array($displayMetrics)
+            || !is_array($displayWidgets)
         ) {
             return $this->redirect($response, '/servers/' . $serverId . '/edit');
         }
-        $displayMetrics = array_values(array_unique(array_filter(
-            $displayMetrics,
-            static fn (mixed $metric): bool =>
-                is_string($metric)
-                && preg_match('/^[a-z][a-z0-9_]{0,99}$/', $metric) === 1
+        $displayWidgets = array_values(array_unique(array_filter(
+            $displayWidgets,
+            static fn (mixed $widget): bool =>
+                is_string($widget)
+                && preg_match('/^[a-z][a-z0-9_]{0,99}$/', $widget) === 1
         )));
+        $displayMetrics = (new DashboardMetricService($this->pdo))->expandWidgets(
+            $serverId,
+            $displayWidgets
+        );
 
         $statement = $this->pdo->prepare(
             'UPDATE servers SET
