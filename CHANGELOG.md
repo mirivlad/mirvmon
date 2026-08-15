@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.4.14
+
+- Server list agent updates can now be started directly from the Agent column
+  without opening each server detail page.
+- Agent update state is refreshed in place while commands are pending, accepted,
+  downloading, installing, restarting, or failed; the installed version updates
+  without a page reload when the agent reports back.
+- Added an Agent filter for all, current, and outdated installations. When the
+  outdated filter is active, a server disappears from the list as soon as its
+  agent reaches the current version.
+- Update-state polling is batched across all agents currently being updated, so
+  quickly triggering several updates does not require one polling request per
+  server.
+
 ## 0.4.13
 
 - Added an optional "Remember me for 30 days" login mode. Remembered sessions

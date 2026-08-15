@@ -121,6 +121,7 @@ final class AgentUpdateService
             'artifact' => $artifactKey,
             'capabilities' => $capabilities,
             'can_update' => $canUpdate,
+            'is_outdated' => $installed === null ? null : $isNewer,
             'state' => $state,
             'command' => $latest,
         ];
