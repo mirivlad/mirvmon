@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\I18n\Translator;
 use App\Repositories\NotificationOutboxRepository;
 use DateTimeImmutable;
 use PDO;
@@ -17,16 +18,14 @@ final class AlertController
     public function __construct(
         private readonly PDO $pdo,
         private readonly Twig $twig,
-        private readonly NotificationOutboxRepository $outbox
+        private readonly NotificationOutboxRepository $outbox,
+        private readonly Translator $translator
     ) {
     }
 
     /** @param array<string, string> $args */
-    public function index(
-        Request $request,
-        Response $response,
-        array $args
-    ): Response {
+    public function index(Request $request, Response $response, array $args): Response
+    {
         $alerts = $this->pdo->query(
             <<<'SQL'
             SELECT
@@ -38,11 +37,7 @@ final class AlertController
                 alerts.severity,
                 alerts.created_at,
                 servers.name AS server_name,
-                COALESCE(
-                    metric_names.name,
-                    alerts.subject,
-                    alerts.kind
-                ) AS metric_name,
+                COALESCE(metric_names.name, alerts.subject, alerts.kind) AS metric_name,
                 metric_names.unit
             FROM alerts
             INNER JOIN servers ON servers.id = alerts.server_id
@@ -53,58 +48,46 @@ final class AlertController
         )?->fetchAll() ?? [];
 
         return $this->twig->render($response, 'alerts/index.twig', [
-            'title' => 'Алерты',
+            'title' => $this->translator->trans('alerts.title'),
             'alerts' => $alerts,
         ]);
     }
 
     /** @param array<string, string> $args */
-    public function markAsResolved(
-        Request $request,
-        Response $response,
-        array $args
-    ): Response {
+    public function markAsResolved(Request $request, Response $response, array $args): Response
+    {
         $alertId = filter_var(
             $args['id'] ?? null,
             FILTER_VALIDATE_INT,
             ['options' => ['min_range' => 1]]
         );
         if ($alertId === false) {
-            $this->flash('Алерт не найден', 'error');
-
+            $this->flashKey('alert.flash.not_found', 'error');
             return $this->redirect($response);
         }
 
         try {
             $statement = $this->pdo->prepare(
-                <<<'SQL'
-                UPDATE alerts
-                SET resolved = TRUE, resolved_at = CURRENT_TIMESTAMP
-                WHERE id = :id AND resolved = FALSE
-                SQL
+                'UPDATE alerts
+                 SET resolved = TRUE, resolved_at = CURRENT_TIMESTAMP
+                 WHERE id = :id AND resolved = FALSE'
             );
             $statement->execute(['id' => $alertId]);
             $resolved = $statement->rowCount() === 1;
             if ($resolved) {
                 $this->announceManualResolution($alertId);
             }
-            $this->flash(
-                $resolved
-                    ? 'Алерт отмечен как исправленный'
-                    : 'Алерт уже исправлен или не найден',
+            $this->flashKey(
+                $resolved ? 'alert.flash.resolved' : 'alert.flash.already_resolved',
                 $resolved ? 'success' : 'warning'
             );
         } catch (Throwable) {
-            $this->flash('Не удалось обновить алерт', 'error');
+            $this->flashKey('alert.flash.update_failed', 'error');
         }
 
         return $this->redirect($response);
     }
 
-    /**
-     * A manually cleared alert is as much a state change as an automatic
-     * recovery, so it reaches the same channels.
-     */
     private function announceManualResolution(int $alertId): void
     {
         $statement = $this->pdo->prepare(
@@ -115,11 +98,7 @@ final class AlertController
                 alerts.value,
                 alerts.resolved_at,
                 servers.name AS server_name,
-                COALESCE(
-                    metric_names.name,
-                    alerts.subject,
-                    alerts.kind
-                ) AS subject
+                COALESCE(metric_names.name, alerts.subject, alerts.kind) AS subject
             FROM alerts
             INNER JOIN servers ON servers.id = alerts.server_id
             LEFT JOIN metric_names ON metric_names.id = alerts.metric_id
@@ -152,7 +131,6 @@ final class AlertController
         );
     }
 
-    /** Matches the ISO-8601 event time the ingestion payloads carry. */
     private function timestamp(mixed $value): string
     {
         try {
@@ -162,9 +140,9 @@ final class AlertController
         }
     }
 
-    private function flash(string $message, string $type): void
+    private function flashKey(string $key, string $type): void
     {
-        $_SESSION['flash_message'] = $message;
+        $_SESSION['flash_message'] = $this->translator->trans($key);
         $_SESSION['flash_type'] = $type;
     }
 
