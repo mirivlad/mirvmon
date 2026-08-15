@@ -53,6 +53,7 @@ final class DashboardController
             'title' => $this->translator->trans('dashboard.title'),
             'stats' => $this->status->summary($servers, $this->servers->groupCount()),
             'groups' => $groups,
+            'attention' => $this->attention($servers),
             'system_health' => $this->systemHealth?->summary() ?? [
                 'application_status' => 'unknown',
                 'host_status' => 'unknown',
@@ -112,5 +113,39 @@ final class DashboardController
         ));
 
         return $response->withHeader('Content-Type', 'application/json');
+    }
+
+    /**
+     * @param list<array<string, mixed>> $servers
+     * @return list<array<string, mixed>>
+     */
+    private function attention(array $servers): array
+    {
+        $issues = array_values(array_filter(
+            $servers,
+            static fn (array $server): bool => in_array(
+                (string) ($server['status'] ?? 'offline'),
+                ['warning', 'critical', 'offline'],
+                true
+            )
+        ));
+        $priority = ['critical' => 0, 'offline' => 1, 'warning' => 2];
+        usort($issues, static function (array $left, array $right) use ($priority): int {
+            $leftStatus = (string) ($left['status'] ?? 'offline');
+            $rightStatus = (string) ($right['status'] ?? 'offline');
+            $statusOrder = ($priority[$leftStatus] ?? 99) <=> ($priority[$rightStatus] ?? 99);
+            if ($statusOrder !== 0) {
+                return $statusOrder;
+            }
+
+            $alertsOrder = (int) ($right['active_alerts'] ?? 0) <=> (int) ($left['active_alerts'] ?? 0);
+            if ($alertsOrder !== 0) {
+                return $alertsOrder;
+            }
+
+            return strcasecmp((string) ($left['name'] ?? ''), (string) ($right['name'] ?? ''));
+        });
+
+        return array_slice($issues, 0, 6);
     }
 }
