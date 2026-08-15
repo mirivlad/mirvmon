@@ -1,36 +1,36 @@
 {% if agent_update %}
 {% set state_labels = {
-    current: ['Актуальная версия', 'success', 'fa-circle-check'],
-    unknown: ['Версия агента не сообщена', 'secondary', 'fa-circle-question'],
-    manual_required: ['Требуется ручное обновление', 'warning', 'fa-triangle-exclamation'],
-    update_available: ['Доступно обновление', 'info', 'fa-circle-arrow-up'],
-    pending: ['Ожидает подключения агента', 'secondary', 'fa-clock'],
-    accepted: ['Команда принята агентом', 'info', 'fa-circle-check'],
-    downloading: ['Агент скачивает обновление', 'info', 'fa-download'],
-    installing: ['Агент устанавливает обновление', 'warning', 'fa-gears'],
-    awaiting_restart: ['Проверяется новая версия', 'warning', 'fa-rotate'],
-    succeeded: ['Обновление установлено', 'success', 'fa-circle-check'],
-    failed: ['Обновление не выполнено', 'danger', 'fa-circle-xmark']
+    current: [t('agent.state.current'), 'success', 'fa-circle-check'],
+    unknown: [t('agent.state.unknown'), 'secondary', 'fa-circle-question'],
+    manual_required: [t('agent.state.manual_required'), 'warning', 'fa-triangle-exclamation'],
+    update_available: [t('agent.state.update_available'), 'info', 'fa-circle-arrow-up'],
+    pending: [t('agent.state.pending'), 'secondary', 'fa-clock'],
+    accepted: [t('agent.state.accepted'), 'info', 'fa-circle-check'],
+    downloading: [t('agent.state.downloading'), 'info', 'fa-download'],
+    installing: [t('agent.state.installing'), 'warning', 'fa-gears'],
+    awaiting_restart: [t('agent.state.awaiting_restart'), 'warning', 'fa-rotate'],
+    succeeded: [t('agent.state.succeeded'), 'success', 'fa-circle-check'],
+    failed: [t('agent.state.failed'), 'danger', 'fa-circle-xmark']
 } %}
 {% set state = state_labels[agent_update.state]|default(state_labels.unknown) %}
 {% set error_labels = {
-    checksum_mismatch: 'Контрольная сумма файла не совпала.',
-    identity_mismatch: 'Скачанный агент сообщил другую версию или платформу.',
-    download_failed: 'Не удалось скачать файл обновления.',
-    handoff_failed: 'Не удалось запустить системный помощник обновления.',
-    apply_failed: 'Новая версия не запустилась; выполнен откат.',
-    target_superseded: 'Запрошенная версия устарела. Очистите stale-состояние агента и повторите обновление.',
-    update_failed: 'Обновление завершилось ошибкой.'
+    checksum_mismatch: t('agent.error.checksum_mismatch'),
+    identity_mismatch: t('agent.error.identity_mismatch'),
+    download_failed: t('agent.error.download_failed'),
+    handoff_failed: t('agent.error.handoff_failed'),
+    apply_failed: t('agent.error.apply_failed'),
+    target_superseded: t('agent.error.target_superseded'),
+    update_failed: t('agent.error.update_failed')
 } %}
 <div class="card mb-3">
     <div class="card-body">
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
             <div>
-                <h4 class="mb-3"><i class="fas fa-code-branch"></i> Версия агента</h4>
+                <h4 class="mb-3"><i class="fas fa-code-branch"></i> {{ t('agent.version.title') }}</h4>
                 <dl class="row mb-0">
-                    <dt class="col-sm-5">Установлена</dt>
-                    <dd class="col-sm-7"><code>{{ agent_update.installed_version|default('не сообщена') }}</code></dd>
-                    <dt class="col-sm-5">Доступна</dt>
+                    <dt class="col-sm-5">{{ t('agent.version.installed') }}</dt>
+                    <dd class="col-sm-7"><code>{{ agent_update.installed_version|default(t('agent.version.not_reported')) }}</code></dd>
+                    <dt class="col-sm-5">{{ t('agent.version.available') }}</dt>
                     <dd class="col-sm-7"><code>{{ agent_update.available_version }}</code></dd>
                 </dl>
             </div>
@@ -39,9 +39,7 @@
                     <i class="fas {{ state[2] }} me-1" aria-hidden="true"></i>{{ state[0] }}
                 </span>
                 {% if agent_update.command and agent_update.command.error_code %}
-                    <div class="small text-danger">
-                        {{ error_labels[agent_update.command.error_code]|default('Обновление завершилось ошибкой.') }}
-                    </div>
+                    <div class="small text-danger">{{ error_labels[agent_update.command.error_code]|default(t('agent.error.update_failed')) }}</div>
                 {% endif %}
             </div>
         </div>
@@ -50,14 +48,12 @@
                 {% include "partials/csrf.twig" %}
                 <button type="submit" class="btn btn-primary">
                     <i class="fas fa-circle-arrow-up me-1"></i>
-                    {{ agent_update.state == 'failed' ? 'Повторить обновление' : 'Обновить агент' }}
+                    {{ agent_update.state == 'failed' ? t('agent.retry_update') : t('agent.update') }}
                 </button>
             </form>
         {% endif %}
         {% if agent_update.state == 'manual_required' %}
-            <p class="small text-muted mb-0 mt-2">
-                Этот агент ещё не поддерживает удалённое обновление. Один раз установите актуальную версию вручную.
-            </p>
+            <p class="small text-muted mb-0 mt-2">{{ t('agent.manual_help') }}</p>
         {% endif %}
     </div>
 </div>
@@ -65,29 +61,19 @@
 
 <div class="card">
     <div class="card-body">
-        <h4><i class="fas fa-download"></i> Управление агентом мониторинга</h4>
-        <p class="text-muted">
-            Выдача установщиков не меняет действующий ключ агента. Отзыв ключа
-            немедленно отключает прежний агент и потребует новой установки.
-        </p>
+        <h4><i class="fas fa-download"></i> {{ t('agent.management.title') }}</h4>
+        <p class="text-muted">{{ t('agent.management.help') }}</p>
         {% if requires_token_rotation %}
-            <div class="alert alert-warning small">
-                Этот ключ создан предыдущей версией MirvMon. Его значение хранится
-                только в конфигурации агента, поэтому для выдачи нового установщика
-                сначала явно отзовите ключ.
-            </div>
+            <div class="alert alert-warning small">{{ t('agent.management.legacy_token') }}</div>
         {% else %}
             <form method="post" action="/servers/{{ server.id }}/installers" class="d-inline">
                 {% include "partials/csrf.twig" %}
-                <button type="submit" class="btn btn-outline-primary">
-                    <i class="fas fa-download"></i> Скачать установщики
-                </button>
+                <button type="submit" class="btn btn-outline-primary"><i class="fas fa-download"></i> {{ t('agent.management.download_installers') }}</button>
             </form>
         {% endif %}
-        <button type="button" class="btn btn-outline-warning"
-                data-bs-toggle="modal" data-bs-target="#revokeAgentTokenModal">
+        <button type="button" class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#revokeAgentTokenModal">
             <i class="fas fa-sync-alt"></i>
-            {{ has_agent_token ? 'Отозвать ключ' : 'Создать ключ' }}
+            {{ has_agent_token ? t('agent.management.revoke_key') : t('agent.management.create_key') }}
         </button>
     </div>
 </div>
@@ -97,13 +83,13 @@
         <form method="post" action="/servers/{{ server.id }}/regenerate-token">
             {% include "partials/csrf.twig" %}
             <div class="modal-header">
-                <h5 class="modal-title" id="revokeAgentTokenTitle">Отозвать ключ агента?</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                <h5 class="modal-title" id="revokeAgentTokenTitle">{{ t('agent.management.revoke_title') }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ t('common.close') }}"></button>
             </div>
-            <div class="modal-body">Текущий ключ немедленно перестанет приниматься. Скачайте и установите новый installer на сервере.</div>
+            <div class="modal-body">{{ t('agent.management.revoke_body') }}</div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                <button type="submit" class="btn btn-warning">Отозвать и создать установщики</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('common.cancel') }}</button>
+                <button type="submit" class="btn btn-warning">{{ t('agent.management.revoke_submit') }}</button>
             </div>
         </form>
     </div></div>
