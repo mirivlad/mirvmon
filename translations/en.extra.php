@@ -1,0 +1,50 @@
+<?php
+
+declare(strict_types=1);
+
+return [
+    'groups.icon' => 'Icon (Font Awesome)',
+    'groups.icon_help' => 'Choose an icon or enter one manually',
+    'groups.color_help' => 'Choose a color used to identify the group',
+
+    'servers.created.success' => 'Server “{name}” was added successfully!',
+    'servers.created.download_hint' => 'Download one suitable installer. Each link is single-use and valid for one hour.',
+    'servers.created.linux_agent' => 'Linux agent',
+    'servers.created.windows_agent' => 'Windows x64 agent',
+    'servers.created.installation' => 'Installation instructions',
+    'servers.created.linux.step1' => 'Download install.sh',
+    'servers.created.linux.step2' => 'Upload it to the server',
+    'servers.created.linux.step3' => 'Make it executable and run it as root',
+    'servers.created.windows.step1' => 'Download MirvMon-Agent-Setup.exe',
+    'servers.created.windows.step2' => 'Run it as Administrator',
+    'servers.created.windows.step3' => 'Confirm running the unsigned installer',
+    'servers.created.windows.support' => 'Supported systems are Windows 7 SP1, 8, 8.1, 10, 11 and Windows Server 2008 R2 SP1, 2012, 2012 R2, 2016, 2019, 2022, 2025 — x64 only. The installer selects the compatible agent build and migrates configuration and queue data.',
+    'servers.created.to_list' => 'Back to server list',
+    'servers.created.open' => 'Open server',
+
+    'agent.version.title' => 'Agent version',
+    'agent.version.installed' => 'Installed',
+    'agent.version.available' => 'Available',
+    'agent.version.not_reported' => 'not reported',
+    'agent.state.succeeded' => 'Update installed',
+    'agent.manual_help' => 'This agent does not support remote updates yet. Install a current version manually once.',
+    'agent.management.title' => 'Monitoring agent management',
+    'agent.management.help' => 'Issuing installers does not change the active agent key. Revoking the key immediately disables the old agent and requires a new installation.',
+    'agent.management.legacy_token' => 'This key was created by an older MirvMon version. Its value exists only in the agent configuration, so explicitly revoke it before issuing a new installer.',
+    'agent.management.download_installers' => 'Download installers',
+    'agent.management.revoke_key' => 'Revoke key',
+    'agent.management.create_key' => 'Create key',
+    'agent.management.revoke_title' => 'Revoke agent key?',
+    'agent.management.revoke_body' => 'The current key will stop being accepted immediately. Download and install a new installer on the server.',
+    'agent.management.revoke_submit' => 'Revoke and create installers',
+    'agent.error.checksum_mismatch' => 'The downloaded file checksum does not match.',
+    'agent.error.identity_mismatch' => 'The downloaded agent reported a different version or platform.',
+    'agent.error.download_failed' => 'The update file could not be downloaded.',
+    'agent.error.handoff_failed' => 'The privileged update helper could not be started.',
+    'agent.error.apply_failed' => 'The new version failed to start; rollback was performed.',
+    'agent.error.target_superseded' => 'The requested version is obsolete. Clear the agent stale update state and retry.',
+    'agent.error.update_failed' => 'The update failed.',
+
+    'flash.saved' => 'Changes saved',
+    'flash.operation_failed' => 'Operation failed',
+];
