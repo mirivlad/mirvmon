@@ -1,13 +1,13 @@
 {% extends "layout.twig" %}
+{% set page_title = t('users.title') %}
 
 {% block content %}
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h2><i class="fas fa-users-cog"></i> Управление пользователями</h2>
-            <button class="btn btn-primary" data-bs-toggle="modal"
-                    data-bs-target="#userModal" data-user-create>
-                <i class="fas fa-plus"></i> Добавить пользователя
+            <h2><i class="fas fa-users-cog"></i> {{ t('users.title') }}</h2>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#userModal" data-user-create>
+                <i class="fas fa-plus"></i> {{ t('users.add') }}
             </button>
         </div>
 
@@ -16,18 +16,16 @@
                 {% if users|length > 0 %}
                 <div class="table-responsive">
                     <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Имя пользователя</th>
-                                <th>Email</th>
-                                <th>Роль</th>
-                                <th>Telegram Chat ID</th>
-                                <th>Email для алертов</th>
-                                <th>Дата создания</th>
-                                <th>Действия</th>
-                            </tr>
-                        </thead>
+                        <thead><tr>
+                            <th>ID</th>
+                            <th>{{ t('users.username') }}</th>
+                            <th>{{ t('users.email') }}</th>
+                            <th>{{ t('users.role') }}</th>
+                            <th>{{ t('users.telegram') }}</th>
+                            <th>{{ t('users.alert_email') }}</th>
+                            <th>{{ t('users.created') }}</th>
+                            <th>{{ t('common.actions') }}</th>
+                        </tr></thead>
                         <tbody>
                             {% for user in users %}
                             <tr>
@@ -36,9 +34,9 @@
                                 <td>{{ user.email|default('-') }}</td>
                                 <td>
                                     {% if user.role == 'admin' %}
-                                        <span class="badge bg-danger"><i class="fas fa-crown"></i> Администратор</span>
+                                        <span class="badge bg-danger"><i class="fas fa-crown"></i> {{ t('users.role.admin') }}</span>
                                     {% else %}
-                                        <span class="badge bg-secondary"><i class="fas fa-user"></i> Пользователь</span>
+                                        <span class="badge bg-secondary"><i class="fas fa-user"></i> {{ t('users.role.user') }}</span>
                                     {% endif %}
                                 </td>
                                 <td>{{ user.telegram_chat_id|default('-') }}</td>
@@ -47,7 +45,7 @@
                                 <td>
                                     <button class="btn btn-sm btn-outline-primary"
                                             data-bs-toggle="modal" data-bs-target="#userModal"
-                                            aria-label="Редактировать" title="Редактировать"
+                                            aria-label="{{ t('common.edit') }}" title="{{ t('common.edit') }}"
                                             data-user-edit
                                             data-user-id="{{ user.id }}"
                                             data-username="{{ user.username }}"
@@ -60,8 +58,8 @@
                                     <form method="post" action="/admin/users/{{ user.id }}/delete" class="d-inline">
                                         {% include "partials/csrf.twig" %}
                                         <button type="submit" class="btn btn-sm btn-outline-danger"
-                                                aria-label="Удалить" data-bs-toggle="tooltip" title="Удалить"
-                                                data-confirm="Удалить пользователя {{ user.username }}?">
+                                                aria-label="{{ t('common.delete') }}" data-bs-toggle="tooltip" title="{{ t('common.delete') }}"
+                                                data-confirm="{{ t('users.delete_confirm') }}">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </form>
@@ -74,7 +72,7 @@
                 {% else %}
                 <div class="text-center py-4">
                     <i class="fas fa-users fa-3x text-muted mb-3"></i>
-                    <p class="lead">Пользователи не найдены</p>
+                    <p class="lead">{{ t('common.no_data') }}</p>
                 </div>
                 {% endif %}
             </div>
@@ -82,70 +80,50 @@
     </div>
 </div>
 
-<!-- Модальная форма -->
 <div class="modal fade" id="userModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <form id="userForm" method="post" action="/admin/users/save">
                 {% include "partials/csrf.twig" %}
                 <input type="hidden" id="user_id" name="user_id" value="">
-                
                 <div class="modal-header">
-                    <h5 class="modal-title" id="modalTitle">Добавить пользователя</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <h5 class="modal-title" id="modalTitle">{{ t('users.add') }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ t('common.close') }}"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label for="username" class="form-label">Имя пользователя *</label>
-                        <input type="text" class="form-control" id="username"
-                               name="username" minlength="3" maxlength="80"
-                               autocomplete="username" required>
+                        <label for="username" class="form-label">{{ t('users.username') }} *</label>
+                        <input type="text" class="form-control" id="username" name="username" minlength="3" maxlength="80" autocomplete="username" required>
                     </div>
-
                     <div class="mb-3">
-                        <label for="email" class="form-label">Email</label>
-                        <input type="email" class="form-control" id="email"
-                               name="email" maxlength="254"
-                               autocomplete="email">
+                        <label for="email" class="form-label">{{ t('users.email') }}</label>
+                        <input type="email" class="form-control" id="email" name="email" maxlength="254" autocomplete="email">
                     </div>
-
                     <div class="mb-3">
-                        <label for="password" class="form-label">Пароль <span id="password_hint" class="text-muted small">(оставьте пустым чтобы не менять)</span></label>
-                        <input type="password" class="form-control" id="password"
-                               name="password" minlength="12"
-                               autocomplete="new-password">
+                        <label for="password" class="form-label">{{ t('users.password') }} <span id="password_hint" class="text-muted small">({{ t('notifications.smtp.password_keep') }})</span></label>
+                        <input type="password" class="form-control" id="password" name="password" minlength="12" autocomplete="new-password">
                     </div>
-
                     <div class="mb-3">
-                        <label for="role" class="form-label">Роль</label>
+                        <label for="role" class="form-label">{{ t('users.role') }}</label>
                         <select class="form-select" id="role" name="role">
-                            <option value="user">Пользователь</option>
-                            <option value="admin">Администратор</option>
+                            <option value="user">{{ t('users.role.user') }}</option>
+                            <option value="admin">{{ t('users.role.admin') }}</option>
                         </select>
                     </div>
-
                     <hr>
-                    <h6><i class="fas fa-bell"></i> Настройки уведомлений</h6>
-
+                    <h6><i class="fas fa-bell"></i> {{ t('nav.notifications') }}</h6>
                     <div class="mb-3">
-                        <label for="telegram_chat_id" class="form-label">Telegram Chat ID</label>
-                        <input type="text" class="form-control" id="telegram_chat_id" name="telegram_chat_id"
-                               placeholder="1150922 или -1001234567890"
-                               maxlength="100">
-                        <div class="form-text small">ID личного чата или группы для уведомлений</div>
+                        <label for="telegram_chat_id" class="form-label">{{ t('users.telegram') }}</label>
+                        <input type="text" class="form-control" id="telegram_chat_id" name="telegram_chat_id" placeholder="1150922 / -1001234567890" maxlength="100">
                     </div>
-
                     <div class="mb-3">
-                        <label for="email_for_alerts" class="form-label">Email для алертов</label>
-                        <input type="email" class="form-control" id="email_for_alerts" name="email_for_alerts"
-                               placeholder="user@example.com" maxlength="254">
+                        <label for="email_for_alerts" class="form-label">{{ t('users.alert_email') }}</label>
+                        <input type="email" class="form-control" id="email_for_alerts" name="email_for_alerts" placeholder="user@example.com" maxlength="254">
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save"></i> Сохранить
-                    </button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('common.cancel') }}</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> {{ t('common.save') }}</button>
                 </div>
             </form>
         </div>
@@ -153,8 +131,12 @@
 </div>
 
 <script nonce="__MIRVMON_CSP_NONCE__">
+const userModalLabels = {
+    create: {{ t('users.add')|json_encode|raw }},
+    edit: {{ t('common.edit')|json_encode|raw }}
+};
 function openCreateModal() {
-    document.getElementById('modalTitle').textContent = 'Добавить пользователя';
+    document.getElementById('modalTitle').textContent = userModalLabels.create;
     document.getElementById('user_id').value = '';
     document.getElementById('username').value = '';
     document.getElementById('email').value = '';
@@ -166,9 +148,8 @@ function openCreateModal() {
     document.getElementById('email_for_alerts').value = '';
     document.getElementById('userForm').action = '/admin/users/save';
 }
-
 function openEditModal(id, username, email, role, telegramChatId, emailForAlerts) {
-    document.getElementById('modalTitle').textContent = 'Редактировать пользователя';
+    document.getElementById('modalTitle').textContent = userModalLabels.edit;
     document.getElementById('user_id').value = id;
     document.getElementById('username').value = username;
     document.getElementById('email').value = email === '' ? '' : email;
@@ -181,23 +162,12 @@ function openEditModal(id, username, email, role, telegramChatId, emailForAlerts
     document.getElementById('email_for_alerts').value = emailForAlerts === '' ? '' : emailForAlerts;
     document.getElementById('userForm').action = '/admin/users/save';
 }
-
 const createUserButton = document.querySelector('[data-user-create]');
-if (createUserButton) {
-    createUserButton.addEventListener('click', openCreateModal);
-}
+if (createUserButton) createUserButton.addEventListener('click', openCreateModal);
 document.querySelectorAll('[data-user-edit]').forEach(function(button) {
     button.addEventListener('click', function() {
-        openEditModal(
-            button.dataset.userId,
-            button.dataset.username,
-            button.dataset.email,
-            button.dataset.role,
-            button.dataset.telegramChatId,
-            button.dataset.emailForAlerts
-        );
+        openEditModal(button.dataset.userId, button.dataset.username, button.dataset.email, button.dataset.role, button.dataset.telegramChatId, button.dataset.emailForAlerts);
     });
 });
 </script>
-
 {% endblock %}
