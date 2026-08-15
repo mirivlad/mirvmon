@@ -127,7 +127,7 @@ jobs:
             go build -trimpath -buildvcs=false -o /tmp/mirvmon-agent.exe ./cmd/mirvmon-agent
 
   container:
-    name: Container and Compose
+    name: Container and Compose / amd64
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
@@ -158,15 +158,39 @@ jobs:
           file: docker/Dockerfile
           platforms: linux/amd64
           build-args: |
-            APP_VERSION=ci
+            APP_VERSION=${{ github.ref_type == 'tag' && github.ref_name || 'ci' }}
           load: true
           tags: mirvmon:test
           cache-from: type=gha,scope=release-linux-amd64
           cache-to: type=gha,mode=max,scope=release-linux-amd64
 
+  container-arm64:
+    name: Container / arm64
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 25
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configure Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Build production image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/arm64
+          build-args: |
+            APP_VERSION=${{ github.ref_type == 'tag' && github.ref_name || 'ci' }}
+          load: true
+          tags: mirvmon:test-arm64
+          cache-from: type=gha,scope=release-linux-arm64
+          cache-to: type=gha,mode=max,scope=release-linux-arm64
+
   publish-platform:
     name: Publish ${{ matrix.platform }}
-    needs: [php, frontend, agent, container]
+    needs: [php, frontend, agent, container, container-arm64]
     if: github.ref_type == 'tag'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
