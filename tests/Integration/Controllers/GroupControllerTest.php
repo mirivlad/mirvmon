@@ -135,7 +135,21 @@ final class GroupControllerTest extends TestCase
             'group_id' => $this->groupId,
             'age' => $age,
         ]);
+        $serverId = (int) $statement?->fetchColumn();
 
-        return (int) $statement?->fetchColumn();
+        self::$pdo?->prepare(
+            'INSERT INTO agent_tokens (server_id, token_hash, last_used_at)
+             VALUES (
+                :server_id,
+                :token_hash,
+                CURRENT_TIMESTAMP - CAST(:age AS interval)
+             )'
+        )->execute([
+            'server_id' => $serverId,
+            'token_hash' => hash('sha256', 'group-controller-' . $serverId),
+            'age' => $age,
+        ]);
+
+        return $serverId;
     }
 }

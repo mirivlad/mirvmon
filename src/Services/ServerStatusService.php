@@ -23,8 +23,8 @@ final class ServerStatusService
             return 'offline';
         }
 
-        $lastMetricsAt = $this->date($server['last_metrics_at'] ?? null);
-        if ($lastMetricsAt === null) {
+        $lastContactAt = $this->date($server['last_contact_at'] ?? null);
+        if ($lastContactAt === null) {
             return 'offline';
         }
 
@@ -32,7 +32,7 @@ final class ServerStatusService
         $offlineTimeout = max(0, (int) ($server['offline_timeout_seconds'] ?? 300));
         if (
             $offlineTimeout > 0
-            && $now->getTimestamp() - $lastMetricsAt->getTimestamp() > $offlineTimeout
+            && $now->getTimestamp() - $lastContactAt->getTimestamp() > $offlineTimeout
         ) {
             return 'offline';
         }
@@ -55,10 +55,10 @@ final class ServerStatusService
         $now ??= new DateTimeImmutable();
 
         return array_map(function (array $server) use ($now): array {
-            $lastMetricsAt = $this->date($server['last_metrics_at'] ?? null);
-            $server['seconds_since_update'] = $lastMetricsAt === null
+            $lastContactAt = $this->date($server['last_contact_at'] ?? null);
+            $server['seconds_since_update'] = $lastContactAt === null
                 ? null
-                : max(0, $now->getTimestamp() - $lastMetricsAt->getTimestamp());
+                : max(0, $now->getTimestamp() - $lastContactAt->getTimestamp());
             $server['status'] = $this->status($server, $now);
             $server['platform'] = $this->platform->classify(
                 is_string($server['os_version'] ?? null)

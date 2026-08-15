@@ -64,6 +64,13 @@ final class DashboardReadModelTest extends TestCase
             SQL
         );
         $this->serverId = (int) $server?->fetchColumn();
+        self::$pdo?->prepare(
+            'INSERT INTO agent_tokens (server_id, token_hash, last_used_at)
+             VALUES (:server_id, :token_hash, CURRENT_TIMESTAMP)'
+        )->execute([
+            'server_id' => $this->serverId,
+            'token_hash' => hash('sha256', str_repeat('d', 64)),
+        ]);
 
         $metricId = (int) self::$pdo?->query(
             "SELECT id FROM metric_names WHERE name = 'cpu_load'"
@@ -152,7 +159,7 @@ final class DashboardReadModelTest extends TestCase
         self::assertStringContainsString('CPU сейчас', $detailHtml);
         self::assertStringContainsString('40%', $detailHtml);
         self::assertStringContainsString('id="agent-tab"', $detailHtml);
-        self::assertStringContainsString('Создать ключ', $detailHtml);
+        self::assertStringContainsString('Отозвать ключ', $detailHtml);
         self::assertStringContainsString('fab fa-linux', $detailHtml);
         self::assertStringContainsString('title="Debian GNU/Linux 12"', $detailHtml);
         self::assertStringContainsString('server-status-online', $detailHtml);

@@ -194,6 +194,7 @@ final class GroupController
                 servers.description,
                 servers.is_active,
                 servers.last_metrics_at,
+                max(agent_tokens.last_used_at) AS last_contact_at,
                 servers.offline_timeout_seconds,
                 count(alerts.id) FILTER (
                     WHERE alerts.severity = 'warning'
@@ -202,6 +203,7 @@ final class GroupController
                     WHERE alerts.severity = 'critical'
                 ) AS critical_alerts
             FROM servers
+            LEFT JOIN agent_tokens ON agent_tokens.server_id = servers.id
             LEFT JOIN alerts
               ON alerts.server_id = servers.id
              AND alerts.resolved = FALSE

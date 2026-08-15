@@ -35,9 +35,9 @@ final class ServerStatusServiceTest extends TestCase
     /** @return iterable<string, array{array<string, mixed>, string}> */
     public static function statusCases(): iterable
     {
-        yield 'no samples' => [[
+        yield 'no contact' => [[
             'is_active' => true,
-            'last_metrics_at' => null,
+            'last_contact_at' => null,
             'offline_timeout_seconds' => 300,
             'warning_alerts' => 0,
             'critical_alerts' => 0,
@@ -45,7 +45,7 @@ final class ServerStatusServiceTest extends TestCase
 
         yield 'stale for short timeout' => [[
             'is_active' => true,
-            'last_metrics_at' => '2026-07-30T11:57:59+00:00',
+            'last_contact_at' => '2026-07-30T11:57:59+00:00',
             'offline_timeout_seconds' => 120,
             'warning_alerts' => 0,
             'critical_alerts' => 0,
@@ -53,7 +53,7 @@ final class ServerStatusServiceTest extends TestCase
 
         yield 'fresh for long timeout' => [[
             'is_active' => true,
-            'last_metrics_at' => '2026-07-30T11:57:59+00:00',
+            'last_contact_at' => '2026-07-30T11:57:59+00:00',
             'offline_timeout_seconds' => 600,
             'warning_alerts' => 0,
             'critical_alerts' => 0,
@@ -61,7 +61,7 @@ final class ServerStatusServiceTest extends TestCase
 
         yield 'zero disables stale timeout' => [[
             'is_active' => true,
-            'last_metrics_at' => '2026-07-01T00:00:00+00:00',
+            'last_contact_at' => '2026-07-01T00:00:00+00:00',
             'offline_timeout_seconds' => 0,
             'warning_alerts' => 0,
             'critical_alerts' => 0,
@@ -69,7 +69,7 @@ final class ServerStatusServiceTest extends TestCase
 
         yield 'warning alert' => [[
             'is_active' => true,
-            'last_metrics_at' => '2026-07-30T11:59:00+00:00',
+            'last_contact_at' => '2026-07-30T11:59:00+00:00',
             'offline_timeout_seconds' => 300,
             'warning_alerts' => 1,
             'critical_alerts' => 0,
@@ -77,7 +77,7 @@ final class ServerStatusServiceTest extends TestCase
 
         yield 'critical takes priority' => [[
             'is_active' => true,
-            'last_metrics_at' => '2026-07-30T11:59:00+00:00',
+            'last_contact_at' => '2026-07-30T11:59:00+00:00',
             'offline_timeout_seconds' => 300,
             'warning_alerts' => 2,
             'critical_alerts' => 1,
@@ -85,7 +85,7 @@ final class ServerStatusServiceTest extends TestCase
 
         yield 'offline takes priority over alerts' => [[
             'is_active' => true,
-            'last_metrics_at' => '2026-07-30T11:00:00+00:00',
+            'last_contact_at' => '2026-07-30T11:00:00+00:00',
             'offline_timeout_seconds' => 300,
             'warning_alerts' => 0,
             'critical_alerts' => 1,
@@ -93,7 +93,25 @@ final class ServerStatusServiceTest extends TestCase
 
         yield 'inactive server is offline' => [[
             'is_active' => false,
-            'last_metrics_at' => '2026-07-30T11:59:59+00:00',
+            'last_contact_at' => '2026-07-30T11:59:59+00:00',
+            'offline_timeout_seconds' => 300,
+            'warning_alerts' => 0,
+            'critical_alerts' => 0,
+        ], 'offline'];
+
+        yield 'agent clock skew does not affect liveness' => [[
+            'is_active' => true,
+            'last_metrics_at' => '2026-07-30T11:00:00+00:00',
+            'last_contact_at' => '2026-07-30T11:59:50+00:00',
+            'offline_timeout_seconds' => 300,
+            'warning_alerts' => 0,
+            'critical_alerts' => 0,
+        ], 'online'];
+
+        yield 'fresh sample timestamp cannot fake liveness' => [[
+            'is_active' => true,
+            'last_metrics_at' => '2026-07-30T12:00:00+00:00',
+            'last_contact_at' => '2026-07-30T11:00:00+00:00',
             'offline_timeout_seconds' => 300,
             'warning_alerts' => 0,
             'critical_alerts' => 0,
@@ -105,7 +123,7 @@ final class ServerStatusServiceTest extends TestCase
         $servers = $this->service->enrich([
             [
                 'is_active' => true,
-                'last_metrics_at' => '2026-07-30T11:59:00+00:00',
+                'last_contact_at' => '2026-07-30T11:59:00+00:00',
                 'offline_timeout_seconds' => 300,
                 'active_alerts' => 0,
                 'warning_alerts' => 0,
@@ -113,7 +131,7 @@ final class ServerStatusServiceTest extends TestCase
             ],
             [
                 'is_active' => true,
-                'last_metrics_at' => '2026-07-30T11:59:00+00:00',
+                'last_contact_at' => '2026-07-30T11:59:00+00:00',
                 'offline_timeout_seconds' => 300,
                 'active_alerts' => 2,
                 'warning_alerts' => 1,
@@ -121,7 +139,7 @@ final class ServerStatusServiceTest extends TestCase
             ],
             [
                 'is_active' => true,
-                'last_metrics_at' => '2026-07-30T10:00:00+00:00',
+                'last_contact_at' => '2026-07-30T10:00:00+00:00',
                 'offline_timeout_seconds' => 300,
                 'active_alerts' => 1,
                 'warning_alerts' => 1,
@@ -151,7 +169,7 @@ final class ServerStatusServiceTest extends TestCase
     {
         $server = $this->service->enrich([[
             'is_active' => true,
-            'last_metrics_at' => '2026-07-30T11:59:00+00:00',
+            'last_contact_at' => '2026-07-30T11:59:00+00:00',
             'offline_timeout_seconds' => 300,
             'warning_alerts' => 1,
             'critical_alerts' => 0,

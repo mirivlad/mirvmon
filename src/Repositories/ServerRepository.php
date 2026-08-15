@@ -86,6 +86,7 @@ final class ServerRepository
                 servers.display_metrics,
                 servers.is_active,
                 servers.last_metrics_at,
+                agent_tokens.last_used_at AS last_contact_at,
                 servers.last_service_check_at,
                 servers.offline_timeout_seconds,
                 servers.notify_on_offline,
@@ -99,6 +100,7 @@ final class ServerRepository
                 COALESCE(latest_metrics.metrics, '{}'::jsonb) AS latest_metrics,
                 COALESCE(server_thresholds.thresholds, '{}'::jsonb) AS thresholds
             FROM servers
+            LEFT JOIN agent_tokens ON agent_tokens.server_id = servers.id
             LEFT JOIN server_groups AS groups ON groups.id = servers.group_id
             LEFT JOIN latest_metrics ON latest_metrics.server_id = servers.id
             LEFT JOIN active_alerts ON active_alerts.server_id = servers.id
@@ -131,13 +133,15 @@ final class ServerRepository
             <<<'SQL'
             SELECT
                 servers.*,
+                agent_tokens.last_used_at AS last_contact_at,
                 groups.name AS group_name,
                 groups.icon AS group_icon,
                 groups.color AS group_color,
                 COALESCE(alert_counts.warning_alerts, 0) AS warning_alerts,
                 COALESCE(alert_counts.critical_alerts, 0) AS critical_alerts,
-                servers.last_metrics_at AS last_seen
+                agent_tokens.last_used_at AS last_seen
             FROM servers
+            LEFT JOIN agent_tokens ON agent_tokens.server_id = servers.id
             LEFT JOIN server_groups AS groups ON groups.id = servers.group_id
             LEFT JOIN LATERAL (
                 SELECT
