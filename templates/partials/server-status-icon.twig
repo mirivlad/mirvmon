@@ -9,18 +9,9 @@
     critical: 'критическое состояние',
     offline: 'нет актуальных данных'
 }[server.status]|default('состояние неизвестно') %}
-{% set status_color = {
-    online: 'var(--app-online)',
-    warning: 'var(--app-warning)',
-    critical: 'var(--app-critical)',
-    offline: 'var(--app-offline)'
-}[server.status]|default('var(--app-offline)') %}
-{% set status_icon_class = icon_container_class|default('server-platform-icon') %}
-{% set status_icon_size = status_icon_class == 'server-status-icon' ? '34px' : '1.65rem' %}
-<span class="{{ status_icon_class }}"
-      style="display:inline-flex;width:{{ status_icon_size }};height:{{ status_icon_size }};flex:0 0 {{ status_icon_size }};align-items:center;justify-content:center;color:#fff;background:{{ status_color }};border-radius:50%;box-shadow:0 0 0 1px rgba(23,32,51,.08);"
+<span class="{{ icon_container_class|default('server-platform-icon') }} server-status-emblem"
       aria-label="{{ platform.tooltip }}, {{ status_text }}"
-      title="{{ platform.tooltip }}, {{ status_text }}" data-bs-toggle="tooltip">
+      title="{{ platform.tooltip }}" data-bs-toggle="tooltip">
     <i{% if icon_id|default('') %} id="{{ icon_id }}"{% endif %}
        class="{{ platform.icon_class }}" aria-hidden="true"></i>
 </span>
