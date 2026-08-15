@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\I18n\Translator;
+use App\I18n\TwigTranslation;
 use App\Repositories\ServerRepository;
 use App\Services\ServerStatusService;
 use DateTimeImmutable;
@@ -17,8 +19,10 @@ final class DashboardController
     public function __construct(
         private readonly Twig $twig,
         private readonly ServerRepository $servers,
-        private readonly ServerStatusService $status
+        private readonly ServerStatusService $status,
+        private readonly Translator $translator = new Translator()
     ) {
+        TwigTranslation::register($this->twig->getEnvironment(), $this->translator);
     }
 
     /** @param array<string, string> $args */
@@ -44,7 +48,7 @@ final class DashboardController
         }
 
         return $this->twig->render($response, 'dashboard.twig', [
-            'title' => 'Дашборд мониторинга',
+            'title' => $this->translator->trans('dashboard.title'),
             'stats' => $this->status->summary($servers, $this->servers->groupCount()),
             'groups' => $groups,
         ]);

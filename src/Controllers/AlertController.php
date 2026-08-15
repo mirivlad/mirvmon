@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\I18n\Translator;
+use App\I18n\TwigTranslation;
 use App\Repositories\NotificationOutboxRepository;
 use DateTimeImmutable;
 use PDO;
@@ -19,8 +20,9 @@ final class AlertController
         private readonly PDO $pdo,
         private readonly Twig $twig,
         private readonly NotificationOutboxRepository $outbox,
-        private readonly Translator $translator
+        private readonly Translator $translator = new Translator()
     ) {
+        TwigTranslation::register($this->twig->getEnvironment(), $this->translator);
     }
 
     /** @param array<string, string> $args */

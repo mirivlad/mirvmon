@@ -20,6 +20,7 @@ use App\Controllers\SetupController;
 use App\Database\ConnectionFactory;
 use App\Domain\Metrics\MetricsValidator;
 use App\I18n\Translator;
+use App\I18n\TwigTranslation;
 use App\Repositories\AgentUpdateRepository;
 use App\Repositories\AppSettingsRepository;
 use App\Repositories\MaintenanceWindowRepository;
@@ -87,12 +88,19 @@ final class Bootstrap
     {
         $container = new Container();
         $pdo ??= ConnectionFactory::fromEnvironment();
+        $appSettings = new AppSettingsRepository($pdo);
+        $translator = new Translator(
+            $appSettings,
+            (string) ($settings['translations_path'] ?? dirname(__DIR__, 2) . '/translations')
+        );
+        $translator->refreshLocale();
 
         $twig = Twig::create((string) $settings['templates_path'], [
             'cache' => $settings['twig_cache'],
             'auto_reload' => ($settings['app_env'] ?? 'production') !== 'production',
             'strict_variables' => ($settings['app_env'] ?? 'production') !== 'production',
         ]);
+        TwigTranslation::register($twig->getEnvironment(), $translator);
         $twig->getEnvironment()->addGlobal(
             'app_version',
             (string) ($settings['app_version'] ?? 'development')
@@ -101,18 +109,8 @@ final class Bootstrap
         $container->set('settings', $settings);
         $container->set(PDO::class, $pdo);
         $container->set(Twig::class, $twig);
-        $container->set(
-            AppSettingsRepository::class,
-            static fn (Container $container): AppSettingsRepository =>
-                new AppSettingsRepository($container->get(PDO::class))
-        );
-        $container->set(
-            Translator::class,
-            static fn (Container $container): Translator => new Translator(
-                $container->get(AppSettingsRepository::class),
-                (string) ($settings['translations_path'] ?? dirname(__DIR__, 2) . '/translations')
-            )
-        );
+        $container->set(AppSettingsRepository::class, $appSettings);
+        $container->set(Translator::class, $translator);
         $container->set(
             ServerRepository::class,
             static fn (Container $container): ServerRepository => new ServerRepository(
@@ -208,7 +206,8 @@ final class Bootstrap
             static fn (Container $container): NotificationSettingsRepository =>
                 new NotificationSettingsRepository(
                     $container->get(PDO::class),
-                    $container->get(SecretCipher::class)
+                    $container->get(SecretCipher::class),
+                    $container->get(Translator::class)
                 )
         );
 
@@ -353,14 +352,12 @@ final class Bootstrap
         if ($value === '') {
             throw new RuntimeException($name . ' is required.');
         }
-
         return $value;
     }
 
     private static function environment(string $name, string $default = ''): string
     {
         $value = getenv($name);
-
         return $value === false ? $default : trim($value);
     }
 
@@ -370,7 +367,6 @@ final class Bootstrap
         if ($value === false) {
             return $default;
         }
-
         return filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? $default;
     }
 
@@ -388,7 +384,6 @@ final class Bootstrap
                 'fe80::/10',
             ];
         }
-
         return array_values(array_filter(array_map('trim', explode(',', $value))));
     }
 }

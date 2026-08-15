@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\I18n\Translator;
+use App\I18n\TwigTranslation;
 use App\Services\AgentCredentialIssuer;
 use App\Services\AgentUpdateService;
 use App\Services\DashboardMetricService;
@@ -25,8 +26,9 @@ final class ServerController
         private readonly AgentCredentialIssuer $credentials,
         private readonly ?AgentUpdateService $agentUpdates,
         private readonly ServerStatusService $status,
-        private readonly Translator $translator
+        private readonly Translator $translator = new Translator()
     ) {
+        TwigTranslation::register($this->twig->getEnvironment(), $this->translator);
     }
 
     /** @param array<string, string> $args */

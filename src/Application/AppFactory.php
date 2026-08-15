@@ -57,7 +57,7 @@ final class AppFactory
         $translator = $container->get(Translator::class);
         $translator->refreshLocale();
         $responseFactory = $app->getResponseFactory();
-        $locale = new LocaleMiddleware($translator, $twig);
+        $locale = new LocaleMiddleware($translator);
 
         $csrf = new CsrfMiddleware($responseFactory, $twig);
         $auth = new AuthMiddleware($responseFactory, $pdo);

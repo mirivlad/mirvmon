@@ -93,7 +93,11 @@ final class NotificationSettingsRepository
         $statement->execute();
     }
 
-    /** @param array<string, mixed> $input @param array<string, mixed> $current @return array<string, mixed> */
+    /**
+     * @param array<string, mixed> $input
+     * @param array<string, mixed> $current
+     * @return array<string, mixed>
+     */
     private function normalize(array $input, array $current): array
     {
         $emailEnabled = $this->toBool($input['email_enabled'] ?? false);
