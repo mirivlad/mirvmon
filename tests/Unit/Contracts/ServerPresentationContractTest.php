@@ -45,11 +45,11 @@ final class ServerPresentationContractTest extends TestCase
         $template = (string) file_get_contents($root . '/templates/servers/detail.twig');
 
         self::assertMatchesRegularExpression(
-            '/\{% if displayMetrics\|filter\(v => v starts with \'temp_\'\)\|length > 0 %\}.*?Температуры.*?\{% endif %\}/s',
+            '/\{% if displayMetrics\|filter\(v => v starts with \'temp_\'\)\|length > 0 %\}.*?t\(\'server\.temperature\.title\'\).*?\{% endif %\}/s',
             $template
         );
         self::assertStringContainsString(
-            'По выбранным температурным метрикам за этот период нет данных.',
+            "t('server.temperature.no_data')",
             $template
         );
     }
