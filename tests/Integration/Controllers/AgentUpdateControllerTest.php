@@ -98,6 +98,64 @@ final class AgentUpdateControllerTest extends TestCase
         )['state']);
     }
 
+    public function testJsonUpdateRequestReturnsPendingStatusForInlineUi(): void
+    {
+        $_SESSION['user_id'] = $this->userId;
+        $request = (new ServerRequestFactory())
+            ->createServerRequest('POST', '/')
+            ->withHeader('Accept', 'application/json');
+        $response = $this->controller->requestUpdate(
+            $request,
+            (new ResponseFactory())->createResponse(),
+            ['id' => (string) $this->serverId]
+        );
+
+        self::assertSame(202, $response->getStatusCode());
+        $payload = json_decode((string) $response->getBody(), true);
+        self::assertIsArray($payload);
+        self::assertSame('pending', $payload['status']['state']);
+        self::assertTrue($payload['status']['is_outdated']);
+        self::assertSame('v0.4.2', $payload['status']['installed_version']);
+        self::assertSame('v0.4.3', $payload['status']['available_version']);
+    }
+
+    public function testBatchStatusEndpointSupportsServerListPolling(): void
+    {
+        $request = (new ServerRequestFactory())->createServerRequest(
+            'GET',
+            '/?ids=' . $this->serverId
+        );
+        $response = $this->controller->statuses(
+            $request,
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+
+        self::assertSame(200, $response->getStatusCode());
+        $payload = json_decode((string) $response->getBody(), true);
+        self::assertIsArray($payload);
+        self::assertCount(1, $payload['statuses']);
+        $status = array_values($payload['statuses'])[0];
+        self::assertSame('update_available', $status['state']);
+        self::assertTrue($status['is_outdated']);
+        self::assertTrue($status['can_update']);
+    }
+
+    public function testBatchStatusEndpointRejectsInvalidIds(): void
+    {
+        $request = (new ServerRequestFactory())->createServerRequest(
+            'GET',
+            '/?ids=1,nope'
+        );
+        $response = $this->controller->statuses(
+            $request,
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+
+        self::assertSame(422, $response->getStatusCode());
+    }
+
     public function testAgentReportsProgressWithBearerOwnership(): void
     {
         $command = $this->service->request($this->serverId, null);

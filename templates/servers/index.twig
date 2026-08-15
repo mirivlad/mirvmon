@@ -1,6 +1,18 @@
 {% extends "layout.twig" %}
 
 {% block content %}
+{% set update_indicators = {
+    current: ['fa-circle-check', 'text-success', 'Актуальная версия агента'],
+    unknown: ['fa-circle-question', 'text-secondary', 'Версия агента не сообщена'],
+    manual_required: ['fa-triangle-exclamation', 'text-warning', 'Требуется ручное обновление агента'],
+    update_available: ['fa-circle-arrow-up', 'text-info', 'Доступно обновление агента'],
+    pending: ['fa-clock', 'text-secondary', 'Обновление ожидает агента'],
+    accepted: ['fa-circle-check', 'text-info', 'Команда обновления принята'],
+    downloading: ['fa-download', 'text-info', 'Агент скачивает обновление'],
+    installing: ['fa-gears', 'text-warning', 'Агент устанавливает обновление'],
+    awaiting_restart: ['fa-rotate', 'text-warning', 'Проверяется новая версия агента'],
+    failed: ['fa-circle-xmark', 'text-danger', 'Обновление агента не выполнено']
+} %}
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -17,15 +29,21 @@
                     <form id="server-filters" method="get" action="/servers" data-server-filter-form>
                         <input type="hidden" name="sort" value="{{ sort }}">
                         <input type="hidden" name="direction" value="{{ direction|lower }}">
+                        <input type="hidden" name="agent" value="" data-agent-filter-value>
                     </form>
+                    {% if session.role == 'admin' %}
+                    <form id="agent-update-csrf" class="d-none" aria-hidden="true">
+                        {% include "partials/csrf.twig" %}
+                    </form>
+                    {% endif %}
                     <table class="table table-striped">
                         <thead>
                             <tr>
-                                <th><a href="{{ sort_urls.name }}" class="link-dark text-decoration-none">Название{% if sort == 'name' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}</a></th>
-                                <th><a href="{{ sort_urls.address }}" class="link-dark text-decoration-none">Адрес{% if sort == 'address' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}</a></th>
-                                <th><a href="{{ sort_urls.group }}" class="link-dark text-decoration-none">Группа{% if sort == 'group' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}</a></th>
-                                <th><a href="{{ sort_urls.description }}" class="link-dark text-decoration-none">Описание{% if sort == 'description' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}</a></th>
-                                <th><a href="{{ sort_urls.last_metrics }}" class="link-dark text-decoration-none">Последние метрики{% if sort == 'last_metrics' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}</a></th>
+                                <th><a href="{{ sort_urls.name }}" data-server-sort-link class="link-dark text-decoration-none">Название{% if sort == 'name' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}</a></th>
+                                <th><a href="{{ sort_urls.address }}" data-server-sort-link class="link-dark text-decoration-none">Адрес{% if sort == 'address' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}</a></th>
+                                <th><a href="{{ sort_urls.group }}" data-server-sort-link class="link-dark text-decoration-none">Группа{% if sort == 'group' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}</a></th>
+                                <th><a href="{{ sort_urls.description }}" data-server-sort-link class="link-dark text-decoration-none">Описание{% if sort == 'description' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}</a></th>
+                                <th><a href="{{ sort_urls.last_metrics }}" data-server-sort-link class="link-dark text-decoration-none">Последние метрики{% if sort == 'last_metrics' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}</a></th>
                                 <th>Агент</th>
                                 <th>Действия</th>
                             </tr>
@@ -35,12 +53,26 @@
                                 <th><input form="server-filters" class="form-control form-control-sm" type="search" name="group" value="{{ filters.group }}" aria-label="Поиск по группе" placeholder="Поиск"></th>
                                 <th><input form="server-filters" class="form-control form-control-sm" type="search" name="description" value="{{ filters.description }}" aria-label="Поиск по описанию" placeholder="Поиск"></th>
                                 <th><input form="server-filters" class="form-control form-control-sm" type="search" name="last_metrics" value="{{ filters.last_metrics }}" aria-label="Поиск по последним метрикам" placeholder="Поиск"></th>
-                                <th></th><th></th>
+                                <th>
+                                    <select class="form-select form-select-sm" aria-label="Фильтр по версии агента" data-agent-filter>
+                                        <option value="all">Все агенты</option>
+                                        <option value="current">Актуальные</option>
+                                        <option value="outdated">Устаревшие</option>
+                                    </select>
+                                </th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for server in servers %}
-                            <tr>
+                            {% set agent_known = server.agent_update and server.agent_update.installed_version %}
+                            {% set agent_outdated = server.agent_update and server.agent_update.is_outdated is same as(true) %}
+                            {% set agent_filter_state = agent_outdated ? '1' : (agent_known ? '0' : 'unknown') %}
+                            {% set indicator = server.agent_update ? update_indicators[server.agent_update.state]|default(update_indicators.unknown) : null %}
+                            <tr data-agent-row
+                                data-server-id="{{ server.id }}"
+                                data-agent-outdated="{{ agent_filter_state }}"
+                                data-agent-state="{{ server.agent_update.state|default('unknown') }}">
                                 <td class="server-status-{{ server.status }}">
                                     {% include "partials/server-status-icon.twig" %}
                                     {{ server.name }}
@@ -62,30 +94,25 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% if server.agent_version %}
-                                        <a href="/servers/{{ server.id }}?tab=agent" class="text-decoration-none">
-                                            <span class="badge bg-light text-dark">{{ server.agent_version }}</span>
-                                            {% if server.agent_update %}
-                                                {% set update_indicators = {
-                                                    update_available: ['fa-circle-arrow-up', 'text-info', 'Доступно обновление агента'],
-                                                    manual_required: ['fa-triangle-exclamation', 'text-warning', 'Требуется ручное обновление агента'],
-                                                    pending: ['fa-clock', 'text-secondary', 'Обновление ожидает агента'],
-                                                    accepted: ['fa-circle-check', 'text-info', 'Команда обновления принята'],
-                                                    downloading: ['fa-download', 'text-info', 'Агент скачивает обновление'],
-                                                    installing: ['fa-gears', 'text-warning', 'Агент устанавливает обновление'],
-                                                    awaiting_restart: ['fa-rotate', 'text-warning', 'Проверяется новая версия агента'],
-                                                    failed: ['fa-circle-xmark', 'text-danger', 'Обновление агента не выполнено']
-                                                } %}
-                                                {% set indicator = update_indicators[server.agent_update.state]|default(null) %}
-                                                {% if indicator %}
-                                                    <i class="fas {{ indicator[0] }} {{ indicator[1] }} ms-1"
-                                                       aria-label="{{ indicator[2] }}" title="{{ indicator[2] }}"
-                                                       data-bs-toggle="tooltip"></i>
-                                                {% endif %}
+                                    <a href="/servers/{{ server.id }}?tab=agent" class="text-decoration-none">
+                                        <span class="badge bg-light text-dark" data-agent-version>{{ server.agent_version|default('—') }}</span>
+                                    </a>
+                                    {% if server.agent_update and indicator %}
+                                        <span class="ms-1" data-agent-state-control>
+                                            {% if session.role == 'admin' and server.agent_update.can_update and server.agent_update.state in ['update_available', 'failed'] %}
+                                                <button type="button"
+                                                        class="btn btn-link btn-sm p-0 align-baseline {{ indicator[1] }}"
+                                                        data-agent-update-button
+                                                        data-update-url="/servers/{{ server.id }}/agent/update"
+                                                        title="{{ server.agent_update.state == 'failed' ? 'Повторить обновление агента' : 'Обновить агент до ' ~ server.agent_update.available_version }}"
+                                                        aria-label="{{ server.agent_update.state == 'failed' ? 'Повторить обновление агента' : 'Обновить агент' }}">
+                                                    <i class="fas {{ indicator[0] }}" aria-hidden="true"></i>
+                                                </button>
+                                            {% else %}
+                                                <i class="fas {{ indicator[0] }} {{ indicator[1] }}"
+                                                   aria-label="{{ indicator[2] }}" title="{{ indicator[2] }}"></i>
                                             {% endif %}
-                                        </a>
-                                    {% else %}
-                                        <span class="text-muted">—</span>
+                                        </span>
                                     {% endif %}
                                 </td>
                                 <td>
@@ -95,6 +122,11 @@
                                 </td>
                             </tr>
                             {% endfor %}
+                            <tr data-agent-filter-empty hidden>
+                                <td colspan="7" class="text-center text-muted py-4">
+                                    Нет серверов, подходящих под выбранный фильтр агентов.
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -111,4 +143,281 @@
         </div>
     </div>
 </div>
+
+{% if servers|length > 0 %}
+<script nonce="__MIRVMON_CSP_NONCE__">
+(() => {
+    'use strict';
+
+    const canManageAgents = {{ session.role == 'admin' ? 'true' : 'false' }};
+    const activeStates = new Set([
+        'pending',
+        'accepted',
+        'downloading',
+        'installing',
+        'awaiting_restart'
+    ]);
+    const stateMeta = {
+        current: { icon: 'fa-circle-check', className: 'text-success', label: 'Актуальная версия агента' },
+        unknown: { icon: 'fa-circle-question', className: 'text-secondary', label: 'Версия агента не сообщена' },
+        manual_required: { icon: 'fa-triangle-exclamation', className: 'text-warning', label: 'Требуется ручное обновление агента' },
+        update_available: { icon: 'fa-circle-arrow-up', className: 'text-info', label: 'Доступно обновление агента' },
+        pending: { icon: 'fa-clock', className: 'text-secondary', label: 'Обновление ожидает агента' },
+        accepted: { icon: 'fa-circle-check', className: 'text-info', label: 'Команда обновления принята' },
+        downloading: { icon: 'fa-download', className: 'text-info', label: 'Агент скачивает обновление' },
+        installing: { icon: 'fa-gears', className: 'text-warning', label: 'Агент устанавливает обновление' },
+        awaiting_restart: { icon: 'fa-rotate', className: 'text-warning', label: 'Проверяется новая версия агента' },
+        failed: { icon: 'fa-circle-xmark', className: 'text-danger', label: 'Обновление агента не выполнено' }
+    };
+    const rows = Array.from(document.querySelectorAll('[data-agent-row]'));
+    const rowsById = new Map(rows.map((row) => [row.dataset.serverId, row]));
+    const trackedServerIds = new Set();
+    const filter = document.querySelector('[data-agent-filter]');
+    const filterValue = document.querySelector('[data-agent-filter-value]');
+    const emptyState = document.querySelector('[data-agent-filter-empty]');
+    const csrfForm = document.getElementById('agent-update-csrf');
+    let pollTimer = null;
+
+    function normalizedFilter(value) {
+        return ['current', 'outdated'].includes(value) ? value : 'all';
+    }
+
+    function updateFilterUrl(value) {
+        const url = new URL(window.location.href);
+        if (value === 'all') {
+            url.searchParams.delete('agent');
+        } else {
+            url.searchParams.set('agent', value);
+        }
+        window.history.replaceState(null, '', url);
+        if (filterValue) {
+            filterValue.value = value;
+        }
+
+        document.querySelectorAll('[data-server-sort-link]').forEach((link) => {
+            const sortUrl = new URL(link.href, window.location.origin);
+            if (value === 'all') {
+                sortUrl.searchParams.delete('agent');
+            } else {
+                sortUrl.searchParams.set('agent', value);
+            }
+            link.href = sortUrl.pathname + sortUrl.search;
+        });
+    }
+
+    function applyAgentFilter() {
+        const value = filter ? normalizedFilter(filter.value) : 'all';
+        let visible = 0;
+        rows.forEach((row) => {
+            const outdated = row.dataset.agentOutdated;
+            const show = value === 'all'
+                || (value === 'current' && outdated === '0')
+                || (value === 'outdated' && outdated === '1');
+            row.hidden = !show;
+            if (show) {
+                visible += 1;
+            }
+        });
+        if (emptyState) {
+            emptyState.hidden = visible !== 0;
+        }
+        updateFilterUrl(value);
+    }
+
+    function createIcon(meta) {
+        const icon = document.createElement('i');
+        icon.className = `fas ${meta.icon} ${meta.className}`;
+        icon.setAttribute('aria-label', meta.label);
+        icon.title = meta.label;
+        return icon;
+    }
+
+    function createUpdateButton(row, status, meta) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `btn btn-link btn-sm p-0 align-baseline ${meta.className}`;
+        button.dataset.agentUpdateButton = '';
+        button.dataset.updateUrl = `/servers/${row.dataset.serverId}/agent/update`;
+        button.title = status.state === 'failed'
+            ? 'Повторить обновление агента'
+            : `Обновить агент до ${status.available_version}`;
+        button.setAttribute('aria-label', status.state === 'failed'
+            ? 'Повторить обновление агента'
+            : 'Обновить агент');
+        button.appendChild(createIcon(meta));
+        return button;
+    }
+
+    function renderStatus(row, status) {
+        const state = stateMeta[status.state] ? status.state : 'unknown';
+        const meta = stateMeta[state];
+        row.dataset.agentState = state;
+        row.dataset.agentOutdated = status.is_outdated === true
+            ? '1'
+            : (status.is_outdated === false ? '0' : 'unknown');
+
+        const version = row.querySelector('[data-agent-version]');
+        if (version) {
+            version.textContent = status.installed_version || '—';
+        }
+
+        let control = row.querySelector('[data-agent-state-control]');
+        if (!control) {
+            control = document.createElement('span');
+            control.className = 'ms-1';
+            control.dataset.agentStateControl = '';
+            const versionLink = version ? version.closest('a') : null;
+            (versionLink || version)?.after(control);
+        }
+        if (!control) {
+            return;
+        }
+        control.replaceChildren();
+
+        const actionable = canManageAgents
+            && status.can_update === true
+            && ['update_available', 'failed'].includes(state);
+        control.appendChild(actionable
+            ? createUpdateButton(row, status, meta)
+            : createIcon(meta));
+
+        if (activeStates.has(state)) {
+            trackedServerIds.add(row.dataset.serverId);
+        } else {
+            trackedServerIds.delete(row.dataset.serverId);
+        }
+        applyAgentFilter();
+    }
+
+    function renderRequesting(row) {
+        const control = row.querySelector('[data-agent-state-control]');
+        if (!control) {
+            return;
+        }
+        const icon = document.createElement('i');
+        icon.className = 'fas fa-spinner fa-spin text-info';
+        icon.title = 'Отправляем команду обновления';
+        icon.setAttribute('aria-label', 'Отправляем команду обновления');
+        control.replaceChildren(icon);
+    }
+
+    function renderRequestError(row) {
+        const control = row.querySelector('[data-agent-state-control]');
+        if (!control) {
+            return;
+        }
+        const icon = document.createElement('i');
+        icon.className = 'fas fa-triangle-exclamation text-danger';
+        icon.title = 'Не удалось отправить команду обновления';
+        icon.setAttribute('aria-label', 'Не удалось отправить команду обновления');
+        control.replaceChildren(icon);
+    }
+
+    async function fetchStatuses(serverIds) {
+        if (serverIds.length === 0) {
+            return {};
+        }
+        const response = await fetch(
+            '/api/agent-updates/status?ids=' + encodeURIComponent(serverIds.join(',')),
+            {
+                headers: { Accept: 'application/json' },
+                cache: 'no-store'
+            }
+        );
+        if (!response.ok) {
+            throw new Error('Cannot fetch agent update statuses.');
+        }
+        const payload = await response.json();
+        return payload.statuses || {};
+    }
+
+    async function refreshStatuses(serverIds) {
+        const statuses = await fetchStatuses(serverIds);
+        serverIds.forEach((serverId) => {
+            const row = rowsById.get(String(serverId));
+            const status = statuses[String(serverId)] ?? statuses[serverId];
+            if (row && status) {
+                renderStatus(row, status);
+            }
+        });
+    }
+
+    function schedulePoll(delay = 2000) {
+        window.clearTimeout(pollTimer);
+        if (trackedServerIds.size === 0) {
+            pollTimer = null;
+            return;
+        }
+        pollTimer = window.setTimeout(pollStatuses, delay);
+    }
+
+    async function pollStatuses() {
+        const ids = Array.from(trackedServerIds);
+        try {
+            await refreshStatuses(ids);
+            schedulePoll();
+        } catch (error) {
+            console.error(error);
+            schedulePoll(5000);
+        }
+    }
+
+    document.addEventListener('click', async (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) {
+            return;
+        }
+        const button = target.closest('[data-agent-update-button]');
+        if (!(button instanceof HTMLButtonElement) || !csrfForm) {
+            return;
+        }
+        const row = button.closest('[data-agent-row]');
+        if (!(row instanceof HTMLTableRowElement)) {
+            return;
+        }
+
+        button.disabled = true;
+        renderRequesting(row);
+        try {
+            const response = await fetch(button.dataset.updateUrl, {
+                method: 'POST',
+                headers: { Accept: 'application/json' },
+                body: new FormData(csrfForm)
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.status) {
+                throw new Error(payload.error || 'Agent update request failed.');
+            }
+            renderStatus(row, payload.status);
+            trackedServerIds.add(row.dataset.serverId);
+            schedulePoll(1000);
+        } catch (error) {
+            console.error(error);
+            renderRequestError(row);
+            window.setTimeout(async () => {
+                try {
+                    await refreshStatuses([row.dataset.serverId]);
+                } catch (refreshError) {
+                    console.error(refreshError);
+                }
+            }, 2000);
+        }
+    });
+
+    if (filter) {
+        const initial = normalizedFilter(new URL(window.location.href).searchParams.get('agent'));
+        filter.value = initial;
+        filter.addEventListener('change', applyAgentFilter);
+    }
+
+    rows.forEach((row) => {
+        if (activeStates.has(row.dataset.agentState)) {
+            trackedServerIds.add(row.dataset.serverId);
+        }
+    });
+    applyAgentFilter();
+    schedulePoll();
+})();
+</script>
+{% endif %}
 {% endblock %}

@@ -87,6 +87,10 @@ final class AppFactory
                 self::controller($container, DashboardController::class, 'getDashboardData')
             );
             $group->get(
+                '/api/agent-updates/status',
+                self::controller($container, AgentUpdateController::class, 'statuses')
+            );
+            $group->get(
                 '/api/servers/{id}/metrics',
                 self::controller($container, MetricsApiController::class, 'getServerMetrics')
             );
