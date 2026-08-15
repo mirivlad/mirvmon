@@ -18,7 +18,7 @@ final class RememberMeContractTest extends TestCase
         $template = (string) file_get_contents($root . '/templates/login.twig');
 
         self::assertStringContainsString('name="remember_me"', $template);
-        self::assertStringContainsString('Запомнить меня на 30 дней', $template);
+        self::assertStringContainsString("t('auth.login.remember')", $template);
         self::assertStringContainsString("\$body['remember_me']", $controller);
         self::assertStringContainsString("\$_SESSION['_remember_until']", $controller);
         self::assertStringContainsString('REMEMBER_ME_SECONDS = 2592000', $middleware);
