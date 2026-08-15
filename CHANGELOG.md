@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Server metric display settings now expose only dashboard-capable metrics from
+  recent agent samples, hiding stale legacy names and internal helper values.
+- Added paired disk I/O charts, grouped network choices, OS uptime history, and
+  an independent stepped online/offline availability history with downtime and
+  outage statistics.
+- Linux agents now report the canonical `temp_system` temperature metric and
+  ignore pseudo-filesystems such as tmpfs, procfs, sysfs, and cgroups when
+  discovering filesystem-usage charts.
+- Availability history is recorded independently from offline notification
+  preferences, while `offline_timeout_seconds = 0` consistently disables
+  offline transitions.
+
 ## 0.4.11
 
 - Server liveness and offline/recovery notifications now use the MirvMon-side
