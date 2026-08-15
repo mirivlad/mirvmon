@@ -4,8 +4,14 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\I18n\Translator;
+
 final class ServerPlatformService
 {
+    public function __construct(private readonly ?Translator $translator = null)
+    {
+    }
+
     /**
      * @return array{
      *     family: 'windows'|'linux'|'unknown',
@@ -32,9 +38,9 @@ final class ServerPlatformService
             $tooltip = $osVersion;
         } else {
             $tooltip = match ($family) {
-                'windows' => 'Windows · точная версия не сообщена',
-                'linux' => 'Linux · точная версия не сообщена',
-                default => 'ОС не сообщена',
+                'windows' => $this->translator?->trans('platform.windows_unknown') ?? 'Windows',
+                'linux' => $this->translator?->trans('platform.linux_unknown') ?? 'Linux',
+                default => $this->translator?->trans('platform.unknown') ?? 'Unknown OS',
             };
         }
 

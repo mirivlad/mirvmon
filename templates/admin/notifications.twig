@@ -1,107 +1,66 @@
 {% extends "layout.twig" %}
+{% set page_title = t('notifications.title') %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col-12">
-        <h2><i class="fas fa-bell"></i> Настройки уведомлений</h2>
-        <p class="text-muted">
-            Доставка выполняется фоновым worker. Секреты хранятся в зашифрованном виде
-            и никогда не выводятся обратно в браузер.
-        </p>
-    </div>
-</div>
+<div class="row mb-4"><div class="col-12">
+    <h2><i class="fas fa-bell"></i> {{ t('notifications.title') }}</h2>
+    <p class="text-muted">{{ t('notifications.subtitle') }}</p>
+</div></div>
 
 <form method="post" action="/admin/notifications/save">
     {% include "partials/csrf.twig" %}
-
     <div class="row">
         <div class="col-lg-6 mb-4">
             <div class="card h-100">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="fas fa-envelope"></i> Email (SMTP)</h5>
-                </div>
+                <div class="card-header bg-primary text-white"><h5 class="mb-0"><i class="fas fa-envelope"></i> {{ t('notifications.email.title') }}</h5></div>
                 <div class="card-body">
                     <div class="form-check form-switch mb-3">
-                        <input class="form-check-input" type="checkbox"
-                               name="email_enabled" id="email_enabled"
-                               {% if settings.email_enabled %}checked{% endif %}>
-                        <label class="form-check-label" for="email_enabled">
-                            Включить Email-уведомления
-                        </label>
+                        <input class="form-check-input" type="checkbox" name="email_enabled" id="email_enabled" {% if settings.email_enabled %}checked{% endif %}>
+                        <label class="form-check-label" for="email_enabled">{{ t('notifications.email.enable') }}</label>
                     </div>
-
                     <div class="row g-3">
                         <div class="col-md-8">
-                            <label for="smtp_host" class="form-label">SMTP-сервер</label>
-                            <input type="text" class="form-control" id="smtp_host"
-                                   name="smtp_host" value="{{ settings.smtp_host|default('') }}"
-                                   placeholder="smtp.example.net" maxlength="255">
+                            <label for="smtp_host" class="form-label">{{ t('notifications.smtp.host') }}</label>
+                            <input type="text" class="form-control" id="smtp_host" name="smtp_host" value="{{ settings.smtp_host|default('') }}" placeholder="smtp.example.net" maxlength="255">
                         </div>
                         <div class="col-md-4">
-                            <label for="smtp_port" class="form-label">Порт</label>
-                            <input type="number" class="form-control" id="smtp_port"
-                                   name="smtp_port" value="{{ settings.smtp_port|default(587) }}"
-                                   min="1" max="65535">
+                            <label for="smtp_port" class="form-label">{{ t('notifications.smtp.port') }}</label>
+                            <input type="number" class="form-control" id="smtp_port" name="smtp_port" value="{{ settings.smtp_port|default(587) }}" min="1" max="65535">
                         </div>
                         <div class="col-12">
-                            <label for="smtp_username" class="form-label">Логин</label>
-                            <input type="text" class="form-control" id="smtp_username"
-                                   name="smtp_username"
-                                   value="{{ settings.smtp_username|default('') }}"
-                                   autocomplete="username" maxlength="255">
+                            <label for="smtp_username" class="form-label">{{ t('notifications.smtp.username') }}</label>
+                            <input type="text" class="form-control" id="smtp_username" name="smtp_username" value="{{ settings.smtp_username|default('') }}" autocomplete="username" maxlength="255">
                         </div>
                         <div class="col-12">
                             <label for="smtp_password" class="form-label">
-                                Пароль
-                                {% if settings.has_smtp_password %}
-                                    <span class="badge bg-success">сохранён</span>
-                                {% endif %}
+                                {{ t('notifications.smtp.password') }}
+                                {% if settings.has_smtp_password %}<span class="badge bg-success">{{ t('notifications.smtp.password_saved') }}</span>{% endif %}
                             </label>
-                            <input type="password" class="form-control" id="smtp_password"
-                                   name="smtp_password" value="" autocomplete="new-password"
-                                   placeholder="{{ settings.has_smtp_password ? 'Оставьте пустым, чтобы не менять' : 'Пароль SMTP' }}">
+                            <input type="password" class="form-control" id="smtp_password" name="smtp_password" value="" autocomplete="new-password"
+                                   placeholder="{{ settings.has_smtp_password ? t('notifications.smtp.password_keep') : t('notifications.smtp.password') }}">
                             {% if settings.has_smtp_password %}
                             <div class="form-check mt-2">
-                                <input class="form-check-input" type="checkbox"
-                                       name="clear_smtp_password" id="clear_smtp_password">
-                                <label class="form-check-label" for="clear_smtp_password">
-                                    Удалить сохранённый пароль
-                                </label>
+                                <input class="form-check-input" type="checkbox" name="clear_smtp_password" id="clear_smtp_password">
+                                <label class="form-check-label" for="clear_smtp_password">{{ t('notifications.smtp.password_clear') }}</label>
                             </div>
                             {% endif %}
                         </div>
                         <div class="col-md-4">
-                            <label for="smtp_encryption" class="form-label">Шифрование</label>
+                            <label for="smtp_encryption" class="form-label">{{ t('notifications.smtp.encryption') }}</label>
                             <select class="form-select" id="smtp_encryption" name="smtp_encryption">
-                                <option value="tls" {% if settings.smtp_encryption == 'tls' %}selected{% endif %}>
-                                    STARTTLS
-                                </option>
-                                <option value="ssl" {% if settings.smtp_encryption == 'ssl' %}selected{% endif %}>
-                                    Implicit TLS
-                                </option>
-                                <option value="none" {% if settings.smtp_encryption == 'none' %}selected{% endif %}>
-                                    Без TLS
-                                </option>
+                                <option value="tls" {% if settings.smtp_encryption == 'tls' %}selected{% endif %}>STARTTLS</option>
+                                <option value="ssl" {% if settings.smtp_encryption == 'ssl' %}selected{% endif %}>Implicit TLS</option>
+                                <option value="none" {% if settings.smtp_encryption == 'none' %}selected{% endif %}>{{ t('notifications.smtp.no_tls') }}</option>
                             </select>
                         </div>
                         <div class="col-md-8">
-                            <label for="smtp_from_email" class="form-label">Адрес отправителя</label>
-                            <input type="email" class="form-control" id="smtp_from_email"
-                                   name="smtp_from_email"
-                                   value="{{ settings.smtp_from_email|default('') }}"
-                                   placeholder="monitor@example.net" maxlength="254">
+                            <label for="smtp_from_email" class="form-label">{{ t('notifications.smtp.from') }}</label>
+                            <input type="email" class="form-control" id="smtp_from_email" name="smtp_from_email" value="{{ settings.smtp_from_email|default('') }}" placeholder="monitor@example.net" maxlength="254">
                         </div>
                         <div class="col-12">
-                            <label for="smtp_recipients" class="form-label">Адреса получателей</label>
-                            <input type="text" class="form-control" id="smtp_recipients"
-                                   name="smtp_recipients"
-                                   value="{{ settings.smtp_recipients|default([])|join(', ') }}"
-                                   placeholder="ops@example.net, dev@example.net">
-                            <div class="form-text">
-                                Несколько адресов через запятую, до двадцати. Каждый
-                                получает отдельное письмо, поэтому отказ одного адреса
-                                не задерживает остальные.
-                            </div>
+                            <label for="smtp_recipients" class="form-label">{{ t('notifications.smtp.recipients') }}</label>
+                            <input type="text" class="form-control" id="smtp_recipients" name="smtp_recipients" value="{{ settings.smtp_recipients|default([])|join(', ') }}" placeholder="ops@example.net, dev@example.net">
+                            <div class="form-text">{{ t('notifications.smtp.recipients_help') }}</div>
                         </div>
                     </div>
                 </div>
@@ -110,117 +69,69 @@
 
         <div class="col-lg-6 mb-4">
             <div class="card h-100">
-                <div class="card-header bg-info text-white">
-                    <h5 class="mb-0"><i class="fab fa-telegram-plane"></i> Telegram Bot</h5>
-                </div>
+                <div class="card-header bg-info text-white"><h5 class="mb-0"><i class="fab fa-telegram-plane"></i> {{ t('notifications.telegram.title') }}</h5></div>
                 <div class="card-body">
                     <div class="form-check form-switch mb-3">
-                        <input class="form-check-input" type="checkbox"
-                               name="telegram_enabled" id="telegram_enabled"
-                               {% if settings.telegram_enabled %}checked{% endif %}>
-                        <label class="form-check-label" for="telegram_enabled">
-                            Включить Telegram-уведомления
-                        </label>
+                        <input class="form-check-input" type="checkbox" name="telegram_enabled" id="telegram_enabled" {% if settings.telegram_enabled %}checked{% endif %}>
+                        <label class="form-check-label" for="telegram_enabled">{{ t('notifications.telegram.enable') }}</label>
                     </div>
-
                     <div class="row g-3">
                         <div class="col-12">
                             <label for="telegram_bot_token" class="form-label">
-                                Токен бота
-                                {% if settings.has_telegram_bot_token %}
-                                    <span class="badge bg-success">сохранён</span>
-                                {% endif %}
+                                {{ t('notifications.telegram.token') }}
+                                {% if settings.has_telegram_bot_token %}<span class="badge bg-success">{{ t('notifications.smtp.password_saved') }}</span>{% endif %}
                             </label>
-                            <input type="password" class="form-control"
-                                   id="telegram_bot_token" name="telegram_bot_token"
-                                   value="" autocomplete="new-password"
-                                   placeholder="{{ settings.has_telegram_bot_token ? 'Оставьте пустым, чтобы не менять' : '123456:ABC-DEF…' }}">
+                            <input type="password" class="form-control" id="telegram_bot_token" name="telegram_bot_token" value="" autocomplete="new-password"
+                                   placeholder="{{ settings.has_telegram_bot_token ? t('notifications.smtp.password_keep') : '123456:ABC-DEF…' }}">
                             {% if settings.has_telegram_bot_token %}
                             <div class="form-check mt-2">
-                                <input class="form-check-input" type="checkbox"
-                                       name="clear_telegram_bot_token"
-                                       id="clear_telegram_bot_token">
-                                <label class="form-check-label" for="clear_telegram_bot_token">
-                                    Удалить сохранённый токен
-                                </label>
+                                <input class="form-check-input" type="checkbox" name="clear_telegram_bot_token" id="clear_telegram_bot_token">
+                                <label class="form-check-label" for="clear_telegram_bot_token">{{ t('notifications.telegram.clear_token') }}</label>
                             </div>
                             {% endif %}
                         </div>
                         <div class="col-12">
-                            <label for="telegram_chat_id" class="form-label">Chat ID</label>
-                            <input type="text" class="form-control" id="telegram_chat_id"
-                                   name="telegram_chat_id"
-                                   value="{{ settings.telegram_chat_id|default('') }}"
-                                   placeholder="-1001234567890" maxlength="100">
+                            <label for="telegram_chat_id" class="form-label">{{ t('notifications.telegram.chat_id') }}</label>
+                            <input type="text" class="form-control" id="telegram_chat_id" name="telegram_chat_id" value="{{ settings.telegram_chat_id|default('') }}" placeholder="-1001234567890" maxlength="100">
                         </div>
                     </div>
 
                     <hr class="my-4">
-                    <h6>Прокси только для Telegram</h6>
-                    <p class="text-muted small">
-                        Выберите «Без прокси» для прямого соединения. SOCKS5H
-                        разрешает DNS через прокси. Прокси, слушающий на самом
-                        хосте Docker, доступен по имени
-                        <code>host.docker.internal</code>: внутри контейнера
-                        <code>127.0.0.1</code> указывает на сам контейнер.
-                    </p>
+                    <h6>{{ t('notifications.telegram.proxy_title') }}</h6>
+                    <p class="text-muted small">{{ t('notifications.telegram.proxy_help') }} <code>host.docker.internal</code></p>
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <label for="telegram_proxy_type" class="form-label">Тип</label>
-                            <select class="form-select" id="telegram_proxy_type"
-                                    name="telegram_proxy_type">
-                                <option value="">Без прокси</option>
+                            <label for="telegram_proxy_type" class="form-label">{{ t('notifications.proxy.type') }}</label>
+                            <select class="form-select" id="telegram_proxy_type" name="telegram_proxy_type">
+                                <option value="">{{ t('notifications.proxy.none') }}</option>
                                 {% for type in ['http', 'https', 'socks4', 'socks4a', 'socks5', 'socks5h'] %}
-                                <option value="{{ type }}"
-                                        {% if settings.telegram_proxy_type == type %}selected{% endif %}>
-                                    {{ type|upper }}
-                                </option>
+                                <option value="{{ type }}" {% if settings.telegram_proxy_type == type %}selected{% endif %}>{{ type|upper }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="col-md-5">
-                            <label for="telegram_proxy_host" class="form-label">Хост</label>
-                            <input type="text" class="form-control"
-                                   id="telegram_proxy_host" name="telegram_proxy_host"
-                                   value="{{ settings.telegram_proxy_host|default('') }}"
-                                   placeholder="host.docker.internal" maxlength="255">
+                            <label for="telegram_proxy_host" class="form-label">{{ t('notifications.proxy.host') }}</label>
+                            <input type="text" class="form-control" id="telegram_proxy_host" name="telegram_proxy_host" value="{{ settings.telegram_proxy_host|default('') }}" placeholder="host.docker.internal" maxlength="255">
                         </div>
                         <div class="col-md-3">
-                            <label for="telegram_proxy_port" class="form-label">Порт</label>
-                            <input type="number" class="form-control"
-                                   id="telegram_proxy_port" name="telegram_proxy_port"
-                                   value="{{ settings.telegram_proxy_port|default('') }}"
-                                   min="1" max="65535" placeholder="1080">
+                            <label for="telegram_proxy_port" class="form-label">{{ t('notifications.proxy.port') }}</label>
+                            <input type="number" class="form-control" id="telegram_proxy_port" name="telegram_proxy_port" value="{{ settings.telegram_proxy_port|default('') }}" min="1" max="65535" placeholder="1080">
                         </div>
                         <div class="col-md-6">
-                            <label for="telegram_proxy_username" class="form-label">Логин прокси</label>
-                            <input type="text" class="form-control"
-                                   id="telegram_proxy_username"
-                                   name="telegram_proxy_username"
-                                   value="{{ settings.telegram_proxy_username|default('') }}"
-                                   autocomplete="username" maxlength="255">
+                            <label for="telegram_proxy_username" class="form-label">{{ t('notifications.proxy.username') }}</label>
+                            <input type="text" class="form-control" id="telegram_proxy_username" name="telegram_proxy_username" value="{{ settings.telegram_proxy_username|default('') }}" autocomplete="username" maxlength="255">
                         </div>
                         <div class="col-md-6">
                             <label for="telegram_proxy_password" class="form-label">
-                                Пароль прокси
-                                {% if settings.has_telegram_proxy_password %}
-                                    <span class="badge bg-success">сохранён</span>
-                                {% endif %}
+                                {{ t('notifications.proxy.password') }}
+                                {% if settings.has_telegram_proxy_password %}<span class="badge bg-success">{{ t('notifications.smtp.password_saved') }}</span>{% endif %}
                             </label>
-                            <input type="password" class="form-control"
-                                   id="telegram_proxy_password"
-                                   name="telegram_proxy_password" value=""
-                                   autocomplete="new-password"
-                                   placeholder="{{ settings.has_telegram_proxy_password ? 'Оставьте пустым, чтобы не менять' : '' }}">
+                            <input type="password" class="form-control" id="telegram_proxy_password" name="telegram_proxy_password" value="" autocomplete="new-password"
+                                   placeholder="{{ settings.has_telegram_proxy_password ? t('notifications.smtp.password_keep') : '' }}">
                             {% if settings.has_telegram_proxy_password %}
                             <div class="form-check mt-2">
-                                <input class="form-check-input" type="checkbox"
-                                       name="clear_telegram_proxy_password"
-                                       id="clear_telegram_proxy_password">
-                                <label class="form-check-label"
-                                       for="clear_telegram_proxy_password">
-                                    Удалить пароль прокси
-                                </label>
+                                <input class="form-check-input" type="checkbox" name="clear_telegram_proxy_password" id="clear_telegram_proxy_password">
+                                <label class="form-check-label" for="clear_telegram_proxy_password">{{ t('notifications.proxy.clear_password') }}</label>
                             </div>
                             {% endif %}
                         </div>
@@ -231,60 +142,35 @@
     </div>
 
     <div class="card mb-4">
-        <div class="card-header">
-            <h5 class="mb-0"><i class="fas fa-sliders-h"></i> Уровни событий</h5>
-        </div>
+        <div class="card-header"><h5 class="mb-0"><i class="fas fa-sliders-h"></i> {{ t('notifications.events.title') }}</h5></div>
         <div class="card-body d-flex flex-wrap gap-4 align-items-end">
             <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox"
-                       name="notify_on_warning" id="notify_on_warning"
-                       {% if settings.notify_on_warning %}checked{% endif %}>
-                <label class="form-check-label" for="notify_on_warning">
-                    Предупреждения
-                </label>
+                <input class="form-check-input" type="checkbox" name="notify_on_warning" id="notify_on_warning" {% if settings.notify_on_warning %}checked{% endif %}>
+                <label class="form-check-label" for="notify_on_warning">{{ t('notifications.events.warning') }}</label>
             </div>
             <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox"
-                       name="notify_on_critical" id="notify_on_critical"
-                       {% if settings.notify_on_critical %}checked{% endif %}>
-                <label class="form-check-label" for="notify_on_critical">
-                    Критические события
-                </label>
+                <input class="form-check-input" type="checkbox" name="notify_on_critical" id="notify_on_critical" {% if settings.notify_on_critical %}checked{% endif %}>
+                <label class="form-check-label" for="notify_on_critical">{{ t('notifications.events.critical') }}</label>
             </div>
             <div>
-                <label for="cooldown_seconds" class="form-label mb-1">
-                    Пауза между одинаковыми уведомлениями
-                </label>
+                <label for="cooldown_seconds" class="form-label mb-1">{{ t('notifications.cooldown') }}</label>
                 <div class="input-group input-group-sm" style="max-width: 220px;">
-                    <input type="number" class="form-control" id="cooldown_seconds"
-                           name="cooldown_seconds" min="0" max="86400"
-                           value="{{ settings.cooldown_seconds|default(0) }}">
-                    <span class="input-group-text">сек</span>
+                    <input type="number" class="form-control" id="cooldown_seconds" name="cooldown_seconds" min="0" max="86400" value="{{ settings.cooldown_seconds|default(0) }}">
+                    <span class="input-group-text">{{ t('common.seconds') }}</span>
                 </div>
-                <div class="form-text">
-                    Не чаще одного сообщения об одном и том же событии по одной
-                    метрике одного сервера. Восстановления — отдельное событие,
-                    их пауза не задерживает. Ноль отключает ограничение.
-                </div>
+                <div class="form-text">{{ t('notifications.cooldown_help') }}</div>
             </div>
         </div>
     </div>
 
     <div class="d-flex flex-wrap justify-content-between gap-2 mb-4">
-        <button type="submit" class="btn btn-primary">
-            <i class="fas fa-save"></i> Сохранить настройки
-        </button>
-        <button type="submit" formaction="/admin/notifications/test"
-                class="btn btn-outline-success">
-            <i class="fas fa-paper-plane"></i> Сохранить и отправить тест
-        </button>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> {{ t('notifications.save') }}</button>
+        <button type="submit" formaction="/admin/notifications/test" class="btn btn-outline-success"><i class="fas fa-paper-plane"></i> {{ t('notifications.save_test') }}</button>
     </div>
 </form>
 
 <div class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-2">
-    <span>Состояние доставки, ошибки и повторная отправка находятся в отдельной очереди.</span>
-    <a class="btn btn-sm btn-outline-primary" href="/admin/notifications/queue">
-        <i class="fas fa-list-check"></i> Открыть очередь уведомлений
-    </a>
+    <span>{{ t('notifications.queue_hint') }}</span>
+    <a class="btn btn-sm btn-outline-primary" href="/admin/notifications/queue"><i class="fas fa-list-check"></i> {{ t('notifications.open_queue') }}</a>
 </div>
 {% endblock %}

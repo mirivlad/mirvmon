@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\I18n\Translator;
 use App\Middlewares\SessionSecurityMiddleware;
 use App\Middlewares\TrustedProxyMiddleware;
 use DateTimeImmutable;
@@ -21,16 +22,14 @@ final class AuthController
     public function __construct(
         private readonly PDO $pdo,
         private readonly Twig $twig,
-        private readonly string $applicationKey
+        private readonly string $applicationKey,
+        private readonly Translator $translator
     ) {
     }
 
     /** @param array<string, string> $arguments */
-    public function form(
-        ServerRequestInterface $request,
-        ResponseInterface $response,
-        array $arguments
-    ): ResponseInterface {
+    public function form(ServerRequestInterface $request, ResponseInterface $response, array $arguments): ResponseInterface
+    {
         if (isset($_SESSION['user_id'])) {
             return $response->withHeader('Location', '/')->withStatus(302);
         }
@@ -39,16 +38,13 @@ final class AuthController
         }
 
         return $this->twig->render($response, 'login.twig', [
-            'title' => 'Вход в систему',
+            'title' => $this->translator->trans('auth.login.title'),
         ]);
     }
 
     /** @param array<string, string> $arguments */
-    public function login(
-        ServerRequestInterface $request,
-        ResponseInterface $response,
-        array $arguments
-    ): ResponseInterface {
+    public function login(ServerRequestInterface $request, ResponseInterface $response, array $arguments): ResponseInterface
+    {
         if ($this->userCount() === 0) {
             return $response->withHeader('Location', '/setup')->withStatus(302);
         }
@@ -61,9 +57,7 @@ final class AuthController
         $attemptUsername = strlen($username) <= 80 ? $username : '__invalid__';
 
         if ($this->isRateLimited($attemptUsername, $sourceHash)) {
-            $_SESSION['flash_message'] = 'Неверное имя пользователя или пароль';
-            $_SESSION['flash_type'] = 'error';
-
+            $this->invalidCredentials();
             return $response->withHeader('Location', '/login')->withStatus(302);
         }
 
@@ -83,9 +77,7 @@ final class AuthController
         $valid = is_array($user) && (bool) $user['is_active'] && $passwordValid;
         if (!$valid) {
             $this->recordAttempt($attemptUsername, $sourceHash, false);
-            $_SESSION['flash_message'] = 'Неверное имя пользователя или пароль';
-            $_SESSION['flash_type'] = 'error';
-
+            $this->invalidCredentials();
             return $response->withHeader('Location', '/login')->withStatus(302);
         }
 
@@ -119,14 +111,16 @@ final class AuthController
     }
 
     /** @param array<string, string> $arguments */
-    public function logout(
-        ServerRequestInterface $request,
-        ResponseInterface $response,
-        array $arguments
-    ): ResponseInterface {
+    public function logout(ServerRequestInterface $request, ResponseInterface $response, array $arguments): ResponseInterface
+    {
         $_SESSION['_destroyed'] = true;
-
         return $response->withHeader('Location', '/login')->withStatus(302);
+    }
+
+    private function invalidCredentials(): void
+    {
+        $_SESSION['flash_message'] = $this->translator->trans('auth.login.invalid');
+        $_SESSION['flash_type'] = 'error';
     }
 
     private function userCount(): int
@@ -140,7 +134,6 @@ final class AuthController
             TrustedProxyMiddleware::CLIENT_IP_ATTRIBUTE,
             $request->getServerParams()['REMOTE_ADDR'] ?? 'unknown'
         );
-
         return hash_hmac('sha256', $address, $this->applicationKey);
     }
 
@@ -162,7 +155,6 @@ final class AuthController
         $statement->bindValue(':succeeded', false, PDO::PARAM_BOOL);
         $statement->bindValue(':cutoff', $cutoff);
         $statement->execute();
-
         return (int) $statement->fetchColumn() >= 5;
     }
 

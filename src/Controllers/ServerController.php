@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\I18n\Translator;
 use App\Services\AgentCredentialIssuer;
 use App\Services\AgentUpdateService;
 use App\Services\DashboardMetricService;
@@ -23,16 +24,14 @@ final class ServerController
         private readonly Twig $twig,
         private readonly AgentCredentialIssuer $credentials,
         private readonly ?AgentUpdateService $agentUpdates,
-        private readonly ServerStatusService $status
+        private readonly ServerStatusService $status,
+        private readonly Translator $translator
     ) {
     }
 
     /** @param array<string, string> $args */
-    public function index(
-        Request $request,
-        Response $response,
-        array $args
-    ): Response {
+    public function index(Request $request, Response $response, array $args): Response
+    {
         $query = $request->getQueryParams();
         $sortColumns = [
             'name' => 'servers.name',
@@ -104,15 +103,13 @@ final class ServerController
                 $filters,
                 [
                     'sort' => $key,
-                    'direction' => $sort === $key && $direction === 'ASC'
-                        ? 'desc'
-                        : 'asc',
+                    'direction' => $sort === $key && $direction === 'ASC' ? 'desc' : 'asc',
                 ]
             ));
         }
 
         return $this->twig->render($response, 'servers/index.twig', [
-            'title' => 'Серверы',
+            'title' => $this->translator->trans('servers.title'),
             'servers' => $servers,
             'filters' => $filters,
             'sort' => $sort,
@@ -122,23 +119,17 @@ final class ServerController
     }
 
     /** @param array<string, string> $args */
-    public function create(
-        Request $request,
-        Response $response,
-        array $args
-    ): Response {
+    public function create(Request $request, Response $response, array $args): Response
+    {
         return $this->twig->render($response, 'servers/create.twig', [
-            'title' => 'Добавить сервер',
+            'title' => $this->translator->trans('servers.create.title'),
             'groups' => $this->groups(),
         ]);
     }
 
     /** @param array<string, string> $args */
-    public function store(
-        Request $request,
-        Response $response,
-        array $args
-    ): Response {
+    public function store(Request $request, Response $response, array $args): Response
+    {
         $body = $request->getParsedBody();
         if (!is_array($body)) {
             return $this->redirect($response, '/servers/create');
@@ -152,21 +143,12 @@ final class ServerController
         try {
             $statement = $this->pdo->prepare(
                 'INSERT INTO servers (
-                    name,
-                    address,
-                    group_id,
-                    description,
-                    offline_timeout_seconds,
-                    notify_on_offline
+                    name, address, group_id, description,
+                    offline_timeout_seconds, notify_on_offline
                  ) VALUES (
-                    :name,
-                    :address,
-                    :group_id,
-                    :description,
-                    :offline_timeout_seconds,
-                    TRUE
-                 )
-                 RETURNING id'
+                    :name, :address, :group_id, :description,
+                    :offline_timeout_seconds, TRUE
+                 ) RETURNING id'
             );
             $statement->execute([
                 'name' => $name,
@@ -176,41 +158,26 @@ final class ServerController
                 'offline_timeout_seconds' => $this->defaultOfflineTimeout(),
             ]);
             $serverId = (int) $statement->fetchColumn();
-
-            $config = $this->pdo->prepare(
-                'INSERT INTO agent_configs (server_id) VALUES (:server_id)'
-            );
+            $config = $this->pdo->prepare('INSERT INTO agent_configs (server_id) VALUES (:server_id)');
             $config->execute(['server_id' => $serverId]);
             $installerTokens = $this->installerTokens($serverId);
             $this->commitTransaction($ownsTransaction, 'server_store');
 
-            return $this->createdResponse(
-                $response,
-                $serverId,
-                $name,
-                $installerTokens
-            );
+            return $this->createdResponse($response, $serverId, $name, $installerTokens);
         } catch (Throwable) {
             $this->rollbackTransaction($ownsTransaction, 'server_store');
-
             return $this->redirect($response, '/servers/create');
         }
     }
 
     /** @param array<string, string> $args */
-    public function edit(
-        Request $request,
-        Response $response,
-        array $args
-    ): Response {
+    public function edit(Request $request, Response $response, array $args): Response
+    {
         $serverId = $this->serverId($args);
         if ($serverId === null) {
             return $this->redirect($response, '/servers');
         }
-
-        $statement = $this->pdo->prepare(
-            'SELECT * FROM servers WHERE id = :server_id'
-        );
+        $statement = $this->pdo->prepare('SELECT * FROM servers WHERE id = :server_id');
         $statement->execute(['server_id' => $serverId]);
         $server = $statement->fetch();
         if (!is_array($server)) {
@@ -218,36 +185,26 @@ final class ServerController
         }
 
         $savedMetrics = $this->decodeStringList($server['display_metrics'] ?? '[]');
-        $display = (new DashboardMetricService($this->pdo))->displayOptions(
-            $serverId,
-            $savedMetrics
-        );
-        $agentToken = $this->pdo->prepare(
-            'SELECT token_generation FROM agent_tokens WHERE server_id = :server_id'
-        );
+        $display = (new DashboardMetricService($this->pdo))->displayOptions($serverId, $savedMetrics);
+        $agentToken = $this->pdo->prepare('SELECT token_generation FROM agent_tokens WHERE server_id = :server_id');
         $agentToken->execute(['server_id' => $serverId]);
         $tokenGeneration = $agentToken->fetchColumn();
 
         return $this->twig->render($response, 'servers/edit.twig', [
-            'title' => 'Редактировать сервер',
+            'title' => $this->translator->trans('servers.edit.title', ['name' => (string) $server['name']]),
             'server' => $server,
             'groups' => $this->groups(),
             'has_agent_token' => $tokenGeneration !== false,
             'requires_token_rotation' => $tokenGeneration === null,
             'display_groups' => $display['groups'],
             'selected_widgets' => $display['selected'],
-            'server_notification_emails' => $this->decodeStringList(
-                $server['notification_emails'] ?? '[]'
-            ),
+            'server_notification_emails' => $this->decodeStringList($server['notification_emails'] ?? '[]'),
         ]);
     }
 
     /** @param array<string, string> $args */
-    public function update(
-        Request $request,
-        Response $response,
-        array $args
-    ): Response {
+    public function update(Request $request, Response $response, array $args): Response
+    {
         $serverId = $this->serverId($args);
         $body = $request->getParsedBody();
         if ($serverId === null || !is_array($body)) {
@@ -261,24 +218,15 @@ final class ServerController
             ['options' => ['min_range' => 0, 'max_range' => 86400]]
         );
         $displayWidgets = $body['display_widgets'] ?? [];
-        if (
-            $name === ''
-            || strlen($name) > 100
-            || $timeout === false
-            || !is_array($displayWidgets)
-        ) {
+        if ($name === '' || strlen($name) > 100 || $timeout === false || !is_array($displayWidgets)) {
             return $this->redirect($response, '/servers/' . $serverId . '/edit');
         }
         $displayWidgets = array_values(array_unique(array_filter(
             $displayWidgets,
             static fn (mixed $widget): bool =>
-                is_string($widget)
-                && preg_match('/^[a-z][a-z0-9_]{0,99}$/', $widget) === 1
+                is_string($widget) && preg_match('/^[a-z][a-z0-9_]{0,99}$/', $widget) === 1
         )));
-        $displayMetrics = (new DashboardMetricService($this->pdo))->expandWidgets(
-            $serverId,
-            $displayWidgets
-        );
+        $displayMetrics = (new DashboardMetricService($this->pdo))->expandWidgets($serverId, $displayWidgets);
 
         $statement = $this->pdo->prepare(
             'UPDATE servers SET
@@ -298,7 +246,6 @@ final class ServerController
         } catch (InvalidArgumentException $exception) {
             $_SESSION['flash_message'] = $exception->getMessage();
             $_SESSION['flash_type'] = 'danger';
-
             return $this->redirect($response, '/servers/' . $serverId . '/edit');
         }
         $statement->execute([
@@ -309,10 +256,7 @@ final class ServerController
             'description' => $this->optionalString($body['description'] ?? null),
             'offline_timeout_seconds' => $timeout,
             'notify_on_offline' => isset($body['notify_on_offline']),
-            'notification_telegram_chat_id' => $this->optionalString(
-                $body['notification_telegram_chat_id'] ?? null,
-                100
-            ),
+            'notification_telegram_chat_id' => $this->optionalString($body['notification_telegram_chat_id'] ?? null, 100),
             'notification_emails' => json_encode($recipientEmails, JSON_THROW_ON_ERROR),
             'display_metrics' => json_encode($displayMetrics, JSON_THROW_ON_ERROR),
         ]);
@@ -321,36 +265,24 @@ final class ServerController
     }
 
     /** @param array<string, string> $args */
-    public function delete(
-        Request $request,
-        Response $response,
-        array $args
-    ): Response {
+    public function delete(Request $request, Response $response, array $args): Response
+    {
         $serverId = $this->serverId($args);
         if ($serverId !== null) {
-            $statement = $this->pdo->prepare(
-                'DELETE FROM servers WHERE id = :server_id'
-            );
+            $statement = $this->pdo->prepare('DELETE FROM servers WHERE id = :server_id');
             $statement->execute(['server_id' => $serverId]);
         }
-
         return $this->redirect($response, '/servers');
     }
 
     /** @param array<string, string> $args */
-    public function regenerateToken(
-        Request $request,
-        Response $response,
-        array $args
-    ): Response {
+    public function regenerateToken(Request $request, Response $response, array $args): Response
+    {
         $serverId = $this->serverId($args);
         if ($serverId === null) {
             return $this->redirect($response, '/servers');
         }
-
-        $statement = $this->pdo->prepare(
-            'SELECT name FROM servers WHERE id = :server_id'
-        );
+        $statement = $this->pdo->prepare('SELECT name FROM servers WHERE id = :server_id');
         $statement->execute(['server_id' => $serverId]);
         $name = $statement->fetchColumn();
         if ($name === false) {
@@ -362,26 +294,16 @@ final class ServerController
             $this->credentials->rotate($serverId);
             $installerTokens = $this->installerTokens($serverId);
             $this->commitTransaction($ownsTransaction, 'server_regenerate');
-
-            return $this->createdResponse(
-                $response,
-                $serverId,
-                (string) $name,
-                $installerTokens
-            );
+            return $this->createdResponse($response, $serverId, (string) $name, $installerTokens);
         } catch (Throwable) {
             $this->rollbackTransaction($ownsTransaction, 'server_regenerate');
-
             return $this->redirect($response, '/servers/' . $serverId);
         }
     }
 
     /** @param array<string, string> $args */
-    public function installers(
-        Request $request,
-        Response $response,
-        array $args
-    ): Response {
+    public function installers(Request $request, Response $response, array $args): Response
+    {
         $serverId = $this->serverId($args);
         if ($serverId === null) {
             return $this->redirect($response, '/servers');
@@ -393,9 +315,8 @@ final class ServerController
             return $this->redirect($response, '/servers');
         }
         if ($this->requiresTokenRotation($serverId)) {
-            $_SESSION['flash_message'] = 'Для этого агента требуется явный отзыв ключа.';
+            $_SESSION['flash_message'] = $this->translator->trans('servers.installers.rotation_required');
             $_SESSION['flash_type'] = 'warning';
-
             return $this->redirect($response, '/servers/' . $serverId);
         }
         try {
@@ -413,42 +334,27 @@ final class ServerController
     /** @return list<array<string, mixed>> */
     private function groups(): array
     {
-        return $this->pdo->query(
-            'SELECT * FROM server_groups ORDER BY name, id'
-        )?->fetchAll() ?? [];
+        return $this->pdo->query('SELECT * FROM server_groups ORDER BY name, id')?->fetchAll() ?? [];
     }
 
     private function defaultOfflineTimeout(): int
     {
         $statement = $this->pdo->prepare(
-            "SELECT setting_value
-             FROM app_settings
-             WHERE setting_key = 'default_offline_timeout'"
+            "SELECT setting_value FROM app_settings WHERE setting_key = 'default_offline_timeout'"
         );
         $statement->execute();
         $value = $statement->fetchColumn();
         if ($value === false) {
             return 300;
         }
-
         try {
-            return max(0, min(86400, (int) json_decode(
-                (string) $value,
-                true,
-                512,
-                JSON_THROW_ON_ERROR
-            )));
+            return max(0, min(86400, (int) json_decode((string) $value, true, 512, JSON_THROW_ON_ERROR)));
         } catch (JsonException) {
             return 300;
         }
     }
 
-    /**
-     * @return array{
-     *     linux: string,
-     *     windows: string
-     * }
-     */
+    /** @return array{linux: string, windows: string} */
     private function installerTokens(int $serverId): array
     {
         return [
@@ -459,37 +365,22 @@ final class ServerController
 
     private function requiresTokenRotation(int $serverId): bool
     {
-        $statement = $this->pdo->prepare(
-            'SELECT token_generation FROM agent_tokens WHERE server_id = :server_id'
-        );
+        $statement = $this->pdo->prepare('SELECT token_generation FROM agent_tokens WHERE server_id = :server_id');
         $statement->execute(['server_id' => $serverId]);
-
         return $statement->fetchColumn() === null;
     }
 
-    /**
-     * @param array{
-     *     linux: string,
-     *     windows: string
-     * } $tokens
-     */
-    private function createdResponse(
-        Response $response,
-        int $serverId,
-        string $name,
-        array $tokens
-    ): Response {
+    /** @param array{linux: string, windows: string} $tokens */
+    private function createdResponse(Response $response, int $serverId, string $name, array $tokens): Response
+    {
         return $this->twig->render($response, 'servers/created.twig', [
-            'title' => 'Установщики агента',
+            'title' => $this->translator->trans('servers.installers.title'),
             'server' => ['id' => $serverId, 'name' => $name],
             'installer_tokens' => $tokens,
         ]);
     }
 
-    /**
-     * @return list<string>
-     * @throws InvalidArgumentException When an address is not an email.
-     */
+    /** @return list<string> */
     private function emailList(mixed $value): array
     {
         $parts = preg_split('/[,;\r\n]+/', (string) ($value ?? '')) ?: [];
@@ -501,7 +392,7 @@ final class ServerController
             }
             if (filter_var($email, FILTER_VALIDATE_EMAIL) === false || strlen($email) > 254) {
                 throw new InvalidArgumentException(
-                    'Проверьте адреса получателей: «' . $email . '» не похож на email'
+                    $this->translator->trans('servers.validation.email', ['email' => $email])
                 );
             }
             if (!in_array($email, $emails, true)) {
@@ -509,9 +400,8 @@ final class ServerController
             }
         }
         if (count($emails) > 20) {
-            throw new InvalidArgumentException('Слишком много адресов получателей');
+            throw new InvalidArgumentException($this->translator->trans('servers.validation.too_many_emails'));
         }
-
         return $emails;
     }
 
@@ -521,7 +411,6 @@ final class ServerController
             return null;
         }
         $value = trim($value);
-
         return $value === '' ? null : substr($value, 0, $maximum);
     }
 
@@ -531,7 +420,6 @@ final class ServerController
             return null;
         }
         $value = trim($value);
-
         return $value === '' ? null : substr($value, 0, 100);
     }
 
@@ -545,12 +433,7 @@ final class ServerController
         if ($value === null || $value === '') {
             return null;
         }
-        $id = filter_var(
-            $value,
-            FILTER_VALIDATE_INT,
-            ['options' => ['min_range' => 1]]
-        );
-
+        $id = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
         return $id === false ? null : $id;
     }
 
@@ -558,27 +441,17 @@ final class ServerController
     private function decodeStringList(mixed $value): array
     {
         try {
-            $decoded = is_string($value)
-                ? json_decode($value, true, 512, JSON_THROW_ON_ERROR)
-                : $value;
+            $decoded = is_string($value) ? json_decode($value, true, 512, JSON_THROW_ON_ERROR) : $value;
         } catch (JsonException) {
             return [];
         }
-
-        return is_array($decoded)
-            ? array_values(array_filter($decoded, 'is_string'))
-            : [];
+        return is_array($decoded) ? array_values(array_filter($decoded, 'is_string')) : [];
     }
 
     /** @param array<string, mixed> $args */
     private function serverId(array $args): ?int
     {
-        $serverId = filter_var(
-            $args['id'] ?? null,
-            FILTER_VALIDATE_INT,
-            ['options' => ['min_range' => 1]]
-        );
-
+        $serverId = filter_var($args['id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
         return $serverId === false ? null : $serverId;
     }
 
@@ -593,34 +466,27 @@ final class ServerController
             $this->pdo->beginTransaction();
             return true;
         }
-
         $this->pdo->exec('SAVEPOINT ' . $savepoint);
         return false;
     }
 
-    private function commitTransaction(
-        bool $ownsTransaction,
-        string $savepoint
-    ): void {
+    private function commitTransaction(bool $ownsTransaction, string $savepoint): void
+    {
         if ($ownsTransaction) {
             $this->pdo->commit();
             return;
         }
-
         $this->pdo->exec('RELEASE SAVEPOINT ' . $savepoint);
     }
 
-    private function rollbackTransaction(
-        bool $ownsTransaction,
-        string $savepoint
-    ): void {
+    private function rollbackTransaction(bool $ownsTransaction, string $savepoint): void
+    {
         if ($ownsTransaction) {
             if ($this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
             }
             return;
         }
-
         $this->pdo->exec('ROLLBACK TO SAVEPOINT ' . $savepoint);
         $this->pdo->exec('RELEASE SAVEPOINT ' . $savepoint);
     }

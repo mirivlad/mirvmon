@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\I18n\Translator;
 use App\Services\AgentUpdateService;
 use InvalidArgumentException;
 use Psr\Http\Message\ResponseInterface as Response;
@@ -11,16 +12,15 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 
 final class AgentUpdateController
 {
-    public function __construct(private readonly AgentUpdateService $updates)
-    {
+    public function __construct(
+        private readonly AgentUpdateService $updates,
+        private readonly Translator $translator
+    ) {
     }
 
     /** @param array<string, string> $args */
-    public function requestUpdate(
-        Request $request,
-        Response $response,
-        array $args
-    ): Response {
+    public function requestUpdate(Request $request, Response $response, array $args): Response
+    {
         $serverId = filter_var(
             $args['id'] ?? null,
             FILTER_VALIDATE_INT,
@@ -38,13 +38,10 @@ final class AgentUpdateController
             );
         } catch (InvalidArgumentException) {
             if ($this->wantsJson($request)) {
-                return $this->json(
-                    $response,
-                    ['error' => 'agent_update_not_available'],
-                    409
-                );
+                return $this->json($response, ['error' => 'agent_update_not_available'], 409);
             }
-
+            $_SESSION['flash_message'] = $this->translator->trans('agent.update.not_available');
+            $_SESSION['flash_type'] = 'warning';
             return $response
                 ->withHeader('Location', '/servers/' . $serverId . '?tab=agent')
                 ->withStatus(303);
@@ -55,18 +52,14 @@ final class AgentUpdateController
                 'status' => $this->updates->statusForServer((int) $serverId),
             ], 202);
         }
-
         return $response
             ->withHeader('Location', '/servers/' . $serverId . '?tab=agent')
             ->withStatus(303);
     }
 
     /** @param array<string, string> $args */
-    public function statuses(
-        Request $request,
-        Response $response,
-        array $args
-    ): Response {
+    public function statuses(Request $request, Response $response, array $args): Response
+    {
         $rawIds = $request->getQueryParams()['ids'] ?? '';
         if (!is_string($rawIds)) {
             return $this->json($response, ['error' => 'invalid_server_ids'], 422);
@@ -74,12 +67,10 @@ final class AgentUpdateController
         if ($rawIds === '') {
             return $this->json($response, ['statuses' => []], 200);
         }
-
         $parts = explode(',', $rawIds);
         if (count($parts) > 100) {
             return $this->json($response, ['error' => 'too_many_server_ids'], 422);
         }
-
         $serverIds = [];
         foreach ($parts as $part) {
             if (preg_match('/^[1-9][0-9]*$/', $part) !== 1) {
@@ -88,18 +79,14 @@ final class AgentUpdateController
             $serverIds[] = (int) $part;
         }
         $serverIds = array_values(array_unique($serverIds));
-
         return $this->json($response, [
             'statuses' => $this->updates->statusesForServers($serverIds),
         ], 200);
     }
 
     /** @param array<string, string> $args */
-    public function reportStatus(
-        Request $request,
-        Response $response,
-        array $args
-    ): Response {
+    public function reportStatus(Request $request, Response $response, array $args): Response
+    {
         $token = $this->bearerToken($request);
         $command = $args['command'] ?? '';
         $body = $request->getParsedBody();
@@ -107,10 +94,7 @@ final class AgentUpdateController
             return $this->json($response, ['error' => 'invalid_token'], 401);
         }
         if (
-            preg_match(
-                '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
-                $command
-            ) !== 1
+            preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', $command) !== 1
             || !is_array($body)
             || !is_string($body['state'] ?? null)
             || (isset($body['error_code']) && !is_string($body['error_code']))
@@ -130,16 +114,12 @@ final class AgentUpdateController
         if (!$saved) {
             return $this->json($response, ['error' => 'invalid_token'], 401);
         }
-
         return $this->json($response, ['saved' => true], 200);
     }
 
     private function wantsJson(Request $request): bool
     {
-        return str_contains(
-            strtolower($request->getHeaderLine('Accept')),
-            'application/json'
-        );
+        return str_contains(strtolower($request->getHeaderLine('Accept')), 'application/json');
     }
 
     private function bearerToken(Request $request): ?string
@@ -148,10 +128,7 @@ final class AgentUpdateController
         if (preg_match('/^Bearer ([^\s]+)$/', $header, $matches) !== 1) {
             return null;
         }
-
-        return strlen($matches[1]) >= 32 && strlen($matches[1]) <= 512
-            ? $matches[1]
-            : null;
+        return strlen($matches[1]) >= 32 && strlen($matches[1]) <= 512 ? $matches[1] : null;
     }
 
     /** @param array<string, mixed> $payload */
@@ -161,7 +138,6 @@ final class AgentUpdateController
             $payload,
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
         ));
-
         return $response
             ->withHeader('Content-Type', 'application/json; charset=UTF-8')
             ->withStatus($status);

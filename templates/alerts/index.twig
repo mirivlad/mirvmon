@@ -1,10 +1,11 @@
 {% extends "layout.twig" %}
+{% set page_title = t('alerts.title') %}
 
 {% block content %}
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h2><i class="fas fa-bell"></i> Алерты</h2>
+            <h2><i class="fas fa-bell"></i> {{ t('alerts.title') }}</h2>
         </div>
 
         <div class="card">
@@ -14,12 +15,12 @@
                     <table class="table table-striped">
                         <thead>
                             <tr>
-                                <th>Сервер</th>
-                                <th>Метрика</th>
-                                <th>Значение</th>
-                                <th>Уровень</th>
-                                <th>Время</th>
-                                <th>Действия</th>
+                                <th>{{ t('alerts.column.server') }}</th>
+                                <th>{{ t('alerts.column.metric') }}</th>
+                                <th>{{ t('alerts.column.value') }}</th>
+                                <th>{{ t('alerts.column.level') }}</th>
+                                <th>{{ t('alerts.column.time') }}</th>
+                                <th>{{ t('common.actions') }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -33,20 +34,24 @@
                                 <td>
                                     {% if alert.value is not null %}
                                         {{ alert.value|round(2) }}{{ alert.unit|default('') }}
-                                    {% else %}
-                                        —
-                                    {% endif %}
+                                    {% else %}—{% endif %}
                                 </td>
                                 <td>
                                     {% if alert.severity == 'critical' %}
-                                        <span class="badge bg-danger"><i class="fas fa-exclamation-triangle"></i> Критично</span>
+                                        <span class="badge bg-danger"><i class="fas fa-exclamation-triangle"></i> {{ t('alerts.level.critical') }}</span>
                                     {% else %}
-                                        <span class="badge bg-warning text-dark"><i class="fas fa-exclamation-circle"></i> Предупреждение</span>
+                                        <span class="badge bg-warning text-dark"><i class="fas fa-exclamation-circle"></i> {{ t('alerts.level.warning') }}</span>
                                     {% endif %}
                                 </td>
                                 <td>{{ alert.created_at|date('d.m.Y H:i:s') }}</td>
                                 <td>
-                                    {% include "partials/action-button.twig" with {form_action: '/alerts/' ~ alert.id ~ '/resolve', icon: 'fa-check', label: 'Отметить исправленным', class: 'btn-outline-success', confirm: 'Вы уверены, что хотите отметить этот алерт как исправленный?'} %}
+                                    {% include "partials/action-button.twig" with {
+                                        form_action: '/alerts/' ~ alert.id ~ '/resolve',
+                                        icon: 'fa-check',
+                                        label: t('alerts.resolve'),
+                                        class: 'btn-outline-success',
+                                        confirm: t('alerts.resolve.confirm')
+                                    } %}
                                 </td>
                             </tr>
                             {% endfor %}
@@ -56,8 +61,8 @@
                 {% else %}
                 <div class="text-center py-5">
                     <i class="fas fa-bell fa-3x text-muted mb-3"></i>
-                    <p class="lead">Нет активных алертов</p>
-                    <p class="text-muted">Все серверы работают в штатном режиме</p>
+                    <p class="lead">{{ t('alerts.empty.heading') }}</p>
+                    <p class="text-muted">{{ t('alerts.empty.text') }}</p>
                 </div>
                 {% endif %}
             </div>

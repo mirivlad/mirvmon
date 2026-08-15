@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http;
 
+use App\I18n\Translator;
 use App\Middlewares\RequestIdMiddleware;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
@@ -16,7 +17,8 @@ final class ErrorResponder
     public function __construct(
         private readonly ResponseFactoryInterface $responseFactory,
         private readonly bool $debug,
-        private readonly bool $logErrors = true
+        private readonly bool $logErrors = true,
+        private readonly ?Translator $translator = null
     ) {
     }
 
@@ -84,7 +86,7 @@ final class ErrorResponder
             return $response->withHeader('Content-Type', 'application/json');
         }
 
-        $title = match ($status) {
+        $fallbackTitle = match ($status) {
             400 => 'Некорректный запрос',
             401 => 'Требуется авторизация',
             403 => 'Доступ запрещён',
@@ -93,19 +95,28 @@ final class ErrorResponder
             413 => 'Запрос слишком большой',
             default => 'Внутренняя ошибка сервера',
         };
+        $key = in_array($status, [400, 401, 403, 404, 405, 413], true)
+            ? 'error.' . $status
+            : 'error.500';
+        $title = $this->translator?->trans($key) ?? $fallbackTitle;
+        $locale = $this->translator?->locale() ?? Translator::DEFAULT_LOCALE;
         $detail = $this->debug && $status === 500
             ? '<pre>' . htmlspecialchars($exception->getMessage(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</pre>'
             : '';
         $response->getBody()->write(
-            '<!doctype html><html lang="ru"><meta charset="utf-8"><title>'
-            . $title
+            '<!doctype html><html lang="'
+            . htmlspecialchars($locale, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+            . '"><meta charset="utf-8"><title>'
+            . htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
             . '</title><body><main><h1>'
-            . $title
+            . htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
             . '</h1>'
             . $detail
             . '</main></body></html>'
         );
 
-        return $response->withHeader('Content-Type', 'text/html; charset=utf-8');
+        return $response
+            ->withHeader('Content-Type', 'text/html; charset=utf-8')
+            ->withHeader('Content-Language', $locale);
     }
 }
