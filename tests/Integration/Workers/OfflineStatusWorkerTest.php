@@ -46,13 +46,20 @@ final class OfflineStatusWorkerTest extends TestCase
                 notify_on_offline
              ) VALUES (
                 'offline-server',
-                '2026-07-30 11:50:00+00',
+                '2026-07-30 11:59:50+00',
                 60,
                 TRUE
              )
              RETURNING id"
         );
         $this->serverId = (int) $statement?->fetchColumn();
+        self::$pdo?->prepare(
+            "INSERT INTO agent_tokens (server_id, token_hash, last_used_at)
+             VALUES (:server_id, :token_hash, '2026-07-30 11:50:00+00')"
+        )->execute([
+            'server_id' => $this->serverId,
+            'token_hash' => hash('sha256', str_repeat('c', 64)),
+        ]);
         self::$pdo?->exec(
             "UPDATE notification_settings
              SET telegram_enabled = TRUE, telegram_chat_id = '123'"
@@ -80,11 +87,11 @@ final class OfflineStatusWorkerTest extends TestCase
         self::assertSame(1, $this->tableCount('notification_outbox'));
 
         $statement = self::$pdo?->prepare(
-            'UPDATE servers SET last_metrics_at = :last_metrics_at WHERE id = :id'
+            'UPDATE agent_tokens SET last_used_at = :last_used_at WHERE server_id = :id'
         );
         $statement?->execute([
             'id' => $this->serverId,
-            'last_metrics_at' => '2026-07-30 11:59:30+00',
+            'last_used_at' => '2026-07-30 11:59:30+00',
         ]);
 
         self::assertSame(1, $this->worker->runOnce($now));
@@ -95,6 +102,21 @@ final class OfflineStatusWorkerTest extends TestCase
             )->fetchColumn()
         );
         self::assertSame(2, $this->tableCount('notification_outbox'));
+    }
+
+    public function testFreshMetricTimestampCannotMaskStaleAgentContact(): void
+    {
+        $now = new DateTimeImmutable('2026-07-30T12:00:00Z');
+
+        self::$pdo?->prepare(
+            'UPDATE servers SET last_metrics_at = :last_metrics_at WHERE id = :id'
+        )->execute([
+            'id' => $this->serverId,
+            'last_metrics_at' => '2026-07-30 12:10:00+00',
+        ]);
+
+        self::assertSame(1, $this->worker->runOnce($now));
+        self::assertSame(1, $this->tableCount('alerts'));
     }
 
     private function tableCount(string $table): int

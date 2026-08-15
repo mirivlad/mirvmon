@@ -27,8 +27,8 @@ final class OfflineStatusWorker
             $transitions = 0;
             foreach ($servers as $server) {
                 $timeout = (int) $server['offline_timeout_seconds'];
-                $lastMetricsAt = new DateTimeImmutable((string) $server['last_metrics_at']);
-                $offline = $lastMetricsAt <= $now->modify('-' . $timeout . ' seconds');
+                $lastContactAt = new DateTimeImmutable((string) $server['last_contact_at']);
+                $offline = $lastContactAt <= $now->modify('-' . $timeout . ' seconds');
                 $alertId = $server['alert_id'] === null
                     ? null
                     : (int) $server['alert_id'];
@@ -65,16 +65,18 @@ final class OfflineStatusWorker
                 servers.id,
                 servers.name,
                 servers.last_metrics_at,
+                agent_tokens.last_used_at AS last_contact_at,
                 servers.offline_timeout_seconds,
                 servers.notify_on_offline,
                 active_alert.id AS alert_id
              FROM servers
+             INNER JOIN agent_tokens ON agent_tokens.server_id = servers.id
              LEFT JOIN alerts AS active_alert
                ON active_alert.server_id = servers.id
               AND active_alert.kind = 'offline'
               AND active_alert.resolved = FALSE
              WHERE servers.is_active = TRUE
-               AND servers.last_metrics_at IS NOT NULL
+               AND agent_tokens.last_used_at IS NOT NULL
                AND (
                     servers.notify_on_offline = TRUE
                     OR active_alert.id IS NOT NULL
@@ -179,7 +181,10 @@ final class OfflineStatusWorker
             'event' => $event,
             'server_id' => (int) $server['id'],
             'server_name' => (string) $server['name'],
-            'last_metrics_at' => (string) $server['last_metrics_at'],
+            'last_contact_at' => (string) $server['last_contact_at'],
+            'last_metrics_at' => $server['last_metrics_at'] === null
+                ? null
+                : (string) $server['last_metrics_at'],
             'severity' => 'critical',
             'event_time' => $now->format(DATE_ATOM),
         ];
