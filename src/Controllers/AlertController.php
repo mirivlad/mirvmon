@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\I18n\Translator;
 use App\I18n\TwigTranslation;
+use App\Repositories\IncidentRepository;
 use App\Repositories\NotificationOutboxRepository;
 use DateTimeImmutable;
 use PDO;
@@ -20,6 +21,7 @@ final class AlertController
         private readonly PDO $pdo,
         private readonly Twig $twig,
         private readonly NotificationOutboxRepository $outbox,
+        private readonly IncidentRepository $incidents,
         private readonly Translator $translator = new Translator()
     ) {
         TwigTranslation::register($this->twig->getEnvironment(), $this->translator);
@@ -28,30 +30,27 @@ final class AlertController
     /** @param array<string, string> $args */
     public function index(Request $request, Response $response, array $args): Response
     {
-        $alerts = $this->pdo->query(
-            <<<'SQL'
-            SELECT
-                alerts.id,
-                alerts.server_id,
-                alerts.kind,
-                alerts.subject,
-                alerts.value,
-                alerts.severity,
-                alerts.created_at,
-                servers.name AS server_name,
-                COALESCE(metric_names.name, alerts.subject, alerts.kind) AS metric_name,
-                metric_names.unit
-            FROM alerts
-            INNER JOIN servers ON servers.id = alerts.server_id
-            LEFT JOIN metric_names ON metric_names.id = alerts.metric_id
-            WHERE alerts.resolved = FALSE
-            ORDER BY alerts.created_at DESC, alerts.id DESC
-            SQL
-        )?->fetchAll() ?? [];
+        $query = $request->getQueryParams();
+        $view = ($query['view'] ?? null) === 'history' ? 'history' : 'active';
+        $filters = $this->filters($query);
+        $events = $view === 'history'
+            ? $this->incidents->history($filters)
+            : $this->incidents->active($filters);
 
         return $this->twig->render($response, 'alerts/index.twig', [
-            'title' => $this->translator->trans('alerts.title'),
-            'alerts' => $alerts,
+            'title' => $this->translator->trans('incidents.title'),
+            'view' => $view,
+            'events' => $events,
+            'filters' => [
+                'server_id' => $filters['server_id'] ?? '',
+                'group_id' => $filters['group_id'] ?? '',
+                'kind' => $filters['kind'] ?? '',
+                'severity' => $filters['severity'] ?? '',
+                'from' => $this->displayDate($query['from'] ?? null),
+                'to' => $this->displayDate($query['to'] ?? null),
+            ],
+            'server_options' => $this->incidents->serverOptions(),
+            'group_options' => $this->incidents->groupOptions(),
         ]);
     }
 
@@ -71,10 +70,23 @@ final class AlertController
         try {
             $statement = $this->pdo->prepare(
                 'UPDATE alerts
-                 SET resolved = TRUE, resolved_at = CURRENT_TIMESTAMP
+                 SET resolved = TRUE,
+                     resolved_at = CURRENT_TIMESTAMP,
+                     resolved_by_user_id = :user_id,
+                     resolved_by_username = :username
                  WHERE id = :id AND resolved = FALSE'
             );
-            $statement->execute(['id' => $alertId]);
+            $userId = filter_var(
+                $_SESSION['user_id'] ?? null,
+                FILTER_VALIDATE_INT,
+                ['options' => ['min_range' => 1]]
+            );
+            $username = $_SESSION['username'] ?? null;
+            $statement->execute([
+                'id' => $alertId,
+                'user_id' => $userId === false ? null : $userId,
+                'username' => is_string($username) ? mb_substr($username, 0, 80) : null,
+            ]);
             $resolved = $statement->rowCount() === 1;
             if ($resolved) {
                 $this->announceManualResolution($alertId);
@@ -131,6 +143,64 @@ final class AlertController
             ],
             'alert:' . $alertId . ':resolved_manually'
         );
+    }
+
+    /**
+     * @param array<string, mixed> $query
+     * @return array{server_id?: int, group_id?: int, kind?: string, severity?: string, from?: string, to?: string}
+     */
+    private function filters(array $query): array
+    {
+        $filters = [];
+        foreach (['server_id', 'group_id'] as $name) {
+            $value = filter_var(
+                $query[$name] ?? null,
+                FILTER_VALIDATE_INT,
+                ['options' => ['min_range' => 1]]
+            );
+            if ($value !== false) {
+                $filters[$name] = $value;
+            }
+        }
+
+        $kind = $query['kind'] ?? null;
+        if (is_string($kind) && in_array($kind, ['metric', 'service', 'offline'], true)) {
+            $filters['kind'] = $kind;
+        }
+        $severity = $query['severity'] ?? null;
+        if (is_string($severity) && in_array($severity, ['warning', 'critical'], true)) {
+            $filters['severity'] = $severity;
+        }
+
+        $from = $this->date($query['from'] ?? null);
+        if ($from !== null) {
+            $filters['from'] = $from->format('Y-m-d 00:00:00P');
+        }
+        $to = $this->date($query['to'] ?? null);
+        if ($to !== null) {
+            $filters['to'] = $to->modify('+1 day')->format('Y-m-d 00:00:00P');
+        }
+
+        return $filters;
+    }
+
+    private function date(mixed $value): ?DateTimeImmutable
+    {
+        if (!is_string($value) || $value === '') {
+            return null;
+        }
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+        if ($date === false || $date->format('Y-m-d') !== $value) {
+            return null;
+        }
+
+        return $date;
+    }
+
+    private function displayDate(mixed $value): string
+    {
+        $date = $this->date($value);
+        return $date?->format('Y-m-d') ?? '';
     }
 
     private function timestamp(mixed $value): string
