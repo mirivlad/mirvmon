@@ -1,0 +1,38 @@
+{% set health_labels = {
+    'ok': t('system.status.ok'),
+    'warning': t('system.status.warning'),
+    'critical': t('system.status.critical'),
+    'unknown': t('system.status.unknown')
+} %}
+{% set health_classes = {
+    'ok': 'success',
+    'warning': 'warning text-dark',
+    'critical': 'danger',
+    'unknown': 'secondary'
+} %}
+<aside class="card mb-4" aria-label="{{ t('dashboard.system_health.title') }}">
+    <div class="card-body py-3 d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div class="d-flex flex-wrap align-items-center gap-3">
+            <strong><i class="fas fa-heart-pulse me-1" aria-hidden="true"></i>{{ t('dashboard.system_health.title') }}</strong>
+            <span>
+                {{ t('dashboard.system_health.application') }}:
+                <span class="badge bg-{{ health_classes[system_health.application_status]|default('secondary') }}">
+                    {{ health_labels[system_health.application_status]|default(t('system.status.unknown')) }}
+                </span>
+            </span>
+            <span>
+                {{ t('dashboard.system_health.host') }}:
+                {% if system_health.host_configured %}
+                    <span class="badge bg-{{ health_classes[system_health.host_status]|default('secondary') }}">
+                        {{ health_labels[system_health.host_status]|default(t('system.status.unknown')) }}
+                    </span>
+                {% else %}
+                    <span class="badge bg-secondary">{{ t('dashboard.system_health.host_not_configured') }}</span>
+                {% endif %}
+            </span>
+        </div>
+        {% if session.role == 'admin' %}
+            <a class="btn btn-sm btn-outline-secondary" href="/admin/system">{{ t('dashboard.system_health.details') }}</a>
+        {% endif %}
+    </div>
+</aside>
