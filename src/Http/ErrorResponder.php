@@ -42,11 +42,26 @@ final class ErrorResponder
         $status = $status >= 400 && $status <= 599 ? $status : 500;
         $requestId = (string) $request->getAttribute(RequestIdMiddleware::ATTRIBUTE, '');
         if ($status >= 500 && $requestId !== '' && $this->logErrors) {
+            $location = sprintf('%s:%d', $exception->getFile(), $exception->getLine());
             error_log(sprintf(
-                '[mirvmon] request_id=%s exception=%s',
+                '[mirvmon] request_id=%s exception=%s location=%s',
                 $requestId,
-                $exception::class
+                $exception::class,
+                $location
             ));
+            if ($this->debug) {
+                $message = preg_replace('/\s+/', ' ', $exception->getMessage()) ?? $exception->getMessage();
+                error_log(sprintf(
+                    '[mirvmon] request_id=%s message=%s',
+                    $requestId,
+                    $message
+                ));
+                error_log(sprintf(
+                    "[mirvmon] request_id=%s trace=\n%s",
+                    $requestId,
+                    $exception->getTraceAsString()
+                ));
+            }
         }
 
         $apiRequest = str_starts_with($request->getUri()->getPath(), '/api/')

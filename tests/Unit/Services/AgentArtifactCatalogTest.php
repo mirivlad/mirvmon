@@ -31,6 +31,15 @@ final class AgentArtifactCatalogTest extends TestCase
         $catalog->require('../../.env');
     }
 
+    public function testLoadsFourPartHotfixVersion(): void
+    {
+        $directory = $this->artifactDirectory(version: 'v0.4.15.2');
+
+        $catalog = AgentArtifactCatalog::load($directory);
+
+        self::assertSame('v0.4.15.2', $catalog->version());
+    }
+
     public function testRejectsManifestIntegrityAndAllowlistViolations(): void
     {
         $directory = $this->artifactDirectory();
@@ -48,7 +57,7 @@ final class AgentArtifactCatalogTest extends TestCase
     }
 
     /** @param array<string, array{filename: string, content: string}> $overrides */
-    private function artifactDirectory(array $overrides = []): string
+    private function artifactDirectory(array $overrides = [], string $version = 'v0.4.3'): string
     {
         $directory = sys_get_temp_dir() . '/mirvmon-artifacts-' . bin2hex(random_bytes(8));
         mkdir($directory, 0700, true);
@@ -69,7 +78,7 @@ final class AgentArtifactCatalogTest extends TestCase
         foreach ($overrides as $key => $value) {
             $artifacts[$key] = $value;
         }
-        $manifest = ['version' => 'v0.4.3', 'artifacts' => []];
+        $manifest = ['version' => $version, 'artifacts' => []];
         foreach ($artifacts as $key => $artifact) {
             file_put_contents($directory . '/' . $artifact['filename'], $artifact['content']);
             $manifest['artifacts'][$key] = [
