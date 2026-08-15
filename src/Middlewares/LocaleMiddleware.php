@@ -8,30 +8,11 @@ use App\I18n\Translator;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
-use Slim\Views\Twig;
-use Twig\TwigFunction;
 
 final class LocaleMiddleware
 {
-    public function __construct(
-        private readonly Translator $translator,
-        Twig $twig
-    ) {
-        $environment = $twig->getEnvironment();
-        if ($environment->getFunction('t') === null) {
-            $environment->addFunction(new TwigFunction(
-                't',
-                $this->translator->trans(...)
-            ));
-            $environment->addFunction(new TwigFunction(
-                'current_locale',
-                $this->translator->locale(...)
-            ));
-            $environment->addFunction(new TwigFunction(
-                'supported_locales',
-                $this->translator->supportedLocales(...)
-            ));
-        }
+    public function __construct(private readonly Translator $translator)
+    {
     }
 
     public function __invoke(
