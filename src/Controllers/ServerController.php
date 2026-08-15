@@ -64,12 +64,14 @@ final class ServerController
         $statement = $this->pdo->prepare(
             'SELECT
                 servers.*,
+                agent_tokens.last_used_at AS last_contact_at,
                 server_groups.name AS group_name,
                 server_groups.icon AS group_icon,
                 server_groups.color AS group_color,
                 COALESCE(alert_counts.warning_alerts, 0) AS warning_alerts,
                 COALESCE(alert_counts.critical_alerts, 0) AS critical_alerts
              FROM servers
+             LEFT JOIN agent_tokens ON agent_tokens.server_id = servers.id
              LEFT JOIN server_groups ON server_groups.id = servers.group_id
              LEFT JOIN LATERAL (
                 SELECT
