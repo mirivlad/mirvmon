@@ -8,6 +8,7 @@ use App\I18n\Translator;
 use App\I18n\TwigTranslation;
 use App\Repositories\ServerRepository;
 use App\Services\ServerStatusService;
+use App\Services\SystemHealthService;
 use DateTimeImmutable;
 use JsonException;
 use Psr\Http\Message\ResponseInterface as Response;
@@ -20,7 +21,8 @@ final class DashboardController
         private readonly Twig $twig,
         private readonly ServerRepository $servers,
         private readonly ServerStatusService $status,
-        private readonly Translator $translator = new Translator()
+        private readonly Translator $translator = new Translator(),
+        private readonly ?SystemHealthService $systemHealth = null
     ) {
         TwigTranslation::register($this->twig->getEnvironment(), $this->translator);
     }
@@ -38,7 +40,7 @@ final class DashboardController
 
             if (!isset($groups[$groupKey])) {
                 $groups[$groupKey] = [
-                    'name' => $server['group_name'] ?: 'Без группы',
+                    'name' => $server['group_name'] ?: $this->translator->trans('dashboard.ungrouped'),
                     'color' => $server['group_color'] ?: '#6c757d',
                     'icon' => $server['group_icon'] ?: 'fa-server',
                     'servers' => [],
@@ -51,6 +53,11 @@ final class DashboardController
             'title' => $this->translator->trans('dashboard.title'),
             'stats' => $this->status->summary($servers, $this->servers->groupCount()),
             'groups' => $groups,
+            'system_health' => $this->systemHealth?->summary() ?? [
+                'application_status' => 'unknown',
+                'host_status' => 'unknown',
+                'host_configured' => false,
+            ],
         ]);
     }
 

@@ -69,7 +69,7 @@ func TestLinuxCollectorCollectsFixtureHostState(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{
-		"cpu_load", "ram_used", "ram_total_gb", "uptime", "disk_used",
+		"cpu_load", "ram_used", "ram_total_gb", "uptime", "load_1", "load_5", "load_15", "disk_used",
 		"disk_used_root", "disk_total_gb_root", "disk_read_sda", "disk_write_sda",
 		"net_in_eth0", "net_out_eth0", "temp_system",
 	} {
@@ -79,6 +79,9 @@ func TestLinuxCollectorCollectsFixtureHostState(t *testing.T) {
 	}
 	if measurement.Metrics["cpu_load"] != 40 {
 		t.Fatalf("cpu_load=%v, want 40", measurement.Metrics["cpu_load"])
+	}
+	if measurement.Metrics["load_1"] != 0.42 || measurement.Metrics["load_5"] != 0.31 || measurement.Metrics["load_15"] != 0.27 {
+		t.Fatalf("unexpected load averages: %#v", measurement.Metrics)
 	}
 	if measurement.Metrics["disk_read_sda"] != 5120 || measurement.Metrics["disk_write_sda"] != 10240 {
 		t.Fatalf("unexpected disk rates: %#v", measurement.Metrics)
@@ -122,6 +125,7 @@ func writeLinuxFixture(t *testing.T, root string) {
 		"etc/nethserver-release":               "NethServer 7.9.2009\n",
 		"proc/meminfo":                         "MemTotal:       1048576 kB\nMemAvailable:    524288 kB\n",
 		"proc/uptime":                          "1234.00 0.00\n",
+		"proc/loadavg":                         "0.42 0.31 0.27 1/100 1234\n",
 		"proc/1/comm":                          "init\n",
 		"proc/self/mountinfo":                  "36 25 0:32 / / rw,relatime - ext4 /dev/sda rw\n",
 		"sys/class/thermal/thermal_zone0/temp": "42000\n",

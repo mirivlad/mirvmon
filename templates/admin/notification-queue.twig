@@ -88,19 +88,6 @@
         </div>
     </div>
     <div class="card-body">
-        <div class="mb-3">
-            <span class="text-muted small me-2">{{ t('queue.workers') }}</span>
-            {% if heartbeats is empty %}
-                <span class="badge bg-danger">{{ t('queue.no_heartbeat') }}</span>
-            {% else %}
-                {% for heartbeat in heartbeats %}
-                    <span class="badge {% if heartbeat.stale %}bg-danger{% else %}bg-success{% endif %} me-1"
-                          data-bs-toggle="tooltip" title="{{ t('queue.last_signal', {time: heartbeat.last_tick_at|date('d.m.Y H:i:s')}) }}">
-                        {{ heartbeat.worker }}: {% if heartbeat.stale %}{{ t('queue.worker_stale', {seconds: heartbeat.seconds_since_tick}) }}{% else %}{{ t('queue.worker_alive') }}{% endif %}
-                    </span>
-                {% endfor %}
-            {% endif %}
-        </div>
         {% if queue.jobs is empty %}
             <p class="mb-0 text-muted">{{ t('queue.empty') }}</p>
         {% else %}
