@@ -1,6 +1,6 @@
 ARG APP_VERSION=development
 
-FROM golang:1.26.5-bookworm@sha256:53eeac89074db483fdf0ab3be1df32bf6e47562263d2d0d6baa7f26acb4957dd AS agent-modern
+FROM --platform=$BUILDPLATFORM golang:1.26.5-bookworm@sha256:53eeac89074db483fdf0ab3be1df32bf6e47562263d2d0d6baa7f26acb4957dd AS agent-modern
 
 ARG APP_VERSION
 
@@ -30,7 +30,7 @@ RUN set -eux; \
         -o /tmp/mirvmon-agent-windows-amd64.exe ./cmd/mirvmon-agent; \
     cmp /out/mirvmon-agent-windows-amd64.exe /tmp/mirvmon-agent-windows-amd64.exe
 
-FROM golang:1.20.14-bookworm@sha256:9fa9101141c01e9440216d32eb2b380b3c3079bea07aeab3546020cc91b3662c AS agent-legacy
+FROM --platform=$BUILDPLATFORM golang:1.20.14-bookworm@sha256:9fa9101141c01e9440216d32eb2b380b3c3079bea07aeab3546020cc91b3662c AS agent-legacy
 
 ARG APP_VERSION
 
@@ -80,7 +80,7 @@ FROM scratch AS agent-dist
 
 COPY --from=agent-manifest /out /out
 
-FROM composer:2.10.1@sha256:7725eb4545c438629ae8bde3ef0bb9a5038ef566126ad878442a69007242d267 AS vendor
+FROM --platform=$BUILDPLATFORM composer:2.10.1@sha256:7725eb4545c438629ae8bde3ef0bb9a5038ef566126ad878442a69007242d267 AS vendor
 
 WORKDIR /app
 

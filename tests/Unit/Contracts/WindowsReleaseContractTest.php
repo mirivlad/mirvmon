@@ -28,10 +28,10 @@ final class WindowsReleaseContractTest extends TestCase
         $dockerfile = (string) file_get_contents($root . '/docker/Dockerfile');
         $ci = (string) file_get_contents($root . '/.github/workflows/ci.yml');
 
-        self::assertStringContainsString('FROM golang:1.20.14-bookworm@sha256:', $dockerfile);
-        self::assertStringContainsString('FROM golang:1.26.5-bookworm@sha256:', $dockerfile);
+        self::assertStringContainsString('FROM --platform=$BUILDPLATFORM golang:1.20.14-bookworm@sha256:', $dockerfile);
+        self::assertStringContainsString('FROM --platform=$BUILDPLATFORM golang:1.26.5-bookworm@sha256:', $dockerfile);
         self::assertMatchesRegularExpression(
-            '/FROM golang:1\.20\.14[\s\S]*?CGO_ENABLED=0 GOOS=windows GOARCH=amd64 GOAMD64=v1[\s\S]*?windows-legacy-amd64/',
+            '/FROM --platform=\$BUILDPLATFORM golang:1\.20\.14[\s\S]*?CGO_ENABLED=0 GOOS=windows GOARCH=amd64 GOAMD64=v1[\s\S]*?windows-legacy-amd64/',
             $dockerfile
         );
         self::assertStringContainsString('go: "1.20.14"', $ci);
