@@ -92,7 +92,7 @@ final class IncidentRepository
         }
 
         $where = $conditions === [] ? '' : 'WHERE ' . implode(' AND ', $conditions);
-        $statement = $this->pdo->prepare(
+        $sql = sprintf(
             <<<'SQL'
             WITH completed_outages AS (
                 SELECT
@@ -171,9 +171,10 @@ final class IncidentRepository
             %s
             ORDER BY events.resolved_at DESC, events.created_at DESC, events.source_id DESC
             LIMIT 1000
-            SQL
+            SQL,
+            $where
         );
-        $statement = $this->pdo->prepare(sprintf($statement->queryString, $where));
+        $statement = $this->pdo->prepare($sql);
         $statement->execute($parameters);
 
         return $statement->fetchAll();
@@ -182,11 +183,9 @@ final class IncidentRepository
     /** @return list<array{id: int|string, name: string}> */
     public function serverOptions(): array
     {
-        $rows = $this->pdo->query(
+        return $this->pdo->query(
             'SELECT id, name FROM servers ORDER BY lower(name), id'
         )?->fetchAll() ?? [];
-
-        return $rows;
     }
 
     /** @return list<array{id: int|string, name: string}> */
