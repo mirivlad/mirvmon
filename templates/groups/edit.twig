@@ -1,65 +1,45 @@
 {% extends "layout.twig" %}
+{% set page_title = t('common.edit') ~ ' · ' ~ group.name %}
 
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-8">
         <div class="card">
             <div class="card-header">
-                <h3><i class="fas fa-edit"></i> Редактировать группу "{{ group.name }}"</h3>
+                <h3><i class="fas fa-edit"></i> {{ t('common.edit') }}: {{ group.name }}</h3>
             </div>
             <div class="card-body">
                 <form method="post" action="/groups/{{ group.id }}">
                     {% include "partials/csrf.twig" %}
-                    
                     <div class="mb-3">
-                        <label for="name" class="form-label">Название группы *</label>
-                        <input type="text" class="form-control" id="name"
-                               name="name" value="{{ group.name }}"
-                               maxlength="100" required>
+                        <label for="name" class="form-label">{{ t('common.name') }} *</label>
+                        <input type="text" class="form-control" id="name" name="name" value="{{ group.name }}" maxlength="100" required>
                     </div>
-                    
                     <div class="mb-3">
-                        <label for="description" class="form-label">Описание</label>
-                        <textarea class="form-control" id="description"
-                                  name="description" rows="3"
-                                  maxlength="5000">{{ group.description|default('') }}</textarea>
+                        <label for="description" class="form-label">{{ t('common.description') }}</label>
+                        <textarea class="form-control" id="description" name="description" rows="3" maxlength="5000">{{ group.description|default('') }}</textarea>
                     </div>
-                    
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="icon" class="form-label">Иконка (Font Awesome)</label>
+                                <label for="icon" class="form-label">Icon (Font Awesome)</label>
                                 <div class="input-group">
-                                    <input type="text" class="form-control"
-                                           id="icon" name="icon"
-                                           value="{{ group.icon|default('fa-server') }}"
-                                           placeholder="fa-server"
-                                           maxlength="50">
+                                    <input type="text" class="form-control" id="icon" name="icon" value="{{ group.icon|default('fa-server') }}" placeholder="fa-server" maxlength="50">
                                     <span class="input-group-text"><i class="fas {{ group.icon|default('fa-server') }}" id="iconPreview"></i></span>
-                                    <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#iconPickerModal" data-icon-picker data-icon-input="icon">
-                                        <i class="fas fa-icons"></i>
-                                    </button>
+                                    <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#iconPickerModal" data-icon-picker data-icon-input="icon"><i class="fas fa-icons"></i></button>
                                 </div>
-                                <small class="form-text text-muted">Выберите иконку или введите вручную</small>
                             </div>
                         </div>
-                        
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="color" class="form-label">Цвет</label>
+                                <label for="color" class="form-label">{{ t('groups.column.color') }}</label>
                                 <input type="color" class="form-control form-control-color" id="color" name="color" value="{{ group.color|default('#007bff') }}">
-                                <small class="form-text text-muted">Выберите цвет для обозначения группы</small>
                             </div>
                         </div>
                     </div>
-                    
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                        <a href="/groups" class="btn btn-secondary me-md-2">
-                            <i class="fas fa-arrow-left"></i> Назад
-                        </a>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save"></i> Сохранить изменения
-                        </button>
+                        <a href="/groups" class="btn btn-secondary me-md-2"><i class="fas fa-arrow-left"></i> {{ t('common.back') }}</a>
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> {{ t('servers.form.save') }}</button>
                     </div>
                 </form>
             </div>
