@@ -19,7 +19,7 @@ final class AlertController
         private readonly PDO $pdo,
         private readonly Twig $twig,
         private readonly NotificationOutboxRepository $outbox,
-        private readonly Translator $translator
+        private readonly Translator $translator = new Translator()
     ) {
     }
 
