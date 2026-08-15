@@ -7,12 +7,20 @@
     const resultCount = document.getElementById('dashboard-result-count');
     const noResults = document.getElementById('dashboard-no-results');
     const liveRegion = document.getElementById('dashboard-live-region');
-    const statusLabels = {
-        online: 'В норме',
-        warning: 'Внимание',
-        critical: 'Критично',
-        offline: 'Нет данных'
-    };
+
+    if (!search || !statusFilter || !sort || !resultCount || !noResults) {
+        return;
+    }
+
+    const locale = resultCount.dataset.locale || document.documentElement.lang || 'ru';
+    const countTemplate = resultCount.dataset.countTemplate || '__COUNT__';
+    const noUpdates = resultCount.dataset.noUpdates || '—';
+    const relativeTime = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+    const statusLabels = Object.fromEntries(
+        Array.from(statusFilter.options)
+            .filter((option) => option.value !== 'all')
+            .map((option) => [option.value, option.textContent.trim()])
+    );
     const statusOrder = {
         critical: 0,
         offline: 1,
@@ -20,15 +28,11 @@
         online: 3
     };
 
-    if (!search || !statusFilter || !sort || !resultCount || !noResults) {
-        return;
-    }
-
     const items = () => Array.from(document.querySelectorAll('[data-server-item]'));
     const groups = () => Array.from(document.querySelectorAll('[data-dashboard-group]'));
 
     function normalizedSearch() {
-        return search.value.trim().toLocaleLowerCase('ru');
+        return search.value.trim().toLocaleLowerCase(locale);
     }
 
     function compareItems(left, right) {
@@ -51,9 +55,13 @@
 
         return left.dataset.serverName.localeCompare(
             right.dataset.serverName,
-            'ru',
+            locale,
             { sensitivity: 'base', numeric: true }
         );
+    }
+
+    function formatCount(count) {
+        return countTemplate.replace('__COUNT__', String(count));
     }
 
     function applyView() {
@@ -90,31 +98,29 @@
             visibleTotal += visibleInGroup;
         });
 
-        resultCount.textContent = `Показано: ${visibleTotal}`;
+        const label = formatCount(visibleTotal);
+        resultCount.textContent = label;
         noResults.hidden = visibleTotal !== 0;
         if (liveRegion) {
-            liveRegion.textContent = `Показано серверов: ${visibleTotal}`;
+            liveRegion.textContent = label;
         }
     }
 
     function formatRelativeTime(seconds) {
         if (!Number.isFinite(seconds) || seconds < 0) {
-            return 'обновлений нет';
-        }
-        if (seconds < 10) {
-            return 'только что';
+            return noUpdates;
         }
         if (seconds < 60) {
-            return `${Math.floor(seconds)} сек. назад`;
+            return relativeTime.format(-Math.floor(seconds), 'second');
         }
         if (seconds < 3600) {
-            return `${Math.floor(seconds / 60)} мин. назад`;
+            return relativeTime.format(-Math.floor(seconds / 60), 'minute');
         }
         if (seconds < 86400) {
-            return `${Math.floor(seconds / 3600)} ч. назад`;
+            return relativeTime.format(-Math.floor(seconds / 3600), 'hour');
         }
 
-        return `${Math.floor(seconds / 86400)} д. назад`;
+        return relativeTime.format(-Math.floor(seconds / 86400), 'day');
     }
 
     function refreshRelativeTimes() {
@@ -126,7 +132,7 @@
             if (target) {
                 target.textContent = timestamp > 0
                     ? formatRelativeTime(Math.max(0, now - timestamp))
-                    : 'обновлений нет';
+                    : noUpdates;
             }
         });
     }
