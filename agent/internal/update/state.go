@@ -26,7 +26,7 @@ var (
 	ErrInvalidCommand   = errors.New("invalid update command")
 	ErrUpdateInProgress = errors.New("another update is in progress")
 	uuidPattern         = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
-	versionPattern      = regexp.MustCompile(`^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$`)
+	versionPattern      = regexp.MustCompile(`^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:\.(?:0|[1-9][0-9]*))?(?:-[0-9A-Za-z.-]+)?$`)
 	artifactPattern     = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 	checksumPattern     = regexp.MustCompile(`^[a-f0-9]{64}$`)
 	errorCodePattern    = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
@@ -44,8 +44,8 @@ type Command struct {
 // State is persisted without credentials beside the metrics queue.
 type State struct {
 	Command   Command `json:"command"`
-	State     string  `json:"state"`
-	ErrorCode string  `json:"error_code,omitempty"`
+	State     string `json:"state"`
+	ErrorCode string `json:"error_code,omitempty"`
 }
 
 // Store owns update-state.json beside the queue.

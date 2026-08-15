@@ -30,6 +30,15 @@ func TestStoreAcceptsCommandOnceAndRejectsConcurrentCommand(t *testing.T) {
 	}
 }
 
+func TestCommandAcceptsFourPartHotfixVersion(t *testing.T) {
+	command := testCommand()
+	command.TargetVersion = "v0.4.15.2"
+
+	if err := command.Validate(); err != nil {
+		t.Fatalf("hotfix version rejected: %v", err)
+	}
+}
+
 func TestStoreAllowsNewCommandAfterTerminalFailure(t *testing.T) {
 	store := NewStore(filepath.Join(t.TempDir(), "queue.json"))
 	command := testCommand()
