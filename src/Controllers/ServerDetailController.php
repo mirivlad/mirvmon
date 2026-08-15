@@ -561,7 +561,11 @@ final class ServerDetailController
         return $charts;
     }
 
-    /** @param GroupedMetrics $groupedMetrics @param list<string>|null $displayMetrics */
+    /**
+     * @param GroupedMetrics $groupedMetrics
+     * @param list<string>|null $displayMetrics
+     * @return Chart
+     */
     private function buildUptimeChart(array $groupedMetrics, ?array $displayMetrics): array
     {
         if (!$this->isMetricSelected('uptime', $displayMetrics) || empty($groupedMetrics['uptime'])) {
@@ -581,7 +585,10 @@ final class ServerDetailController
         ];
     }
 
-    /** @param array<string, mixed> $availability */
+    /**
+     * @param array<string, mixed> $availability
+     * @return Chart
+     */
     private function buildAvailabilityChart(array $availability): array
     {
         if (($availability['known'] ?? false) !== true) {
