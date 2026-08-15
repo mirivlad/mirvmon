@@ -9,7 +9,7 @@
     critical: 'критическое состояние',
     offline: 'нет актуальных данных'
 }[server.status]|default('состояние неизвестно') %}
-<span class="{{ icon_container_class|default('server-platform-icon') }}"
+<span class="{{ icon_container_class|default('server-platform-icon') }} server-status-emblem"
       aria-label="{{ platform.tooltip }}, {{ status_text }}"
       title="{{ platform.tooltip }}" data-bs-toggle="tooltip">
     <i{% if icon_id|default('') %} id="{{ icon_id }}"{% endif %}

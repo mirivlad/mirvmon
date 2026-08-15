@@ -9,6 +9,38 @@
     <link rel="stylesheet" href="/vendor/bootstrap/bootstrap.min.css">
     <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css">
     <link rel="stylesheet" href="/css/app.css">
+    <style>
+        .server-status-emblem {
+            display: inline-flex;
+            width: 1.65rem;
+            height: 1.65rem;
+            flex: 0 0 1.65rem;
+            align-items: center;
+            justify-content: center;
+            color: #fff !important;
+            background: var(--app-online) !important;
+            border-radius: 50% !important;
+            box-shadow: 0 0 0 1px rgba(23, 32, 51, 0.08);
+        }
+
+        .server-status-icon.server-status-emblem {
+            width: 34px;
+            height: 34px;
+            flex-basis: 34px;
+        }
+
+        .server-status-warning .server-status-emblem {
+            background: var(--app-warning) !important;
+        }
+
+        .server-status-critical .server-status-emblem {
+            background: var(--app-critical) !important;
+        }
+
+        .server-status-offline .server-status-emblem {
+            background: var(--app-offline) !important;
+        }
+    </style>
 </head>
 <body>
     {% if session.username %}
