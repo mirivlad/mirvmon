@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Domain\Metrics\MetricValueFormatter;
 use App\I18n\Translator;
+use App\I18n\TwigTranslation;
 use App\Repositories\AvailabilityRepository;
 use App\Repositories\MaintenanceWindowRepository;
 use App\Repositories\MetricRepository;
@@ -44,8 +45,9 @@ final class ServerDetailController
         private readonly MaintenanceWindowRepository $maintenance,
         private readonly ?AgentUpdateService $agentUpdates,
         private readonly ServerStatusService $status,
-        private readonly Translator $translator
+        private readonly Translator $translator = new Translator()
     ) {
+        TwigTranslation::register($this->twig->getEnvironment(), $this->translator);
     }
 
     /** @param array<string, string> $args */
