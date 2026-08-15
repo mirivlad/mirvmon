@@ -159,7 +159,7 @@ final class DashboardReadModelTest extends TestCase
         self::assertStringContainsString('CPU сейчас', $detailHtml);
         self::assertStringContainsString('40%', $detailHtml);
         self::assertStringContainsString('id="agent-tab"', $detailHtml);
-        self::assertStringContainsString('Создать ключ', $detailHtml);
+        self::assertStringContainsString('Отозвать ключ', $detailHtml);
         self::assertStringContainsString('fab fa-linux', $detailHtml);
         self::assertStringContainsString('title="Debian GNU/Linux 12"', $detailHtml);
         self::assertStringContainsString('server-status-online', $detailHtml);
