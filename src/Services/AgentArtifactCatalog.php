@@ -40,7 +40,7 @@ final class AgentArtifactCatalog
             !is_array($manifest)
             || array_keys($manifest) !== ['version', 'artifacts']
             || !is_string($manifest['version'])
-            || preg_match('/^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$/', $manifest['version']) !== 1
+            || preg_match('/^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:\.(?:0|[1-9][0-9]*))?(?:-[0-9A-Za-z.-]+)?$/', $manifest['version']) !== 1
             || !is_array($manifest['artifacts'])
             || array_keys($manifest['artifacts']) !== array_keys(self::FILENAMES)
         ) {
