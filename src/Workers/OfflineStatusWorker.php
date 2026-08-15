@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Workers;
 
+use App\Repositories\AvailabilityRepository;
 use App\Repositories\NotificationOutboxRepository;
 use DateTimeImmutable;
 use PDO;
@@ -24,11 +25,19 @@ final class OfflineStatusWorker
 
         try {
             $servers = $this->serversForCheck();
+            $availability = new AvailabilityRepository($this->pdo);
             $transitions = 0;
             foreach ($servers as $server) {
                 $timeout = (int) $server['offline_timeout_seconds'];
                 $lastContactAt = new DateTimeImmutable((string) $server['last_contact_at']);
-                $offline = $lastContactAt <= $now->modify('-' . $timeout . ' seconds');
+                $offline = $timeout > 0
+                    && $lastContactAt <= $now->modify('-' . $timeout . ' seconds');
+                $availability->mark(
+                    (int) $server['id'],
+                    $offline ? 'offline' : 'online',
+                    $now
+                );
+
                 $alertId = $server['alert_id'] === null
                     ? null
                     : (int) $server['alert_id'];
@@ -77,10 +86,6 @@ final class OfflineStatusWorker
               AND active_alert.resolved = FALSE
              WHERE servers.is_active = TRUE
                AND agent_tokens.last_used_at IS NOT NULL
-               AND (
-                    servers.notify_on_offline = TRUE
-                    OR active_alert.id IS NOT NULL
-               )
              ORDER BY servers.id
              FOR UPDATE OF servers"
         );
