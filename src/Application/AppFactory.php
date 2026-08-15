@@ -13,19 +13,23 @@ use App\Controllers\Api\MetricsController;
 use App\Controllers\AuthController;
 use App\Controllers\DashboardController;
 use App\Controllers\GroupController;
+use App\Controllers\LanguageController;
 use App\Controllers\ServerController;
 use App\Controllers\ServerDetailController;
 use App\Controllers\SetupController;
 use App\Http\ErrorResponder;
+use App\I18n\Translator;
 use App\Middlewares\AdminMiddleware;
 use App\Middlewares\AuthMiddleware;
 use App\Middlewares\CsrfMiddleware;
+use App\Middlewares\LocaleMiddleware;
 use App\Middlewares\RequestSizeMiddleware;
 use App\Middlewares\RequestIdMiddleware;
 use App\Middlewares\SecurityHeadersMiddleware;
 use App\Middlewares\SessionMiddleware;
 use App\Middlewares\SessionSecurityMiddleware;
 use App\Middlewares\TrustedProxyMiddleware;
+use App\Repositories\AppSettingsRepository;
 use Closure;
 use PDO;
 use Psr\Container\ContainerInterface;
@@ -48,10 +52,21 @@ final class AppFactory
         $settings = $container->get('settings');
         /** @var Twig $twig */
         $twig = $container->get(Twig::class);
+        /** @var PDO $pdo */
+        $pdo = $container->get(PDO::class);
         $responseFactory = $app->getResponseFactory();
 
+        $appSettings = new AppSettingsRepository($pdo);
+        $translator = new Translator(
+            $appSettings,
+            dirname(__DIR__, 2) . '/translations'
+        );
+        $translator->refreshLocale();
+        $locale = new LocaleMiddleware($translator, $twig);
+        $languageController = new LanguageController($appSettings, $translator);
+
         $csrf = new CsrfMiddleware($responseFactory, $twig);
-        $auth = new AuthMiddleware($responseFactory, $container->get(PDO::class));
+        $auth = new AuthMiddleware($responseFactory, $pdo);
         $admin = new AdminMiddleware($responseFactory);
 
         $app->get('/login', self::controller($container, AuthController::class, 'form'))
@@ -172,7 +187,10 @@ final class AppFactory
 
         $administration = $app->group(
             '/admin',
-            function (RouteCollectorProxyInterface $group) use ($container): void {
+            function (RouteCollectorProxyInterface $group) use (
+                $container,
+                $languageController
+            ): void {
                 $group->get('/users', self::controller($container, AdminController::class, 'usersList'));
                 $group->post('/users/save', self::controller($container, AdminController::class, 'saveUser'));
                 $group->post(
@@ -215,6 +233,16 @@ final class AppFactory
                 $group->post(
                     '/defaults/save',
                     self::controller($container, AdminController::class, 'saveDefaultSettings')
+                );
+                $group->post(
+                    '/language',
+                    static function (
+                        ServerRequestInterface $request,
+                        ResponseInterface $response,
+                        array $arguments
+                    ) use ($languageController): ResponseInterface {
+                        return $languageController->save($request, $response, $arguments);
+                    }
                 );
             }
         );
@@ -260,6 +288,7 @@ final class AppFactory
         $app->addBodyParsingMiddleware();
         $app->add(TwigMiddleware::create($app, $twig));
         $app->add(new SessionMiddleware($twig));
+        $app->add($locale);
         $app->add(new SessionSecurityMiddleware(
             (string) $settings['session_name'],
             (bool) $settings['session_secure'],
@@ -281,7 +310,8 @@ final class AppFactory
         $errorMiddleware->setDefaultErrorHandler(new ErrorResponder(
             $responseFactory,
             (bool) $settings['app_debug'],
-            ($settings['app_env'] ?? 'production') !== 'test'
+            ($settings['app_env'] ?? 'production') !== 'test',
+            $translator
         ));
         $app->add(new SecurityHeadersMiddleware(new StreamFactory()));
         $app->add(new RequestIdMiddleware());
