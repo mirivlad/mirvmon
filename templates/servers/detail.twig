@@ -234,22 +234,24 @@
                                 </div>
                             {% endfor %}
 
-                            <div class="card mb-4">
-                                <div class="card-header">
-                                    <h6 class="mb-0"><i class="fas fa-thermometer-half me-1"></i>Температуры</h6>
+                            {% if displayMetrics|filter(v => v starts with 'temp_')|length > 0 %}
+                                <div class="card mb-4">
+                                    <div class="card-header">
+                                        <h6 class="mb-0"><i class="fas fa-thermometer-half me-1"></i>Температуры</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        {% if temperatureChart.datasets is not empty %}
+                                            <div style="height: 320px;">
+                                                <canvas id="chart-temperatures"></canvas>
+                                            </div>
+                                        {% else %}
+                                            <div class="alert alert-info mb-0">
+                                                По выбранным температурным метрикам за этот период нет данных.
+                                            </div>
+                                        {% endif %}
+                                    </div>
                                 </div>
-                                <div class="card-body">
-                                    {% if temperatureChart.datasets is not empty %}
-                                        <div style="height: 320px;">
-                                            <canvas id="chart-temperatures"></canvas>
-                                        </div>
-                                    {% else %}
-                                        <div class="alert alert-info mb-0">
-                                            Температурные датчики не выбраны или по ним нет данных.
-                                        </div>
-                                    {% endif %}
-                                </div>
-                            </div>
+                            {% endif %}
 
                             <div class="row">
                                 {% if diskCharts is not empty %}
