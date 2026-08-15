@@ -72,6 +72,10 @@ if ! command -v makensis >/dev/null 2>&1; then
     exit 1
 fi
 
+session_directory=/app/var/sessions
+mkdir -p "$session_directory"
+chmod 0700 "$session_directory"
+
 attempt=1
 max_attempts="${DB_STARTUP_ATTEMPTS:-60}"
 until php -r '
