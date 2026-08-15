@@ -106,7 +106,7 @@ func (manager Manager) Process(
 	}
 	if err := atomicfile.Write(handoffPath, []byte(command.ID), 0600); err != nil {
 		_ = os.Remove(requestPath)
-		return manager.fail(context, command, report, "handoff_write_failed", err)
+		return manager.fail(context, command, report, "handoff_failed", err)
 	}
 	if manager.Handoff != nil {
 		if err := manager.Handoff(requestPath); err != nil {
@@ -162,8 +162,8 @@ func isUpgrade(installed, target string) bool {
 	return installedPre != "" && (targetPre == "" || targetPre > installedPre)
 }
 
-func parseVersion(value string) ([3]int, string, bool) {
-	var parts [3]int
+func parseVersion(value string) ([4]int, string, bool) {
+	var parts [4]int
 	if !versionPattern.MatchString(value) {
 		return parts, "", false
 	}
