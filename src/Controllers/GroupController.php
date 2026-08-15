@@ -19,7 +19,7 @@ final class GroupController
         private readonly PDO $pdo,
         private readonly Twig $twig,
         private readonly ServerStatusService $status,
-        private readonly Translator $translator
+        private readonly Translator $translator = new Translator()
     ) {
     }
 
