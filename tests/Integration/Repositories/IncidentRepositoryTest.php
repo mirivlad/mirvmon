@@ -72,7 +72,51 @@ final class IncidentRepositoryTest extends TestCase
         self::assertSame('edge-01', $rows[0]['server_name']);
         self::assertSame('Production', $rows[0]['group_name']);
         self::assertSame('cpu_load', $rows[0]['subject_name']);
+        self::assertSame('alert', $rows[0]['source']);
+        self::assertNotNull($rows[0]['id']);
         self::assertGreaterThanOrEqual(590, (int) $rows[0]['duration_seconds']);
+    }
+
+    public function testActiveIncludesOfflineAvailabilityWithoutOfflineAlert(): void
+    {
+        self::$pdo?->exec(
+            "INSERT INTO server_availability_state (server_id, state, changed_at)
+             VALUES ({$this->serverId}, 'offline', CURRENT_TIMESTAMP - INTERVAL '5 minutes')"
+        );
+
+        $rows = $this->repository->active([
+            'server_id' => $this->serverId,
+            'kind' => 'offline',
+        ]);
+
+        self::assertCount(1, $rows);
+        self::assertSame('availability', $rows[0]['source']);
+        self::assertNull($rows[0]['id']);
+        self::assertSame('offline', $rows[0]['kind']);
+        self::assertSame('critical', $rows[0]['severity']);
+        self::assertSame('edge-01', $rows[0]['server_name']);
+        self::assertGreaterThanOrEqual(290, (int) $rows[0]['duration_seconds']);
+    }
+
+    public function testActiveDoesNotDuplicateOfflineAvailabilityWhenAlertExists(): void
+    {
+        self::$pdo?->exec(
+            "INSERT INTO server_availability_state (server_id, state, changed_at)
+             VALUES ({$this->serverId}, 'offline', CURRENT_TIMESTAMP - INTERVAL '5 minutes')"
+        );
+        self::$pdo?->exec(
+            "INSERT INTO alerts (server_id, kind, subject, severity, created_at)
+             VALUES ({$this->serverId}, 'offline', 'agent', 'critical', CURRENT_TIMESTAMP - INTERVAL '5 minutes')"
+        );
+
+        $rows = $this->repository->active([
+            'server_id' => $this->serverId,
+            'kind' => 'offline',
+        ]);
+
+        self::assertCount(1, $rows);
+        self::assertSame('alert', $rows[0]['source']);
+        self::assertNotNull($rows[0]['id']);
     }
 
     public function testHistoryCombinesResolvedAlertsAndCompletedOutagesWithoutOfflineAlertDuplication(): void
