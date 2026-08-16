@@ -27,34 +27,77 @@
             <strong class="summary-value" data-summary="total">{{ stats.total_servers }}</strong>
         </div>
     </article>
-    <article class="summary-card summary-card-online">
+    <a href="/?status=online" class="summary-card summary-card-online text-reset text-decoration-none">
         <span class="summary-icon" aria-hidden="true"><i class="fas fa-circle-check"></i></span>
         <div>
             <span class="summary-label">{{ t('dashboard.summary.online') }}</span>
             <strong class="summary-value" data-summary="online">{{ stats.online_servers }}</strong>
         </div>
-    </article>
-    <article class="summary-card summary-card-warning">
+    </a>
+    <a href="/?status=warning" class="summary-card summary-card-warning text-reset text-decoration-none">
         <span class="summary-icon" aria-hidden="true"><i class="fas fa-triangle-exclamation"></i></span>
         <div>
             <span class="summary-label">{{ t('dashboard.summary.warning') }}</span>
             <strong class="summary-value" data-summary="warning">{{ stats.warning_servers }}</strong>
         </div>
-    </article>
-    <article class="summary-card summary-card-critical">
+    </a>
+    <a href="/?status=critical" class="summary-card summary-card-critical text-reset text-decoration-none">
         <span class="summary-icon" aria-hidden="true"><i class="fas fa-circle-exclamation"></i></span>
         <div>
             <span class="summary-label">{{ t('dashboard.summary.critical') }}</span>
             <strong class="summary-value" data-summary="critical">{{ stats.critical_servers }}</strong>
         </div>
-    </article>
-    <article class="summary-card summary-card-offline">
+    </a>
+    <a href="/?status=offline" class="summary-card summary-card-offline text-reset text-decoration-none">
         <span class="summary-icon" aria-hidden="true"><i class="fas fa-plug-circle-xmark"></i></span>
         <div>
             <span class="summary-label">{{ t('dashboard.summary.offline') }}</span>
             <strong class="summary-value" data-summary="offline">{{ stats.offline_servers }}</strong>
         </div>
-    </article>
+    </a>
+</section>
+
+<section class="card mb-4" aria-labelledby="dashboard-attention-title">
+    <div class="card-header d-flex justify-content-between align-items-center gap-3">
+        <h2 class="h5 mb-0" id="dashboard-attention-title">
+            <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+            {{ t('incidents.attention.title') }}
+        </h2>
+        <a href="/alerts?view=active" class="small text-decoration-none">{{ t('incidents.attention.all') }}</a>
+    </div>
+    {% if attention|length > 0 %}
+    <div class="list-group list-group-flush">
+        {% for issue in attention %}
+        <div class="list-group-item d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+            <div class="min-w-0">
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <a href="/servers/{{ issue.server_id }}" class="fw-semibold text-decoration-none">{{ issue.server_name }}</a>
+                    {% if issue.group_id %}
+                    <a href="/groups/{{ issue.group_id }}" class="text-muted small text-decoration-none">· {{ issue.group_name }}</a>
+                    {% endif %}
+                </div>
+                <div class="small mt-1">
+                    <span class="badge bg-light text-dark border me-1">{{ t('incidents.kind.' ~ issue.kind) }}</span>
+                    <code>{{ issue.subject_name|replace({'_': ' '}) }}</code>
+                    {% if issue.created_at %}
+                    <span class="text-muted ms-1">· {{ issue.created_at|date('d.m.Y H:i') }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge {{ issue.severity == 'critical' ? 'bg-danger' : 'bg-warning text-dark' }}">
+                    {{ issue.severity == 'critical' ? t('alerts.level.critical') : t('alerts.level.warning') }}
+                </span>
+                <a href="/alerts?view=active&server_id={{ issue.server_id }}" class="btn btn-sm btn-outline-secondary">
+                    {{ t('common.details') }}
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card-body text-muted">{{ t('incidents.attention.empty') }}</div>
+    {% endif %}
 </section>
 
 {% if groups|length == 0 %}
@@ -150,7 +193,7 @@
                                   class="server-alert-count{% if server.active_alerts == 0 %} d-none{% endif %}">
                                 <i class="fas fa-bell" aria-hidden="true"></i>
                                 <span>{{ server.active_alerts }}</span>
-                                <span class="visually-hidden">{{ t('nav.alerts') }}</span>
+                                <span class="visually-hidden">{{ t('nav.incidents') }}</span>
                             </span>
                         </div>
 
