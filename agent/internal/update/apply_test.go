@@ -17,11 +17,65 @@ func TestReplaceExecutableKeepsBackupOnSuccess(t *testing.T) {
 	staged := filepath.Join(directory, "staged")
 	os.WriteFile(installed, []byte("old"), 0755)
 	os.WriteFile(staged, []byte("new"), 0700)
-	if err := replaceExecutable(staged, installed, func() error { return nil }, nil, nil); err != nil {
+	if err := replaceExecutable(staged, installed, nil, func() error { return nil }, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	assertFileContents(t, installed, "new")
 	assertFileContents(t, installed+".previous", "old")
+}
+
+func TestReplaceExecutableStopsBeforeRenamingInstalledBinary(t *testing.T) {
+	directory := t.TempDir()
+	installed := filepath.Join(directory, "agent")
+	staged := filepath.Join(directory, "staged")
+	if err := os.WriteFile(installed, []byte("old"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(staged, []byte("new"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	stopped := false
+	if err := replaceExecutable(staged, installed, func() error {
+		assertFileContents(t, installed, "old")
+		if _, err := os.Stat(installed + ".previous"); !os.IsNotExist(err) {
+			t.Fatalf("backup exists before service stop: %v", err)
+		}
+		stopped = true
+		return nil
+	}, func() error {
+		if !stopped {
+			t.Fatal("restart ran before service stop")
+		}
+		return nil
+	}, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	assertFileContents(t, installed, "new")
+	assertFileContents(t, installed+".previous", "old")
+}
+
+func TestReplaceExecutableLeavesFilesUntouchedWhenStopFails(t *testing.T) {
+	directory := t.TempDir()
+	installed := filepath.Join(directory, "agent")
+	staged := filepath.Join(directory, "staged")
+	if err := os.WriteFile(installed, []byte("old"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(staged, []byte("new"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	want := errors.New("stop failed")
+	if err := replaceExecutable(staged, installed, func() error { return want }, func() error {
+		t.Fatal("restart must not run when the old service cannot be stopped")
+		return nil
+	}, nil, nil); !errors.Is(err, want) {
+		t.Fatalf("got %v", err)
+	}
+	assertFileContents(t, installed, "old")
+	assertFileContents(t, staged, "new")
+	if _, err := os.Stat(installed + ".previous"); !os.IsNotExist(err) {
+		t.Fatalf("backup created after failed stop: %v", err)
+	}
 }
 
 func TestReplaceExecutableRollsBackWhenRestartFails(t *testing.T) {
@@ -31,7 +85,7 @@ func TestReplaceExecutableRollsBackWhenRestartFails(t *testing.T) {
 	os.WriteFile(installed, []byte("old"), 0755)
 	os.WriteFile(staged, []byte("new"), 0700)
 	want := errors.New("restart failed")
-	if err := replaceExecutable(staged, installed, func() error { return want }, nil, nil); !errors.Is(err, want) {
+	if err := replaceExecutable(staged, installed, nil, func() error { return want }, nil, nil); !errors.Is(err, want) {
 		t.Fatalf("got %v", err)
 	}
 	assertFileContents(t, installed, "old")
@@ -45,7 +99,7 @@ func TestReplaceExecutableRollsBackWhenTargetHealthFails(t *testing.T) {
 	os.WriteFile(staged, []byte("new"), 0700)
 	restarts := 0
 	want := errors.New("target unhealthy")
-	err := replaceExecutable(staged, installed, func() error {
+	err := replaceExecutable(staged, installed, nil, func() error {
 		restarts++
 		return nil
 	}, func() error { return want }, nil)
