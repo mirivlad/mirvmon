@@ -28,6 +28,19 @@ return [
     'audit.previous' => 'Назад',
     'audit.next' => 'Далее',
 
+    'audit.retention.title' => 'Хранение журнала',
+    'audit.retention.help' => '0 — хранить бессрочно. Иначе записи старше указанного числа дней будут удаляться автоматически.',
+    'audit.retention.independent' => 'Эта политика независима от срока хранения метрик и процессов.',
+    'audit.retention.label' => 'Срок хранения',
+    'audit.retention.days' => 'дней',
+    'audit.retention.range' => 'Допустимо 0 либо от {min} до {max} дней.',
+    'audit.retention.save' => 'Сохранить',
+    'audit.retention.invalid' => 'Срок хранения журнала должен быть 0 либо находиться в допустимом диапазоне.',
+    'audit.retention.save_failed' => 'Не удалось сохранить политику хранения журнала.',
+    'audit.retention.saved_forever' => 'Журнал будет храниться бессрочно.',
+    'audit.retention.saved_days' => 'Срок хранения журнала установлен: {days} дней.',
+    'audit.retention.object' => 'Политика хранения журнала',
+
     'audit.event.server.created' => 'Создан сервер «{name}».',
     'audit.event.server.updated' => 'Изменены настройки сервера «{name}».',
     'audit.event.server.deleted' => 'Удалён сервер «{name}».',
@@ -56,4 +69,6 @@ return [
     'audit.event.system.host_saved' => 'Изменён сервер, используемый для мониторинга MirvMon.',
     'audit.event.system.host_cleared' => 'Сервер мониторинга MirvMon сброшен.',
     'audit.event.alert.resolved' => 'Инцидент #{id} закрыт вручную.',
+    'audit.event.retention.forever' => 'Политика хранения журнала изменена: хранить бессрочно.',
+    'audit.event.retention.saved' => 'Политика хранения журнала изменена: {days} дней.',
 ];
