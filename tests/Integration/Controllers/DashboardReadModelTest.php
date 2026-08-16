@@ -164,6 +164,21 @@ final class DashboardReadModelTest extends TestCase
         self::assertStringContainsString('title="Debian GNU/Linux 12"', $detailHtml);
         self::assertStringContainsString('server-status-online', $detailHtml);
 
+        $metricsDetail = $detailController->show(
+            $requestFactory->createServerRequest(
+                'GET',
+                'http://localhost/servers/' . $this->serverId . '?tab=metrics&period=24h'
+            ),
+            $responseFactory->createResponse(),
+            ['id' => (string) $this->serverId]
+        );
+        $metricsHtml = (string) $metricsDetail->getBody();
+
+        self::assertSame(200, $metricsDetail->getStatusCode());
+        self::assertStringContainsString('id="chart-cpu_load"', $metricsHtml);
+        self::assertStringContainsString('40%', $metricsHtml);
+        self::assertStringNotContainsString('Отозвать ключ', $metricsHtml);
+
         $agentDetail = $detailController->show(
             $requestFactory->createServerRequest(
                 'GET',
