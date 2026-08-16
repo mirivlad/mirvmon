@@ -179,6 +179,32 @@ final class DashboardReadModelTest extends TestCase
         self::assertStringContainsString('40%', $metricsHtml);
         self::assertStringNotContainsString('Отозвать ключ', $metricsHtml);
 
+        $servicesDetail = $detailController->show(
+            $requestFactory->createServerRequest(
+                'GET',
+                'http://localhost/servers/' . $this->serverId . '?tab=services'
+            ),
+            $responseFactory->createResponse(),
+            ['id' => (string) $this->serverId]
+        );
+        $servicesHtml = (string) $servicesDetail->getBody();
+        self::assertSame(200, $servicesDetail->getStatusCode());
+        self::assertStringContainsString('Состояние сервисов', $servicesHtml);
+        self::assertStringContainsString('/edit#services-monitoring', $servicesHtml);
+
+        $eventsDetail = $detailController->show(
+            $requestFactory->createServerRequest(
+                'GET',
+                'http://localhost/servers/' . $this->serverId . '?tab=events'
+            ),
+            $responseFactory->createResponse(),
+            ['id' => (string) $this->serverId]
+        );
+        $eventsHtml = (string) $eventsDetail->getBody();
+        self::assertSame(200, $eventsDetail->getStatusCode());
+        self::assertStringContainsString('События сервера', $eventsHtml);
+        self::assertStringContainsString('Активных проблем нет', $eventsHtml);
+
         $agentDetail = $detailController->show(
             $requestFactory->createServerRequest(
                 'GET',
