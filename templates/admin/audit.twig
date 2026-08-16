@@ -1,0 +1,134 @@
+{% extends 'layout.twig' %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+    <div>
+        <h1 class="mb-1">{{ t('audit.title') }}</h1>
+        <p class="text-muted mb-0">{{ t('audit.subtitle') }}</p>
+    </div>
+    <span class="badge text-bg-light border">{{ t('audit.total', {count: audit.total}) }}</span>
+</div>
+
+<form method="get" action="/admin/audit" class="card mb-4">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-12 col-md-6 col-xl-3">
+                <label class="form-label" for="audit-actor">{{ t('audit.filter.actor') }}</label>
+                <select class="form-select" id="audit-actor" name="actor">
+                    <option value="">{{ t('common.all') }}</option>
+                    {% for actor in options.actors %}
+                        <option value="{{ actor }}" {{ filters.actor == actor ? 'selected' : '' }}>{{ actor }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 col-md-6 col-xl-3">
+                <label class="form-label" for="audit-action">{{ t('audit.filter.action') }}</label>
+                <select class="form-select" id="audit-action" name="action">
+                    <option value="">{{ t('common.all') }}</option>
+                    {% for action in options.actions %}
+                        <option value="{{ action }}" {{ filters.action == action ? 'selected' : '' }}>{{ action }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 col-md-6 col-xl-3">
+                <label class="form-label" for="audit-object-type">{{ t('audit.filter.object_type') }}</label>
+                <select class="form-select" id="audit-object-type" name="object_type">
+                    <option value="">{{ t('common.all') }}</option>
+                    {% for object_type in options.object_types %}
+                        <option value="{{ object_type }}" {{ filters.object_type == object_type ? 'selected' : '' }}>{{ object_type }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 col-md-6 col-xl-3">
+                <label class="form-label" for="audit-object-id">{{ t('audit.filter.object_id') }}</label>
+                <input class="form-control" id="audit-object-id" name="object_id" value="{{ filters.object_id ?? '' }}" maxlength="100">
+            </div>
+            <div class="col-12 col-md-6 col-xl-3">
+                <label class="form-label" for="audit-from">{{ t('audit.filter.from') }}</label>
+                <input class="form-control" type="date" id="audit-from" name="from" value="{{ filters.from }}">
+            </div>
+            <div class="col-12 col-md-6 col-xl-3">
+                <label class="form-label" for="audit-to">{{ t('audit.filter.to') }}</label>
+                <input class="form-control" type="date" id="audit-to" name="to" value="{{ filters.to }}">
+            </div>
+            <div class="col-12 col-xl-4">
+                <label class="form-label" for="audit-query">{{ t('audit.filter.search') }}</label>
+                <input class="form-control" id="audit-query" name="q" value="{{ filters.q ?? '' }}" maxlength="200" placeholder="{{ t('audit.filter.search_placeholder') }}">
+            </div>
+            <div class="col-12 col-xl-2 d-flex gap-2">
+                <button class="btn btn-primary flex-grow-1" type="submit">{{ t('common.apply') }}</button>
+                <a class="btn btn-outline-secondary" href="/admin/audit">{{ t('common.reset') }}</a>
+            </div>
+        </div>
+    </div>
+</form>
+
+<div class="card overflow-hidden">
+    {% if audit.items is empty %}
+        <div class="card-body py-5 text-center text-muted">
+            <i class="fa-solid fa-clock-rotate-left fa-2x mb-3"></i>
+            <div>{{ t('audit.empty') }}</div>
+        </div>
+    {% else %}
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" data-audit-table>
+                <thead>
+                <tr>
+                    <th>{{ t('audit.column.time') }}</th>
+                    <th>{{ t('audit.column.actor') }}</th>
+                    <th>{{ t('audit.column.action') }}</th>
+                    <th>{{ t('audit.column.object') }}</th>
+                    <th>{{ t('audit.column.description') }}</th>
+                    <th class="text-end">{{ t('audit.column.details') }}</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for row in audit.items %}
+                    <tr>
+                        <td class="text-nowrap">
+                            <time datetime="{{ row.occurred_at }}">{{ row.occurred_at|date('d.m.Y H:i:s') }}</time>
+                        </td>
+                        <td>
+                            <div class="fw-semibold">{{ row.actor_username }}</div>
+                            {% if row.actor_role %}<small class="text-muted">{{ row.actor_role }}</small>{% endif %}
+                        </td>
+                        <td><code>{{ row.action }}</code></td>
+                        <td>
+                            {% if row.object_url %}
+                                <a href="{{ row.object_url }}" class="text-decoration-none fw-semibold">{{ row.object_label ?: row.object_type }}</a>
+                            {% else %}
+                                <span class="fw-semibold">{{ row.object_label ?: row.object_type }}</span>
+                            {% endif %}
+                            <div class="small text-muted">
+                                {{ row.object_type }}{% if row.object_id %} #{{ row.object_id }}{% endif %}
+                            </div>
+                        </td>
+                        <td>{{ row.description }}</td>
+                        <td class="text-end">
+                            {% if row.metadata_text %}
+                                <details class="audit-details text-start">
+                                    <summary class="btn btn-sm btn-outline-secondary">{{ t('audit.details') }}</summary>
+                                    <pre class="mt-2 mb-0 p-2 bg-body-tertiary border rounded small">{{ row.metadata_text }}</pre>
+                                </details>
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+
+    {% if audit.pages > 1 %}
+        <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <span class="text-muted small">{{ t('audit.page', {page: audit.page, pages: audit.pages}) }}</span>
+            <div class="btn-group" role="group" aria-label="{{ t('audit.pagination') }}">
+                <a class="btn btn-sm btn-outline-secondary {{ audit.page <= 1 ? 'disabled' : '' }}" href="{{ previous_url }}">{{ t('audit.previous') }}</a>
+                <a class="btn btn-sm btn-outline-secondary {{ audit.page >= audit.pages ? 'disabled' : '' }}" href="{{ next_url }}">{{ t('audit.next') }}</a>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

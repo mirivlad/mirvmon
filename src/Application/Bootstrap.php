@@ -10,6 +10,7 @@ use App\Controllers\AgentUpdateController;
 use App\Controllers\AlertController;
 use App\Controllers\Api\MetricsApiController;
 use App\Controllers\Api\MetricsController;
+use App\Controllers\AuditController;
 use App\Controllers\AuthController;
 use App\Controllers\DashboardController;
 use App\Controllers\GroupController;
@@ -24,6 +25,7 @@ use App\I18n\Translator;
 use App\I18n\TwigTranslation;
 use App\Repositories\AgentUpdateRepository;
 use App\Repositories\AppSettingsRepository;
+use App\Repositories\AuditLogRepository;
 use App\Repositories\IncidentRepository;
 use App\Repositories\MaintenanceWindowRepository;
 use App\Repositories\MetricRepository;
@@ -37,6 +39,7 @@ use App\Services\AgentCredentialIssuer;
 use App\Services\AgentInstallerService;
 use App\Services\AgentUpdateService;
 use App\Services\AgentVersionService;
+use App\Services\AuditLogger;
 use App\Services\MetricsIngestionService;
 use App\Services\PublicUrlResolver;
 use App\Services\ServerPlatformService;
@@ -114,6 +117,18 @@ final class Bootstrap
         $container->set(Twig::class, $twig);
         $container->set(AppSettingsRepository::class, $appSettings);
         $container->set(Translator::class, $translator);
+        $container->set(
+            AuditLogRepository::class,
+            static fn (Container $container): AuditLogRepository => new AuditLogRepository(
+                $container->get(PDO::class)
+            )
+        );
+        $container->set(
+            AuditLogger::class,
+            static fn (Container $container): AuditLogger => new AuditLogger(
+                $container->get(AuditLogRepository::class)
+            )
+        );
         $container->set(
             ServerRepository::class,
             static fn (Container $container): ServerRepository => new ServerRepository(
@@ -359,6 +374,14 @@ final class Bootstrap
                     $container->get(AgentUpdateService::class),
                     $container->get(Translator::class)
                 )
+        );
+        $container->set(
+            AuditController::class,
+            static fn (Container $container): AuditController => new AuditController(
+                $container->get(Twig::class),
+                $container->get(AuditLogRepository::class),
+                $container->get(Translator::class)
+            )
         );
         $container->set(
             MetricsController::class,

@@ -10,6 +10,7 @@ use App\Controllers\AgentUpdateController;
 use App\Controllers\AlertController;
 use App\Controllers\Api\MetricsApiController;
 use App\Controllers\Api\MetricsController;
+use App\Controllers\AuditController;
 use App\Controllers\AuthController;
 use App\Controllers\DashboardController;
 use App\Controllers\GroupController;
@@ -133,6 +134,7 @@ final class AppFactory
             $group->post('/language', self::controller($container, LanguageController::class, 'save'));
             $group->get('/system', self::controller($container, SystemController::class, 'index'));
             $group->post('/system/host', self::controller($container, SystemController::class, 'saveHost'));
+            $group->get('/audit', self::controller($container, AuditController::class, 'index'));
         });
         $administration->add($csrf)->add($admin)->add($auth);
 
