@@ -22,6 +22,7 @@ use App\Controllers\SystemController;
 use App\Http\ErrorResponder;
 use App\I18n\Translator;
 use App\Middlewares\AdminMiddleware;
+use App\Middlewares\AuditTrailMiddleware;
 use App\Middlewares\AuthMiddleware;
 use App\Middlewares\CsrfMiddleware;
 use App\Middlewares\LocaleMiddleware;
@@ -64,6 +65,8 @@ final class AppFactory
         $csrf = new CsrfMiddleware($responseFactory, $twig);
         $auth = new AuthMiddleware($responseFactory, $pdo);
         $admin = new AdminMiddleware($responseFactory);
+        /** @var AuditTrailMiddleware $auditTrail */
+        $auditTrail = $container->get(AuditTrailMiddleware::class);
 
         $app->get('/login', self::controller($container, AuthController::class, 'form'))->add($csrf);
         $app->post('/login', self::controller($container, AuthController::class, 'login'))->add($csrf);
@@ -115,7 +118,7 @@ final class AppFactory
             $group->post('/agent/{id}/config', self::controller($container, AgentController::class, 'updateConfig'));
             $group->get('/agent/{id}/status', self::controller($container, AgentController::class, 'getStatus'));
         });
-        $protected->add($csrf)->add($auth);
+        $protected->add($auditTrail)->add($csrf)->add($auth);
 
         $administration = $app->group('/admin', function (RouteCollectorProxyInterface $group) use ($container): void {
             $group->get('/users', self::controller($container, AdminController::class, 'usersList'));
@@ -136,7 +139,7 @@ final class AppFactory
             $group->post('/system/host', self::controller($container, SystemController::class, 'saveHost'));
             $group->get('/audit', self::controller($container, AuditController::class, 'index'));
         });
-        $administration->add($csrf)->add($admin)->add($auth);
+        $administration->add($auditTrail)->add($csrf)->add($admin)->add($auth);
 
         $app->post('/api/v1/metrics', self::controller($container, MetricsController::class, 'collectMetrics'));
         $app->get('/api/v1/agent/config', self::controller($container, AgentController::class, 'getAgentConfig'));
