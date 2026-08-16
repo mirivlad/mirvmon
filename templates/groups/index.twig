@@ -2,55 +2,94 @@
 {% set page_title = t('groups.title') %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h2><i class="fas fa-layer-group"></i> {{ t('groups.title') }}</h2>
-            <a href="/groups/create" class="btn btn-primary">
-                <i class="fas fa-plus"></i> <span class="d-none d-sm-inline">{{ t('groups.create') }}</span>
-            </a>
-        </div>
+<header class="app-page-header">
+    <div class="app-page-header-main">
+        <p class="page-eyebrow">MirvMon</p>
+        <h1><i class="fas fa-layer-group" aria-hidden="true"></i> {{ t('groups.title') }}</h1>
+        <p class="page-subtitle">{{ t('ui19.groups.subtitle') }}</p>
+    </div>
+    <div class="app-page-actions">
+        <a href="/groups/create" class="btn btn-primary">
+            <i class="fas fa-plus" aria-hidden="true"></i>
+            <span>{{ t('groups.create') }}</span>
+        </a>
+    </div>
+</header>
 
-        <div class="card">
-            <div class="card-body">
-                {% if groups|length > 0 %}
-                <div class="table-responsive">
-                    <table class="table table-striped">
-                        <thead><tr>
-                            <th>{{ t('common.name') }}</th>
-                            <th>{{ t('common.description') }}</th>
-                            <th>{{ t('groups.column.servers') }}</th>
-                            <th>{{ t('groups.column.color') }}</th>
-                            <th>{{ t('common.actions') }}</th>
-                        </tr></thead>
-                        <tbody>
-                            {% for group in groups %}
-                            <tr>
-                                <td><i class="fas {{ group.icon|default('fa-box') }}" {% if group.color %}style="color: {{ group.color }}"{% endif %}></i> {{ group.name }}</td>
-                                <td>{{ group.description|default('') }}</td>
-                                <td>{{ group.server_count }}</td>
-                                <td>{% if group.color %}<span class="badge" style="background-color: {{ group.color }}">{{ group.color }}</span>{% else %}-{% endif %}</td>
-                                <td>
-                                    {% include "partials/action-button.twig" with {href: '/groups/' ~ group.id, icon: 'fa-eye', label: t('common.view'), class: 'btn-outline-info'} %}
-                                    {% include "partials/action-button.twig" with {href: '/groups/' ~ group.id ~ '/edit', icon: 'fa-edit', label: t('common.edit'), class: 'btn-outline-primary'} %}
-                                    {% include "partials/action-button.twig" with {form_action: '/groups/' ~ group.id ~ '/delete', icon: 'fa-trash', label: t('common.delete'), class: 'btn-outline-danger', confirm: t('groups.delete.confirm')} %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+{% if groups|length > 0 %}
+<div class="group-dashboard-grid">
+    {% for group in groups %}
+        {% set summary = group.summary %}
+        <article class="group-dashboard-card" style="--group-color: {{ group.color|default('#3157d5') }}">
+            <div class="group-dashboard-header">
+                <span class="group-dashboard-icon" aria-hidden="true">
+                    <i class="fas {{ group.icon|default('fa-box') }}"></i>
+                </span>
+                <div class="group-dashboard-heading">
+                    <a class="group-dashboard-name" href="/groups/{{ group.id }}">{{ group.name }}</a>
+                    <span class="group-dashboard-description">
+                        {{ group.description|default(t('groups.no_description')) }}
+                    </span>
                 </div>
-                {% else %}
-                <div class="text-center py-5">
-                    <i class="fas fa-layer-group fa-3x text-muted mb-3"></i>
-                    <p class="lead">{{ t('groups.empty.heading') }}</p>
-                    <a href="/groups/create" class="btn btn-primary">
-                        <i class="fas fa-plus"></i> {{ t('groups.empty.create') }}
-                    </a>
-                </div>
-                {% endif %}
             </div>
-        </div>
+
+            <div class="group-dashboard-body">
+                <div class="group-stat-grid">
+                    <div class="group-stat">
+                        <span class="group-stat-label">{{ t('ui19.groups.total') }}</span>
+                        <strong class="group-stat-value">{{ summary.total }}</strong>
+                    </div>
+                    <div class="group-stat">
+                        <span class="group-stat-label">{{ t('ui19.groups.active_problems') }}</span>
+                        <strong class="group-stat-value">{{ summary.active_problems }}</strong>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="small text-muted fw-semibold mb-2">{{ t('ui19.groups.statuses') }}</div>
+                    <div class="group-status-strip" aria-label="{{ t('ui19.groups.statuses') }}">
+                        <div class="group-status-item">
+                            <strong class="group-status-value">{{ summary.online }}</strong>
+                            <span class="group-status-label">{{ t('status.online') }}</span>
+                        </div>
+                        <div class="group-status-item status-warning">
+                            <strong class="group-status-value">{{ summary.warning }}</strong>
+                            <span class="group-status-label">{{ t('status.warning') }}</span>
+                        </div>
+                        <div class="group-status-item status-critical">
+                            <strong class="group-status-value">{{ summary.critical }}</strong>
+                            <span class="group-status-label">{{ t('status.critical') }}</span>
+                        </div>
+                        <div class="group-status-item status-offline">
+                            <strong class="group-status-value">{{ summary.offline }}</strong>
+                            <span class="group-status-label">{{ t('status.offline') }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="group-dashboard-footer">
+                    <a class="btn btn-sm btn-primary" href="/groups/{{ group.id }}">
+                        <i class="fas fa-arrow-right" aria-hidden="true"></i> {{ t('ui19.groups.open') }}
+                    </a>
+                    <div class="d-flex gap-1">
+                        {% include "partials/action-button.twig" with {href: '/groups/' ~ group.id ~ '/edit', icon: 'fa-edit', label: t('common.edit'), class: 'btn-outline-primary'} %}
+                        {% include "partials/action-button.twig" with {form_action: '/groups/' ~ group.id ~ '/delete', icon: 'fa-trash', label: t('common.delete'), class: 'btn-outline-danger', confirm: t('groups.delete.confirm')} %}
+                    </div>
+                </div>
+            </div>
+        </article>
+    {% endfor %}
+</div>
+{% else %}
+<div class="app-panel">
+    <div class="app-empty-state">
+        <span class="app-empty-state-icon"><i class="fas fa-layer-group" aria-hidden="true"></i></span>
+        <h3>{{ t('groups.empty.heading') }}</h3>
+        <p>{{ t('ui19.groups.subtitle') }}</p>
+        <a href="/groups/create" class="btn btn-primary">
+            <i class="fas fa-plus" aria-hidden="true"></i> {{ t('groups.empty.create') }}
+        </a>
     </div>
 </div>
+{% endif %}
 {% endblock %}

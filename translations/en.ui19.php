@@ -1,0 +1,32 @@
+<?php
+
+declare(strict_types=1);
+
+return [
+    'ui19.servers.subtitle' => 'Fast search and operational filters without a table full of per-column search fields.',
+    'ui19.servers.search' => 'Search servers',
+    'ui19.servers.search_placeholder' => 'Name, address, description, or group',
+    'ui19.servers.group' => 'Group',
+    'ui19.servers.all_groups' => 'All groups',
+    'ui19.servers.status' => 'Status',
+    'ui19.servers.all_statuses' => 'All statuses',
+    'ui19.servers.advanced' => 'Advanced filters',
+    'ui19.servers.advanced_hint' => 'Less frequently used exact filters',
+    'ui19.servers.apply' => 'Apply',
+    'ui19.servers.reset' => 'Reset',
+    'ui19.servers.server' => 'Server',
+    'ui19.servers.health' => 'Status / data',
+    'ui19.servers.results' => 'Shown: {count}',
+    'ui19.servers.no_matches' => 'No servers match the selected filters.',
+    'ui19.servers.last_sample' => 'Last sample: {time}',
+    'ui19.servers.no_sample' => 'No sample received yet',
+    'ui19.groups.subtitle' => 'Groups as operational mini-dashboards: server health and active problems at a glance.',
+    'ui19.groups.open' => 'Open group',
+    'ui19.groups.total' => 'Servers',
+    'ui19.groups.active_problems' => 'Active problems',
+    'ui19.groups.no_problems' => 'No active problems',
+    'ui19.groups.statuses' => 'Server status',
+    'ui19.groups.summary' => 'Group summary',
+    'ui19.groups.servers' => 'Group servers',
+    'ui19.groups.manage' => 'Manage group',
+];

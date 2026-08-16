@@ -87,6 +87,34 @@ final class GroupControllerTest extends TestCase
         self::assertStringContainsString('stale-server', $html);
         self::assertStringContainsString('Внимание', $html);
         self::assertStringContainsString('Нет данных', $html);
+        self::assertStringContainsString('Активных проблем', $html);
+        self::assertStringContainsString('group-summary-grid', $html);
+    }
+
+    public function testGroupIndexRendersOperationalSummaryInsteadOfCrudOnlyTable(): void
+    {
+        $freshId = $this->insertServer('group-online', '10 seconds');
+        $this->insertServer('group-offline', '20 minutes');
+        self::$pdo?->exec(
+            "INSERT INTO alerts (server_id, kind, subject, severity)
+             VALUES ({$freshId}, 'metric', 'cpu_load', 'critical')"
+        );
+
+        $response = $this->controller->index(
+            (new ServerRequestFactory())->createServerRequest('GET', '/groups'),
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+        $html = (string) $response->getBody();
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertStringContainsString('group-dashboard-card', $html);
+        self::assertStringContainsString('group-status-strip', $html);
+        self::assertStringContainsString('Активных проблем', $html);
+        self::assertStringContainsString('Production', $html);
+        self::assertStringContainsString('group-online', (string) self::$pdo?->query(
+            "SELECT name FROM servers WHERE name = 'group-online'"
+        )->fetchColumn());
     }
 
     public function testInvalidGroupDataIsRejected(): void
