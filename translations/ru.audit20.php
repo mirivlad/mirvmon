@@ -32,6 +32,7 @@ return [
     'audit.event.server.updated' => 'Изменены настройки сервера «{name}».',
     'audit.event.server.deleted' => 'Удалён сервер «{name}».',
     'audit.event.server.token_rotated' => 'Перевыпущен токен агента сервера «{name}».',
+    'audit.event.server.installers_issued' => 'Выпущены новые установочные токены для сервера «{name}».',
     'audit.event.server.maintenance_started' => 'Для сервера «{name}» включено обслуживание на {minutes} мин.',
     'audit.event.server.maintenance_cancelled' => 'Для сервера «{name}» завершено обслуживание.',
     'audit.event.server.thresholds_saved' => 'Изменены пороги сервера «{name}».',
