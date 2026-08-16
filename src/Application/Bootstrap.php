@@ -24,6 +24,7 @@ use App\I18n\Translator;
 use App\I18n\TwigTranslation;
 use App\Repositories\AgentUpdateRepository;
 use App\Repositories\AppSettingsRepository;
+use App\Repositories\IncidentRepository;
 use App\Repositories\MaintenanceWindowRepository;
 use App\Repositories\MetricRepository;
 use App\Repositories\NotificationOutboxRepository;
@@ -120,6 +121,12 @@ final class Bootstrap
             )
         );
         $container->set(
+            IncidentRepository::class,
+            static fn (Container $container): IncidentRepository => new IncidentRepository(
+                $container->get(PDO::class)
+            )
+        );
+        $container->set(
             MaintenanceWindowRepository::class,
             static fn (Container $container): MaintenanceWindowRepository =>
                 new MaintenanceWindowRepository($container->get(PDO::class))
@@ -199,7 +206,8 @@ final class Bootstrap
         $container->set(
             AgentUpdateRepository::class,
             static fn (Container $container): AgentUpdateRepository =>
-                new AgentUpdateRepository($container->get(PDO::class))
+                new AgentUpdateRepository($container->get(PDO::class)
+            )
         );
         $container->set(AgentVersionService::class, static fn (): AgentVersionService => new AgentVersionService());
         $container->set(
@@ -257,7 +265,8 @@ final class Bootstrap
                 $container->get(ServerRepository::class),
                 $container->get(ServerStatusService::class),
                 $container->get(Translator::class),
-                $container->get(SystemHealthService::class)
+                $container->get(SystemHealthService::class),
+                $container->get(IncidentRepository::class)
             )
         );
         $container->set(
@@ -299,7 +308,8 @@ final class Bootstrap
                 $container->get(PDO::class),
                 $container->get(Twig::class),
                 $container->get(NotificationOutboxRepository::class),
-                $container->get(Translator::class)
+                $container->get(Translator::class),
+                $container->get(IncidentRepository::class)
             )
         );
         $container->set(
