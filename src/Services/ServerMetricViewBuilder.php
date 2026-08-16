@@ -202,7 +202,11 @@ final class ServerMetricViewBuilder
         return $charts;
     }
 
-    /** @param GroupedMetrics $grouped @param list<string>|null $displayMetrics @return list<Chart> */
+    /**
+     * @param GroupedMetrics $grouped
+     * @param list<string>|null $displayMetrics
+     * @return list<Chart>
+     */
     private function networkCharts(array $grouped, ?array $displayMetrics): array
     {
         $interfaces = [];
@@ -252,7 +256,11 @@ final class ServerMetricViewBuilder
         return $charts;
     }
 
-    /** @param GroupedMetrics $grouped @param list<string>|null $displayMetrics @return list<Chart> */
+    /**
+     * @param GroupedMetrics $grouped
+     * @param list<string>|null $displayMetrics
+     * @return list<Chart>
+     */
     private function diskIoCharts(array $grouped, ?array $displayMetrics): array
     {
         $devices = [];
@@ -302,7 +310,11 @@ final class ServerMetricViewBuilder
         return $charts;
     }
 
-    /** @param GroupedMetrics $grouped @param list<string>|null $displayMetrics @return Chart */
+    /**
+     * @param GroupedMetrics $grouped
+     * @param list<string>|null $displayMetrics
+     * @return Chart
+     */
     private function temperatureChart(array $grouped, ?array $displayMetrics): array
     {
         $labels = [];
@@ -339,7 +351,12 @@ final class ServerMetricViewBuilder
         ];
     }
 
-    /** @param GroupedMetrics $grouped @param list<string>|null $displayMetrics @param CurrentMetrics $current @return list<Chart> */
+    /**
+     * @param GroupedMetrics $grouped
+     * @param list<string>|null $displayMetrics
+     * @param CurrentMetrics $current
+     * @return list<Chart>
+     */
     private function diskCharts(array $grouped, ?array $displayMetrics, array $current): array
     {
         $charts = [];
@@ -374,7 +391,11 @@ final class ServerMetricViewBuilder
         return $charts;
     }
 
-    /** @param GroupedMetrics $grouped @param list<string>|null $displayMetrics @return Chart */
+    /**
+     * @param GroupedMetrics $grouped
+     * @param list<string>|null $displayMetrics
+     * @return Chart
+     */
     private function uptimeChart(array $grouped, ?array $displayMetrics): array
     {
         if (!$this->selected('uptime', $displayMetrics) || empty($grouped['uptime'])) {
@@ -469,7 +490,7 @@ final class ServerMetricViewBuilder
             ];
         }
         if ($network !== []) {
-            $top = null;
+            $top = ['label' => '', 'value' => -1.0, 'unit' => ''];
             foreach ($network as $chart) {
                 $peak = 0.0;
                 foreach ($chart['datasets'] as $dataset) {
@@ -477,7 +498,7 @@ final class ServerMetricViewBuilder
                         $peak = max($peak, (float) $value);
                     }
                 }
-                if ($top === null || $peak > $top['value']) {
+                if ($peak > $top['value']) {
                     $top = [
                         'label' => $chart['title'],
                         'value' => $peak,
@@ -485,18 +506,20 @@ final class ServerMetricViewBuilder
                     ];
                 }
             }
-            if ($top !== null) {
-                $cards[] = [
-                    'title' => $this->translator->trans('metric.busiest_interface'),
-                    'value' => (new MetricValueFormatter())->format($top['value'], $top['unit']),
-                    'subtitle' => $top['label'],
-                ];
-            }
+            $cards[] = [
+                'title' => $this->translator->trans('metric.busiest_interface'),
+                'value' => (new MetricValueFormatter())->format($top['value'], $top['unit']),
+                'subtitle' => $top['label'],
+            ];
         }
         return $cards;
     }
 
-    /** @param GroupedMetrics $grouped @param CurrentMetrics $current @return array{totalGb: float, usedGb: float, freeGb: float}|null */
+    /**
+     * @param GroupedMetrics $grouped
+     * @param CurrentMetrics $current
+     * @return array{totalGb: float, usedGb: float, freeGb: float}|null
+     */
     private function ramDetails(array $grouped, array $current): ?array
     {
         $ram = $current['ram_used'] ?? $this->latest($grouped['ram_used'] ?? []);
@@ -519,19 +542,28 @@ final class ServerMetricViewBuilder
         return is_array($displayMetrics) && in_array($name, $displayMetrics, true);
     }
 
-    /** @param list<MetricPoint> $points @return list<string> */
+    /**
+     * @param list<MetricPoint> $points
+     * @return list<string>
+     */
     private function labels(array $points): array
     {
         return array_map(fn (array $point): string => $this->pointTime($point, 'd.m H:i'), $points);
     }
 
-    /** @param list<MetricPoint> $points @return list<float> */
+    /**
+     * @param list<MetricPoint> $points
+     * @return list<float>
+     */
     private function values(array $points): array
     {
         return array_map(static fn (array $point): float => round((float) ($point['value'] ?? 0), 2), $points);
     }
 
-    /** @param list<MetricPoint> $points @return list<mixed> */
+    /**
+     * @param list<MetricPoint> $points
+     * @return list<mixed>
+     */
     private function timestamps(array $points): array
     {
         return array_map(
@@ -547,7 +579,10 @@ final class ServerMetricViewBuilder
         return $value ? (new DateTimeImmutable((string) $value))->format($format) : '';
     }
 
-    /** @param list<MetricPoint> $points @return MetricPoint */
+    /**
+     * @param list<MetricPoint> $points
+     * @return MetricPoint
+     */
     private function latest(array $points): array
     {
         return $points === [] ? [] : $points[array_key_last($points)];
