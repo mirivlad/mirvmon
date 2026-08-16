@@ -2,130 +2,210 @@
 {% set page_title = t('servers.edit.title', {name: server.name}) %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">
-                <h3><i class="fas fa-edit"></i> {{ t('servers.edit.title', {name: server.name}) }}</h3>
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h1 class="h3 mb-1"><i class="fas fa-sliders me-1" aria-hidden="true"></i>{{ t('server18.settings.title', {name: server.name}) }}</h1>
+        <p class="text-muted mb-0">{{ t('server18.settings.help') }}</p>
+    </div>
+    <a href="/servers/{{ server.id }}?tab=overview" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-1" aria-hidden="true"></i>{{ t('server18.settings.back') }}</a>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header bg-white"><h2 class="h5 mb-0"><i class="fas fa-server me-1" aria-hidden="true"></i>{{ t('server18.settings.general') }}</h2></div>
+    <div class="card-body">
+        <form method="post" action="/servers/{{ server.id }}">
+            {% include "partials/csrf.twig" %}
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="name" class="form-label">{{ t('servers.form.name') }}</label>
+                    <input type="text" class="form-control" id="name" name="name" value="{{ server.name }}" maxlength="100" required>
+                    <div class="form-text">{{ t('servers.form.name_help') }}</div>
+                </div>
+                <div class="col-md-6">
+                    <label for="address" class="form-label">{{ t('servers.form.address') }}</label>
+                    <input type="text" class="form-control" id="address" name="address" value="{{ server.address|default('') }}" placeholder="IP / DNS" maxlength="255">
+                    <div class="form-text">{{ t('servers.form.address_help') }}</div>
+                </div>
+                <div class="col-md-6">
+                    <label for="group_id" class="form-label">{{ t('servers.form.group') }}</label>
+                    <select class="form-select" id="group_id" name="group_id">
+                        <option value="">{{ t('servers.form.group_none') }}</option>
+                        {% for group in groups %}
+                        <option value="{{ group.id }}" {% if server.group_id == group.id %}selected{% endif %}>{{ group.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">{{ t('servers.form.group_help') }}</div>
+                </div>
+                <div class="col-md-6">
+                    <label for="description" class="form-label">{{ t('servers.form.description') }}</label>
+                    <textarea class="form-control" id="description" name="description" rows="2">{{ server.description|default('') }}</textarea>
+                    <div class="form-text">{{ t('servers.form.description_help') }}</div>
+                </div>
             </div>
-            <div class="card-body">
-                <form method="post" action="/servers/{{ server.id }}">
-                    {% include "partials/csrf.twig" %}
 
-                    <div class="mb-3">
-                        <label for="name" class="form-label">{{ t('servers.form.name') }}</label>
-                        <input type="text" class="form-control" id="name" name="name" value="{{ server.name }}" required>
-                        <small class="form-text text-muted">{{ t('servers.form.name_help') }}</small>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="address" class="form-label">{{ t('servers.form.address') }}</label>
-                        <input type="text" class="form-control" id="address" name="address" value="{{ server.address|default('') }}" placeholder="IP / DNS">
-                        <small class="form-text text-muted">{{ t('servers.form.address_help') }}</small>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="group_id" class="form-label">{{ t('servers.form.group') }}</label>
-                        <select class="form-select" id="group_id" name="group_id">
-                            <option value="">{{ t('servers.form.group_none') }}</option>
-                            {% for group in groups %}
-                            <option value="{{ group.id }}" {% if server.group_id == group.id %}selected{% endif %}>{{ group.name }}</option>
-                            {% endfor %}
-                        </select>
-                        <small class="form-text text-muted">{{ t('servers.form.group_help') }}</small>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="description" class="form-label">{{ t('servers.form.description') }}</label>
-                        <textarea class="form-control" id="description" name="description" rows="3">{{ server.description|default('') }}</textarea>
-                        <small class="form-text text-muted">{{ t('servers.form.description_help') }}</small>
-                    </div>
-
-                    {% if display_groups|length > 0 %}
-                    <hr>
-                    <h5 class="mb-3"><i class="fas fa-chart-line"></i> {{ t('servers.form.display_metrics') }}</h5>
-                    <p class="text-muted small">{{ t('servers.form.display_metrics_help') }}</p>
-                    {% for displayGroup in display_groups %}
-                    <div class="mb-3">
-                        <div class="fw-semibold small text-muted text-uppercase mb-2">{{ displayGroup.name }}</div>
-                        <div class="row">
-                            {% for option in displayGroup.options %}
-                            <div class="col-md-6 col-lg-4 mb-2">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox"
-                                           name="display_widgets[]" id="widget_{{ option.id }}" value="{{ option.id }}"
-                                           {% if option.id in selected_widgets %}checked{% endif %}>
-                                    <label class="form-check-label" for="widget_{{ option.id }}">
-                                        {{ option.label }}{% if option.unit %} <span class="text-muted">({{ option.unit }})</span>{% endif %}
-                                    </label>
-                                </div>
+            <hr class="my-4" id="display-metrics">
+            <h3 class="h5 mb-2"><i class="fas fa-chart-line me-1" aria-hidden="true"></i>{{ t('servers.form.display_metrics') }}</h3>
+            <p class="text-muted small">{{ t('servers.form.display_metrics_help') }}</p>
+            {% if display_groups|length > 0 %}
+                {% for displayGroup in display_groups %}
+                <div class="mb-3">
+                    <div class="fw-semibold small text-muted text-uppercase mb-2">{{ displayGroup.name }}</div>
+                    <div class="row">
+                        {% for option in displayGroup.options %}
+                        <div class="col-md-6 col-lg-4 mb-2">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="display_widgets[]" id="widget_{{ option.id }}" value="{{ option.id }}" {% if option.id in selected_widgets %}checked{% endif %}>
+                                <label class="form-check-label" for="widget_{{ option.id }}">{{ option.label }}{% if option.unit %} <span class="text-muted">({{ option.unit }})</span>{% endif %}</label>
                             </div>
-                            {% endfor %}
                         </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="alert alert-light border small">{{ t('server18.settings.no_display_metrics') }}</div>
+            {% endif %}
+
+            <hr class="my-4" id="offline-settings">
+            <h3 class="h5 mb-3"><i class="fas fa-wifi me-1" aria-hidden="true"></i>{{ t('servers.form.offline_settings') }}</h3>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="offline_timeout" class="form-label">{{ t('servers.form.offline_timeout') }}</label>
+                    <div class="input-group">
+                        <input type="number" class="form-control" id="offline_timeout" name="offline_timeout" value="{{ server.offline_timeout_seconds|default(300) }}" min="0" max="86400">
+                        <span class="input-group-text">{{ t('common.seconds') }}</span>
+                    </div>
+                    <div class="form-text">{{ t('servers.form.offline_timeout_help') }}</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">{{ t('servers.form.notifications') }}</label>
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" name="notify_on_offline" id="notify_on_offline" value="1" {% if server.notify_on_offline|default(1) %}checked{% endif %}>
+                        <label class="form-check-label" for="notify_on_offline">{{ t('servers.form.notify_offline') }}</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mt-1">
+                <div class="col-12">
+                    <label class="form-label">{{ t('servers.form.personal_recipients') }}</label>
+                    <div class="form-text mt-0">{{ t('servers.form.personal_recipients_help') }}</div>
+                </div>
+                <div class="col-md-6">
+                    <label for="notification_telegram_chat_id" class="form-label">{{ t('servers.form.telegram_chat_id') }}</label>
+                    <input type="text" class="form-control" id="notification_telegram_chat_id" name="notification_telegram_chat_id" value="{{ server.notification_telegram_chat_id|default('') }}" placeholder="-1001234567890" maxlength="100">
+                </div>
+                <div class="col-md-6">
+                    <label for="notification_emails" class="form-label">{{ t('servers.form.email_addresses') }}</label>
+                    <input type="text" class="form-control" id="notification_emails" name="notification_emails" value="{{ server_notification_emails|default([])|join(', ') }}" placeholder="ivan@example.net, ops@example.net">
+                </div>
+            </div>
+
+            {% if server.last_offline_alert_at %}
+            <div class="alert alert-info small mt-3 mb-0"><i class="fas fa-clock me-1" aria-hidden="true"></i>{{ t('servers.form.last_offline_alert', {time: server.last_offline_alert_at|date('d.m.Y H:i:s')}) }}</div>
+            {% endif %}
+
+            <div class="d-flex justify-content-end mt-4">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1" aria-hidden="true"></i>{{ t('common.save') }}</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card mb-3" id="thresholds">
+    <div class="card-header bg-white"><h2 class="h5 mb-0"><i class="fas fa-gauge-high me-1" aria-hidden="true"></i>{{ t('server18.settings.thresholds') }}</h2></div>
+    <div class="card-body">
+        <p class="text-muted small">{{ t('server18.settings.thresholds_help') }}</p>
+        {% if all_metric_types is empty %}
+            <div class="alert alert-light border mb-0">{{ t('server18.settings.thresholds_empty') }}</div>
+        {% else %}
+        <form method="post" action="/servers/{{ server.id }}/thresholds">
+            {% include "partials/csrf.twig" %}
+            <input type="hidden" name="return_to" value="edit">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead><tr>
+                        <th>{{ t('server18.settings.metric') }}</th>
+                        <th style="min-width: 130px">{{ t('server18.settings.warning') }}</th>
+                        <th style="min-width: 130px">{{ t('server18.settings.critical') }}</th>
+                        <th style="min-width: 140px">{{ t('server18.settings.trigger_delay') }}</th>
+                        <th style="min-width: 140px">{{ t('server18.settings.recovery_delay') }}</th>
+                    </tr></thead>
+                    <tbody>
+                    {% for metric in all_metric_types %}
+                        {% set current = existing_thresholds[metric.name]|default({}) %}
+                        {% if metric.name == 'cpu_load' %}
+                            {% set metric_label = t('metric.cpu_load') %}
+                        {% elseif metric.name == 'ram_used' %}
+                            {% set metric_label = t('metric.ram_used') %}
+                        {% elseif metric.name starts with 'disk_used_' %}
+                            {% set metric_label = t('server.thresholds.disk', {name: metric.name|replace({'disk_used_': ''})|replace({'_': '/'})}) %}
+                        {% elseif metric.name starts with 'net_in_' %}
+                            {% set metric_label = t('server.thresholds.network_in', {name: metric.name|replace({'net_in_': ''})}) %}
+                        {% elseif metric.name starts with 'net_out_' %}
+                            {% set metric_label = t('server.thresholds.network_out', {name: metric.name|replace({'net_out_': ''})}) %}
+                        {% elseif metric.name starts with 'temp_' %}
+                            {% set translated_metric = t('incidents.metric.' ~ metric.name) %}
+                            {% set metric_label = translated_metric != 'incidents.metric.' ~ metric.name ? translated_metric : t('metric.temperature', {name: metric.name|replace({'temp_': ''})|replace({'_': ' '})}) %}
+                        {% else %}
+                            {% set metric_label = metric.name|replace({'_': ' '}) %}
+                        {% endif %}
+                        <tr>
+                            <td><div class="fw-semibold">{{ metric_label }}</div>{% if metric.unit %}<div class="small text-muted">{{ metric.unit }}</div>{% endif %}</td>
+                            <td><input type="number" step="any" class="form-control form-control-sm" name="{{ metric.name }}_warning" value="{{ current.warning is defined and current.warning is not null ? current.warning : '' }}"></td>
+                            <td><input type="number" step="any" class="form-control form-control-sm" name="{{ metric.name }}_critical" value="{{ current.critical is defined and current.critical is not null ? current.critical : '' }}"></td>
+                            <td><div class="input-group input-group-sm"><input type="number" min="0" max="86400" class="form-control" name="{{ metric.name }}_duration" value="{{ current.duration|default('') }}"><span class="input-group-text">{{ t('common.seconds') }}</span></div></td>
+                            <td><div class="input-group input-group-sm"><input type="number" min="0" max="86400" class="form-control" name="{{ metric.name }}_recovery" value="{{ current.recovery|default('') }}"><span class="input-group-text">{{ t('common.seconds') }}</span></div></td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="small text-muted mb-3">{{ t('server18.settings.thresholds_blank_help') }}</div>
+            <div class="d-flex justify-content-end"><button type="submit" class="btn btn-primary"><i class="fas fa-save me-1" aria-hidden="true"></i>{{ t('server18.settings.save_thresholds') }}</button></div>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card" id="services-monitoring">
+    <div class="card-header bg-white"><h2 class="h5 mb-0"><i class="fas fa-list-check me-1" aria-hidden="true"></i>{{ t('server18.settings.services') }}</h2></div>
+    <div class="card-body">
+        <p class="text-muted small">{{ t('server18.settings.services_help') }}</p>
+        <form method="post" action="/servers/{{ server.id }}/services">
+            {% include "partials/csrf.twig" %}
+            <input type="hidden" name="return_to" value="edit">
+            {% set reported_names = all_services|map(s => s.service_name) %}
+            {% if all_services is empty and monitor_services is empty %}
+                <div class="alert alert-light border">{{ t('server18.settings.services_empty') }}</div>
+            {% else %}
+                <div class="row g-2 mb-3">
+                    {% for service in all_services %}
+                    <div class="col-md-6 col-xl-4">
+                        <label class="border rounded p-2 d-flex gap-2 align-items-start h-100" for="service_{{ loop.index }}">
+                            <input class="form-check-input mt-1" type="checkbox" id="service_{{ loop.index }}" name="services[]" value="{{ service.service_name }}" {% if service.service_name in monitor_services %}checked{% endif %}>
+                            <span class="flex-grow-1 min-w-0">
+                                <span class="d-block"><code>{{ service.service_name }}</code></span>
+                                <span class="small {{ service.status == 'running' ? 'text-success' : (service.status == 'stopped' ? 'text-danger' : 'text-warning') }}">{{ t('server.services.' ~ service.status) }}</span>
+                            </span>
+                        </label>
                     </div>
                     {% endfor %}
-                    {% endif %}
-
-                    <hr>
-                    <h5 class="mb-3"><i class="fas fa-wifi"></i> {{ t('servers.form.offline_settings') }}</h5>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="offline_timeout" class="form-label">{{ t('servers.form.offline_timeout') }}</label>
-                                <div class="input-group">
-                                    <input type="number" class="form-control" id="offline_timeout" name="offline_timeout"
-                                           value="{{ server.offline_timeout_seconds|default(300) }}" min="0" max="86400">
-                                    <span class="input-group-text">{{ t('common.seconds') }}</span>
-                                </div>
-                                <small class="form-text text-muted">{{ t('servers.form.offline_timeout_help') }}</small>
-                            </div>
+                    {% for service_name in monitor_services %}
+                        {% if service_name not in reported_names %}
+                        <div class="col-md-6 col-xl-4">
+                            <label class="border rounded p-2 d-flex gap-2 align-items-start h-100" for="legacy_service_{{ loop.index }}">
+                                <input class="form-check-input mt-1" type="checkbox" id="legacy_service_{{ loop.index }}" name="services[]" value="{{ service_name }}" checked>
+                                <span><code>{{ service_name }}</code><span class="d-block small text-muted">{{ t('server18.settings.service_not_reported') }}</span></span>
+                            </label>
                         </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label">{{ t('servers.form.notifications') }}</label>
-                                <div class="form-check form-switch mt-2">
-                                    <input class="form-check-input" type="checkbox" name="notify_on_offline" id="notify_on_offline"
-                                           value="1" {% if server.notify_on_offline|default(1) %}checked{% endif %}>
-                                    <label class="form-check-label" for="notify_on_offline">{{ t('servers.form.notify_offline') }}</label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-12">
-                            <label class="form-label">{{ t('servers.form.personal_recipients') }}</label>
-                            <p class="form-text mt-0">{{ t('servers.form.personal_recipients_help') }}</p>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="notification_telegram_chat_id" class="form-label">{{ t('servers.form.telegram_chat_id') }}</label>
-                                <input type="text" class="form-control" id="notification_telegram_chat_id" name="notification_telegram_chat_id"
-                                       value="{{ server.notification_telegram_chat_id|default('') }}" placeholder="-1001234567890" maxlength="100">
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="notification_emails" class="form-label">{{ t('servers.form.email_addresses') }}</label>
-                                <input type="text" class="form-control" id="notification_emails" name="notification_emails"
-                                       value="{{ server_notification_emails|default([])|join(', ') }}" placeholder="ivan@example.net, ops@example.net">
-                            </div>
-                        </div>
-                    </div>
-
-                    {% if server.last_offline_alert_at %}
-                    <div class="alert alert-info small">
-                        <i class="fas fa-clock"></i> {{ t('servers.form.last_offline_alert', {time: server.last_offline_alert_at|date('d.m.Y H:i:s')}) }}
-                    </div>
-                    {% endif %}
-
-                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                        <a href="/servers" class="btn btn-secondary me-md-2"><i class="fas fa-arrow-left"></i> {{ t('common.back') }}</a>
-                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> {{ t('servers.form.save') }}</button>
-                    </div>
-                </form>
-            </div>
-        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            {% endif %}
+            <div class="d-flex justify-content-end"><button type="submit" class="btn btn-primary"><i class="fas fa-save me-1" aria-hidden="true"></i>{{ t('server18.settings.save_services') }}</button></div>
+        </form>
     </div>
 </div>
 {% endblock %}
