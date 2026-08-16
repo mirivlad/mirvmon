@@ -16,7 +16,10 @@ const detailText = {
     warning: {{ t('alerts.level.warning')|json_encode|raw }},
     critical: {{ t('alerts.level.critical')|json_encode|raw }},
     online: {{ t('server18.status.online')|json_encode|raw }},
-    offline: {{ t('server18.status.offline')|json_encode|raw }}
+    offline: {{ t('server18.status.offline')|json_encode|raw }},
+    days: {{ t('common.days')|json_encode|raw }},
+    hours: {{ t('common.hours')|json_encode|raw }},
+    minutes: {{ t('common.minutes')|json_encode|raw }}
 };
 
 function fetchProcesses(serverId, time) {
@@ -52,7 +55,7 @@ function renderProcessTooltip(context, chartMeta) {
     const timestamp = chartMeta.timestamps[dataIndex] || chartMeta.labels[dataIndex];
     const value = point.raw;
     const valueText = `${point.dataset.label}: ${value}${chartMeta.unit || ''}`;
-    tooltipEl.innerHTML = `${detailText.time}: ${chartMeta.labels[dataIndex]}<br>${valueText}<br><span class="text-muted">${detailText.loading}</span>`;
+    tooltipEl.textContent = `${detailText.time}: ${chartMeta.labels[dataIndex]}\n${valueText}\n${detailText.loading}`;
     tooltipEl.style.opacity = 1;
     const position = context.chart.canvas.getBoundingClientRect();
     tooltipEl.style.left = position.left + window.pageXOffset + tooltip.caretX + 12 + 'px';
@@ -73,10 +76,10 @@ function renderProcessTooltip(context, chartMeta) {
             lines.push('');
             lines.push((chartMeta.id === 'cpu_load' ? detailText.topCpu : detailText.topRam) + ':');
             processList.slice(0, 5).forEach(function(proc) {
-                lines.push(`${proc.cmdline || proc.name}: ${proc.value}%`);
+                lines.push(`${proc.command || proc.name}: ${proc.value}%`);
             });
         }
-        tooltipEl.innerHTML = lines.join('<br>');
+        tooltipEl.textContent = lines.join('\n');
     });
 }
 
@@ -128,9 +131,9 @@ function formatUptimeSeconds(value) {
     const hours = Math.floor(seconds / 3600);
     seconds %= 3600;
     const minutes = Math.floor(seconds / 60);
-    if (days > 0) return `${days}d ${hours}h`;
-    if (hours > 0) return `${hours}h ${minutes}m`;
-    return `${minutes}m`;
+    if (days > 0) return `${days} ${detailText.days} ${hours} ${detailText.hours}`;
+    if (hours > 0) return `${hours} ${detailText.hours} ${minutes} ${detailText.minutes}`;
+    return `${minutes} ${detailText.minutes}`;
 }
 
 function createUptimeChart(chartData) {
