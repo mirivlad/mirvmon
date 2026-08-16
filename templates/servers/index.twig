@@ -14,123 +14,232 @@
     awaiting_restart: ['fa-rotate', 'text-warning', t('agent.state.awaiting_restart')],
     failed: ['fa-circle-xmark', 'text-danger', t('agent.state.failed')]
 } %}
-<div class="row">
-    <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h2><i class="fas fa-server"></i> {{ t('servers.title') }}</h2>
-            <a href="/servers/create" class="btn btn-primary">
-                <i class="fas fa-plus"></i> <span class="d-none d-sm-inline">{{ t('servers.add') }}</span>
-            </a>
-        </div>
 
-        <div class="card">
-            <div class="card-body">
-                {% if servers|length > 0 %}
-                <div class="table-responsive">
-                    <form id="server-filters" method="get" action="/servers" data-server-filter-form>
-                        <input type="hidden" name="sort" value="{{ sort }}">
-                        <input type="hidden" name="direction" value="{{ direction|lower }}">
-                        <input type="hidden" name="agent" value="" data-agent-filter-value>
-                    </form>
-                    {% if session.role == 'admin' %}
-                    <form id="agent-update-csrf" class="d-none" aria-hidden="true">
-                        {% include "partials/csrf.twig" %}
-                    </form>
-                    {% endif %}
-                    <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th><a href="{{ sort_urls.name }}" data-server-sort-link class="link-dark text-decoration-none">{{ t('servers.column.name') }}{% if sort == 'name' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}</a></th>
-                                <th><a href="{{ sort_urls.address }}" data-server-sort-link class="link-dark text-decoration-none">{{ t('servers.column.address') }}{% if sort == 'address' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}</a></th>
-                                <th><a href="{{ sort_urls.group }}" data-server-sort-link class="link-dark text-decoration-none">{{ t('servers.column.group') }}{% if sort == 'group' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}</a></th>
-                                <th><a href="{{ sort_urls.description }}" data-server-sort-link class="link-dark text-decoration-none">{{ t('servers.column.description') }}{% if sort == 'description' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}</a></th>
-                                <th><a href="{{ sort_urls.last_metrics }}" data-server-sort-link class="link-dark text-decoration-none">{{ t('servers.column.last_metrics') }}{% if sort == 'last_metrics' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}</a></th>
-                                <th>{{ t('servers.column.agent') }}</th>
-                                <th>{{ t('common.actions') }}</th>
-                            </tr>
-                            <tr>
-                                <th><input form="server-filters" class="form-control form-control-sm" type="search" name="name" value="{{ filters.name }}" aria-label="{{ t('servers.column.name') }}" placeholder="{{ t('common.search') }}"></th>
-                                <th><input form="server-filters" class="form-control form-control-sm" type="search" name="address" value="{{ filters.address }}" aria-label="{{ t('servers.column.address') }}" placeholder="{{ t('common.search') }}"></th>
-                                <th><input form="server-filters" class="form-control form-control-sm" type="search" name="group" value="{{ filters.group }}" aria-label="{{ t('servers.column.group') }}" placeholder="{{ t('common.search') }}"></th>
-                                <th><input form="server-filters" class="form-control form-control-sm" type="search" name="description" value="{{ filters.description }}" aria-label="{{ t('servers.column.description') }}" placeholder="{{ t('common.search') }}"></th>
-                                <th><input form="server-filters" class="form-control form-control-sm" type="search" name="last_metrics" value="{{ filters.last_metrics }}" aria-label="{{ t('servers.column.last_metrics') }}" placeholder="{{ t('common.search') }}"></th>
-                                <th>
-                                    <select class="form-select form-select-sm" aria-label="{{ t('servers.filter.agent.label') }}" data-agent-filter>
-                                        <option value="all">{{ t('servers.filter.agent.all') }}</option>
-                                        <option value="current">{{ t('servers.filter.agent.current') }}</option>
-                                        <option value="outdated">{{ t('servers.filter.agent.outdated') }}</option>
-                                    </select>
-                                </th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for server in servers %}
-                            {% set agent_known = server.agent_update and server.agent_update.installed_version %}
-                            {% set agent_outdated = server.agent_update and server.agent_update.is_outdated is same as(true) %}
-                            {% set agent_filter_state = agent_outdated ? '1' : (agent_known ? '0' : 'unknown') %}
-                            {% set indicator = server.agent_update ? update_indicators[server.agent_update.state]|default(update_indicators.unknown) : null %}
-                            <tr data-agent-row
-                                data-server-id="{{ server.id }}"
-                                data-agent-outdated="{{ agent_filter_state }}"
-                                data-agent-state="{{ server.agent_update.state|default('unknown') }}">
-                                <td class="server-status-{{ server.status }}">
-                                    {% include "partials/server-status-icon.twig" %}
-                                    {{ server.name }}
-                                </td>
-                                <td>{{ server.address|default('-') }}</td>
-                                <td>
-                                    {% if server.group_name %}
-                                        <i class="fas {{ server.group_icon|default('fa-box') }}" {% if server.group_color %}style="color: {{ server.group_color }}"{% endif %}></i> {{ server.group_name }}
-                                    {% else %}-{% endif %}
-                                </td>
-                                <td>{{ server.description|default('-')|slice(0, 30) ~ (attribute(server, 'description')|length > 30 ? '...' : '') }}</td>
-                                <td>{% if server.last_metrics_at %}{{ server.last_metrics_at|date('d.m.Y H:i:s') }}{% else %}{{ t('common.no_data') }}{% endif %}</td>
-                                <td>
-                                    <a href="/servers/{{ server.id }}?tab=agent" class="text-decoration-none">
-                                        <span class="badge bg-light text-dark" data-agent-version>{{ server.agent_version|default('—') }}</span>
-                                    </a>
-                                    {% if server.agent_update and indicator %}
-                                        <span class="ms-1" data-agent-state-control>
-                                            {% if session.role == 'admin' and server.agent_update.can_update and server.agent_update.state in ['update_available', 'failed'] %}
-                                                <button type="button"
-                                                        class="btn btn-link btn-sm p-0 align-baseline {{ indicator[1] }}"
-                                                        data-agent-update-button
-                                                        data-update-url="/servers/{{ server.id }}/agent/update"
-                                                        title="{{ server.agent_update.state == 'failed' ? t('agent.retry_update') : t('agent.update_to', {version: server.agent_update.available_version}) }}"
-                                                        aria-label="{{ server.agent_update.state == 'failed' ? t('agent.retry_update') : t('agent.update') }}">
-                                                    <i class="fas {{ indicator[0] }}" aria-hidden="true"></i>
-                                                </button>
-                                            {% else %}
-                                                <i class="fas {{ indicator[0] }} {{ indicator[1] }}" aria-label="{{ indicator[2] }}" title="{{ indicator[2] }}"></i>
-                                            {% endif %}
-                                        </span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% include "partials/action-button.twig" with {href: '/servers/' ~ server.id, icon: 'fa-eye', label: t('common.view'), class: 'btn-info'} %}
-                                    {% include "partials/action-button.twig" with {href: '/servers/' ~ server.id ~ '/edit', icon: 'fa-edit', label: t('common.edit'), class: 'btn-outline-primary'} %}
-                                    {% include "partials/action-button.twig" with {form_action: '/servers/' ~ server.id ~ '/delete', icon: 'fa-trash', label: t('common.delete'), class: 'btn-outline-danger', confirm: t('servers.delete.confirm')} %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                            <tr data-agent-filter-empty hidden>
-                                <td colspan="7" class="text-center text-muted py-4">{{ t('servers.filter.empty') }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="text-center py-5">
-                    <i class="fas fa-server fa-3x text-muted mb-3"></i>
-                    <p class="lead">{{ t('servers.empty.heading') }}</p>
-                    <a href="/servers/create" class="btn btn-primary"><i class="fas fa-plus"></i> {{ t('servers.empty.add') }}</a>
-                </div>
-                {% endif %}
+<header class="app-page-header">
+    <div class="app-page-header-main">
+        <p class="page-eyebrow">MirvMon</p>
+        <h1><i class="fas fa-server" aria-hidden="true"></i> {{ t('servers.title') }}</h1>
+        <p class="page-subtitle">{{ t('ui19.servers.subtitle') }}</p>
+    </div>
+    <div class="app-page-actions">
+        <a href="/servers/create" class="btn btn-primary">
+            <i class="fas fa-plus" aria-hidden="true"></i> {{ t('servers.add') }}
+        </a>
+    </div>
+</header>
+
+<form id="server-filters" method="get" action="/servers" class="app-filter-panel" data-server-filter-form>
+    <input type="hidden" name="sort" value="{{ sort }}">
+    <input type="hidden" name="direction" value="{{ direction|lower }}">
+
+    <div class="server-list-filter-grid">
+        <div class="app-filter-field">
+            <label for="server-search">{{ t('ui19.servers.search') }}</label>
+            <div class="app-search-field">
+                <i class="fas fa-search" aria-hidden="true"></i>
+                <input id="server-search" class="form-control" type="search" name="q"
+                       placeholder="{{ t('ui19.servers.search_placeholder') }}" data-server-search>
             </div>
         </div>
+        <div class="app-filter-field">
+            <label for="server-group-filter">{{ t('ui19.servers.group') }}</label>
+            <select id="server-group-filter" class="form-select" name="group_filter" data-server-group-filter>
+                <option value="all">{{ t('ui19.servers.all_groups') }}</option>
+            </select>
+        </div>
+        <div class="app-filter-field">
+            <label for="server-status-filter">{{ t('ui19.servers.status') }}</label>
+            <select id="server-status-filter" class="form-select" name="status" data-server-status-filter>
+                <option value="all">{{ t('ui19.servers.all_statuses') }}</option>
+                <option value="online">{{ t('status.online') }}</option>
+                <option value="warning">{{ t('status.warning') }}</option>
+                <option value="critical">{{ t('status.critical') }}</option>
+                <option value="offline">{{ t('status.offline') }}</option>
+            </select>
+        </div>
+        <div class="app-filter-field">
+            <label for="server-agent-filter">{{ t('servers.filter.agent.label') }}</label>
+            <select id="server-agent-filter" class="form-select" name="agent" data-agent-filter>
+                <option value="all">{{ t('servers.filter.agent.all') }}</option>
+                <option value="current">{{ t('servers.filter.agent.current') }}</option>
+                <option value="outdated">{{ t('servers.filter.agent.outdated') }}</option>
+            </select>
+        </div>
+        <div class="app-filter-actions">
+            <button class="btn btn-outline-secondary" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#advanced-server-filters"
+                    aria-expanded="false" aria-controls="advanced-server-filters"
+                    title="{{ t('ui19.servers.advanced_hint') }}">
+                <i class="fas fa-sliders" aria-hidden="true"></i>
+                <span class="d-none d-xl-inline">{{ t('ui19.servers.advanced') }}</span>
+            </button>
+            <a class="btn btn-outline-secondary" href="/servers" title="{{ t('ui19.servers.reset') }}">
+                <i class="fas fa-rotate-left" aria-hidden="true"></i>
+                <span class="visually-hidden">{{ t('ui19.servers.reset') }}</span>
+            </a>
+        </div>
     </div>
-</div>
+
+    <div class="collapse app-advanced-filters" id="advanced-server-filters">
+        <div class="app-advanced-filter-grid">
+            <div class="app-filter-field">
+                <label for="filter-address">{{ t('servers.column.address') }}</label>
+                <input id="filter-address" class="form-control" type="search" name="address" value="{{ filters.address }}">
+            </div>
+            <div class="app-filter-field">
+                <label for="filter-description">{{ t('servers.column.description') }}</label>
+                <input id="filter-description" class="form-control" type="search" name="description" value="{{ filters.description }}">
+            </div>
+            <div class="app-filter-field">
+                <label for="filter-last-metrics">{{ t('servers.column.last_metrics') }}</label>
+                <input id="filter-last-metrics" class="form-control" type="search" name="last_metrics" value="{{ filters.last_metrics }}">
+            </div>
+        </div>
+        <div class="d-flex justify-content-end gap-2 mt-3">
+            <a class="btn btn-outline-secondary" href="/servers">{{ t('ui19.servers.reset') }}</a>
+            <button class="btn btn-primary" type="submit">
+                <i class="fas fa-filter" aria-hidden="true"></i> {{ t('ui19.servers.apply') }}
+            </button>
+        </div>
+    </div>
+
+    <div class="app-filter-meta">
+        <span data-server-result-count>{{ t('ui19.servers.results', {count: servers|length}) }}</span>
+        <span>{{ t('ui19.servers.advanced_hint') }}</span>
+    </div>
+</form>
+
+{% if session.role == 'admin' %}
+<form id="agent-update-csrf" class="d-none" aria-hidden="true">
+    {% include "partials/csrf.twig" %}
+</form>
+{% endif %}
+
+{% if servers|length > 0 %}
+<section class="app-panel" aria-label="{{ t('servers.title') }}">
+    <div class="table-responsive" data-server-table>
+        <table class="table app-table server-list-table">
+            <thead>
+                <tr>
+                    <th>
+                        <a href="{{ sort_urls.name }}" data-server-sort-link class="link-dark text-decoration-none">
+                            {{ t('ui19.servers.server') }}{% if sort == 'name' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}
+                        </a>
+                    </th>
+                    <th>
+                        <a href="{{ sort_urls.group }}" data-server-sort-link class="link-dark text-decoration-none">
+                            {{ t('servers.column.group') }}{% if sort == 'group' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}
+                        </a>
+                    </th>
+                    <th>
+                        <a href="{{ sort_urls.last_metrics }}" data-server-sort-link class="link-dark text-decoration-none">
+                            {{ t('ui19.servers.health') }}{% if sort == 'last_metrics' %} <i class="fas fa-sort-{% if direction == 'ASC' %}up{% else %}down{% endif %}"></i>{% endif %}
+                        </a>
+                    </th>
+                    <th>{{ t('servers.column.agent') }}</th>
+                    <th>{{ t('common.actions') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for server in servers %}
+                {% set agent_known = server.agent_update and server.agent_update.installed_version %}
+                {% set agent_outdated = server.agent_update and server.agent_update.is_outdated is same as(true) %}
+                {% set agent_filter_state = agent_outdated ? '1' : (agent_known ? '0' : 'unknown') %}
+                {% set indicator = server.agent_update ? update_indicators[server.agent_update.state]|default(update_indicators.unknown) : null %}
+                {% set search_text = server.name ~ ' ' ~ server.address|default('') ~ ' ' ~ server.description|default('') ~ ' ' ~ server.group_name|default('') %}
+                <tr data-agent-row
+                    data-server-id="{{ server.id }}"
+                    data-server-search="{{ search_text }}"
+                    data-server-group="{{ server.group_name|default('') }}"
+                    data-server-status="{{ server.status }}"
+                    data-agent-outdated="{{ agent_filter_state }}"
+                    data-agent-state="{{ server.agent_update.state|default('unknown') }}">
+                    <td data-label="{{ t('ui19.servers.server') }}">
+                        <div class="server-list-identity server-status-{{ server.status }}">
+                            {% include "partials/server-status-icon.twig" %}
+                            <div class="server-list-primary">
+                                <a class="server-list-name" href="/servers/{{ server.id }}">{{ server.name }}</a>
+                                <span class="server-list-secondary">
+                                    {{ server.address|default('—') }}
+                                    {% if server.description %} · {{ server.description }}{% endif %}
+                                </span>
+                            </div>
+                        </div>
+                    </td>
+                    <td data-label="{{ t('servers.column.group') }}">
+                        {% if server.group_name %}
+                            <a class="text-decoration-none text-body" href="/groups/{{ server.group_id }}">
+                                <i class="fas {{ server.group_icon|default('fa-box') }}" {% if server.group_color %}style="color: {{ server.group_color }}"{% endif %} aria-hidden="true"></i>
+                                {{ server.group_name }}
+                            </a>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td data-label="{{ t('ui19.servers.health') }}">
+                        <span class="app-status-badge status-{{ server.status }}">
+                            <span class="app-status-dot" aria-hidden="true"></span>
+                            {{ t('status.' ~ server.status) }}
+                        </span>
+                        <span class="server-list-secondary">
+                            {% if server.last_metrics_at %}
+                                {{ t('ui19.servers.last_sample', {time: server.last_metrics_at|date('d.m.Y H:i:s')}) }}
+                            {% else %}
+                                {{ t('ui19.servers.no_sample') }}
+                            {% endif %}
+                        </span>
+                    </td>
+                    <td data-label="{{ t('servers.column.agent') }}">
+                        <a href="/servers/{{ server.id }}?tab=agent" class="text-decoration-none">
+                            <span class="badge bg-light text-dark" data-agent-version>{{ server.agent_version|default('—') }}</span>
+                        </a>
+                        {% if server.agent_update and indicator %}
+                            <span class="ms-1" data-agent-state-control>
+                                {% if session.role == 'admin' and server.agent_update.can_update and server.agent_update.state in ['update_available', 'failed'] %}
+                                    <button type="button"
+                                            class="btn btn-link btn-sm p-0 align-baseline {{ indicator[1] }}"
+                                            data-agent-update-button
+                                            data-update-url="/servers/{{ server.id }}/agent/update"
+                                            title="{{ server.agent_update.state == 'failed' ? t('agent.retry_update') : t('agent.update_to', {version: server.agent_update.available_version}) }}"
+                                            aria-label="{{ server.agent_update.state == 'failed' ? t('agent.retry_update') : t('agent.update') }}">
+                                        <i class="fas {{ indicator[0] }}" aria-hidden="true"></i>
+                                    </button>
+                                {% else %}
+                                    <i class="fas {{ indicator[0] }} {{ indicator[1] }}" aria-label="{{ indicator[2] }}" title="{{ indicator[2] }}"></i>
+                                {% endif %}
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td data-label="{{ t('common.actions') }}">
+                        <div class="d-flex flex-wrap gap-1">
+                            {% include "partials/action-button.twig" with {href: '/servers/' ~ server.id, icon: 'fa-eye', label: t('common.view'), class: 'btn-info'} %}
+                            {% include "partials/action-button.twig" with {href: '/servers/' ~ server.id ~ '/edit', icon: 'fa-edit', label: t('common.edit'), class: 'btn-outline-primary'} %}
+                            {% include "partials/action-button.twig" with {form_action: '/servers/' ~ server.id ~ '/delete', icon: 'fa-trash', label: t('common.delete'), class: 'btn-outline-danger', confirm: t('servers.delete.confirm')} %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="app-empty-state" data-server-filter-empty hidden>
+        <span class="app-empty-state-icon"><i class="fas fa-filter-circle-xmark" aria-hidden="true"></i></span>
+        <h3>{{ t('ui19.servers.no_matches') }}</h3>
+        <a class="btn btn-outline-secondary" href="/servers">{{ t('ui19.servers.reset') }}</a>
+    </div>
+</section>
+{% else %}
+<section class="app-panel">
+    <div class="app-empty-state">
+        <span class="app-empty-state-icon"><i class="fas fa-server" aria-hidden="true"></i></span>
+        <h3>{{ t('servers.empty.heading') }}</h3>
+        <p>{{ t('ui19.servers.subtitle') }}</p>
+        <a href="/servers/create" class="btn btn-primary">
+            <i class="fas fa-plus" aria-hidden="true"></i> {{ t('servers.empty.add') }}
+        </a>
+    </div>
+</section>
+{% endif %}
 
 {% if servers|length > 0 %}
 <script nonce="__MIRVMON_CSP_NONCE__">
@@ -156,44 +265,94 @@
         updateTo: {{ t('agent.update_to', {version: '__VERSION__'})|json_encode|raw }},
         retry: {{ t('agent.retry_update')|json_encode|raw }},
         requesting: {{ t('agent.state.pending')|json_encode|raw }},
-        requestError: {{ t('agent.state.failed')|json_encode|raw }}
+        requestError: {{ t('agent.state.failed')|json_encode|raw }},
+        results: {{ t('ui19.servers.results', {count: '__COUNT__'})|json_encode|raw }}
     };
     const rows = Array.from(document.querySelectorAll('[data-agent-row]'));
     const rowsById = new Map(rows.map((row) => [row.dataset.serverId, row]));
     const trackedServerIds = new Set();
-    const filter = document.querySelector('[data-agent-filter]');
-    const filterValue = document.querySelector('[data-agent-filter-value]');
-    const emptyState = document.querySelector('[data-agent-filter-empty]');
+    const search = document.querySelector('[data-server-search]');
+    const groupFilter = document.querySelector('[data-server-group-filter]');
+    const statusFilter = document.querySelector('[data-server-status-filter]');
+    const agentFilter = document.querySelector('[data-agent-filter]');
+    const emptyState = document.querySelector('[data-server-filter-empty]');
+    const table = document.querySelector('[data-server-table]');
+    const resultCount = document.querySelector('[data-server-result-count]');
     const csrfForm = document.getElementById('agent-update-csrf');
     let pollTimer = null;
 
-    function normalizedFilter(value) {
+    function normalizedAgentFilter(value) {
         return ['current', 'outdated'].includes(value) ? value : 'all';
     }
 
-    function updateFilterUrl(value) {
+    function normalizedStatus(value) {
+        return ['online', 'warning', 'critical', 'offline'].includes(value) ? value : 'all';
+    }
+
+    function populateGroups() {
+        if (!groupFilter) return;
+        const current = new URL(window.location.href).searchParams.get('group_filter') || 'all';
+        const groups = Array.from(new Set(rows.map((row) => row.dataset.serverGroup || '').filter(Boolean)))
+            .sort((a, b) => a.localeCompare(b));
+        groups.forEach((group) => {
+            const option = document.createElement('option');
+            option.value = group;
+            option.textContent = group;
+            groupFilter.appendChild(option);
+        });
+        if (current !== 'all' && !groups.includes(current)) {
+            const option = document.createElement('option');
+            option.value = current;
+            option.textContent = current;
+            groupFilter.appendChild(option);
+        }
+        groupFilter.value = current;
+    }
+
+    function updateFilterUrl() {
         const url = new URL(window.location.href);
-        if (value === 'all') url.searchParams.delete('agent'); else url.searchParams.set('agent', value);
-        window.history.replaceState(null, '', url);
-        if (filterValue) filterValue.value = value;
+        const values = {
+            q: search instanceof HTMLInputElement ? search.value.trim() : '',
+            group_filter: groupFilter instanceof HTMLSelectElement ? groupFilter.value : 'all',
+            status: statusFilter instanceof HTMLSelectElement ? statusFilter.value : 'all',
+            agent: agentFilter instanceof HTMLSelectElement ? normalizedAgentFilter(agentFilter.value) : 'all'
+        };
+        Object.entries(values).forEach(([key, value]) => {
+            if (!value || value === 'all') url.searchParams.delete(key); else url.searchParams.set(key, value);
+        });
+        window.history.replaceState(null, '', url.pathname + url.search);
         document.querySelectorAll('[data-server-sort-link]').forEach((link) => {
             const sortUrl = new URL(link.href, window.location.origin);
-            if (value === 'all') sortUrl.searchParams.delete('agent'); else sortUrl.searchParams.set('agent', value);
+            Object.entries(values).forEach(([key, value]) => {
+                if (!value || value === 'all') sortUrl.searchParams.delete(key); else sortUrl.searchParams.set(key, value);
+            });
             link.href = sortUrl.pathname + sortUrl.search;
         });
     }
 
-    function applyAgentFilter() {
-        const value = filter ? normalizedFilter(filter.value) : 'all';
+    function applyFilters() {
+        const query = search instanceof HTMLInputElement ? search.value.trim().toLocaleLowerCase() : '';
+        const group = groupFilter instanceof HTMLSelectElement ? groupFilter.value : 'all';
+        const status = statusFilter instanceof HTMLSelectElement ? normalizedStatus(statusFilter.value) : 'all';
+        const agent = agentFilter instanceof HTMLSelectElement ? normalizedAgentFilter(agentFilter.value) : 'all';
         let visible = 0;
         rows.forEach((row) => {
+            const haystack = (row.dataset.serverSearch || '').toLocaleLowerCase();
+            const matchesSearch = query === '' || haystack.includes(query);
+            const matchesGroup = group === 'all' || row.dataset.serverGroup === group;
+            const matchesStatus = status === 'all' || row.dataset.serverStatus === status;
             const outdated = row.dataset.agentOutdated;
-            const show = value === 'all' || (value === 'current' && outdated === '0') || (value === 'outdated' && outdated === '1');
+            const matchesAgent = agent === 'all'
+                || (agent === 'current' && outdated === '0')
+                || (agent === 'outdated' && outdated === '1');
+            const show = matchesSearch && matchesGroup && matchesStatus && matchesAgent;
             row.hidden = !show;
             if (show) visible += 1;
         });
+        if (table) table.hidden = visible === 0;
         if (emptyState) emptyState.hidden = visible !== 0;
-        updateFilterUrl(value);
+        if (resultCount) resultCount.textContent = text.results.replace('__COUNT__', String(visible));
+        updateFilterUrl();
     }
 
     function createIcon(meta) {
@@ -236,7 +395,7 @@
         const actionable = canManageAgents && status.can_update === true && ['update_available', 'failed'].includes(state);
         control.appendChild(actionable ? createUpdateButton(row, status, meta) : createIcon(meta));
         if (activeStates.has(state)) trackedServerIds.add(row.dataset.serverId); else trackedServerIds.delete(row.dataset.serverId);
-        applyAgentFilter();
+        applyFilters();
     }
 
     function renderTransient(row, iconClass, label) {
@@ -318,13 +477,16 @@
         }
     });
 
-    if (filter) {
-        const initial = normalizedFilter(new URL(window.location.href).searchParams.get('agent'));
-        filter.value = initial;
-        filter.addEventListener('change', applyAgentFilter);
-    }
+    populateGroups();
+    const initialUrl = new URL(window.location.href);
+    if (search instanceof HTMLInputElement) search.value = initialUrl.searchParams.get('q') || '';
+    if (statusFilter instanceof HTMLSelectElement) statusFilter.value = normalizedStatus(initialUrl.searchParams.get('status'));
+    if (agentFilter instanceof HTMLSelectElement) agentFilter.value = normalizedAgentFilter(initialUrl.searchParams.get('agent'));
+
+    [groupFilter, statusFilter, agentFilter].forEach((control) => control?.addEventListener('change', applyFilters));
+    search?.addEventListener('input', applyFilters);
     rows.forEach((row) => { if (activeStates.has(row.dataset.agentState)) trackedServerIds.add(row.dataset.serverId); });
-    applyAgentFilter();
+    applyFilters();
     schedulePoll();
 })();
 </script>
