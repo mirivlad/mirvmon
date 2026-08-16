@@ -1,0 +1,60 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Middlewares;
+
+final class AuditTrailMiddleware
+{
+    /**
+     * @param array<string, mixed> $body
+     * @return array<string, mixed>|null
+     */
+    private function userSaveState(array $body): ?array
+    {
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     * @return array{matching:int,filters:array<string,mixed>}
+     */
+    private function queueDeleteState(array $body): array
+    {
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     * @return array<string, mixed>
+     */
+    private function safeQueueFilters(array $filters): array
+    {
+    }
+
+    /**
+     * @param array<string, mixed> $before
+     * @param array<string, mixed> $after
+     * @param array<string, string> $aliases
+     * @return list<string>
+     */
+    private function changedFields(array $before, array $after, array $aliases = []): array
+    {
+    }
+
+    /**
+     * @param array<string, mixed> $before
+     * @param array<string, mixed> $after
+     * @return list<string>
+     */
+    private function changedMapKeys(array $before, array $after): array
+    {
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     * @param list<string> $fields
+     * @return list<string>
+     */
+    private function presentFields(array $body, array $fields): array
+    {
+    }
+}
