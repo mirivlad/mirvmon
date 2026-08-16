@@ -78,6 +78,31 @@ func TestReplaceExecutableLeavesFilesUntouchedWhenStopFails(t *testing.T) {
 	}
 }
 
+func TestReplaceExecutableRestartsInstalledAgentWhenRenameCannotBegin(t *testing.T) {
+	directory := t.TempDir()
+	installed := filepath.Join(directory, "missing-agent")
+	staged := filepath.Join(directory, "staged")
+	if err := os.WriteFile(staged, []byte("new"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	stops := 0
+	restarts := 0
+	err := replaceExecutable(staged, installed, func() error {
+		stops++
+		return nil
+	}, func() error {
+		restarts++
+		return nil
+	}, nil, nil)
+	if err == nil {
+		t.Fatal("missing installed executable was accepted")
+	}
+	if stops != 1 || restarts != 1 {
+		t.Fatalf("stops=%d restarts=%d, want 1/1", stops, restarts)
+	}
+	assertFileContents(t, staged, "new")
+}
+
 func TestReplaceExecutableRollsBackWhenRestartFails(t *testing.T) {
 	directory := t.TempDir()
 	installed := filepath.Join(directory, "agent")
