@@ -9,6 +9,47 @@
     <span class="badge text-bg-light border">{{ t('audit.total', {count: audit.total}) }}</span>
 </div>
 
+<section class="card mb-4" id="audit-retention">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-lg-8">
+                <h2 class="h5 mb-2">
+                    <i class="fa-solid fa-box-archive me-2" aria-hidden="true"></i>
+                    {{ t('audit.retention.title') }}
+                </h2>
+                <p class="text-muted mb-1">{{ t('audit.retention.help') }}</p>
+                <p class="small text-muted mb-0">{{ t('audit.retention.independent') }}</p>
+            </div>
+            <div class="col-lg-4">
+                <form method="post" action="/admin/audit/retention" class="d-flex gap-2 align-items-end">
+                    {% include 'partials/csrf.twig' %}
+                    <div class="flex-grow-1">
+                        <label for="audit-retention-days" class="form-label">{{ t('audit.retention.label') }}</label>
+                        <div class="input-group">
+                            <input type="number"
+                                   class="form-control"
+                                   id="audit-retention-days"
+                                   name="retention_days"
+                                   value="{{ retention_days }}"
+                                   min="0"
+                                   max="{{ retention_max_days }}"
+                                   required>
+                            <span class="input-group-text">{{ t('audit.retention.days') }}</span>
+                        </div>
+                        <div class="form-text">
+                            {{ t('audit.retention.range', {min: retention_min_days, max: retention_max_days}) }}
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary text-nowrap">
+                        <i class="fa-solid fa-floppy-disk me-1" aria-hidden="true"></i>
+                        {{ t('common.save') }}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+
 <form method="get" action="/admin/audit" class="card mb-4">
     <div class="card-body">
         <div class="row g-3 align-items-end">
