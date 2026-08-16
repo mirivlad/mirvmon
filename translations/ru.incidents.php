@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 return [
+    'nav.incidents' => 'Инциденты',
     'incidents.title' => 'Инциденты / События',
     'incidents.subtitle' => 'Активные проблемы и история завершённых событий мониторинга.',
     'incidents.tab.active' => 'Активные',
@@ -31,7 +32,7 @@ return [
     'incidents.column.duration' => 'Длительность',
     'incidents.column.resolved_by' => 'Закрыл',
     'incidents.empty.active.heading' => 'Активных инцидентов нет',
-    'incidents.empty.active.text' => 'Сейчас MirvMon не видит активных алертов по выбранным фильтрам.',
+    'incidents.empty.active.text' => 'Сейчас MirvMon не видит активных проблем по выбранным фильтрам.',
     'incidents.empty.history.heading' => 'История пуста',
     'incidents.empty.history.text' => 'За выбранный период завершённых событий нет.',
     'incidents.resolved.automatic' => 'автоматически',
