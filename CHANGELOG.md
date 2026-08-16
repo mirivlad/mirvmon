@@ -6,6 +6,27 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+- Added an administrator-only, append-only **Audit log / Журнал действий** with
+  actor snapshots, human-readable operation descriptions, object references,
+  filtering, search, pagination and direct links back to affected objects.
+- Audit successful persisted administrative mutations across servers and groups,
+  thresholds, maintenance, notification settings, agent-token rotation, agent
+  update requests, users and notification-queue operations without changing the
+  result of the underlying business operation when audit recording itself fails.
+- Added a centralized audit logger with recursive credential redaction and bounded
+  metadata so passwords, tokens, authorization data and similar secrets cannot be
+  written to the audit trail through structured event metadata.
+- Enforce ordinary audit-row immutability in PostgreSQL and preserve deleted-user
+  identity as an actor username/role snapshot instead of mutating historical rows
+  through a user foreign key.
+- Added an audit-specific retention policy independent from metrics/process
+  retention: `0` keeps history forever, finite retention is configurable from the
+  Audit screen, and a dedicated supervised worker performs controlled pruning.
+- Added Russian/English audit terminology plus contract, integration, retention
+  and secret-sanitization coverage for the new operational workflow.
+
+## 0.4.19
+
 - Added route-aware top navigation and Settings subsection highlighting so the
   current operational area remains visible on both desktop and collapsed mobile
   navigation.

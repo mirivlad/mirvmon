@@ -155,6 +155,7 @@ RUN chmod 0555 \
         /app/bin/migrate \
         /app/bin/offline-worker \
         /app/bin/notification-worker \
+        /app/bin/audit-retention-worker \
     && chown -R app:app /app/var \
     && composer check-platform-reqs --no-dev
 

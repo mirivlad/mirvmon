@@ -1,0 +1,61 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use App\Database\ConnectionFactory;
+use App\Repositories\AppSettingsRepository;
+use App\Services\AuditRetentionService;
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+$interval = filter_var(
+    getenv('AUDIT_RETENTION_CHECK_INTERVAL') ?: 3600,
+    FILTER_VALIDATE_INT,
+    ['options' => ['min_range' => 300, 'max_range' => 86400]]
+);
+if ($interval === false) {
+    fwrite(STDERR, "AUDIT_RETENTION_CHECK_INTERVAL must be between 300 and 86400 seconds.\n");
+    exit(1);
+}
+
+$once = in_array('--once', $argv, true);
+$running = true;
+if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
+    pcntl_async_signals(true);
+    pcntl_signal(SIGTERM, static function () use (&$running): void {
+        $running = false;
+    });
+    pcntl_signal(SIGINT, static function () use (&$running): void {
+        $running = false;
+    });
+}
+
+$service = null;
+do {
+    try {
+        if ($service === null) {
+            $pdo = ConnectionFactory::fromEnvironment();
+            $service = new AuditRetentionService($pdo, new AppSettingsRepository($pdo));
+        }
+        $service->pruneExpired();
+    } catch (PDOException) {
+        fwrite(STDERR, "audit_retention_database_unavailable\n");
+        $service = null;
+        if ($once) {
+            exit(1);
+        }
+    } catch (Throwable $exception) {
+        fwrite(STDERR, 'audit_retention_failed:' . $exception::class . PHP_EOL);
+        if ($once) {
+            exit(1);
+        }
+    }
+
+    if ($once) {
+        break;
+    }
+    for ($second = 0; $second < $interval && $running; $second++) {
+        sleep(1);
+    }
+} while ($running);
