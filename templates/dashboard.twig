@@ -67,23 +67,30 @@
     </div>
     {% if attention|length > 0 %}
     <div class="list-group list-group-flush">
-        {% for server in attention %}
+        {% for issue in attention %}
         <div class="list-group-item d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
             <div class="min-w-0">
-                <a href="/servers/{{ server.id }}" class="fw-semibold text-decoration-none">{{ server.name }}</a>
-                {% if server.group_id %}
-                <span class="text-muted small ms-1">· {{ server.group_name }}</span>
-                {% endif %}
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <a href="/servers/{{ issue.server_id }}" class="fw-semibold text-decoration-none">{{ issue.server_name }}</a>
+                    {% if issue.group_id %}
+                    <a href="/groups/{{ issue.group_id }}" class="text-muted small text-decoration-none">· {{ issue.group_name }}</a>
+                    {% endif %}
+                </div>
+                <div class="small mt-1">
+                    <span class="badge bg-light text-dark border me-1">{{ t('incidents.kind.' ~ issue.kind) }}</span>
+                    <code>{{ issue.subject_name|replace({'_': ' '}) }}</code>
+                    {% if issue.created_at %}
+                    <span class="text-muted ms-1">· {{ issue.created_at|date('d.m.Y H:i') }}</span>
+                    {% endif %}
+                </div>
             </div>
             <div class="d-flex align-items-center gap-2">
-                <span class="badge {% if server.status == 'critical' %}bg-danger{% elseif server.status == 'warning' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
-                    {{ status_labels[server.status] }}
+                <span class="badge {{ issue.severity == 'critical' ? 'bg-danger' : 'bg-warning text-dark' }}">
+                    {{ issue.severity == 'critical' ? t('alerts.level.critical') : t('alerts.level.warning') }}
                 </span>
-                {% if server.active_alerts > 0 %}
-                <a href="/alerts?view=active&server_id={{ server.id }}" class="badge bg-light text-dark border text-decoration-none">
-                    <i class="fas fa-bell" aria-hidden="true"></i> {{ server.active_alerts }}
+                <a href="/alerts?view=active&server_id={{ issue.server_id }}" class="btn btn-sm btn-outline-secondary">
+                    {{ t('common.details') }}
                 </a>
-                {% endif %}
             </div>
         </div>
         {% endfor %}
@@ -186,7 +193,7 @@
                                   class="server-alert-count{% if server.active_alerts == 0 %} d-none{% endif %}">
                                 <i class="fas fa-bell" aria-hidden="true"></i>
                                 <span>{{ server.active_alerts }}</span>
-                                <span class="visually-hidden">{{ t('nav.alerts') }}</span>
+                                <span class="visually-hidden">{{ t('nav.incidents') }}</span>
                             </span>
                         </div>
 
