@@ -6,6 +6,35 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+- Added route-aware top navigation and Settings subsection highlighting so the
+  current operational area remains visible on both desktop and collapsed mobile
+  navigation.
+- Reworked the server list around one primary search plus prominent Group,
+  Status, and Agent filters, while moving address, description, and last-sample
+  fields into optional advanced filters; inline agent updates and the outdated
+  agent workflow remain available.
+- Turned Groups into operational mini-dashboards with per-status server counts,
+  active-problem totals, and a compact server health view; active problems reuse
+  the canonical incident read model so availability-only offline incidents are
+  counted even when no notification alert row exists.
+- Added shared page, panel, badge, empty-state, and responsive presentation rules
+  across the main operational UI, including a dedicated phone/tablet pass for
+  Dashboard, Incidents, System, server lists, and event tables.
+- Added Russian/English UI strings plus contract and integration coverage for the
+  navigation, filtering, group summaries, responsive event presentation, and
+  preserved inline agent-update behavior.
+
+## 0.4.18.1
+
+- Fixed SysV native-agent self-update so the installed service is stopped before
+  its executable is renamed, preventing old processes from surviving alongside
+  the newly started agent after an update.
+- Preserve the old installation when service stop fails, restart it if executable
+  replacement cannot begin, and cover the ordering/failure paths with regression
+  tests.
+
+## 0.4.18
+
 - Rebuilt the server detail page around operational **Overview / Metrics /
   Services / Events / Agent** tabs so observation is separated from monitoring
   configuration.
