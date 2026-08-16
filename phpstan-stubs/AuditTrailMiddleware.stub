@@ -8,7 +8,7 @@ final class AuditTrailMiddleware
 {
     /**
      * @param array<string, mixed> $body
-     * @return array<string, mixed>|null
+     * @phpstan-return array<string, mixed>|null
      */
     private function userSaveState(array $body): ?array
     {
@@ -16,7 +16,7 @@ final class AuditTrailMiddleware
 
     /**
      * @param array<string, mixed> $body
-     * @return array{matching:int,filters:array<string,mixed>}
+     * @phpstan-return array{matching:int,filters:array<string,mixed>}
      */
     private function queueDeleteState(array $body): array
     {
@@ -24,7 +24,7 @@ final class AuditTrailMiddleware
 
     /**
      * @param array<string, mixed> $filters
-     * @return array<string, mixed>
+     * @phpstan-return array<string, mixed>
      */
     private function safeQueueFilters(array $filters): array
     {
