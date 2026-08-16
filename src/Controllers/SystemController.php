@@ -70,9 +70,8 @@ final class SystemController
             try {
                 $this->settings->set(SystemHealthService::HOST_SETTING, null);
                 if ($before !== null) {
-                    $this->audit->record(
+                    $this->recordAudit(
                         'system.host.clear',
-                        'system',
                         null,
                         null,
                         $this->translator->trans('audit.event.system.host_cleared'),
@@ -113,9 +112,8 @@ final class SystemController
 
             $this->settings->set(SystemHealthService::HOST_SETTING, $serverId);
             if ($before !== (int) $serverId) {
-                $this->audit->record(
+                $this->recordAudit(
                     'system.host.save',
-                    'system',
                     (int) $serverId,
                     (string) $server['name'],
                     $this->translator->trans('audit.event.system.host_saved'),
@@ -128,6 +126,28 @@ final class SystemController
         }
 
         return $this->redirect($response, '/admin/system');
+    }
+
+    /** @param array<string, mixed> $metadata */
+    private function recordAudit(
+        string $action,
+        ?int $objectId,
+        ?string $objectLabel,
+        string $description,
+        array $metadata
+    ): void {
+        try {
+            $this->audit->record(
+                $action,
+                'system',
+                $objectId,
+                $objectLabel,
+                $description,
+                $metadata
+            );
+        } catch (Throwable $exception) {
+            error_log('[mirvmon][audit][system-host] ' . $exception->getMessage());
+        }
     }
 
     private function isAdmin(): bool
