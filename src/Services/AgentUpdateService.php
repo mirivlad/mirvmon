@@ -99,9 +99,11 @@ final class AgentUpdateService
         $available = $this->artifacts->version();
         $isNewer = $installed !== null
             && $this->versions->isUpgrade($installed, $available);
+        $targetSupported = $installed !== null
+            && $this->versions->supportsSelfUpdateTarget($installed, $available);
         $hasCapability = in_array('self_update_v1', $capabilities, true);
         $artifactExists = $artifactKey !== null && $this->artifactExists($artifactKey);
-        $canUpdate = $isNewer && $hasCapability && $artifactExists;
+        $canUpdate = $isNewer && $targetSupported && $hasCapability && $artifactExists;
 
         $state = 'current';
         if ($installed === null) {
@@ -122,6 +124,7 @@ final class AgentUpdateService
             'capabilities' => $capabilities,
             'can_update' => $canUpdate,
             'is_outdated' => $installed === null ? null : $isNewer,
+            'requires_compatible_updater' => $isNewer && !$targetSupported,
             'state' => $state,
             'command' => $latest,
         ];

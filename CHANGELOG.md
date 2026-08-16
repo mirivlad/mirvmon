@@ -6,6 +6,16 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+- Refined the Incidents screen after production UI review: compact event-history
+  tabs and filters, combined server/group and start/recovery presentation, and
+  human-readable metric/problem labels instead of raw internal metric names.
+- Prevent four-component `vX.Y.Z.N` self-update targets from being offered to
+  native agents older than `v0.4.15.3`; normal three-component bridge updates
+  remain valid for those older updaters, with regression coverage and release
+  documentation for the compatibility boundary.
+
+## 0.4.17
+
 - Rebuilt the former Alerts screen as **Incidents / Events** with separate active
   and history views, operational filtering by server, group, type, severity and
   date range, and direct links to the affected server and group.
