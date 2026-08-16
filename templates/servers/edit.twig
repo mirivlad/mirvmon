@@ -140,7 +140,9 @@
                         {% elseif metric.name == 'ram_used' %}
                             {% set metric_label = t('metric.ram_used') %}
                         {% elseif metric.name starts with 'disk_used_' %}
-                            {% set metric_label = t('server.thresholds.disk', {name: metric.name|replace({'disk_used_': ''})|replace({'_': '/'})}) %}
+                            {% set disk_suffix = metric.name|replace({'disk_used_': ''}) %}
+                            {% set disk_path = disk_suffix == 'root' ? '/' : '/' ~ (disk_suffix|replace({'_': '/'})) %}
+                            {% set metric_label = t('server.thresholds.disk', {name: disk_path}) %}
                         {% elseif metric.name starts with 'net_in_' %}
                             {% set metric_label = t('server.thresholds.network_in', {name: metric.name|replace({'net_in_': ''})}) %}
                         {% elseif metric.name starts with 'net_out_' %}
