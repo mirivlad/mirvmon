@@ -22,6 +22,7 @@ final class SchemaTest extends TestCase
         self::assertFileExists(dirname(__DIR__, 3) . '/migrations/005_notification_dead_letters.sql');
         self::assertFileExists(dirname(__DIR__, 3) . '/migrations/006_notification_delivery.sql');
         self::assertFileExists(dirname(__DIR__, 3) . '/migrations/016_dashboard_widgets_and_availability.sql');
+        self::assertFileExists(dirname(__DIR__, 3) . '/migrations/017_incident_history.sql');
 
         if (getenv('TEST_DB_HOST') === false) {
             self::markTestSkipped('Set TEST_DB_* to run the TimescaleDB integration suite.');
@@ -188,7 +189,7 @@ final class SchemaTest extends TestCase
         self::assertSame([], $migrator->migrate());
 
         $count = self::$pdo?->query('SELECT count(*) FROM schema_migrations')->fetchColumn();
-        self::assertSame('16', (string) $count);
+        self::assertSame('17', (string) $count);
     }
 
     public function testAvailabilitySchemaExists(): void

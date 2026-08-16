@@ -27,6 +27,10 @@
         warning: 2,
         online: 3
     };
+    const requestedStatus = new URL(window.location.href).searchParams.get('status');
+    if (requestedStatus && Object.hasOwn(statusOrder, requestedStatus)) {
+        statusFilter.value = requestedStatus;
+    }
 
     const items = () => Array.from(document.querySelectorAll('[data-server-item]'));
     const groups = () => Array.from(document.querySelectorAll('[data-dashboard-group]'));
@@ -62,6 +66,16 @@
 
     function formatCount(count) {
         return countTemplate.replace('__COUNT__', String(count));
+    }
+
+    function updateStatusUrl() {
+        const url = new URL(window.location.href);
+        if (statusFilter.value === 'all') {
+            url.searchParams.delete('status');
+        } else {
+            url.searchParams.set('status', statusFilter.value);
+        }
+        window.history.replaceState(null, '', url.pathname + url.search + url.hash);
     }
 
     function applyView() {
@@ -253,7 +267,10 @@
     });
 
     search.addEventListener('input', applyView);
-    statusFilter.addEventListener('change', applyView);
+    statusFilter.addEventListener('change', () => {
+        updateStatusUrl();
+        applyView();
+    });
     sort.addEventListener('change', applyView);
     refreshRelativeTimes();
     applyView();

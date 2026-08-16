@@ -6,7 +6,25 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
-_No unreleased changes yet._
+- Rebuilt the former Alerts screen as **Incidents / Events** with separate active
+  and history views, operational filtering by server, group, type, severity and
+  date range, and direct links to the affected server and group.
+- Incident rows now show start time, recovery/completion time and duration;
+  completed metric/service alerts share one history with online/offline periods
+  derived from the availability transition log without duplicating offline
+  alert rows.
+- Current offline availability remains visible as an active operational incident
+  even when offline notifications are disabled; notification preferences still
+  control delivery rather than whether MirvMon records the state.
+- Manual incident resolution now persists the resolving user ID and username
+  snapshot with the alert so the operator remains visible in history after
+  notification-outbox cleanup.
+- Added a compact **Needs attention** block to the main dashboard and made the
+  Online, Warning, Critical and No data summary cards URL-backed status filters
+  for the dashboard server list.
+- Added Russian/English incident terminology, migration 017 schema coverage,
+  integration tests for active/history/offline de-duplication, and UI contract
+  tests for the new operational workflow.
 
 ## 0.4.16
 
