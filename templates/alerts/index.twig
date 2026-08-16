@@ -126,8 +126,8 @@
                         {% endif %}
                         <td class="text-nowrap">
                             {% if duration_days > 0 %}{{ duration_days }} {{ t('common.days') }} {% endif %}
-                            {% if duration_hours > 0 or duration_days > 0 %}{{ duration_hours }}h {% endif %}
-                            {{ duration_minutes }}m
+                            {% if duration_hours > 0 or duration_days > 0 %}{{ duration_hours }} {{ t('common.hours') }} {% endif %}
+                            {{ duration_minutes }} {{ t('common.minutes') }}
                         </td>
                         {% if view == 'history' %}
                         <td>{{ event.resolved_by_username ?: t('incidents.resolved.automatic') }}</td>
