@@ -4,11 +4,3 @@ parameters:
         - src
     tmpDir: var/phpstan
     treatPhpDocTypesAsCertain: false
-    stubFiles:
-        - phpstan-stubs/AuditTrailMiddleware.stub
-    ignoreErrors:
-        -
-            message: '#^Method App\\Middlewares\\AuditTrailMiddleware::(userSaveState|queueDeleteState|safeQueueFilters)\(\) return type has no value type specified in iterable type array\.$#'
-            identifier: missingType.iterableValue
-            path: src/Middlewares/AuditTrailMiddleware.php
-            count: 3
