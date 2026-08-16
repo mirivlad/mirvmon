@@ -91,6 +91,7 @@ final class AuditTrailMiddleware implements MiddlewareInterface
             '#^/servers/([1-9][0-9]*)/agent/update$#' => 'agent_update',
             '#^/servers/([1-9][0-9]*)/maintenance$#' => 'maintenance_start',
             '#^/servers/([1-9][0-9]*)/thresholds$#' => 'thresholds_save',
+            '#^/servers/([1-9][0-9]*)/services$#' => 'services_save',
             '#^/servers/([1-9][0-9]*)/delete$#' => 'server_delete',
             '#^/servers/([1-9][0-9]*)$#' => 'server_update',
             '#^/groups/([1-9][0-9]*)/delete$#' => 'group_delete',
@@ -127,6 +128,7 @@ final class AuditTrailMiddleware implements MiddlewareInterface
             'token_rotate' => $id === null ? null : $this->tokenState($id),
             'maintenance_start', 'maintenance_cancel' => $id === null ? null : $this->maintenanceState($id),
             'thresholds_save' => $id === null ? null : $this->thresholdState($id),
+            'services_save' => $id === null ? null : $this->serviceState($id),
             'agent_update' => $id === null ? null : $this->agentUpdateState($id),
             'group_create' => $this->groupByName($body['name'] ?? null),
             'group_update', 'group_delete' => $id === null ? null : $this->groupState($id),
@@ -242,6 +244,20 @@ final class AuditTrailMiddleware implements MiddlewareInterface
                             $after['thresholds']
                         ),
                         'configured_count' => count($after['thresholds']),
+                    ]
+                );
+
+            case 'services_save':
+                if (!is_array($before) || !is_array($after)
+                    || $before['services'] === $after['services']) {
+                    return null;
+                }
+                return $this->eventData(
+                    'server.services.save', 'server', $id, (string) $after['name'],
+                    'audit.event.server.services_saved', ['name' => (string) $after['name']],
+                    [
+                        'added' => array_values(array_diff($after['services'], $before['services'])),
+                        'removed' => array_values(array_diff($before['services'], $after['services'])),
                     ]
                 );
 
@@ -387,7 +403,7 @@ final class AuditTrailMiddleware implements MiddlewareInterface
     }
 
     /**
-     * @param array<string, scalar> $parameters
+     * @param array<string, scalar|null> $parameters
      * @param array<string, mixed> $metadata
      * @return array{action:string,object_type:string,object_id:int|string|null,object_label:?string,description:string,metadata:array<string,mixed>}
      */
@@ -503,6 +519,21 @@ final class AuditTrailMiddleware implements MiddlewareInterface
         ];
     }
 
+    /** @return array{name:string,services:list<string>}|null */
+    private function serviceState(int $serverId): ?array
+    {
+        $server = $this->servers->find($serverId);
+        if ($server === null) {
+            return null;
+        }
+        $services = $this->servers->monitoredServices($serverId);
+        sort($services, SORT_STRING);
+        return [
+            'name' => (string) $server['name'],
+            'services' => $services,
+        ];
+    }
+
     /** @return array<string, mixed>|null */
     private function agentUpdateState(int $serverId): ?array
     {
@@ -563,7 +594,10 @@ final class AuditTrailMiddleware implements MiddlewareInterface
         return $id === false ? null : $this->groupState((int) $id);
     }
 
-    /** @param array<string,mixed> $body */
+    /**
+     * @param array<string, mixed> $body
+     * @return array<string, mixed>|null
+     */
     private function userSaveState(array $body): ?array
     {
         $id = $this->positiveInt($body['user_id'] ?? null);
@@ -656,7 +690,10 @@ final class AuditTrailMiddleware implements MiddlewareInterface
         ] : null;
     }
 
-    /** @param array<string,mixed> $body @return array{matching:int,filters:array<string,mixed>} */
+    /**
+     * @param array<string, mixed> $body
+     * @return array{matching:int,filters:array<string,mixed>}
+     */
     private function queueDeleteState(array $body): array
     {
         $filters = $this->outbox->filters($body);
@@ -666,7 +703,10 @@ final class AuditTrailMiddleware implements MiddlewareInterface
         ];
     }
 
-    /** @param array<string,mixed> $filters @return array<string,mixed> */
+    /**
+     * @param array<string, mixed> $filters
+     * @return array<string, mixed>
+     */
     private function safeQueueFilters(array $filters): array
     {
         return [
