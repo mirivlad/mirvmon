@@ -11,17 +11,18 @@ import (
 )
 
 func platformApply(staged, installed string, _ int, targetVersion, healthPath string) error {
+	stop := func() error {
+		return runLinuxAgentService("stop")
+	}
 	restart := func() error {
 		if err := runLinuxAgentService("restart"); err != nil {
 			return err
 		}
 		return runLinuxAgentService("status")
 	}
-	return replaceExecutable(staged, installed, restart, func() error {
+	return replaceExecutable(staged, installed, stop, restart, func() error {
 		return waitForTargetHealth(healthPath, targetVersion, 30*time.Second)
-	}, func() error {
-		return runLinuxAgentService("stop")
-	})
+	}, stop)
 }
 
 func runLinuxAgentService(action string) error {

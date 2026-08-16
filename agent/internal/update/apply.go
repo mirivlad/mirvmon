@@ -199,12 +199,20 @@ func waitForTargetHealth(path, targetVersion string, timeout time.Duration) erro
 	}
 }
 
-func replaceExecutable(staged, installed string, restart, confirm, beforeRestore func() error) error {
+func replaceExecutable(staged, installed string, beforeReplace, restart, confirm, beforeRestore func() error) error {
 	backup := installed + ".previous"
 	if err := os.Remove(backup); err != nil && !os.IsNotExist(err) {
 		return err
 	}
+	if beforeReplace != nil {
+		if err := beforeReplace(); err != nil {
+			return fmt.Errorf("stop installed agent: %w", err)
+		}
+	}
 	if err := os.Rename(installed, backup); err != nil {
+		if restartErr := restart(); restartErr != nil {
+			return errors.Join(err, fmt.Errorf("restart installed agent: %w", restartErr))
+		}
 		return err
 	}
 	restore := func(cause error) error {
