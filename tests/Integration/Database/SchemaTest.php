@@ -24,6 +24,7 @@ final class SchemaTest extends TestCase
         self::assertFileExists(dirname(__DIR__, 3) . '/migrations/016_dashboard_widgets_and_availability.sql');
         self::assertFileExists(dirname(__DIR__, 3) . '/migrations/017_incident_history.sql');
         self::assertFileExists(dirname(__DIR__, 3) . '/migrations/018_audit_log.sql');
+        self::assertFileExists(dirname(__DIR__, 3) . '/migrations/019_audit_retention.sql');
 
         if (getenv('TEST_DB_HOST') === false) {
             self::markTestSkipped('Set TEST_DB_* to run the TimescaleDB integration suite.');
@@ -190,7 +191,7 @@ final class SchemaTest extends TestCase
         self::assertSame([], $migrator->migrate());
 
         $count = self::$pdo?->query('SELECT count(*) FROM schema_migrations')->fetchColumn();
-        self::assertSame('18', (string) $count);
+        self::assertSame('19', (string) $count);
     }
 
     public function testAvailabilitySchemaExists(): void
@@ -209,7 +210,7 @@ final class SchemaTest extends TestCase
         ], $tables);
     }
 
-    public function testAuditLogSchemaIsAppendOnly(): void
+    public function testAuditLogSchemaIsAppendOnlyWithControlledRetentionFunction(): void
     {
         self::assertSame('audit_log', self::$pdo?->query(
             "SELECT table_name
@@ -258,6 +259,14 @@ final class SchemaTest extends TestCase
                AND tgname = 'audit_log_append_only'"
         )->fetchColumn();
         self::assertSame('audit_log_append_only', $trigger);
+
+        $retentionFunction = self::$pdo?->query(
+            "SELECT proname
+             FROM pg_proc
+             WHERE proname = 'mirvmon_prune_audit_log'
+               AND pg_get_function_identity_arguments(oid) = 'cutoff timestamp with time zone'"
+        )->fetchColumn();
+        self::assertSame('mirvmon_prune_audit_log', $retentionFunction);
     }
 
     public function testReportedOperatingSystemColumnIsNullable(): void
