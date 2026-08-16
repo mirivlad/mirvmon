@@ -1,0 +1,127 @@
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h2 class="h4 mb-1"><i class="fas fa-clock-rotate-left me-1" aria-hidden="true"></i>{{ t('server18.events.title') }}</h2>
+        <p class="text-muted mb-0">{{ t('server18.events.help') }}</p>
+    </div>
+    <a href="/alerts?view=history&server_id={{ server.id }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-up-right-from-square me-1" aria-hidden="true"></i>{{ t('server18.events.open_log') }}
+    </a>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h3 class="h5 mb-0"><i class="fas fa-bolt me-1 text-danger" aria-hidden="true"></i>{{ t('server18.events.active') }}</h3>
+        <a href="/alerts?view=active&server_id={{ server.id }}" class="small text-decoration-none">{{ t('server18.events.all_active') }}</a>
+    </div>
+    <div class="card-body p-0">
+        {% if active_incidents is empty %}
+            <div class="p-4 text-center text-muted"><i class="fas fa-circle-check text-success me-1" aria-hidden="true"></i>{{ t('server18.events.no_active') }}</div>
+        {% else %}
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead><tr>
+                    <th>{{ t('incidents.column.problem') }}</th>
+                    <th>{{ t('incidents.column.level') }}</th>
+                    <th>{{ t('incidents.column.started') }}</th>
+                    <th>{{ t('incidents.column.duration') }}</th>
+                    <th>{{ t('common.actions') }}</th>
+                </tr></thead>
+                <tbody>
+                    {% for event in active_incidents %}
+                        {% set duration = event.duration_seconds|default(0) %}
+                        {% set days = (duration / 86400)|round(0, 'floor') %}
+                        {% set hours = ((duration % 86400) / 3600)|round(0, 'floor') %}
+                        {% set minutes = ((duration % 3600) / 60)|round(0, 'floor') %}
+                        {% set metric_key = 'incidents.metric.' ~ event.subject_name %}
+                        {% set metric_label = t(metric_key) %}
+                        {% if event.kind == 'offline' %}
+                            {% set problem = t('incidents.problem.offline') %}
+                        {% elseif event.kind == 'service' %}
+                            {% set problem = t('incidents.problem.service', {'name': event.subject_name}) %}
+                        {% elseif metric_label != metric_key %}
+                            {% set problem = metric_label %}
+                        {% else %}
+                            {% set problem = event.subject_name|replace({'_': ' '}) %}
+                        {% endif %}
+                        <tr>
+                            <td>
+                                <div class="fw-semibold">{{ problem }}</div>
+                                <div class="small text-muted">{{ t('incidents.kind.' ~ event.kind) }}{% if event.value is not null %} · {{ event.value|round(2) }}{% if event.unit %} {{ event.unit }}{% endif %}{% endif %}</div>
+                            </td>
+                            <td><span class="badge {{ event.severity == 'critical' ? 'text-bg-danger' : 'text-bg-warning' }}">{{ t('alerts.level.' ~ event.severity) }}</span></td>
+                            <td class="small text-nowrap">{{ event.created_at|date('d.m.Y H:i:s') }}</td>
+                            <td class="small text-nowrap">
+                                {% if days > 0 %}{{ days }} {{ t('common.days') }} {% endif %}{% if hours > 0 or days > 0 %}{{ hours }} {{ t('common.hours') }} {% endif %}{{ minutes }} {{ t('common.minutes') }}
+                            </td>
+                            <td>
+                                {% if event.id is not null %}
+                                    {% include "partials/action-button.twig" with {
+                                        form_action: '/alerts/' ~ event.id ~ '/resolve',
+                                        icon: 'fa-check',
+                                        label: t('alerts.resolve'),
+                                        class: 'btn-outline-success',
+                                        confirm: t('alerts.resolve.confirm')
+                                    } %}
+                                {% else %}<span class="text-muted">—</span>{% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h3 class="h5 mb-0"><i class="fas fa-clock-rotate-left me-1" aria-hidden="true"></i>{{ t('server18.events.history') }}</h3>
+        <a href="/alerts?view=history&server_id={{ server.id }}" class="small text-decoration-none">{{ t('server18.events.full_history') }}</a>
+    </div>
+    <div class="card-body p-0">
+        {% if incident_history is empty %}
+            <div class="p-4 text-center text-muted">{{ t('server18.events.no_history') }}</div>
+        {% else %}
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead><tr>
+                    <th>{{ t('incidents.column.problem') }}</th>
+                    <th>{{ t('incidents.column.level') }}</th>
+                    <th>{{ t('incidents.column.period') }}</th>
+                    <th>{{ t('incidents.column.duration') }}</th>
+                    <th>{{ t('incidents.column.resolved_by') }}</th>
+                </tr></thead>
+                <tbody>
+                    {% for event in incident_history %}
+                        {% set duration = event.duration_seconds|default(0) %}
+                        {% set days = (duration / 86400)|round(0, 'floor') %}
+                        {% set hours = ((duration % 86400) / 3600)|round(0, 'floor') %}
+                        {% set minutes = ((duration % 3600) / 60)|round(0, 'floor') %}
+                        {% set metric_key = 'incidents.metric.' ~ event.subject_name %}
+                        {% set metric_label = t(metric_key) %}
+                        {% if event.kind == 'offline' %}
+                            {% set problem = t('incidents.problem.offline') %}
+                        {% elseif event.kind == 'service' %}
+                            {% set problem = t('incidents.problem.service', {'name': event.subject_name}) %}
+                        {% elseif metric_label != metric_key %}
+                            {% set problem = metric_label %}
+                        {% else %}
+                            {% set problem = event.subject_name|replace({'_': ' '}) %}
+                        {% endif %}
+                        <tr>
+                            <td><div class="fw-semibold">{{ problem }}</div><div class="small text-muted">{{ t('incidents.kind.' ~ event.kind) }}</div></td>
+                            <td><span class="badge {{ event.severity == 'critical' ? 'text-bg-danger' : 'text-bg-warning' }}">{{ t('alerts.level.' ~ event.severity) }}</span></td>
+                            <td class="small text-nowrap">
+                                <div>{{ event.created_at|date('d.m.Y H:i:s') }}</div>
+                                <div class="text-muted">→ {{ event.resolved_at|date('d.m.Y H:i:s') }}</div>
+                            </td>
+                            <td class="small text-nowrap">{% if days > 0 %}{{ days }} {{ t('common.days') }} {% endif %}{% if hours > 0 or days > 0 %}{{ hours }} {{ t('common.hours') }} {% endif %}{{ minutes }} {{ t('common.minutes') }}</td>
+                            <td class="small">{{ event.resolved_by_username ?: t('incidents.resolved.automatic') }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>

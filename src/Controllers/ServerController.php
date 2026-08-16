@@ -6,6 +6,8 @@ namespace App\Controllers;
 
 use App\I18n\Translator;
 use App\I18n\TwigTranslation;
+use App\Repositories\MetricRepository;
+use App\Repositories\ServerRepository;
 use App\Services\AgentCredentialIssuer;
 use App\Services\AgentUpdateService;
 use App\Services\DashboardMetricService;
@@ -191,6 +193,8 @@ final class ServerController
         $agentToken = $this->pdo->prepare('SELECT token_generation FROM agent_tokens WHERE server_id = :server_id');
         $agentToken->execute(['server_id' => $serverId]);
         $tokenGeneration = $agentToken->fetchColumn();
+        $serverRepository = new ServerRepository($this->pdo);
+        $metricRepository = new MetricRepository($this->pdo);
 
         return $this->twig->render($response, 'servers/edit.twig', [
             'title' => $this->translator->trans('servers.edit.title', ['name' => (string) $server['name']]),
@@ -201,6 +205,10 @@ final class ServerController
             'display_groups' => $display['groups'],
             'selected_widgets' => $display['selected'],
             'server_notification_emails' => $this->decodeStringList($server['notification_emails'] ?? '[]'),
+            'all_metric_types' => $metricRepository->metricTypes($serverId),
+            'existing_thresholds' => $serverRepository->thresholds($serverId),
+            'all_services' => $serverRepository->services($serverId),
+            'monitor_services' => $serverRepository->monitoredServices($serverId),
         ]);
     }
 
@@ -262,8 +270,10 @@ final class ServerController
             'notification_emails' => json_encode($recipientEmails, JSON_THROW_ON_ERROR),
             'display_metrics' => json_encode($displayMetrics, JSON_THROW_ON_ERROR),
         ]);
+        $_SESSION['flash_message'] = $this->translator->trans('server18.settings.saved');
+        $_SESSION['flash_type'] = 'success';
 
-        return $this->redirect($response, '/servers');
+        return $this->redirect($response, '/servers/' . $serverId . '/edit');
     }
 
     /** @param array<string, string> $args */

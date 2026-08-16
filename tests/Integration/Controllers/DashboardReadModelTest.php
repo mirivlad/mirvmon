@@ -137,7 +137,7 @@ final class DashboardReadModelTest extends TestCase
         self::assertStringContainsString('title="Debian GNU/Linux 12"', $dashboardHtml);
         self::assertStringContainsString('server-status-online', $dashboardHtml);
 
-        $detail = (new ServerDetailController(
+        $detailController = new ServerDetailController(
             self::$pdo,
             $twig,
             $servers,
@@ -145,7 +145,8 @@ final class DashboardReadModelTest extends TestCase
             new MaintenanceWindowRepository(self::$pdo),
             null,
             new ServerStatusService(new ServerPlatformService())
-        ))->show(
+        );
+        $detail = $detailController->show(
             $requestFactory->createServerRequest(
                 'GET',
                 'http://localhost/servers/' . $this->serverId . '?period=24h'
@@ -158,10 +159,65 @@ final class DashboardReadModelTest extends TestCase
         self::assertSame(200, $detail->getStatusCode());
         self::assertStringContainsString('CPU сейчас', $detailHtml);
         self::assertStringContainsString('40%', $detailHtml);
-        self::assertStringContainsString('id="agent-tab"', $detailHtml);
-        self::assertStringContainsString('Отозвать ключ', $detailHtml);
+        self::assertStringNotContainsString('Отозвать ключ', $detailHtml);
         self::assertStringContainsString('fab fa-linux', $detailHtml);
         self::assertStringContainsString('title="Debian GNU/Linux 12"', $detailHtml);
         self::assertStringContainsString('server-status-online', $detailHtml);
+
+        $metricsDetail = $detailController->show(
+            $requestFactory->createServerRequest(
+                'GET',
+                'http://localhost/servers/' . $this->serverId . '?tab=metrics&period=24h'
+            ),
+            $responseFactory->createResponse(),
+            ['id' => (string) $this->serverId]
+        );
+        $metricsHtml = (string) $metricsDetail->getBody();
+
+        self::assertSame(200, $metricsDetail->getStatusCode());
+        self::assertStringContainsString('id="chart-cpu_load"', $metricsHtml);
+        self::assertStringContainsString('40%', $metricsHtml);
+        self::assertStringNotContainsString('Отозвать ключ', $metricsHtml);
+
+        $servicesDetail = $detailController->show(
+            $requestFactory->createServerRequest(
+                'GET',
+                'http://localhost/servers/' . $this->serverId . '?tab=services'
+            ),
+            $responseFactory->createResponse(),
+            ['id' => (string) $this->serverId]
+        );
+        $servicesHtml = (string) $servicesDetail->getBody();
+        self::assertSame(200, $servicesDetail->getStatusCode());
+        self::assertStringContainsString('Состояние сервисов', $servicesHtml);
+        self::assertStringContainsString('/edit#services-monitoring', $servicesHtml);
+
+        $eventsDetail = $detailController->show(
+            $requestFactory->createServerRequest(
+                'GET',
+                'http://localhost/servers/' . $this->serverId . '?tab=events'
+            ),
+            $responseFactory->createResponse(),
+            ['id' => (string) $this->serverId]
+        );
+        $eventsHtml = (string) $eventsDetail->getBody();
+        self::assertSame(200, $eventsDetail->getStatusCode());
+        self::assertStringContainsString('События сервера', $eventsHtml);
+        self::assertStringContainsString('Активных проблем нет', $eventsHtml);
+
+        $agentDetail = $detailController->show(
+            $requestFactory->createServerRequest(
+                'GET',
+                'http://localhost/servers/' . $this->serverId . '?tab=agent'
+            ),
+            $responseFactory->createResponse(),
+            ['id' => (string) $this->serverId]
+        );
+        $agentHtml = (string) $agentDetail->getBody();
+
+        self::assertSame(200, $agentDetail->getStatusCode());
+        self::assertStringContainsString('Отозвать ключ', $agentHtml);
+        self::assertStringContainsString('?tab=agent', $agentHtml);
+        self::assertStringNotContainsString('CPU сейчас', $agentHtml);
     }
 }

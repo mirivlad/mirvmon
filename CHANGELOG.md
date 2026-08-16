@@ -6,6 +6,31 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+- Rebuilt the server detail page around operational **Overview / Metrics /
+  Services / Events / Agent** tabs so observation is separated from monitoring
+  configuration.
+- Added an operational host passport with the available OS, derived native-agent
+  architecture, configured address/hostname, group, uptime, agent version/update
+  state and active-problem count.
+- Server details now show MirvMon's last authenticated agent contact separately
+  from the agent-provided sample timestamp and warn explicitly about stale queued
+  samples or significant host clock skew.
+- Consolidated displayed metrics, offline timeout, per-server notification
+  recipients, metric thresholds and monitored-service selection into the server
+  settings screen.
+- Maintenance mode is now an explicit action; the prominent maintenance banner
+  appears only while a maintenance window is actually active.
+- Split service observation from service selection: the Services tab shows
+  reported runtime state while the settings page controls which services are
+  monitored.
+- Added a server-scoped Events view backed by the incidents read model, including
+  availability-only offline incidents, recent history and preserved manual
+  resolution behavior.
+- Extracted the server metric presentation read model and added contract,
+  integration and timing-diagnostic coverage for the new page structure.
+
+## 0.4.17.1
+
 - Refined the Incidents screen after production UI review: compact event-history
   tabs and filters, combined server/group and start/recovery presentation, and
   human-readable metric/problem labels instead of raw internal metric names.
