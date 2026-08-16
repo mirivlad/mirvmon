@@ -7,6 +7,8 @@ namespace App\Controllers;
 use App\I18n\Translator;
 use App\I18n\TwigTranslation;
 use App\Repositories\AppSettingsRepository;
+use App\Repositories\AuditLogRepository;
+use App\Services\AuditLogger;
 use App\Services\SystemHealthService;
 use PDO;
 use Psr\Http\Message\ResponseInterface as Response;
@@ -16,13 +18,17 @@ use Throwable;
 
 final class SystemController
 {
+    private readonly AuditLogger $audit;
+
     public function __construct(
         private readonly PDO $pdo,
         private readonly Twig $twig,
         private readonly AppSettingsRepository $settings,
         private readonly SystemHealthService $health,
-        private readonly Translator $translator = new Translator()
+        private readonly Translator $translator = new Translator(),
+        ?AuditLogger $audit = null
     ) {
+        $this->audit = $audit ?? new AuditLogger(new AuditLogRepository($pdo));
         TwigTranslation::register($this->twig->getEnvironment(), $this->translator);
     }
 
@@ -57,11 +63,22 @@ final class SystemController
             return $this->redirect($response, '/');
         }
 
+        $before = $this->health->selectedHostId();
         $body = $request->getParsedBody();
         $value = is_array($body) ? ($body['server_id'] ?? null) : null;
         if ($value === null || $value === '') {
             try {
                 $this->settings->set(SystemHealthService::HOST_SETTING, null);
+                if ($before !== null) {
+                    $this->audit->record(
+                        'system.host.clear',
+                        'system',
+                        null,
+                        null,
+                        $this->translator->trans('audit.event.system.host_cleared'),
+                        ['server_id' => null]
+                    );
+                }
                 $this->flash('system.host.cleared', 'success');
             } catch (Throwable) {
                 $this->flash('system.host.save_failed', 'error');
@@ -81,20 +98,30 @@ final class SystemController
 
         try {
             $statement = $this->pdo->prepare(
-                'SELECT is_active FROM servers WHERE id = :id'
+                'SELECT name, is_active FROM servers WHERE id = :id'
             );
             $statement->execute(['id' => $serverId]);
-            $active = $statement->fetchColumn();
-            if ($active === false) {
+            $server = $statement->fetch();
+            if (!is_array($server)) {
                 $this->flash('system.host.not_found', 'error');
                 return $this->redirect($response, '/admin/system');
             }
-            if (!$this->toBool($active)) {
+            if (!$this->toBool($server['is_active'] ?? false)) {
                 $this->flash('system.host.inactive', 'error');
                 return $this->redirect($response, '/admin/system');
             }
 
             $this->settings->set(SystemHealthService::HOST_SETTING, $serverId);
+            if ($before !== (int) $serverId) {
+                $this->audit->record(
+                    'system.host.save',
+                    'system',
+                    (int) $serverId,
+                    (string) $server['name'],
+                    $this->translator->trans('audit.event.system.host_saved'),
+                    ['server_id' => (int) $serverId]
+                );
+            }
             $this->flash('system.host.saved', 'success');
         } catch (Throwable) {
             $this->flash('system.host.save_failed', 'error');
