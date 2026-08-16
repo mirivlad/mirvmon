@@ -94,8 +94,8 @@ final class AlertControllerTest extends TestCase
 
         self::assertSame(200, $response->getStatusCode());
         self::assertStringContainsString('alert-server', $html);
-        self::assertStringContainsString('cpu load', mb_strtolower($html));
-        self::assertStringContainsString('95.5%', $html);
+        self::assertStringContainsString('загрузка cpu', mb_strtolower($html));
+        self::assertStringContainsString('95.5 %', $html);
     }
 
     public function testResolveUsesPostgresBoolean(): void
