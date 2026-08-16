@@ -138,6 +138,7 @@ final class AppFactory
             $group->get('/system', self::controller($container, SystemController::class, 'index'));
             $group->post('/system/host', self::controller($container, SystemController::class, 'saveHost'));
             $group->get('/audit', self::controller($container, AuditController::class, 'index'));
+            $group->post('/audit/retention', self::controller($container, AuditController::class, 'saveRetention'));
         });
         $administration->add($auditTrail)->add($csrf)->add($admin)->add($auth);
 
