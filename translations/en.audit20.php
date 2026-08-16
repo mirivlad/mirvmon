@@ -28,6 +28,19 @@ return [
     'audit.previous' => 'Previous',
     'audit.next' => 'Next',
 
+    'audit.retention.title' => 'Audit retention',
+    'audit.retention.help' => '0 keeps the audit log forever. Otherwise, entries older than the selected number of days are removed automatically.',
+    'audit.retention.independent' => 'This policy is independent from metrics and process-history retention.',
+    'audit.retention.label' => 'Retention period',
+    'audit.retention.days' => 'days',
+    'audit.retention.range' => 'Use 0 or a value from {min} to {max} days.',
+    'audit.retention.save' => 'Save',
+    'audit.retention.invalid' => 'Audit retention must be 0 or within the allowed range.',
+    'audit.retention.save_failed' => 'Could not save the audit retention policy.',
+    'audit.retention.saved_forever' => 'Audit history will be kept forever.',
+    'audit.retention.saved_days' => 'Audit retention is now {days} days.',
+    'audit.retention.object' => 'Audit retention policy',
+
     'audit.event.server.created' => 'Server “{name}” was created.',
     'audit.event.server.updated' => 'Settings for server “{name}” were changed.',
     'audit.event.server.deleted' => 'Server “{name}” was deleted.',
@@ -56,4 +69,6 @@ return [
     'audit.event.system.host_saved' => 'The server used to monitor MirvMon was changed.',
     'audit.event.system.host_cleared' => 'The MirvMon monitoring server was cleared.',
     'audit.event.alert.resolved' => 'Incident #{id} was resolved manually.',
+    'audit.event.retention.forever' => 'Audit retention changed: keep history forever.',
+    'audit.event.retention.saved' => 'Audit retention changed to {days} days.',
 ];
