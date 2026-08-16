@@ -1,0 +1,283 @@
+<script src="/vendor/chart.js/chart.umd.js"></script>
+<script src="/vendor/hammerjs/hammer.min.js"></script>
+<script src="/vendor/chartjs-plugin-zoom/chartjs-plugin-zoom.min.js"></script>
+<script nonce="__MIRVMON_CSP_NONCE__">
+const managedCharts = [];
+const detailText = {
+    time: {{ t('metric.time')|json_encode|raw }},
+    loading: {{ t('metric.loading')|json_encode|raw }},
+    total: {{ t('server.js.total')|json_encode|raw }},
+    used: {{ t('server.js.used')|json_encode|raw }},
+    free: {{ t('server.js.free')|json_encode|raw }},
+    topCpu: {{ t('metric.top_cpu')|json_encode|raw }},
+    topRam: {{ t('metric.top_ram')|json_encode|raw }},
+    diskUsed: {{ t('metric.used')|json_encode|raw }},
+    diskFree: {{ t('metric.free')|json_encode|raw }},
+    warning: {{ t('alerts.level.warning')|json_encode|raw }},
+    critical: {{ t('alerts.level.critical')|json_encode|raw }},
+    online: {{ t('server18.status.online')|json_encode|raw }},
+    offline: {{ t('server18.status.offline')|json_encode|raw }},
+    days: {{ t('common.days')|json_encode|raw }},
+    hours: {{ t('common.hours')|json_encode|raw }},
+    minutes: {{ t('common.minutes')|json_encode|raw }}
+};
+
+function fetchProcesses(serverId, time) {
+    return fetch('/api/v1/agent/' + serverId + '/processes?time=' + encodeURIComponent(time))
+        .then(response => response.json())
+        .catch(() => ({ top_cpu: [], top_ram: [] }));
+}
+
+function renderProcessTooltip(context, chartMeta) {
+    let tooltipEl = document.getElementById('chartjs-tooltip-' + chartMeta.id);
+    if (!tooltipEl) {
+        tooltipEl = document.createElement('div');
+        tooltipEl.id = 'chartjs-tooltip-' + chartMeta.id;
+        tooltipEl.style.opacity = 0;
+        tooltipEl.style.position = 'absolute';
+        tooltipEl.style.background = 'rgba(33, 37, 41, 0.92)';
+        tooltipEl.style.color = '#fff';
+        tooltipEl.style.borderRadius = '6px';
+        tooltipEl.style.padding = '10px 12px';
+        tooltipEl.style.fontSize = '12px';
+        tooltipEl.style.pointerEvents = 'none';
+        tooltipEl.style.whiteSpace = 'pre-line';
+        tooltipEl.style.zIndex = 1080;
+        document.body.appendChild(tooltipEl);
+    }
+    const tooltip = context.tooltip;
+    if (!tooltip || tooltip.opacity === 0 || !tooltip.dataPoints || !tooltip.dataPoints.length) {
+        tooltipEl.style.opacity = 0;
+        return;
+    }
+    const point = tooltip.dataPoints[0];
+    const dataIndex = point.dataIndex;
+    const timestamp = chartMeta.timestamps[dataIndex] || chartMeta.labels[dataIndex];
+    const value = point.raw;
+    const valueText = `${point.dataset.label}: ${value}${chartMeta.unit || ''}`;
+    tooltipEl.textContent = `${detailText.time}: ${chartMeta.labels[dataIndex]}\n${valueText}\n${detailText.loading}`;
+    tooltipEl.style.opacity = 1;
+    const position = context.chart.canvas.getBoundingClientRect();
+    tooltipEl.style.left = position.left + window.pageXOffset + tooltip.caretX + 12 + 'px';
+    tooltipEl.style.top = position.top + window.pageYOffset + tooltip.caretY + 'px';
+
+    fetchProcesses({{ server.id }}, timestamp).then(function(data) {
+        const lines = [`${detailText.time}: ${chartMeta.labels[dataIndex]}`, valueText];
+        if (chartMeta.id === 'ram_used' && chartMeta.details && chartMeta.details.totalGb) {
+            const totalGb = Number(chartMeta.details.totalGb);
+            const usedGb = Number(((Number(value) / 100) * totalGb).toFixed(1));
+            const freeGb = Number((totalGb - usedGb).toFixed(1));
+            lines.push(`${detailText.total}: ${totalGb.toFixed(1)} GB`);
+            lines.push(`${detailText.used}: ${usedGb.toFixed(1)} GB`);
+            lines.push(`${detailText.free}: ${freeGb.toFixed(1)} GB`);
+        }
+        const processList = chartMeta.id === 'cpu_load' ? (data.top_cpu || []) : (data.top_ram || []);
+        if (processList.length > 0) {
+            lines.push('');
+            lines.push((chartMeta.id === 'cpu_load' ? detailText.topCpu : detailText.topRam) + ':');
+            processList.slice(0, 5).forEach(function(proc) {
+                lines.push(`${proc.command || proc.name}: ${proc.value}%`);
+            });
+        }
+        tooltipEl.textContent = lines.join('\n');
+    });
+}
+
+function createLineChart(canvasId, labels, datasets, unit, chartMeta = null) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return null;
+    const chart = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: datasets.length > 1, position: 'top' },
+                tooltip: chartMeta ? {
+                    enabled: false,
+                    external: function(context) { renderProcessTooltip(context, chartMeta); }
+                } : {
+                    enabled: true,
+                    callbacks: {
+                        label: function(context) {
+                            const value = window.MirvMon.formatMetricValue(context.parsed.y, unit);
+                            return context.dataset.label ? context.dataset.label + ': ' + value : value;
+                        }
+                    }
+                },
+                zoom: {
+                    zoom: { wheel: { enabled: true }, pinch: { enabled: true }, drag: { enabled: true }, mode: 'x' },
+                    pan: { enabled: true, mode: 'x' }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    ticks: { callback: function(value) { return window.MirvMon.formatMetricValue(value, unit); } }
+                }
+            }
+        }
+    });
+    managedCharts.push(chart);
+    return chart;
+}
+
+function formatUptimeSeconds(value) {
+    let seconds = Math.max(0, Math.round(Number(value) || 0));
+    const days = Math.floor(seconds / 86400);
+    seconds %= 86400;
+    const hours = Math.floor(seconds / 3600);
+    seconds %= 3600;
+    const minutes = Math.floor(seconds / 60);
+    if (days > 0) return `${days} ${detailText.days} ${hours} ${detailText.hours}`;
+    if (hours > 0) return `${hours} ${detailText.hours} ${minutes} ${detailText.minutes}`;
+    return `${minutes} ${detailText.minutes}`;
+}
+
+function createUptimeChart(chartData) {
+    const canvas = document.getElementById('chart-uptime');
+    if (!canvas || !chartData.values) return;
+    const chart = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: chartData.labels,
+            datasets: [{ label: chartData.title, data: chartData.values, fill: false, tension: 0.15, pointRadius: 0, borderWidth: 2 }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: function(context) { return formatUptimeSeconds(context.parsed.y); } } },
+                zoom: {
+                    zoom: { wheel: { enabled: true }, pinch: { enabled: true }, drag: { enabled: true }, mode: 'x' },
+                    pan: { enabled: true, mode: 'x' }
+                }
+            },
+            scales: { y: { ticks: { callback: formatUptimeSeconds } } }
+        }
+    });
+    managedCharts.push(chart);
+}
+
+function createAvailabilityChart(chartData) {
+    const canvas = document.getElementById('chart-availability');
+    if (!canvas || !chartData.values) return;
+    const chart = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: chartData.labels,
+            datasets: [{ label: detailText.online, data: chartData.values, stepped: true, fill: true, pointRadius: 0, borderWidth: 2 }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: function(context) { return context.parsed.y >= 0.5 ? detailText.online : detailText.offline; } } },
+                zoom: {
+                    zoom: { wheel: { enabled: true }, pinch: { enabled: true }, drag: { enabled: true }, mode: 'x' },
+                    pan: { enabled: true, mode: 'x' }
+                }
+            },
+            scales: {
+                y: {
+                    min: 0,
+                    max: 1,
+                    ticks: { stepSize: 1, callback: function(value) { return Number(value) === 1 ? detailText.online : detailText.offline; } }
+                }
+            }
+        }
+    });
+    managedCharts.push(chart);
+}
+
+function createDoughnutChart(canvasId, percent) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const color = percent >= 85 ? '#dc3545' : (percent >= 70 ? '#fd7e14' : '#198754');
+    new Chart(canvas.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels: [detailText.diskUsed, detailText.diskFree],
+            datasets: [{ data: [percent, Math.max(0, 100 - percent)], backgroundColor: [color, '#e9ecef'], borderWidth: 0 }]
+        },
+        options: {
+            responsive: true,
+            cutout: '68%',
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: function(context) { return context.label + ': ' + context.parsed.toFixed(1) + '%'; } } }
+            }
+        }
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const simpleMetricCharts = {{ simpleMetricCharts|json_encode|raw }};
+    simpleMetricCharts.forEach(function(chart) {
+        const datasets = [{
+            label: chart.title,
+            data: chart.values,
+            borderColor: chart.color,
+            backgroundColor: chart.color + '22',
+            fill: true,
+            tension: 0.2,
+            pointRadius: 0,
+            borderWidth: 2
+        }];
+        if (chart.thresholds && chart.thresholds.warning !== null) {
+            datasets.push({ label: detailText.warning, data: chart.labels.map(() => Number(chart.thresholds.warning)), borderColor: '#fd7e14', backgroundColor: 'transparent', fill: false, tension: 0, pointRadius: 0, borderWidth: 1.5, borderDash: [6, 4] });
+        }
+        if (chart.thresholds && chart.thresholds.critical !== null) {
+            datasets.push({ label: detailText.critical, data: chart.labels.map(() => Number(chart.thresholds.critical)), borderColor: '#dc3545', backgroundColor: 'transparent', fill: false, tension: 0, pointRadius: 0, borderWidth: 1.5, borderDash: [3, 3] });
+        }
+        createLineChart('chart-' + chart.id, chart.labels, datasets, chart.unit, {
+            id: chart.id,
+            labels: chart.labels,
+            timestamps: chart.timestamps || [],
+            unit: chart.unit,
+            details: chart.details || null
+        });
+    });
+
+    const networkCharts = {{ networkCharts|json_encode|raw }};
+    networkCharts.forEach(function(chart) {
+        createLineChart('chart-net-' + chart.id, chart.labels, chart.datasets.map(function(dataset) {
+            return { label: dataset.label, data: dataset.values, borderColor: dataset.color, backgroundColor: dataset.color + '22', fill: false, tension: 0.2, pointRadius: 0, borderWidth: 2 };
+        }), chart.unit, null);
+    });
+
+    const diskIoCharts = {{ diskIoCharts|json_encode|raw }};
+    diskIoCharts.forEach(function(chart) {
+        createLineChart('chart-disk-io-' + chart.id, chart.labels, chart.datasets.map(function(dataset) {
+            return { label: dataset.label, data: dataset.values, borderColor: dataset.color, backgroundColor: dataset.color + '22', fill: false, tension: 0.2, pointRadius: 0, borderWidth: 2 };
+        }), chart.unit, null);
+    });
+
+    const temperatureChart = {{ temperatureChart|json_encode|raw }};
+    if (temperatureChart.datasets && temperatureChart.datasets.length > 0) {
+        createLineChart('chart-temperatures', temperatureChart.labels, temperatureChart.datasets.map(function(dataset) {
+            return { label: dataset.label, data: dataset.values, borderColor: dataset.color, backgroundColor: dataset.color + '22', fill: false, tension: 0.2, pointRadius: 0, borderWidth: 2 };
+        }), temperatureChart.unit || '', null);
+    }
+
+    createUptimeChart({{ uptimeChart|json_encode|raw }});
+    createAvailabilityChart({{ availabilityChart|json_encode|raw }});
+
+    const diskCharts = {{ diskCharts|json_encode|raw }};
+    diskCharts.forEach(function(disk) { createDoughnutChart('disk-chart-' + disk.id, disk.percent); });
+
+    const resetZoomButton = document.getElementById('reset-all-zoom');
+    if (resetZoomButton) {
+        resetZoomButton.addEventListener('click', function() {
+            managedCharts.forEach(function(chart) {
+                if (chart && typeof chart.resetZoom === 'function') chart.resetZoom();
+            });
+        });
+    }
+});
+</script>

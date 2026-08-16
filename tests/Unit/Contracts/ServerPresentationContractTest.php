@@ -42,7 +42,9 @@ final class ServerPresentationContractTest extends TestCase
     public function testTemperaturePanelRequiresSelectedTemperatureMetric(): void
     {
         $root = dirname(__DIR__, 3);
-        $template = (string) file_get_contents($root . '/templates/servers/detail.twig');
+        $template = (string) file_get_contents(
+            $root . '/templates/servers/partials/detail-metrics.twig'
+        );
 
         self::assertMatchesRegularExpression(
             '/\{% if displayMetrics\|filter\(v => v starts with \'temp_\'\)\|length > 0 %\}.*?t\(\'server\.temperature\.title\'\).*?\{% endif %\}/s',

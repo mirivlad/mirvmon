@@ -2,46 +2,98 @@
 {% set page_title = t('server.page_title', {name: server.name}) %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <h3 class="mb-0 server-status-{{ server.status }}">
-                    {% include "partials/server-status-icon.twig" %}
-                    {{ server.name }}
-                    {% if server.group_name %}
-                        <span class="badge ms-2" {% if server.group_color %}style="background-color: {{ server.group_color }}"{% endif %}>
-                            <i class="fas {{ server.group_icon|default('fa-box') }} me-1"></i>{{ server.group_name }}
-                        </span>
-                    {% endif %}
-                </h3>
-                <div>
-                    {% include "partials/action-button.twig" with {href: '/servers/' ~ server.id ~ '/edit', icon: 'fa-edit', label: t('common.edit'), class: 'btn-outline-primary'} %}
-                    {% include "partials/action-button.twig" with {href: '/servers', icon: 'fa-arrow-left', label: t('server.back_to_list'), class: 'btn-outline-secondary'} %}
-                </div>
-            </div>
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div>
+            <h1 class="h3 mb-1 server-status-{{ server.status }}">
+                {% include "partials/server-status-icon.twig" %}
+                {{ server.name }}
+                {% if server.group_name %}
+                    <span class="badge ms-2" {% if server.group_color %}style="background-color: {{ server.group_color }}"{% endif %}>
+                        <i class="fas {{ server.group_icon|default('fa-box') }} me-1" aria-hidden="true"></i>{{ server.group_name }}
+                    </span>
+                {% endif %}
+            </h1>
+            {% if server.description %}<div class="text-muted">{{ server.description }}</div>{% endif %}
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            {% if not maintenance %}
+            <button type="button" class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#maintenanceModal">
+                <i class="fas fa-screwdriver-wrench me-1" aria-hidden="true"></i>{{ t('server18.maintenance.start') }}
+            </button>
+            {% endif %}
+            <a href="/servers/{{ server.id }}/edit" class="btn btn-outline-primary">
+                <i class="fas fa-sliders me-1" aria-hidden="true"></i>{{ t('server18.settings.open') }}
+            </a>
+            <a href="/servers" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1" aria-hidden="true"></i>{{ t('server.back_to_list') }}
+            </a>
+        </div>
+    </div>
+</div>
 
-            <div class="card-body">
-                {% if maintenance %}
-                <div class="alert alert-warning d-flex flex-wrap justify-content-between align-items-center gap-2">
-                    <div>
-                        <i class="fas fa-screwdriver-wrench"></i>
-                        <strong>{{ t('server.maintenance.until', {time: maintenance.ends_at|date('d.m.Y H:i')}) }}</strong>
-                        {{ t('server.maintenance.suppressed') }}
-                        {% if maintenance.reason %}<span class="ms-1">{{ t('server.maintenance.reason', {reason: maintenance.reason}) }}</span>{% endif %}
-                        {% if maintenance.created_by %}<span class="text-muted small">{{ t('server.maintenance.created_by', {user: maintenance.created_by}) }}</span>{% endif %}
-                    </div>
-                    <form method="post" action="/servers/{{ server.id }}/maintenance/cancel" class="mb-0">
-                        {% include "partials/csrf.twig" %}
-                        <button type="submit" class="btn btn-sm btn-warning"><i class="fas fa-play"></i> {{ t('server.maintenance.end') }}</button>
-                    </form>
+{% if maintenance %}
+<div class="alert alert-warning d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+    <div>
+        <i class="fas fa-screwdriver-wrench me-1" aria-hidden="true"></i>
+        <strong>{{ t('server.maintenance.until', {time: maintenance.ends_at|date('d.m.Y H:i')}) }}</strong>
+        {{ t('server.maintenance.suppressed') }}
+        {% if maintenance.reason %}<span class="ms-1">{{ t('server.maintenance.reason', {reason: maintenance.reason}) }}</span>{% endif %}
+        {% if maintenance.created_by %}<span class="text-muted small ms-1">{{ t('server.maintenance.created_by', {user: maintenance.created_by}) }}</span>{% endif %}
+    </div>
+    <form method="post" action="/servers/{{ server.id }}/maintenance/cancel" class="mb-0">
+        {% include "partials/csrf.twig" %}
+        <button type="submit" class="btn btn-sm btn-warning">
+            <i class="fas fa-play me-1" aria-hidden="true"></i>{{ t('server.maintenance.end') }}
+        </button>
+    </form>
+</div>
+{% endif %}
+
+<ul class="nav nav-tabs mb-3" aria-label="{{ t('server18.tabs.label') }}">
+    {% set tabs = {
+        overview: ['fa-gauge-high', t('server18.tabs.overview')],
+        metrics: ['fa-chart-line', t('server18.tabs.metrics')],
+        services: ['fa-gears', t('server18.tabs.services')],
+        events: ['fa-clock-rotate-left', t('server18.tabs.events')],
+        agent: ['fa-code-branch', t('server18.tabs.agent')]
+    } %}
+    {% for tab, meta in tabs %}
+    <li class="nav-item">
+        <a href="/servers/{{ server.id }}?tab={{ tab }}" class="nav-link {{ active_tab == tab ? 'active fw-semibold' : '' }}" {% if active_tab == tab %}aria-current="page"{% endif %}>
+            <i class="fas {{ meta[0] }} me-1" aria-hidden="true"></i>{{ meta[1] }}
+            {% if tab == 'events' and active_problem_count > 0 %}<span class="badge text-bg-danger ms-1">{{ active_problem_count }}</span>{% endif %}
+        </a>
+    </li>
+    {% endfor %}
+</ul>
+
+{% if active_tab == 'overview' %}
+    {% include "servers/partials/detail-overview.twig" %}
+{% elseif active_tab == 'metrics' %}
+    {% include "servers/partials/detail-metrics.twig" %}
+{% elseif active_tab == 'services' %}
+    {% include "servers/partials/detail-services.twig" %}
+{% elseif active_tab == 'events' %}
+    {% include "servers/partials/detail-events.twig" %}
+{% elseif active_tab == 'agent' %}
+    {% include "servers/partials/agent-management.twig" %}
+{% endif %}
+
+{% if not maintenance %}
+<div class="modal fade" id="maintenanceModal" tabindex="-1" aria-labelledby="maintenanceModalTitle" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="/servers/{{ server.id }}/maintenance">
+                {% include "partials/csrf.twig" %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="maintenanceModalTitle"><i class="fas fa-screwdriver-wrench me-1" aria-hidden="true"></i>{{ t('server18.maintenance.title') }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ t('common.close') }}"></button>
                 </div>
-                {% else %}
-                <form method="post" action="/servers/{{ server.id }}/maintenance" class="row g-2 align-items-end mb-4">
-                    {% include "partials/csrf.twig" %}
-                    <div class="col-auto">
-                        <label for="duration_minutes" class="form-label mb-0 small text-muted">{{ t('server.maintenance.pause_notifications') }}</label>
-                        <select class="form-select form-select-sm" id="duration_minutes" name="duration_minutes">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="duration_minutes" class="form-label">{{ t('server.maintenance.pause_notifications') }}</label>
+                        <select class="form-select" id="duration_minutes" name="duration_minutes">
                             <option value="30">30 {{ t('common.minutes') }}</option>
                             <option value="60" selected>{{ t('server.period.hour_1') }}</option>
                             <option value="240">4 {{ t('common.hours') }}</option>
@@ -49,358 +101,22 @@
                             <option value="1440">24 {{ t('common.hours') }}</option>
                         </select>
                     </div>
-                    <div class="col-sm-4">
-                        <input type="text" class="form-control form-control-sm" name="reason" placeholder="{{ t('server.maintenance.reason_placeholder') }}" maxlength="255">
+                    <div>
+                        <label for="maintenance_reason" class="form-label">{{ t('server18.maintenance.reason') }}</label>
+                        <input type="text" class="form-control" id="maintenance_reason" name="reason" maxlength="255" placeholder="{{ t('server.maintenance.reason_placeholder') }}">
                     </div>
-                    <div class="col-auto">
-                        <button type="submit" class="btn btn-sm btn-outline-warning"><i class="fas fa-screwdriver-wrench"></i> {{ t('server.maintenance.enable') }}</button>
-                    </div>
-                </form>
-                {% endif %}
-
-                <ul class="nav nav-tabs mb-4" role="tablist">
-                    <li class="nav-item" role="presentation"><button class="nav-link active" id="metrics-tab" data-bs-toggle="tab" data-bs-target="#metrics" type="button" role="tab" aria-controls="metrics" aria-selected="true"><i class="fas fa-chart-line me-1"></i> {{ t('server.tabs.metrics') }}</button></li>
-                    <li class="nav-item" role="presentation"><button class="nav-link" id="services-tab" data-bs-toggle="tab" data-bs-target="#services" type="button" role="tab" aria-controls="services" aria-selected="false"><i class="fas fa-cogs me-1"></i> {{ t('server.tabs.services') }}</button></li>
-                    <li class="nav-item" role="presentation"><button class="nav-link" id="thresholds-tab" data-bs-toggle="tab" data-bs-target="#thresholds" type="button" role="tab" aria-controls="thresholds" aria-selected="false"><i class="fas fa-bell me-1"></i> {{ t('server.tabs.thresholds') }}</button></li>
-                    <li class="nav-item" role="presentation"><button class="nav-link" id="agent-tab" data-bs-toggle="tab" data-bs-target="#agent" type="button" role="tab" aria-controls="agent" aria-selected="false"><i class="fas fa-download me-1"></i> {{ t('server.tabs.agent') }}</button></li>
-                </ul>
-
-                <div class="tab-content">
-                    <div class="tab-pane fade show active" id="metrics" role="tabpanel" aria-labelledby="metrics-tab">
-                        <div class="card mb-4"><div class="card-body">
-                            <div class="d-flex flex-wrap gap-2 justify-content-between align-items-end">
-                                <div>
-                                    <div class="small text-muted mb-2">{{ t('server.period.label') }}</div>
-                                    <div class="btn-group flex-wrap" role="group" aria-label="{{ t('common.period') }}">
-                                        <a href="?period=1h&tab=metrics" class="btn btn-sm {% if period == '1h' %}btn-primary{% else %}btn-outline-primary{% endif %}">{{ t('server.period.hour_1') }}</a>
-                                        <a href="?period=6h&tab=metrics" class="btn btn-sm {% if period == '6h' %}btn-primary{% else %}btn-outline-primary{% endif %}">{{ t('server.period.hour_6') }}</a>
-                                        <a href="?period=24h&tab=metrics" class="btn btn-sm {% if period == '24h' %}btn-primary{% else %}btn-outline-primary{% endif %}">{{ t('server.period.hour_24') }}</a>
-                                        <a href="?period=7d&tab=metrics" class="btn btn-sm {% if period == '7d' %}btn-primary{% else %}btn-outline-primary{% endif %}">{{ t('server.period.day_7') }}</a>
-                                        <a href="?period=30d&tab=metrics" class="btn btn-sm {% if period == '30d' %}btn-primary{% else %}btn-outline-primary{% endif %}">{{ t('server.period.day_30') }}</a>
-                                    </div>
-                                </div>
-                                <form method="get" class="row g-2 align-items-end">
-                                    <input type="hidden" name="tab" value="metrics">
-                                    <div class="col-auto"><label for="start" class="form-label small text-muted mb-1">{{ t('server.period.start') }}</label><input type="datetime-local" class="form-control form-control-sm" id="start" name="start" value="{{ startDate }}"></div>
-                                    <div class="col-auto"><label for="end" class="form-label small text-muted mb-1">{{ t('server.period.end') }}</label><input type="datetime-local" class="form-control form-control-sm" id="end" name="end" value="{{ endDate }}"></div>
-                                    <div class="col-auto"><button type="submit" class="btn btn-sm btn-outline-secondary">{{ t('common.apply') }}</button></div>
-                                    <div class="col-auto"><button type="button" class="btn btn-sm btn-outline-dark" id="reset-all-zoom">{{ t('server.period.reset_zoom') }}</button></div>
-                                </form>
-                            </div>
-                        </div></div>
-
-                        <div class="row g-3 mb-4">
-                            <div class="col-md-4"><div class="card h-100"><div class="card-body">
-                                <div class="text-muted small mb-1">{{ t('server.summary.last_metric') }}</div>
-                                <div class="fw-semibold">{% if server.last_seen %}{{ server.last_seen|date('d.m.Y H:i:s') }}{% else %}{{ t('common.no_data') }}{% endif %}</div>
-                            </div></div></div>
-                            <div class="col-md-4"><div class="card h-100"><div class="card-body">
-                                <div class="text-muted small mb-1">{{ t('server.summary.uptime') }}</div>
-                                <div class="fw-semibold">{{ uptimeText ?: t('common.no_data') }}</div>
-                                {% if latestUptime and latestUptime.created_at %}<div class="small text-muted mt-1">{{ latestUptime.created_at|date('d.m.Y H:i:s') }}</div>{% endif %}
-                            </div></div></div>
-                            <div class="col-md-4"><div class="card h-100"><div class="card-body">
-                                <div class="text-muted small mb-1">{{ t('server.summary.selected_period') }}</div>
-                                <div class="fw-semibold">{{ totalMinutes }} {{ t('common.minutes') }}</div>
-                                <div class="small text-muted mt-1">{{ period }}{% if zoom %}, zoom: {{ zoom }}{% endif %}</div>
-                            </div></div></div>
-                        </div>
-
-                        {% if summaryCards is not empty %}
-                        <div class="row g-3 mb-4">
-                            {% for card in summaryCards %}<div class="col-md-6 col-xl"><div class="card h-100"><div class="card-body"><div class="small text-muted mb-1">{{ card.title }}</div><div class="fw-semibold">{{ card.value }}</div><div class="small text-muted mt-1">{{ card.subtitle }}</div></div></div></div>{% endfor %}
-                        </div>
-                        {% endif %}
-
-                        {% if not displayMetrics or displayMetrics is empty %}
-                            <div class="alert alert-warning"><i class="fas fa-info-circle"></i> {{ t('server.metrics.none_selected') }} <a href="/servers/{{ server.id }}/edit">{{ t('common.edit') }}</a>.</div>
-                        {% else %}
-                            {% if simpleMetricCharts is empty and networkCharts is empty and temperatureChart.datasets is empty and diskCharts is empty %}<div class="alert alert-info"><i class="fas fa-info-circle"></i> {{ t('server.metrics.no_data_period') }}</div>{% endif %}
-
-                            {% for chart in simpleMetricCharts %}
-                            <div class="card mb-4">
-                                <div class="card-header d-flex justify-content-between align-items-center">
-                                    <h6 class="mb-0">{{ chart.title }}</h6>
-                                    <div class="text-end">
-                                        <div class="fw-semibold">{{ chart.lastValue }}{{ chart.unit }}</div>
-                                        {% if chart.id == 'ram_used' and chart.details %}
-                                            <div class="small text-muted">{{ t('server.metrics.total', {value: chart.details.totalGb}) }} | {{ t('server.metrics.used', {value: chart.details.usedGb}) }}</div>
-                                            <div class="small text-muted">{{ t('server.metrics.free', {value: chart.details.freeGb}) }}</div>
-                                        {% endif %}
-                                        <div class="small text-muted">{{ chart.lastTime }}</div>
-                                    </div>
-                                </div>
-                                <div class="card-body"><div style="height: 260px;"><canvas id="chart-{{ chart.id }}"></canvas></div></div>
-                            </div>
-                            {% endfor %}
-
-                            {% for chart in networkCharts %}<div class="card mb-4"><div class="card-header"><h6 class="mb-0"><i class="fas fa-network-wired me-1"></i>{{ chart.title }}</h6></div><div class="card-body"><div style="height: 260px;"><canvas id="chart-net-{{ chart.id }}"></canvas></div></div></div>{% endfor %}
-
-                            {% if displayMetrics|filter(v => v starts with 'temp_')|length > 0 %}
-                            <div class="card mb-4">
-                                <div class="card-header"><h6 class="mb-0"><i class="fas fa-thermometer-half me-1"></i>{{ t('server.temperature.title') }}</h6></div>
-                                <div class="card-body">{% if temperatureChart.datasets is not empty %}<div style="height: 320px;"><canvas id="chart-temperatures"></canvas></div>{% else %}<div class="alert alert-info mb-0">{{ t('server.temperature.no_data') }}</div>{% endif %}</div>
-                            </div>
-                            {% endif %}
-
-                            <div class="row">
-                                {% if diskCharts is not empty %}
-                                    {% for disk in diskCharts %}
-                                    <div class="col-md-6 col-xl-4 mb-4"><div class="card h-100"><div class="card-body text-center">
-                                        <h6 class="card-title">{{ disk.title }}</h6>
-                                        <div class="mb-3"><span class="badge bg-primary">{{ disk.percent }}%</span></div>
-                                        {% if disk.totalGb %}
-                                            <div class="small text-muted mb-2">{{ t('server.metrics.total', {value: disk.totalGb}) }}</div>
-                                            <div class="small mb-3"><span class="text-danger">{{ t('server.metrics.used', {value: disk.usedGb}) }}</span><span class="mx-1">|</span><span class="text-success">{{ t('server.metrics.free', {value: disk.freeGb}) }}</span></div>
-                                        {% endif %}
-                                        <div style="max-width: 180px; margin: 0 auto;"><canvas id="disk-chart-{{ disk.id }}"></canvas></div>
-                                        <div class="small text-muted mt-3">{{ disk.updatedAt }}</div>
-                                    </div></div></div>
-                                    {% endfor %}
-                                {% elseif displayMetrics|filter(v => v starts with 'disk_used_')|length > 0 %}<div class="col-12"><div class="alert alert-info">{{ t('server.disk.no_data') }}</div></div>{% endif %}
-                            </div>
-                        {% endif %}
-                    </div>
-
-                    <div class="tab-pane fade" id="services" role="tabpanel" aria-labelledby="services-tab">
-                        <div class="row mb-3"><div class="col-12"><div class="d-flex justify-content-between align-items-center">
-                            <div><h4 class="mb-0"><i class="fas fa-cogs"></i> {{ t('server.services.title') }} {% if allServices is defined %}<small class="text-muted">({{ t('server.services.found', {count: allServices|length}) }})</small>{% endif %}</h4></div>
-                            <div><a href="?tab=services" class="btn btn-outline-primary"><i class="fas fa-sync-alt"></i> <span class="d-none d-sm-inline">{{ t('server.services.refresh') }}</span></a></div>
-                        </div></div></div>
-
-                        <div class="row mb-3"><div class="col-12">
-                            <form method="post" action="/servers/{{ server.id }}/services">
-                                {% include "partials/csrf.twig" %}
-                                <div class="card"><div class="card-body">
-                                    <div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="selectAllServices"><label class="form-check-label" for="selectAllServices">{{ t('server.services.select_all') }}</label></div>
-                                    <hr>
-                                    <div class="row" id="servicesList">
-                                        {% if allServices is defined and allServices|length > 0 %}
-                                            {% set runningServices = allServices|filter(s => s.status == 'running')|sort((a, b) => a.service_name|lower > b.service_name|lower) %}
-                                            {% set stoppedServices = allServices|filter(s => s.status == 'stopped')|sort((a, b) => a.service_name|lower > b.service_name|lower) %}
-                                            {% set unknownServices = allServices|filter(s => s.status != 'running' and s.status != 'stopped')|sort((a, b) => a.service_name|lower > b.service_name|lower) %}
-                                            {% for service in runningServices %}
-                                            <div class="col-md-4 col-lg-3 mb-2"><div class="card border-success"><div class="card-body p-2"><div class="d-flex justify-content-between align-items-start"><div class="form-check mb-0"><input class="form-check-input service-checkbox" type="checkbox" id="service_{{ service.service_name }}" name="services[]" value="{{ service.service_name }}" {% if service.service_name in monitorServices %}checked{% endif %}><label class="form-check-label" for="service_{{ service.service_name }}"><i class="fas fa-check-circle text-success me-1"></i>{{ service.service_name }}</label></div><span class="badge bg-success">{{ t('server.services.running') }}</span></div><div class="small text-muted mt-1"><small>{{ t('server.services.load') }}: {{ service.load_state|default('-') }} | {{ t('server.services.active') }}: {{ service.active_state|default('-') }}</small></div></div></div></div>
-                                            {% endfor %}
-                                            {% for service in stoppedServices %}
-                                            <div class="col-md-4 col-lg-3 mb-2"><div class="card border-danger"><div class="card-body p-2"><div class="d-flex justify-content-between align-items-start"><div class="form-check mb-0"><input class="form-check-input service-checkbox" type="checkbox" id="service_{{ service.service_name }}" name="services[]" value="{{ service.service_name }}" {% if service.service_name in monitorServices %}checked{% endif %}><label class="form-check-label" for="service_{{ service.service_name }}"><i class="fas fa-times-circle text-danger me-1"></i>{{ service.service_name }}</label></div><span class="badge bg-danger">{{ t('server.services.stopped') }}</span></div><div class="small text-muted mt-1"><small>{{ t('server.services.load') }}: {{ service.load_state|default('-') }} | {{ t('server.services.active') }}: {{ service.active_state|default('-') }}</small></div></div></div></div>
-                                            {% endfor %}
-                                            {% for service in unknownServices %}
-                                            <div class="col-md-4 col-lg-3 mb-2"><div class="card border-warning"><div class="card-body p-2"><div class="d-flex justify-content-between align-items-start"><div class="form-check mb-0"><input class="form-check-input service-checkbox" type="checkbox" id="service_{{ service.service_name }}" name="services[]" value="{{ service.service_name }}" {% if service.service_name in monitorServices %}checked{% endif %}><label class="form-check-label" for="service_{{ service.service_name }}"><i class="fas fa-question-circle text-warning me-1"></i>{{ service.service_name }}</label></div><span class="badge bg-warning text-dark">{{ t('server.services.unknown') }}</span></div><div class="small text-muted mt-1"><small>{{ t('server.services.load') }}: {{ service.load_state|default('-') }} | {{ t('server.services.active') }}: {{ service.active_state|default('-') }}</small></div></div></div></div>
-                                            {% endfor %}
-                                        {% else %}
-                                            <div class="col-12"><div class="alert alert-warning text-center"><i class="fas fa-exclamation-triangle"></i> {{ t('server.services.no_list') }}</div></div>
-                                            <div class="col-12 text-center mt-3"><button type="button" class="btn btn-outline-primary" id="request-services"><i class="fas fa-download"></i> {{ t('server.services.request') }}</button></div>
-                                        {% endif %}
-                                    </div>
-                                </div></div>
-                                <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-3"><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> {{ t('server.services.save') }}</button></div>
-                            </form>
-                        </div></div>
-                    </div>
-
-                    <div class="tab-pane fade" id="thresholds" role="tabpanel" aria-labelledby="thresholds-tab">
-                        <h4>{{ t('server.thresholds.title') }}</h4>
-                        <p class="text-muted mb-3"><i class="fas fa-info-circle"></i> {{ t('server.thresholds.help') }}</p>
-                        <div class="row"><div class="col-12"><form method="post" action="/servers/{{ server.id }}/thresholds">
-                            {% include "partials/csrf.twig" %}
-                            {% for metricType in allMetricTypes %}
-                                {% set metricUnit = '%' %}
-                                {% set metricLabel = metricType.name|replace({'_': ' '}) %}
-                                {% if metricType.name starts with 'temp_' %}
-                                    {% set metricUnit = '°C' %}
-                                    {% set metricLabel = t('metric.temperature', {name: (metricType.name|replace({'temp_': '', '_': ' '}))|title}) %}
-                                {% elseif metricType.name == 'cpu_load' %}{% set metricLabel = t('metric.cpu_load') %}
-                                {% elseif metricType.name == 'ram_used' %}{% set metricLabel = t('metric.ram_used') %}
-                                {% elseif metricType.name starts with 'disk_used_' %}
-                                    {% set iface = metricType.name|replace({'disk_used_': ''}) %}
-                                    {% set metricLabel = t('server.thresholds.disk', {name: iface == 'root' ? '/' : '/' ~ (iface|replace({'_': '/'}))}) %}
-                                {% elseif metricType.name starts with 'net_in_' %}
-                                    {% set iface = metricType.name|replace({'net_in_': ''}) %}
-                                    {% set metricLabel = t('server.thresholds.network_in', {name: iface}) %}
-                                {% elseif metricType.name starts with 'net_out_' %}
-                                    {% set iface = metricType.name|replace({'net_out_': ''}) %}
-                                    {% set metricLabel = t('server.thresholds.network_out', {name: iface}) %}
-                                {% endif %}
-                                <div class="card mb-2"><div class="card-body py-2"><div class="row align-items-center">
-                                    <div class="col-md-3 mb-2 mb-md-0"><strong>{{ metricLabel }}</strong> <small class="text-muted">({{ metricUnit }})</small></div>
-                                    <div class="col-md-3 mb-2 mb-md-0"><div class="input-group input-group-sm" title="{{ t('server.thresholds.warning') }}"><span class="input-group-text"><i class="fas fa-exclamation-triangle text-warning"></i></span><input type="number" class="form-control" style="max-width: 90px;" name="{{ metricType.name }}_warning" step="0.01" placeholder="80" {% if existingThresholds[metricType.name].warning is defined %}value="{{ existingThresholds[metricType.name].warning }}"{% endif %}><span class="input-group-text">{{ metricUnit }}</span></div></div>
-                                    <div class="col-md-3 mb-2 mb-md-0"><div class="input-group input-group-sm" title="{{ t('server.thresholds.critical') }}"><span class="input-group-text"><i class="fas fa-exclamation-circle text-danger"></i></span><input type="number" class="form-control" style="max-width: 90px;" name="{{ metricType.name }}_critical" step="0.01" placeholder="90" {% if existingThresholds[metricType.name].critical is defined %}value="{{ existingThresholds[metricType.name].critical }}"{% endif %}><span class="input-group-text">{{ metricUnit }}</span></div></div>
-                                    <div class="col-md-3">
-                                        <div class="input-group input-group-sm mb-2" title="{{ t('server.thresholds.duration') }}"><span class="input-group-text"><i class="fas fa-clock"></i></span><input type="number" class="form-control" style="max-width: 90px;" name="{{ metricType.name }}_duration" min="0" step="1" placeholder="0" {% if existingThresholds[metricType.name].duration is defined %}value="{{ existingThresholds[metricType.name].duration }}"{% endif %}><span class="input-group-text">{{ t('common.seconds') }}</span></div>
-                                        <div class="input-group input-group-sm" title="{{ t('server.thresholds.recovery') }}"><span class="input-group-text"><i class="fas fa-clock-rotate-left"></i></span><input type="number" class="form-control" style="max-width: 90px;" name="{{ metricType.name }}_recovery" min="0" step="1" placeholder="300" {% if existingThresholds[metricType.name].recovery is defined %}value="{{ existingThresholds[metricType.name].recovery }}"{% endif %}><span class="input-group-text">{{ t('common.seconds') }}</span></div>
-                                    </div>
-                                </div></div></div>
-                            {% endfor %}
-                            <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-3"><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> {{ t('server.thresholds.save') }}</button></div>
-                        </form></div></div>
-                    </div>
-                    <div class="tab-pane fade" id="agent" role="tabpanel" aria-labelledby="agent-tab">{% include "servers/partials/agent-management.twig" %}</div>
                 </div>
-            </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('common.cancel') }}</button>
+                    <button type="submit" class="btn btn-warning"><i class="fas fa-screwdriver-wrench me-1" aria-hidden="true"></i>{{ t('server18.maintenance.start') }}</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
+{% endif %}
 
-<script src="/vendor/chart.js/chart.umd.js"></script>
-<script src="/vendor/hammerjs/hammer.min.js"></script>
-<script src="/vendor/chartjs-plugin-zoom/chartjs-plugin-zoom.min.js"></script>
-<script nonce="__MIRVMON_CSP_NONCE__">
-const managedCharts = [];
-const detailText = {
-    servicesError: {{ t('server.js.services_error')|json_encode|raw }},
-    time: {{ t('metric.time')|json_encode|raw }},
-    loading: {{ t('metric.loading')|json_encode|raw }},
-    total: {{ t('server.js.total')|json_encode|raw }},
-    used: {{ t('server.js.used')|json_encode|raw }},
-    free: {{ t('server.js.free')|json_encode|raw }},
-    topCpu: {{ t('metric.top_cpu')|json_encode|raw }},
-    topRam: {{ t('metric.top_ram')|json_encode|raw }},
-    diskUsed: {{ t('metric.used')|json_encode|raw }},
-    diskFree: {{ t('metric.free')|json_encode|raw }},
-    warning: {{ t('alerts.level.warning')|json_encode|raw }},
-    critical: {{ t('alerts.level.critical')|json_encode|raw }}
-};
-
-function requestServices() {
-    fetch('/api/v1/agent/{{ server.id }}/services')
-        .then(response => response.json())
-        .then(data => { if (data.services) location.reload(); })
-        .catch(error => { alert(detailText.servicesError + ': ' + error); });
-}
-
-function fetchProcesses(serverId, time) {
-    return fetch('/api/v1/agent/' + serverId + '/processes?time=' + encodeURIComponent(time))
-        .then(response => response.json())
-        .catch(() => ({ top_cpu: [], top_ram: [] }));
-}
-
-function renderProcessTooltip(context, chartMeta) {
-    let tooltipEl = document.getElementById('chartjs-tooltip-' + chartMeta.id);
-    if (!tooltipEl) {
-        tooltipEl = document.createElement('div');
-        tooltipEl.id = 'chartjs-tooltip-' + chartMeta.id;
-        tooltipEl.style.opacity = 0;
-        tooltipEl.style.position = 'absolute';
-        tooltipEl.style.background = 'rgba(33, 37, 41, 0.92)';
-        tooltipEl.style.color = '#fff';
-        tooltipEl.style.borderRadius = '6px';
-        tooltipEl.style.padding = '10px 12px';
-        tooltipEl.style.fontSize = '12px';
-        tooltipEl.style.pointerEvents = 'none';
-        tooltipEl.style.whiteSpace = 'pre-line';
-        tooltipEl.style.zIndex = 1080;
-        document.body.appendChild(tooltipEl);
-    }
-    const tooltip = context.tooltip;
-    if (!tooltip || tooltip.opacity === 0 || !tooltip.dataPoints || !tooltip.dataPoints.length) {
-        tooltipEl.style.opacity = 0;
-        return;
-    }
-    const point = tooltip.dataPoints[0];
-    const dataIndex = point.dataIndex;
-    const timestamp = chartMeta.timestamps[dataIndex] || chartMeta.labels[dataIndex];
-    const value = point.raw;
-    const valueText = `${point.dataset.label}: ${value}${chartMeta.unit || ''}`;
-    tooltipEl.innerHTML = `${detailText.time}: ${chartMeta.labels[dataIndex]}<br>${valueText}<br><span class="text-muted">${detailText.loading}</span>`;
-    tooltipEl.style.opacity = 1;
-    const position = context.chart.canvas.getBoundingClientRect();
-    tooltipEl.style.left = position.left + window.pageXOffset + tooltip.caretX + 12 + 'px';
-    tooltipEl.style.top = position.top + window.pageYOffset + tooltip.caretY + 'px';
-
-    fetchProcesses({{ server.id }}, timestamp).then(function(data) {
-        const lines = [`${detailText.time}: ${chartMeta.labels[dataIndex]}`, valueText];
-        if (chartMeta.id === 'ram_used' && chartMeta.details && chartMeta.details.totalGb) {
-            const totalGb = Number(chartMeta.details.totalGb);
-            const usedGb = Number(((Number(value) / 100) * totalGb).toFixed(1));
-            const freeGb = Number((totalGb - usedGb).toFixed(1));
-            lines.push(`${detailText.total}: ${totalGb.toFixed(1)} GB`);
-            lines.push(`${detailText.used}: ${usedGb.toFixed(1)} GB`);
-            lines.push(`${detailText.free}: ${freeGb.toFixed(1)} GB`);
-        }
-        const processList = chartMeta.id === 'cpu_load' ? (data.top_cpu || []) : (data.top_ram || []);
-        if (processList.length > 0) {
-            lines.push('');
-            lines.push((chartMeta.id === 'cpu_load' ? detailText.topCpu : detailText.topRam) + ':');
-            processList.slice(0, 5).forEach(function(proc) { lines.push(`${proc.cmdline || proc.name}: ${proc.value}%`); });
-        }
-        tooltipEl.innerHTML = lines.join('<br>');
-    });
-}
-
-function createLineChart(canvasId, labels, datasets, unit, chartMeta = null) {
-    const canvas = document.getElementById(canvasId);
-    if (!canvas) return;
-    const chart = new Chart(canvas.getContext('2d'), {
-        type: 'line',
-        data: { labels, datasets },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
-            plugins: {
-                legend: { display: datasets.length > 1, position: 'top' },
-                tooltip: chartMeta ? { enabled: false, external: function(context) { renderProcessTooltip(context, chartMeta); } } : {
-                    enabled: true,
-                    callbacks: { label: function(context) { const value = window.MirvMon.formatMetricValue(context.parsed.y, unit); return context.dataset.label ? context.dataset.label + ': ' + value : value; } }
-                },
-                zoom: {
-                    zoom: { wheel: { enabled: true }, pinch: { enabled: true }, drag: { enabled: true }, mode: 'x' },
-                    pan: { enabled: true, mode: 'x' }
-                }
-            },
-            scales: { y: { beginAtZero: false, ticks: { callback: function(value) { return window.MirvMon.formatMetricValue(value, unit); } } } }
-        }
-    });
-    managedCharts.push(chart);
-    return chart;
-}
-
-function createDoughnutChart(canvasId, percent) {
-    const canvas = document.getElementById(canvasId);
-    if (!canvas) return;
-    const color = percent >= 85 ? '#dc3545' : (percent >= 70 ? '#fd7e14' : '#198754');
-    new Chart(canvas.getContext('2d'), {
-        type: 'doughnut',
-        data: { labels: [detailText.diskUsed, detailText.diskFree], datasets: [{ data: [percent, Math.max(0, 100 - percent)], backgroundColor: [color, '#e9ecef'], borderWidth: 0 }] },
-        options: { responsive: true, cutout: '68%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(context) { return context.label + ': ' + context.parsed.toFixed(1) + '%'; } } } } }
-    });
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const activeTab = urlParams.get('tab') || 'metrics';
-    const tabButton = document.getElementById(activeTab + '-tab');
-    if (tabButton) tabButton.click();
-
-    const selectAllServices = document.getElementById('selectAllServices');
-    if (selectAllServices) selectAllServices.addEventListener('change', function() { document.querySelectorAll('.service-checkbox').forEach(function(checkbox) { checkbox.checked = selectAllServices.checked; }); });
-
-    const simpleMetricCharts = {{ simpleMetricCharts|json_encode|raw }};
-    simpleMetricCharts.forEach(function(chart) {
-        const datasets = [{ label: chart.title, data: chart.values, borderColor: chart.color, backgroundColor: chart.color + '22', fill: true, tension: 0.2, pointRadius: 0, borderWidth: 2 }];
-        if (chart.thresholds && chart.thresholds.warning !== null) datasets.push({ label: detailText.warning, data: chart.labels.map(() => Number(chart.thresholds.warning)), borderColor: '#fd7e14', backgroundColor: 'transparent', fill: false, tension: 0, pointRadius: 0, borderWidth: 1.5, borderDash: [6, 4] });
-        if (chart.thresholds && chart.thresholds.critical !== null) datasets.push({ label: detailText.critical, data: chart.labels.map(() => Number(chart.thresholds.critical)), borderColor: '#dc3545', backgroundColor: 'transparent', fill: false, tension: 0, pointRadius: 0, borderWidth: 1.5, borderDash: [3, 3] });
-        createLineChart('chart-' + chart.id, chart.labels, datasets, chart.unit, { id: chart.id, labels: chart.labels, timestamps: chart.timestamps || [], unit: chart.unit, details: chart.details || null });
-    });
-
-    const networkCharts = {{ networkCharts|json_encode|raw }};
-    networkCharts.forEach(function(chart) {
-        createLineChart('chart-net-' + chart.id, chart.labels, chart.datasets.map(function(dataset) { return { label: dataset.label, data: dataset.values, borderColor: dataset.color, backgroundColor: dataset.color + '22', fill: false, tension: 0.2, pointRadius: 0, borderWidth: 2 }; }), chart.unit, null);
-    });
-
-    const temperatureChart = {{ temperatureChart|json_encode|raw }};
-    if (temperatureChart.datasets && temperatureChart.datasets.length > 0) {
-        createLineChart('chart-temperatures', temperatureChart.labels, temperatureChart.datasets.map(function(dataset) { return { label: dataset.label, data: dataset.values, borderColor: dataset.color, backgroundColor: dataset.color + '22', fill: false, tension: 0.2, pointRadius: 0, borderWidth: 2 }; }), temperatureChart.unit || '', null);
-    }
-    const diskCharts = {{ diskCharts|json_encode|raw }};
-    diskCharts.forEach(function(disk) { createDoughnutChart('disk-chart-' + disk.id, disk.percent); });
-});
-
-function resetAllZoom() { managedCharts.forEach(function(chart) { if (chart && typeof chart.resetZoom === 'function') chart.resetZoom(); }); }
-const resetZoomButton = document.getElementById('reset-all-zoom');
-if (resetZoomButton) resetZoomButton.addEventListener('click', resetAllZoom);
-const requestServicesButton = document.getElementById('request-services');
-if (requestServicesButton) requestServicesButton.addEventListener('click', requestServices);
-</script>
+{% if active_tab == 'metrics' %}
+    {% include "servers/partials/detail-scripts.twig" %}
+{% endif %}
 {% endblock %}

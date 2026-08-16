@@ -1,0 +1,157 @@
+{% set agent_states = {
+    current: [t('agent.state.current'), 'success'],
+    unknown: [t('agent.state.unknown'), 'secondary'],
+    manual_required: [t('agent.state.manual_required'), 'warning'],
+    update_available: [t('agent.state.update_available'), 'info'],
+    pending: [t('agent.state.pending'), 'secondary'],
+    accepted: [t('agent.state.accepted'), 'info'],
+    downloading: [t('agent.state.downloading'), 'info'],
+    installing: [t('agent.state.installing'), 'warning'],
+    awaiting_restart: [t('agent.state.awaiting_restart'), 'warning'],
+    succeeded: [t('agent.state.succeeded'), 'success'],
+    failed: [t('agent.state.failed'), 'danger']
+} %}
+{% set agent_state = agent_update ? agent_states[agent_update.state]|default(agent_states.unknown) : agent_states.unknown %}
+
+<div class="row g-3 mb-3">
+    <div class="col-xl-8">
+        <div class="card h-100">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h2 class="h5 mb-0"><i class="fas fa-server me-1" aria-hidden="true"></i>{{ t('server18.passport.title') }}</h2>
+                <span class="badge text-bg-{{ server.status == 'online' ? 'success' : (server.status == 'warning' ? 'warning' : (server.status == 'critical' ? 'danger' : 'secondary')) }}">
+                    {{ t('server18.status.' ~ server.status) }}
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-5 text-muted fw-normal">{{ t('server18.passport.os') }}</dt>
+                            <dd class="col-sm-7 fw-semibold">{{ server.os_version ?: t('common.no_data') }}</dd>
+                            <dt class="col-sm-5 text-muted fw-normal">{{ t('server18.passport.architecture') }}</dt>
+                            <dd class="col-sm-7">{{ host_architecture ?: t('common.no_data') }}</dd>
+                            <dt class="col-sm-5 text-muted fw-normal">{{ t('server18.passport.address') }}</dt>
+                            <dd class="col-sm-7"><code>{{ server.address ?: '—' }}</code></dd>
+                            <dt class="col-sm-5 text-muted fw-normal">{{ t('server18.passport.group') }}</dt>
+                            <dd class="col-sm-7">
+                                {% if server.group_id %}<a href="/groups/{{ server.group_id }}" class="text-decoration-none">{{ server.group_name }}</a>{% else %}—{% endif %}
+                            </dd>
+                        </dl>
+                    </div>
+                    <div class="col-md-6">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-5 text-muted fw-normal">{{ t('server18.passport.uptime') }}</dt>
+                            <dd class="col-sm-7 fw-semibold">{{ uptimeText ?: t('common.no_data') }}</dd>
+                            <dt class="col-sm-5 text-muted fw-normal">{{ t('server18.passport.agent') }}</dt>
+                            <dd class="col-sm-7"><code>{{ server.agent_version ?: t('agent.version.not_reported') }}</code></dd>
+                            <dt class="col-sm-5 text-muted fw-normal">{{ t('server18.passport.agent_state') }}</dt>
+                            <dd class="col-sm-7"><span class="badge text-bg-{{ agent_state[1] }}">{{ agent_state[0] }}</span></dd>
+                            <dt class="col-sm-5 text-muted fw-normal">{{ t('server18.passport.problems') }}</dt>
+                            <dd class="col-sm-7">
+                                {% if active_problem_count > 0 %}
+                                    <a href="/servers/{{ server.id }}?tab=events" class="badge text-bg-danger text-decoration-none">{{ active_problem_count }}</a>
+                                {% else %}
+                                    <span class="badge text-bg-success">0</span>
+                                {% endif %}
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-4">
+        <div class="card h-100">
+            <div class="card-header bg-white"><h2 class="h5 mb-0"><i class="fas fa-satellite-dish me-1" aria-hidden="true"></i>{{ t('server18.contact.title') }}</h2></div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="small text-muted">{{ t('server18.contact.last_contact') }}</div>
+                    <div class="fw-semibold">{% if server.last_contact_at %}{{ server.last_contact_at|date('d.m.Y H:i:s') }}{% else %}{{ t('common.no_data') }}{% endif %}</div>
+                    <div class="small text-muted">{{ t('server18.contact.receive_hint') }}</div>
+                </div>
+                <div>
+                    <div class="small text-muted">{{ t('server18.contact.last_sample') }}</div>
+                    <div class="fw-semibold">{% if server.last_metrics_at %}{{ server.last_metrics_at|date('d.m.Y H:i:s') }}{% else %}{{ t('common.no_data') }}{% endif %}</div>
+                    <div class="small text-muted">{{ t('server18.contact.sample_hint') }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if timing.state == 'stale' or timing.state == 'ahead' %}
+    {% set delta = timing.absolute_seconds|default(0) %}
+    {% set delta_hours = (delta / 3600)|round(0, 'floor') %}
+    {% set delta_minutes = ((delta % 3600) / 60)|round(0, 'floor') %}
+    {% set delta_seconds = delta % 60 %}
+    {% set delta_text = '' %}
+    {% if delta_hours > 0 %}{% set delta_text = delta_text ~ delta_hours ~ ' ' ~ t('common.hours') ~ ' ' %}{% endif %}
+    {% if delta_minutes > 0 or delta_hours > 0 %}{% set delta_text = delta_text ~ delta_minutes ~ ' ' ~ t('common.minutes') ~ ' ' %}{% endif %}
+    {% set delta_text = delta_text ~ delta_seconds ~ ' ' ~ t('common.seconds') %}
+    <div class="alert {{ timing.state == 'ahead' ? 'alert-danger' : 'alert-warning' }} mb-3">
+        <div class="d-flex gap-2 align-items-start">
+            <i class="fas {{ timing.state == 'ahead' ? 'fa-clock-rotate-left' : 'fa-hourglass-half' }} mt-1" aria-hidden="true"></i>
+            <div>
+                <strong>{{ t('server18.timing.' ~ timing.state ~ '.title') }}</strong>
+                <div>{{ t('server18.timing.' ~ timing.state ~ '.text', {delta: delta_text}) }}</div>
+            </div>
+        </div>
+    </div>
+{% elseif timing.state == 'ok' %}
+    <div class="alert alert-light border d-flex align-items-center gap-2 mb-3 py-2">
+        <i class="fas fa-clock text-success" aria-hidden="true"></i>
+        <span>{{ t('server18.timing.ok') }}</span>
+    </div>
+{% endif %}
+
+{% if summaryCards is not empty %}
+<div class="row g-3 mb-3">
+    {% for card in summaryCards %}
+    <div class="col-sm-6 col-xl">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="small text-muted mb-1">{{ card.title }}</div>
+                <div class="h5 mb-1">{{ card.value }}</div>
+                <div class="small text-muted">{{ card.subtitle }}</div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center gap-2">
+        <h2 class="h5 mb-0"><i class="fas fa-triangle-exclamation me-1" aria-hidden="true"></i>{{ t('server18.overview.active_problems') }}</h2>
+        <a href="/servers/{{ server.id }}?tab=events" class="btn btn-sm btn-outline-secondary">{{ t('server18.overview.events') }}</a>
+    </div>
+    <div class="card-body p-0">
+        {% if active_incidents is empty %}
+            <div class="p-4 text-center text-muted"><i class="fas fa-circle-check text-success me-1" aria-hidden="true"></i>{{ t('server18.overview.no_active_problems') }}</div>
+        {% else %}
+            <div class="list-group list-group-flush">
+                {% for event in active_incidents|slice(0, 5) %}
+                    {% set metric_key = 'incidents.metric.' ~ event.subject_name %}
+                    {% set metric_label = t(metric_key) %}
+                    {% if event.kind == 'offline' %}
+                        {% set title = t('incidents.problem.offline') %}
+                    {% elseif event.kind == 'service' %}
+                        {% set title = t('incidents.problem.service', {'name': event.subject_name}) %}
+                    {% elseif metric_label != metric_key %}
+                        {% set title = metric_label %}
+                    {% else %}
+                        {% set title = event.subject_name|replace({'_': ' '}) %}
+                    {% endif %}
+                    <div class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <div>
+                            <div class="fw-semibold">{{ title }}</div>
+                            <div class="small text-muted">{{ t('incidents.kind.' ~ event.kind) }} · {{ event.created_at|date('d.m.Y H:i:s') }}</div>
+                        </div>
+                        <span class="badge {{ event.severity == 'critical' ? 'text-bg-danger' : 'text-bg-warning' }}">{{ t('alerts.level.' ~ event.severity) }}</span>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+</div>
