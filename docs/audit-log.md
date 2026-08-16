@@ -4,9 +4,11 @@ MirvMon 0.4.20 keeps a separate append-only audit history for successful adminis
 
 ## Append-only boundary
 
-Application code exposes only append and read operations for `audit_log`. Migration `018_audit_log.sql` also installs a PostgreSQL trigger that rejects `UPDATE` and `DELETE`, so ordinary application/database writes cannot rewrite an existing audit row.
+Application code exposes ordinary audit history as append-and-read only. Migration `018_audit_log.sql` installs a PostgreSQL trigger that rejects direct `UPDATE` and `DELETE`, so normal application/database writes cannot rewrite or remove an existing audit row.
 
 The actor user ID intentionally has no foreign key to `users`. Username and role are stored as snapshots, so deleting a user cannot mutate historical audit rows through `ON DELETE` behavior.
+
+Migration `019_audit_retention.sql` adds the only supported deletion path: `mirvmon_prune_audit_log(cutoff)`. That function enters a transaction-local retention mode before deleting rows older than the supplied cutoff. Direct `DELETE FROM audit_log` remains rejected by the append-only trigger.
 
 ## Secrets
 
@@ -14,6 +16,11 @@ Passwords, tokens, credentials, API/app keys, authorization values, cookies, SMT
 
 ## Retention
 
-Audit retention is deliberately independent from metrics/process retention. In 0.4.20 there is **no automatic audit purge or retention job**: audit rows remain until a future, explicitly designed audit-retention policy is introduced. TimescaleDB metric/process retention policies do not target `audit_log`.
+Audit retention is deliberately independent from metrics/process retention and is configured on the admin **Audit log** page through `audit_retention_days`.
 
-This separation is intentional: shortening metric history must never silently shorten the administrative audit trail.
+- `0` means keep audit history forever and is the default.
+- A finite policy accepts 30–3650 days.
+- `bin/audit-retention-worker` checks the policy independently of TimescaleDB metric/process retention and prunes only audit rows older than the configured cutoff.
+- The worker is supervised separately and defaults to checking once per hour. `AUDIT_RETENTION_CHECK_INTERVAL` may be set from 300 to 86400 seconds.
+
+Changing metric/process retention never changes audit retention, and changing audit retention never alters the TimescaleDB retention policies.
