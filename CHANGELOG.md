@@ -6,6 +6,8 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.4.20
+
 - Added an administrator-only, append-only **Audit log / Журнал действий** with
   actor snapshots, human-readable operation descriptions, object references,
   filtering, search, pagination and direct links back to affected objects.
