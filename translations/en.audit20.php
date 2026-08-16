@@ -32,6 +32,7 @@ return [
     'audit.event.server.updated' => 'Settings for server “{name}” were changed.',
     'audit.event.server.deleted' => 'Server “{name}” was deleted.',
     'audit.event.server.token_rotated' => 'Agent token for server “{name}” was rotated.',
+    'audit.event.server.installers_issued' => 'New installer tokens were issued for server “{name}”.',
     'audit.event.server.maintenance_started' => 'Maintenance for server “{name}” was enabled for {minutes} minutes.',
     'audit.event.server.maintenance_cancelled' => 'Maintenance for server “{name}” was ended.',
     'audit.event.server.thresholds_saved' => 'Thresholds for server “{name}” were changed.',
