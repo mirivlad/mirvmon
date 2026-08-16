@@ -96,10 +96,16 @@
     </div>
     {% endfor %}
 
-    {% if temperatureChart.datasets is not empty %}
+    {% if displayMetrics|filter(v => v starts with 'temp_')|length > 0 %}
     <div class="card mb-3">
         <div class="card-header bg-white"><h2 class="h6 mb-0"><i class="fas fa-temperature-half me-1" aria-hidden="true"></i>{{ t('server.temperature.title') }}</h2></div>
-        <div class="card-body"><div style="height: 300px"><canvas id="chart-temperatures"></canvas></div></div>
+        <div class="card-body">
+            {% if temperatureChart.datasets is empty %}
+                <div class="text-muted text-center py-4">{{ t('server.temperature.no_data') }}</div>
+            {% else %}
+                <div style="height: 300px"><canvas id="chart-temperatures"></canvas></div>
+            {% endif %}
+        </div>
     </div>
     {% endif %}
 
