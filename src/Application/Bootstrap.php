@@ -23,6 +23,7 @@ use App\Database\ConnectionFactory;
 use App\Domain\Metrics\MetricsValidator;
 use App\I18n\Translator;
 use App\I18n\TwigTranslation;
+use App\Middlewares\AuditTrailMiddleware;
 use App\Repositories\AgentUpdateRepository;
 use App\Repositories\AppSettingsRepository;
 use App\Repositories\AuditLogRepository;
@@ -168,6 +169,16 @@ final class Bootstrap
             NotificationOutboxRepository::class,
             static fn (Container $container): NotificationOutboxRepository =>
                 new NotificationOutboxRepository($container->get(PDO::class))
+        );
+        $container->set(
+            AuditTrailMiddleware::class,
+            static fn (Container $container): AuditTrailMiddleware => new AuditTrailMiddleware(
+                $container->get(PDO::class),
+                $container->get(AuditLogger::class),
+                $container->get(ServerRepository::class),
+                $container->get(NotificationOutboxRepository::class),
+                $container->get(Translator::class)
+            )
         );
         $container->set(
             WorkerHeartbeatRepository::class,
