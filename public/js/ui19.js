@@ -30,5 +30,45 @@
         }
     }
 
+    function sectionClass(path) {
+        if (path === '/') return 'ui-section-dashboard';
+        if (path.startsWith('/groups')) return 'ui-section-groups';
+        if (path.startsWith('/servers')) return 'ui-section-servers';
+        if (path.startsWith('/alerts')) return 'ui-section-incidents';
+        if (path.startsWith('/admin/system')) return 'ui-section-system';
+        if (path.startsWith('/admin/')) return 'ui-section-settings';
+        return null;
+    }
+
+    function markSection() {
+        const main = document.querySelector('.app-main');
+        if (!main) return;
+        const className = sectionClass(window.location.pathname);
+        if (className) main.classList.add(className);
+    }
+
+    function prepareResponsiveIncidentTables() {
+        if (!window.location.pathname.startsWith('/alerts')) return;
+
+        document.querySelectorAll('.app-main table').forEach((table) => {
+            const headers = Array.from(table.querySelectorAll('thead th')).map((header) =>
+                (header.textContent || '').trim()
+            );
+            if (headers.length === 0) return;
+
+            table.classList.add('ui-responsive-table');
+            table.querySelectorAll('tbody tr').forEach((row) => {
+                Array.from(row.children).forEach((cell, index) => {
+                    if (!(cell instanceof HTMLTableCellElement)) return;
+                    if (!cell.dataset.label && headers[index]) {
+                        cell.dataset.label = headers[index];
+                    }
+                });
+            });
+        });
+    }
+
     markNavigation();
+    markSection();
+    prepareResponsiveIncidentTables();
 })();
