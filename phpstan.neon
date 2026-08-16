@@ -4,3 +4,5 @@ parameters:
         - src
     tmpDir: var/phpstan
     treatPhpDocTypesAsCertain: false
+    stubFiles:
+        - phpstan-stubs/AuditTrailMiddleware.stub
