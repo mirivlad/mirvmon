@@ -23,6 +23,7 @@ final class SchemaTest extends TestCase
         self::assertFileExists(dirname(__DIR__, 3) . '/migrations/006_notification_delivery.sql');
         self::assertFileExists(dirname(__DIR__, 3) . '/migrations/016_dashboard_widgets_and_availability.sql');
         self::assertFileExists(dirname(__DIR__, 3) . '/migrations/017_incident_history.sql');
+        self::assertFileExists(dirname(__DIR__, 3) . '/migrations/018_audit_log.sql');
 
         if (getenv('TEST_DB_HOST') === false) {
             self::markTestSkipped('Set TEST_DB_* to run the TimescaleDB integration suite.');
@@ -189,7 +190,7 @@ final class SchemaTest extends TestCase
         self::assertSame([], $migrator->migrate());
 
         $count = self::$pdo?->query('SELECT count(*) FROM schema_migrations')->fetchColumn();
-        self::assertSame('17', (string) $count);
+        self::assertSame('18', (string) $count);
     }
 
     public function testAvailabilitySchemaExists(): void
@@ -206,6 +207,57 @@ final class SchemaTest extends TestCase
             'server_availability_events',
             'server_availability_state',
         ], $tables);
+    }
+
+    public function testAuditLogSchemaIsAppendOnly(): void
+    {
+        self::assertSame('audit_log', self::$pdo?->query(
+            "SELECT table_name
+             FROM information_schema.tables
+             WHERE table_schema = 'public'
+               AND table_name = 'audit_log'"
+        )->fetchColumn());
+
+        $columns = self::$pdo?->query(
+            "SELECT column_name
+             FROM information_schema.columns
+             WHERE table_schema = 'public'
+               AND table_name = 'audit_log'
+               AND column_name IN (
+                   'occurred_at',
+                   'actor_user_id',
+                   'actor_username',
+                   'actor_role',
+                   'action',
+                   'object_type',
+                   'object_id',
+                   'object_label',
+                   'description',
+                   'metadata'
+               )
+             ORDER BY column_name"
+        )->fetchAll(PDO::FETCH_COLUMN);
+        self::assertSame([
+            'action',
+            'actor_role',
+            'actor_user_id',
+            'actor_username',
+            'description',
+            'metadata',
+            'object_id',
+            'object_label',
+            'object_type',
+            'occurred_at',
+        ], $columns);
+
+        $trigger = self::$pdo?->query(
+            "SELECT tgname
+             FROM pg_trigger
+             WHERE tgrelid = 'audit_log'::regclass
+               AND NOT tgisinternal
+               AND tgname = 'audit_log_append_only'"
+        )->fetchColumn();
+        self::assertSame('audit_log_append_only', $trigger);
     }
 
     public function testReportedOperatingSystemColumnIsNullable(): void
