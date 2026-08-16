@@ -2,72 +2,118 @@
 {% set page_title = group.name %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h2>
-                <i class="fas {{ group.icon }}"></i> {{ group.name }}
-                {% if group.description %}<small class="text-muted">- {{ group.description }}</small>{% endif %}
-            </h2>
-            <div>
-                {% include "partials/action-button.twig" with {href: '/groups/' ~ group.id ~ '/edit', icon: 'fa-edit', label: t('common.edit'), class: 'btn-outline-primary'} %}
-                {% include "partials/action-button.twig" with {href: '/groups', icon: 'fa-arrow-left', label: t('groups.back'), class: 'btn-outline-secondary'} %}
-            </div>
-        </div>
+<header class="app-page-header">
+    <div class="app-page-header-main">
+        <p class="page-eyebrow">{{ t('groups.title') }}</p>
+        <h1>
+            <i class="fas {{ group.icon|default('fa-box') }}" {% if group.color %}style="color: {{ group.color }}"{% endif %} aria-hidden="true"></i>
+            {{ group.name }}
+        </h1>
+        <p class="page-subtitle">{{ group.description|default(t('groups.no_description')) }}</p>
+    </div>
+    <div class="app-page-actions">
+        <a href="/groups/{{ group.id }}/edit" class="btn btn-outline-primary">
+            <i class="fas fa-edit" aria-hidden="true"></i> {{ t('common.edit') }}
+        </a>
+        <a href="/groups" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left" aria-hidden="true"></i> {{ t('groups.back') }}
+        </a>
+    </div>
+</header>
 
-        <div class="card mb-3">
-            <div class="card-body">
-                <h4>{{ t('groups.info') }}</h4>
-                <p><strong>{{ t('common.description') }}:</strong> {{ group.description|default(t('groups.no_description')) }}</p>
-                <p><strong>{{ t('groups.column.color') }}:</strong>
-                    {% if group.color %}
-                    <span class="badge" style="background-color: {{ group.color }}">{{ group.color }}</span>
-                    {% else %}{{ t('common.not_set') }}{% endif %}
-                </p>
-                <p><strong>{{ t('groups.servers_in_group', {count: servers|length}) }}</strong></p>
-            </div>
+<section aria-labelledby="group-summary-title">
+    <h2 class="visually-hidden" id="group-summary-title">{{ t('ui19.groups.summary') }}</h2>
+    <div class="group-summary-grid">
+        <div class="group-summary-card">
+            <span class="summary-label">{{ t('ui19.groups.total') }}</span>
+            <strong class="summary-value">{{ summary.total }}</strong>
         </div>
-
-        <div class="card">
-            <div class="card-header">
-                <h4 class="mb-0"><i class="fas fa-server"></i> {{ t('groups.servers_title') }}</h4>
-            </div>
-            <div class="card-body">
-                {% if servers|length > 0 %}
-                <div class="table-responsive">
-                    <table class="table table-striped">
-                        <thead><tr>
-                            <th>{{ t('common.name') }}</th>
-                            <th>{{ t('common.address') }}</th>
-                            <th>{{ t('servers.column.last_metrics') }}</th>
-                            <th>{{ t('common.status') }}</th>
-                            <th>{{ t('common.actions') }}</th>
-                        </tr></thead>
-                        <tbody>
-                            {% for server in servers %}
-                            <tr>
-                                <td><strong>{{ server.name }}</strong></td>
-                                <td>{{ server.address|default('-') }}</td>
-                                <td>{% if server.last_metrics_at %}{{ server.last_metrics_at|date('d.m.Y H:i:s') }}{% else %}{{ t('common.no_data') }}{% endif %}</td>
-                                <td>
-                                    {% set status_class = server.status == 'online' ? 'success' : (server.status == 'warning' ? 'warning text-dark' : (server.status == 'critical' ? 'danger' : 'secondary')) %}
-                                    <span class="badge bg-{{ status_class }}">{{ t('status.' ~ server.status) }}</span>
-                                </td>
-                                <td>{% include "partials/action-button.twig" with {href: '/servers/' ~ server.id, icon: 'fa-eye', label: t('common.view'), class: 'btn-primary'} %}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="text-center py-5">
-                    <i class="fas fa-server fa-3x text-muted mb-3"></i>
-                    <p class="lead">{{ t('groups.empty_group') }}</p>
-                    <a href="/servers/create" class="btn btn-primary"><i class="fas fa-plus"></i> {{ t('servers.add') }}</a>
-                </div>
-                {% endif %}
-            </div>
+        <div class="group-summary-card">
+            <span class="summary-label">{{ t('status.online') }}</span>
+            <strong class="summary-value text-success">{{ summary.online }}</strong>
+        </div>
+        <div class="group-summary-card">
+            <span class="summary-label">{{ t('status.warning') }}</span>
+            <strong class="summary-value text-warning">{{ summary.warning }}</strong>
+        </div>
+        <div class="group-summary-card">
+            <span class="summary-label">{{ t('status.critical') }}</span>
+            <strong class="summary-value text-danger">{{ summary.critical }}</strong>
+        </div>
+        <div class="group-summary-card">
+            <span class="summary-label">{{ t('status.offline') }}</span>
+            <strong class="summary-value text-secondary">{{ summary.offline }}</strong>
+        </div>
+        <div class="group-summary-card">
+            <span class="summary-label">{{ t('ui19.groups.active_problems') }}</span>
+            <strong class="summary-value">{{ summary.active_problems }}</strong>
         </div>
     </div>
-</div>
+</section>
+
+<section class="app-panel" aria-labelledby="group-servers-title">
+    <div class="app-panel-header">
+        <h2 class="app-panel-title" id="group-servers-title">
+            <i class="fas fa-server" aria-hidden="true"></i> {{ t('ui19.groups.servers') }}
+        </h2>
+        <span class="badge bg-light text-dark">{{ t('groups.servers_in_group', {count: servers|length}) }}</span>
+    </div>
+
+    {% if servers|length > 0 %}
+    <div class="table-responsive">
+        <table class="table app-table server-list-table">
+            <thead>
+                <tr>
+                    <th>{{ t('ui19.servers.server') }}</th>
+                    <th>{{ t('ui19.servers.health') }}</th>
+                    <th>{{ t('common.actions') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for server in servers %}
+                <tr>
+                    <td data-label="{{ t('ui19.servers.server') }}">
+                        <div class="server-list-identity server-status-{{ server.status }}">
+                            {% include "partials/server-status-icon.twig" %}
+                            <div class="server-list-primary">
+                                <a class="server-list-name" href="/servers/{{ server.id }}">{{ server.name }}</a>
+                                <span class="server-list-secondary">
+                                    {{ server.address|default('—') }}
+                                    {% if server.description %} · {{ server.description }}{% endif %}
+                                </span>
+                            </div>
+                        </div>
+                    </td>
+                    <td data-label="{{ t('ui19.servers.health') }}">
+                        <span class="app-status-badge status-{{ server.status }}">
+                            <span class="app-status-dot" aria-hidden="true"></span>
+                            {{ t('status.' ~ server.status) }}
+                        </span>
+                        <span class="server-list-secondary">
+                            {% if server.last_metrics_at %}
+                                {{ t('ui19.servers.last_sample', {time: server.last_metrics_at|date('d.m.Y H:i:s')}) }}
+                            {% else %}
+                                {{ t('ui19.servers.no_sample') }}
+                            {% endif %}
+                        </span>
+                    </td>
+                    <td data-label="{{ t('common.actions') }}">
+                        {% include "partials/action-button.twig" with {href: '/servers/' ~ server.id, icon: 'fa-eye', label: t('common.view'), class: 'btn-primary'} %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="app-empty-state">
+        <span class="app-empty-state-icon"><i class="fas fa-server" aria-hidden="true"></i></span>
+        <h3>{{ t('groups.empty_group') }}</h3>
+        <p>{{ t('ui19.groups.no_problems') }}</p>
+        <a href="/servers/create" class="btn btn-primary">
+            <i class="fas fa-plus" aria-hidden="true"></i> {{ t('servers.add') }}
+        </a>
+    </div>
+    {% endif %}
+</section>
 {% endblock %}

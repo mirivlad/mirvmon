@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\I18n\Translator;
 use App\I18n\TwigTranslation;
+use App\Repositories\IncidentRepository;
 use App\Services\ServerStatusService;
 use InvalidArgumentException;
 use PDO;
@@ -16,12 +17,16 @@ use Throwable;
 
 final class GroupController
 {
+    private IncidentRepository $incidents;
+
     public function __construct(
         private readonly PDO $pdo,
         private readonly Twig $twig,
         private readonly ServerStatusService $status,
-        private readonly Translator $translator = new Translator()
+        private readonly Translator $translator = new Translator(),
+        ?IncidentRepository $incidents = null
     ) {
+        $this->incidents = $incidents ?? new IncidentRepository($pdo);
         TwigTranslation::register($this->twig->getEnvironment(), $this->translator);
     }
 
@@ -29,14 +34,39 @@ final class GroupController
     public function index(Request $request, Response $response, array $args): Response
     {
         $groups = $this->pdo->query(
-            <<<'SQL'
-            SELECT groups.*, count(servers.id) AS server_count
-            FROM server_groups AS groups
-            LEFT JOIN servers ON servers.group_id = groups.id
-            GROUP BY groups.id
-            ORDER BY groups.sort_order, groups.name, groups.id
-            SQL
+            'SELECT * FROM server_groups ORDER BY sort_order, name, id'
         )?->fetchAll() ?? [];
+        $servers = $this->status->enrich($this->loadServers());
+
+        /** @var array<int, array{total: int, online: int, warning: int, critical: int, offline: int, active_problems: int}> $summaries */
+        $summaries = [];
+        foreach ($servers as $server) {
+            $groupId = (int) ($server['group_id'] ?? 0);
+            if ($groupId <= 0) {
+                continue;
+            }
+            if (!isset($summaries[$groupId])) {
+                $summaries[$groupId] = $this->emptySummary();
+            }
+            $this->addServerToSummary($summaries[$groupId], $server);
+        }
+
+        /** @var array<int, int> $problemCounts */
+        $problemCounts = [];
+        foreach ($this->incidents->active() as $incident) {
+            $groupId = (int) ($incident['group_id'] ?? 0);
+            if ($groupId > 0) {
+                $problemCounts[$groupId] = ($problemCounts[$groupId] ?? 0) + 1;
+            }
+        }
+
+        foreach ($groups as &$group) {
+            $groupId = (int) $group['id'];
+            $group['summary'] = $summaries[$groupId] ?? $this->emptySummary();
+            $group['summary']['active_problems'] = $problemCounts[$groupId] ?? 0;
+            $group['server_count'] = $group['summary']['total'];
+        }
+        unset($group);
 
         return $this->twig->render($response, 'groups/index.twig', [
             'title' => $this->translator->trans('groups.title'),
@@ -143,38 +173,92 @@ final class GroupController
             return $this->redirect($response, '/groups');
         }
 
-        $statement = $this->pdo->prepare(
-            <<<'SQL'
-            SELECT
-                servers.id,
-                servers.name,
-                servers.address,
-                servers.description,
-                servers.is_active,
-                servers.last_metrics_at,
-                max(agent_tokens.last_used_at) AS last_contact_at,
-                servers.offline_timeout_seconds,
-                count(alerts.id) FILTER (WHERE alerts.severity = 'warning') AS warning_alerts,
-                count(alerts.id) FILTER (WHERE alerts.severity = 'critical') AS critical_alerts
-            FROM servers
-            LEFT JOIN agent_tokens ON agent_tokens.server_id = servers.id
-            LEFT JOIN alerts ON alerts.server_id = servers.id AND alerts.resolved = FALSE
-            WHERE servers.group_id = :group_id
-            GROUP BY servers.id
-            ORDER BY servers.name, servers.id
-            SQL
-        );
-        $statement->execute(['group_id' => $group['id']]);
-        $servers = $this->status->enrich($statement->fetchAll());
+        $groupId = (int) $group['id'];
+        $servers = $this->status->enrich($this->loadServers($groupId));
+        $summary = $this->emptySummary();
+        foreach ($servers as $server) {
+            $this->addServerToSummary($summary, $server);
+        }
+        $summary['active_problems'] = count($this->incidents->active(['group_id' => $groupId]));
 
         return $this->twig->render($response, 'groups/show.twig', [
             'title' => (string) $group['name'],
             'group' => $group,
             'servers' => $servers,
+            'summary' => $summary,
         ]);
     }
 
-    /** @param array<string, string> $args */
+    /** @return list<array<string, mixed>> */
+    private function loadServers(?int $groupId = null): array
+    {
+        $sql = <<<'SQL'
+            SELECT
+                servers.id,
+                servers.group_id,
+                servers.name,
+                servers.address,
+                servers.description,
+                servers.is_active,
+                servers.os_version,
+                servers.agent_artifact,
+                servers.last_metrics_at,
+                max(agent_tokens.last_used_at) AS last_contact_at,
+                servers.offline_timeout_seconds,
+                count(DISTINCT alerts.id) AS active_alerts,
+                count(DISTINCT alerts.id) FILTER (WHERE alerts.severity = 'warning') AS warning_alerts,
+                count(DISTINCT alerts.id) FILTER (WHERE alerts.severity = 'critical') AS critical_alerts
+            FROM servers
+            LEFT JOIN agent_tokens ON agent_tokens.server_id = servers.id
+            LEFT JOIN alerts ON alerts.server_id = servers.id AND alerts.resolved = FALSE
+            SQL;
+        if ($groupId !== null) {
+            $sql .= ' WHERE servers.group_id = :group_id';
+        }
+        $sql .= ' GROUP BY servers.id ORDER BY servers.name, servers.id';
+
+        $statement = $this->pdo->prepare($sql);
+        $statement->execute($groupId === null ? [] : ['group_id' => $groupId]);
+        return $statement->fetchAll();
+    }
+
+    /** @return array{total: int, online: int, warning: int, critical: int, offline: int, active_problems: int} */
+    private function emptySummary(): array
+    {
+        return [
+            'total' => 0,
+            'online' => 0,
+            'warning' => 0,
+            'critical' => 0,
+            'offline' => 0,
+            'active_problems' => 0,
+        ];
+    }
+
+    /**
+     * @param array{total: int, online: int, warning: int, critical: int, offline: int, active_problems: int} $summary
+     * @param array<string, mixed> $server
+     */
+    private function addServerToSummary(array &$summary, array $server): void
+    {
+        $summary['total']++;
+        switch ((string) ($server['status'] ?? 'offline')) {
+            case 'online':
+                $summary['online']++;
+                break;
+            case 'warning':
+                $summary['warning']++;
+                break;
+            case 'critical':
+                $summary['critical']++;
+                break;
+            default:
+                $summary['offline']++;
+                break;
+        }
+    }
+
+    /** @param array<string, mixed> $args */
     private function groupId(array $args): ?int
     {
         $id = filter_var($args['id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);

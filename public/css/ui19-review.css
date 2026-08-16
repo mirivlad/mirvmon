@@ -1,0 +1,199 @@
+/* v0.4.19 second-pass polish for existing Dashboard / Incidents / System markup. */
+
+.ui-section-dashboard .dashboard-heading,
+.ui-section-system .dashboard-heading,
+.ui-section-incidents > header:first-of-type {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 1.35rem !important;
+}
+
+.ui-section-dashboard .dashboard-heading h1,
+.ui-section-system .dashboard-heading h1,
+.ui-section-incidents > header:first-of-type h1 {
+    margin: 0;
+    font-size: clamp(1.65rem, 3vw, 2.2rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+}
+
+.ui-section-dashboard .dashboard-heading .page-subtitle,
+.ui-section-system .dashboard-heading .page-subtitle,
+.ui-section-incidents > header:first-of-type .text-muted {
+    max-width: 760px;
+}
+
+.ui-section-dashboard > .card,
+.ui-section-incidents > .card,
+.ui-section-incidents > form.card,
+.ui-section-system .card {
+    border-color: var(--app-border);
+    border-radius: var(--app-radius);
+    box-shadow: var(--app-shadow);
+}
+
+.ui-section-incidents > form.card {
+    overflow: hidden;
+}
+
+.ui-section-incidents > form.card .card-header,
+.ui-section-incidents > .card .card-header,
+.ui-section-system .card-header {
+    border-bottom-color: var(--app-border);
+    background: var(--app-surface-muted) !important;
+}
+
+.ui-section-incidents .nav-tabs {
+    gap: 0.25rem;
+    border-bottom-color: var(--app-border);
+}
+
+.ui-section-incidents .nav-tabs .nav-link {
+    color: var(--app-muted);
+    font-weight: 700;
+    border-radius: 9px 9px 0 0;
+}
+
+.ui-section-incidents .nav-tabs .nav-link.active {
+    color: var(--app-primary-dark);
+    background: var(--app-surface);
+}
+
+.ui-section-incidents table,
+.ui-section-system table {
+    margin-bottom: 0;
+    vertical-align: middle;
+}
+
+.ui-section-incidents table thead th,
+.ui-section-system table thead th {
+    color: var(--app-muted);
+    font-size: 0.73rem;
+    font-weight: 800;
+    letter-spacing: 0.035em;
+    text-transform: uppercase;
+    background: var(--app-surface-muted);
+}
+
+.ui-section-system dl dt {
+    color: var(--app-muted);
+    font-size: 0.78rem;
+    font-weight: 750;
+}
+
+.ui-section-system dl dd {
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 767.98px) {
+    .ui-section-dashboard .dashboard-heading,
+    .ui-section-system .dashboard-heading,
+    .ui-section-incidents > header:first-of-type {
+        align-items: flex-start;
+    }
+
+    .ui-section-incidents .ui-responsive-table,
+    .ui-section-incidents .ui-responsive-table tbody,
+    .ui-section-incidents .ui-responsive-table tr,
+    .ui-section-incidents .ui-responsive-table td {
+        display: block;
+        width: 100%;
+    }
+
+    .ui-section-incidents .ui-responsive-table thead {
+        display: none;
+    }
+
+    .ui-section-incidents .ui-responsive-table tbody {
+        display: grid;
+        gap: 0.75rem;
+        padding: 0.75rem;
+    }
+
+    .ui-section-incidents .ui-responsive-table tbody tr {
+        overflow: hidden;
+        border: 1px solid var(--app-border);
+        border-radius: 12px;
+        background: var(--app-surface);
+    }
+
+    .ui-section-incidents .ui-responsive-table tbody td {
+        position: relative;
+        min-height: 2.55rem;
+        padding: 0.7rem 0.8rem 0.7rem 8.2rem;
+        border-bottom: 1px solid var(--app-border);
+    }
+
+    .ui-section-incidents .ui-responsive-table tbody td::before {
+        position: absolute;
+        top: 0.74rem;
+        left: 0.8rem;
+        width: 6.75rem;
+        color: var(--app-muted);
+        content: attr(data-label);
+        font-size: 0.67rem;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+    }
+
+    .ui-section-incidents .ui-responsive-table tbody td:last-child {
+        border-bottom: 0;
+    }
+
+    .ui-section-incidents .ui-responsive-table .text-nowrap {
+        white-space: normal !important;
+    }
+
+    .ui-section-system .card-header,
+    .ui-section-system .card-body > .d-flex,
+    .ui-section-dashboard > .card .card-header {
+        flex-wrap: wrap;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .ui-section-dashboard .dashboard-heading,
+    .ui-section-system .dashboard-heading,
+    .ui-section-incidents > header:first-of-type {
+        display: block;
+    }
+
+    .ui-section-dashboard .dashboard-add-button {
+        width: 100%;
+        margin-top: 0.85rem;
+    }
+
+    .ui-section-incidents > form.card .card-header {
+        align-items: stretch !important;
+    }
+
+    .ui-section-incidents > form.card .card-header > .d-flex {
+        width: 100%;
+    }
+
+    .ui-section-incidents > form.card .card-header .btn {
+        flex: 1;
+    }
+
+    .ui-section-incidents .ui-responsive-table tbody {
+        padding: 0.55rem;
+    }
+
+    .ui-section-incidents .ui-responsive-table tbody td {
+        padding-left: 0.8rem;
+        padding-top: 2rem;
+    }
+
+    .ui-section-incidents .ui-responsive-table tbody td::before {
+        top: 0.55rem;
+        width: calc(100% - 1.6rem);
+    }
+
+    .ui-section-system .row.g-2 > [class*="col-"],
+    .ui-section-system .row.g-3 > [class*="col-"] {
+        min-width: 0;
+    }
+}

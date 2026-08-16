@@ -26,7 +26,10 @@ final class InlineAgentUpdateContractTest extends TestCase
         self::assertStringContainsString('data-agent-update-button', $template);
         self::assertStringContainsString('/api/agent-updates/status?ids=', $template);
         self::assertStringContainsString('trackedServerIds', $template);
-        self::assertStringContainsString('applyAgentFilter();', $template);
+        self::assertStringContainsString('data-server-search', $template);
+        self::assertStringContainsString('data-server-group-filter', $template);
+        self::assertStringContainsString('data-server-status-filter', $template);
+        self::assertStringContainsString('applyFilters();', $template);
         self::assertStringContainsString("'/api/agent-updates/status'", $factory);
         self::assertStringContainsString('function statuses(', $controller);
         self::assertStringContainsString("'is_outdated' =>", $service);
