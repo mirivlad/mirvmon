@@ -137,12 +137,12 @@ final class AuditTrailMiddlewareTest extends TestCase
         self::assertStringContainsString('description', (string) $row['metadata']);
     }
 
-    public function testFailedMutationRollsBackChangeAndDoesNotWriteAuditRow(): void
+    public function testFailedMutationIsNotAuditedAndObserverDoesNotRollbackControllerWork(): void
     {
         $middleware = $this->middleware();
         $request = (new ServerRequestFactory())
             ->createServerRequest('POST', '/servers/' . $this->serverId)
-            ->withParsedBody(['name' => 'must-rollback']);
+            ->withParsedBody(['name' => 'controller-result']);
 
         $response = $middleware->process($request, new class(self::$pdo, $this->serverId) implements RequestHandlerInterface {
             public function __construct(private readonly PDO $pdo, private readonly int $serverId)
@@ -152,7 +152,7 @@ final class AuditTrailMiddlewareTest extends TestCase
             public function handle(ServerRequestInterface $request): ResponseInterface
             {
                 $statement = $this->pdo->prepare('UPDATE servers SET name = :name WHERE id = :id');
-                $statement->execute(['id' => $this->serverId, 'name' => 'must-rollback']);
+                $statement->execute(['id' => $this->serverId, 'name' => 'controller-result']);
                 $_SESSION['flash_type'] = 'danger';
                 $_SESSION['flash_message'] = 'failed';
                 return (new ResponseFactory())->createResponse(302)
@@ -161,7 +161,7 @@ final class AuditTrailMiddlewareTest extends TestCase
         });
 
         self::assertSame(302, $response->getStatusCode());
-        self::assertSame('audit-before', (string) self::$pdo?->query(
+        self::assertSame('controller-result', (string) self::$pdo?->query(
             'SELECT name FROM servers WHERE id = ' . $this->serverId
         )->fetchColumn());
 
