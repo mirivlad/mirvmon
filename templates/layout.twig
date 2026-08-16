@@ -43,6 +43,23 @@
         .server-status-offline .server-status-emblem {
             background: var(--app-offline) !important;
         }
+
+        .audit-details summary {
+            list-style: none;
+            cursor: pointer;
+        }
+
+        .audit-details summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .audit-details pre {
+            max-width: min(48rem, 80vw);
+            max-height: 22rem;
+            overflow: auto;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
     </style>
 </head>
 <body>
@@ -115,6 +132,12 @@
                                 <a class="dropdown-item" href="/admin/notifications/queue" data-nav-prefix="/admin/notifications/queue">
                                     <i class="fas fa-list-check" aria-hidden="true"></i>
                                     {{ t('nav.notification_queue') }}
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/admin/audit" data-nav-prefix="/admin/audit">
+                                    <i class="fas fa-clock-rotate-left" aria-hidden="true"></i>
+                                    {{ t('nav.audit') }}
                                 </a>
                             </li>
                             <li><hr class="dropdown-divider"></li>
