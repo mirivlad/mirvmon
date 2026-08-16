@@ -1,0 +1,126 @@
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="d-flex flex-wrap gap-3 justify-content-between align-items-end">
+            <div>
+                <div class="small text-muted mb-2">{{ t('server.period.label') }}</div>
+                <div class="btn-group flex-wrap" role="group" aria-label="{{ t('common.period') }}">
+                    {% for item, label in {
+                        '1h': t('server.period.hour_1'),
+                        '6h': t('server.period.hour_6'),
+                        '24h': t('server.period.hour_24'),
+                        '7d': t('server.period.day_7'),
+                        '30d': t('server.period.day_30')
+                    } %}
+                    <a href="/servers/{{ server.id }}?tab=metrics&period={{ item }}" class="btn btn-sm {{ period == item ? 'btn-primary' : 'btn-outline-primary' }}">{{ label }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+            <form method="get" action="/servers/{{ server.id }}" class="row g-2 align-items-end">
+                <input type="hidden" name="tab" value="metrics">
+                <div class="col-auto">
+                    <label for="start" class="form-label small text-muted mb-1">{{ t('server.period.start') }}</label>
+                    <input type="datetime-local" class="form-control form-control-sm" id="start" name="start" value="{{ startDate }}">
+                </div>
+                <div class="col-auto">
+                    <label for="end" class="form-label small text-muted mb-1">{{ t('server.period.end') }}</label>
+                    <input type="datetime-local" class="form-control form-control-sm" id="end" name="end" value="{{ endDate }}">
+                </div>
+                <div class="col-auto"><button type="submit" class="btn btn-sm btn-outline-secondary">{{ t('common.apply') }}</button></div>
+                <div class="col-auto"><button type="button" class="btn btn-sm btn-outline-dark" id="reset-all-zoom">{{ t('server.period.reset_zoom') }}</button></div>
+            </form>
+        </div>
+        <div class="small text-muted mt-2">{{ t('server18.metrics.source', {source: aggregation.source, seconds: aggregation.seconds}) }}</div>
+    </div>
+</div>
+
+{% if not displayMetrics or displayMetrics is empty %}
+<div class="alert alert-warning">
+    <i class="fas fa-info-circle me-1" aria-hidden="true"></i>{{ t('server.metrics.none_selected') }}
+    <a href="/servers/{{ server.id }}/edit#display-metrics">{{ t('server18.metrics.configure') }}</a>.
+</div>
+{% else %}
+    {% if simpleMetricCharts is empty and networkCharts is empty and diskIoCharts is empty and temperatureChart.datasets is empty and diskCharts is empty and uptimeChart is empty and (availabilityChart.known|default(false) == false) %}
+    <div class="alert alert-info"><i class="fas fa-info-circle me-1" aria-hidden="true"></i>{{ t('server.metrics.no_data_period') }}</div>
+    {% endif %}
+
+    {% for chart in simpleMetricCharts %}
+    <div class="card mb-3">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center gap-3">
+            <h2 class="h6 mb-0">{{ chart.title }}</h2>
+            <div class="text-end">
+                <div class="fw-semibold">{{ chart.lastValue }}{{ chart.unit }}</div>
+                {% if chart.id == 'ram_used' and chart.details %}
+                    <div class="small text-muted">{{ t('server.metrics.total', {value: chart.details.totalGb}) }} · {{ t('server.metrics.used', {value: chart.details.usedGb}) }} · {{ t('server.metrics.free', {value: chart.details.freeGb}) }}</div>
+                {% endif %}
+                <div class="small text-muted">{{ chart.lastTime }}</div>
+            </div>
+        </div>
+        <div class="card-body"><div style="height: 280px"><canvas id="chart-{{ chart.id }}"></canvas></div></div>
+    </div>
+    {% endfor %}
+
+    {% if uptimeChart is not empty %}
+    <div class="card mb-3">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center gap-3">
+            <h2 class="h6 mb-0"><i class="fas fa-clock me-1" aria-hidden="true"></i>{{ uptimeChart.title }}</h2>
+            <div class="text-end"><div class="fw-semibold">{{ uptimeChart.lastText }}</div><div class="small text-muted">{{ uptimeChart.lastTime }}</div></div>
+        </div>
+        <div class="card-body"><div style="height: 240px"><canvas id="chart-uptime"></canvas></div></div>
+    </div>
+    {% endif %}
+
+    {% if availabilityChart.known|default(false) %}
+    <div class="card mb-3">
+        <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <h2 class="h6 mb-0"><i class="fas fa-link me-1" aria-hidden="true"></i>{{ t('server18.metrics.availability') }}</h2>
+            <div class="small">
+                <strong>{{ availabilityChart.availabilityPercent }}%</strong>
+                <span class="text-muted ms-2">{{ t('metric.downtime_outages', {downtime: availabilityChart.downtimeText, outages: availabilityChart.outages}) }}</span>
+            </div>
+        </div>
+        <div class="card-body"><div style="height: 220px"><canvas id="chart-availability"></canvas></div></div>
+    </div>
+    {% endif %}
+
+    {% for chart in networkCharts %}
+    <div class="card mb-3">
+        <div class="card-header bg-white"><h2 class="h6 mb-0"><i class="fas fa-network-wired me-1" aria-hidden="true"></i>{{ chart.title }}</h2></div>
+        <div class="card-body"><div style="height: 260px"><canvas id="chart-net-{{ chart.id }}"></canvas></div></div>
+    </div>
+    {% endfor %}
+
+    {% for chart in diskIoCharts %}
+    <div class="card mb-3">
+        <div class="card-header bg-white"><h2 class="h6 mb-0"><i class="fas fa-hard-drive me-1" aria-hidden="true"></i>{{ chart.title }}</h2></div>
+        <div class="card-body"><div style="height: 260px"><canvas id="chart-disk-io-{{ chart.id }}"></canvas></div></div>
+    </div>
+    {% endfor %}
+
+    {% if temperatureChart.datasets is not empty %}
+    <div class="card mb-3">
+        <div class="card-header bg-white"><h2 class="h6 mb-0"><i class="fas fa-temperature-half me-1" aria-hidden="true"></i>{{ t('server.temperature.title') }}</h2></div>
+        <div class="card-body"><div style="height: 300px"><canvas id="chart-temperatures"></canvas></div></div>
+    </div>
+    {% endif %}
+
+    {% if diskCharts is not empty %}
+    <div class="row g-3 mb-3">
+        {% for disk in diskCharts %}
+        <div class="col-md-6 col-xl-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <h2 class="h6">{{ disk.title }}</h2>
+                    <div class="mb-2"><span class="badge bg-primary">{{ disk.percent }}%</span></div>
+                    {% if disk.totalGb %}
+                    <div class="small text-muted mb-2">{{ t('server.metrics.total', {value: disk.totalGb}) }}</div>
+                    <div class="small mb-3"><span class="text-danger">{{ t('server.metrics.used', {value: disk.usedGb}) }}</span> · <span class="text-success">{{ t('server.metrics.free', {value: disk.freeGb}) }}</span></div>
+                    {% endif %}
+                    <div style="max-width: 180px; margin: 0 auto"><canvas id="disk-chart-{{ disk.id }}"></canvas></div>
+                    <div class="small text-muted mt-2">{{ disk.updatedAt }}</div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+{% endif %}
