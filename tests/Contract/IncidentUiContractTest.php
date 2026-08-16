@@ -39,8 +39,17 @@ final class IncidentUiContractTest extends TestCase
         foreach (['online', 'warning', 'critical', 'offline'] as $status) {
             self::assertStringContainsString('/?status=' . $status, $template);
         }
-        self::assertStringContainsString("t('incidents.attention.title')", $template);
-        self::assertStringContainsString('/alerts?view=active', $template);
+        foreach ([
+            "t('incidents.attention.title')",
+            '/alerts?view=active',
+            '/servers/{{ issue.server_id }}',
+            '/groups/{{ issue.group_id }}',
+            "t('incidents.kind.' ~ issue.kind)",
+            'issue.subject_name',
+            'issue.severity',
+        ] as $needle) {
+            self::assertStringContainsString($needle, $template);
+        }
 
         $script = (string) file_get_contents(
             dirname(__DIR__, 2) . '/public/js/dashboard.js'
@@ -48,6 +57,19 @@ final class IncidentUiContractTest extends TestCase
         self::assertStringContainsString("searchParams.get('status')", $script);
         self::assertStringContainsString("searchParams.set('status', statusFilter.value)", $script);
         self::assertStringContainsString("searchParams.delete('status')", $script);
+    }
+
+    public function testIncidentRepositoryIsWiredIntoProductionControllers(): void
+    {
+        $bootstrap = (string) file_get_contents(
+            dirname(__DIR__, 2) . '/src/Application/Bootstrap.php'
+        );
+
+        self::assertStringContainsString('IncidentRepository::class', $bootstrap);
+        self::assertStringContainsString(
+            '$container->get(IncidentRepository::class)',
+            $bootstrap
+        );
     }
 
     public function testPrimaryNavigationUsesIncidentTerminology(): void
