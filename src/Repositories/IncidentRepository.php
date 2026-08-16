@@ -13,41 +13,88 @@ final class IncidentRepository
     }
 
     /**
+     * Active alert incidents plus current offline availability states that do not
+     * already have an offline alert. Availability is operational truth; alert
+     * creation remains controlled by notification preferences.
+     *
      * @param array{server_id?: int, group_id?: int, kind?: string, severity?: string, from?: string, to?: string} $filters
      * @return list<array<string, mixed>>
      */
     public function active(array $filters = []): array
     {
-        [$where, $parameters] = $this->alertFilters($filters, 'alerts.created_at');
-        array_unshift($where, 'alerts.resolved = FALSE');
+        [$conditions, $parameters] = $this->eventFilters($filters, 'issues');
+        $where = $conditions === [] ? '' : 'WHERE ' . implode(' AND ', $conditions);
+        $sql = sprintf(
+            <<<'SQL'
+            WITH issues AS (
+                SELECT
+                    'alert'::varchar AS source,
+                    alerts.id,
+                    alerts.server_id,
+                    alerts.kind,
+                    alerts.subject,
+                    alerts.value,
+                    alerts.severity,
+                    alerts.created_at,
+                    NULL::timestamptz AS resolved_at,
+                    NULL::varchar AS resolved_by_username,
+                    EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - alerts.created_at))::bigint AS duration_seconds,
+                    servers.name AS server_name,
+                    server_groups.id AS group_id,
+                    server_groups.name AS group_name,
+                    COALESCE(metric_names.name, alerts.subject, alerts.kind) AS subject_name,
+                    metric_names.unit
+                FROM alerts
+                INNER JOIN servers ON servers.id = alerts.server_id
+                LEFT JOIN server_groups ON server_groups.id = servers.group_id
+                LEFT JOIN metric_names ON metric_names.id = alerts.metric_id
+                WHERE alerts.resolved = FALSE
 
-        $statement = $this->pdo->prepare(
-            'SELECT
-                alerts.id,
-                alerts.server_id,
-                alerts.kind,
-                alerts.subject,
-                alerts.value,
-                alerts.severity,
-                alerts.created_at,
-                NULL::timestamptz AS resolved_at,
-                NULL::varchar AS resolved_by_username,
-                EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - alerts.created_at))::bigint AS duration_seconds,
-                servers.name AS server_name,
-                server_groups.id AS group_id,
-                server_groups.name AS group_name,
-                COALESCE(metric_names.name, alerts.subject, alerts.kind) AS subject_name,
-                metric_names.unit
-             FROM alerts
-             INNER JOIN servers ON servers.id = alerts.server_id
-             LEFT JOIN server_groups ON server_groups.id = servers.group_id
-             LEFT JOIN metric_names ON metric_names.id = alerts.metric_id
-             WHERE ' . implode(' AND ', $where) . '
-             ORDER BY
-                CASE alerts.severity WHEN \'critical\' THEN 0 ELSE 1 END,
-                alerts.created_at ASC,
-                alerts.id ASC'
+                UNION ALL
+
+                SELECT
+                    'availability'::varchar AS source,
+                    NULL::bigint AS id,
+                    servers.id AS server_id,
+                    'offline'::varchar AS kind,
+                    'agent'::varchar AS subject,
+                    NULL::double precision AS value,
+                    'critical'::varchar AS severity,
+                    availability.changed_at AS created_at,
+                    NULL::timestamptz AS resolved_at,
+                    NULL::varchar AS resolved_by_username,
+                    EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - availability.changed_at))::bigint AS duration_seconds,
+                    servers.name AS server_name,
+                    server_groups.id AS group_id,
+                    server_groups.name AS group_name,
+                    'agent'::varchar AS subject_name,
+                    NULL::varchar AS unit
+                FROM server_availability_state AS availability
+                INNER JOIN servers ON servers.id = availability.server_id
+                LEFT JOIN server_groups ON server_groups.id = servers.group_id
+                WHERE availability.state = 'offline'
+                  AND servers.is_active = TRUE
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM alerts
+                      WHERE alerts.server_id = servers.id
+                        AND alerts.kind = 'offline'
+                        AND alerts.resolved = FALSE
+                  )
+            )
+            SELECT *
+            FROM issues
+            %s
+            ORDER BY
+                CASE issues.severity WHEN 'critical' THEN 0 ELSE 1 END,
+                CASE issues.kind WHEN 'offline' THEN 0 WHEN 'service' THEN 1 ELSE 2 END,
+                issues.created_at ASC,
+                issues.server_id ASC,
+                issues.id ASC NULLS LAST
+            SQL,
+            $where
         );
+        $statement = $this->pdo->prepare($sql);
         $statement->execute($parameters);
 
         return $statement->fetchAll();
@@ -63,34 +110,7 @@ final class IncidentRepository
      */
     public function history(array $filters = []): array
     {
-        $conditions = [];
-        $parameters = [];
-
-        if (isset($filters['server_id'])) {
-            $conditions[] = 'events.server_id = :server_id';
-            $parameters['server_id'] = $filters['server_id'];
-        }
-        if (isset($filters['group_id'])) {
-            $conditions[] = 'events.group_id = :group_id';
-            $parameters['group_id'] = $filters['group_id'];
-        }
-        if (isset($filters['kind'])) {
-            $conditions[] = 'events.kind = :kind';
-            $parameters['kind'] = $filters['kind'];
-        }
-        if (isset($filters['severity'])) {
-            $conditions[] = 'events.severity = :severity';
-            $parameters['severity'] = $filters['severity'];
-        }
-        if (isset($filters['from'])) {
-            $conditions[] = 'events.created_at >= :from';
-            $parameters['from'] = $filters['from'];
-        }
-        if (isset($filters['to'])) {
-            $conditions[] = 'events.created_at < :to';
-            $parameters['to'] = $filters['to'];
-        }
-
+        [$conditions, $parameters] = $this->eventFilters($filters, 'events');
         $where = $conditions === [] ? '' : 'WHERE ' . implode(' AND ', $conditions);
         $sql = sprintf(
             <<<'SQL'
@@ -262,32 +282,32 @@ final class IncidentRepository
      * @param array{server_id?: int, group_id?: int, kind?: string, severity?: string, from?: string, to?: string} $filters
      * @return array{0: list<string>, 1: array<string, int|string>}
      */
-    private function alertFilters(array $filters, string $dateColumn): array
+    private function eventFilters(array $filters, string $alias): array
     {
         $conditions = [];
         $parameters = [];
         if (isset($filters['server_id'])) {
-            $conditions[] = 'alerts.server_id = :server_id';
+            $conditions[] = $alias . '.server_id = :server_id';
             $parameters['server_id'] = $filters['server_id'];
         }
         if (isset($filters['group_id'])) {
-            $conditions[] = 'server_groups.id = :group_id';
+            $conditions[] = $alias . '.group_id = :group_id';
             $parameters['group_id'] = $filters['group_id'];
         }
         if (isset($filters['kind'])) {
-            $conditions[] = 'alerts.kind = :kind';
+            $conditions[] = $alias . '.kind = :kind';
             $parameters['kind'] = $filters['kind'];
         }
         if (isset($filters['severity'])) {
-            $conditions[] = 'alerts.severity = :severity';
+            $conditions[] = $alias . '.severity = :severity';
             $parameters['severity'] = $filters['severity'];
         }
         if (isset($filters['from'])) {
-            $conditions[] = $dateColumn . ' >= :from';
+            $conditions[] = $alias . '.created_at >= :from';
             $parameters['from'] = $filters['from'];
         }
         if (isset($filters['to'])) {
-            $conditions[] = $dateColumn . ' < :to';
+            $conditions[] = $alias . '.created_at < :to';
             $parameters['to'] = $filters['to'];
         }
 
