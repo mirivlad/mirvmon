@@ -23,27 +23,30 @@ final class Audit20ContractTest extends TestCase
         self::assertStringContainsString("t('nav.audit')", $layout);
     }
 
-    public function testAuditStorageIsAppendOnlyAndDoesNotExposeMutationRoutes(): void
+    public function testAuditStorageIsAppendOnlyWithOnlyControlledRetentionDeletion(): void
     {
         $root = dirname(__DIR__, 2);
         $migration = (string) file_get_contents($root . '/migrations/018_audit_log.sql');
+        $retentionMigration = (string) file_get_contents($root . '/migrations/019_audit_retention.sql');
         $repository = (string) file_get_contents($root . '/src/Repositories/AuditLogRepository.php');
         $routes = (string) file_get_contents($root . '/src/Application/AppFactory.php');
 
         self::assertStringContainsString('BEFORE UPDATE OR DELETE ON audit_log', $migration);
         self::assertStringContainsString('audit_log is append-only', $migration);
+        self::assertStringContainsString('mirvmon_prune_audit_log', $retentionMigration);
+        self::assertStringContainsString("current_setting('mirvmon.audit_retention_prune', true) = 'on'", $retentionMigration);
         self::assertStringContainsString('public function append(', $repository);
         self::assertStringNotContainsString('public function update(', $repository);
         self::assertStringNotContainsString('public function delete(', $repository);
-        self::assertStringNotContainsString("post('/audit", $routes);
+        self::assertStringNotContainsString("post('/audit/delete", $routes);
         self::assertStringNotContainsString("delete('/audit", $routes);
     }
 
-    public function testAuditUiProvidesOperationalFiltersAndSafeDetails(): void
+    public function testAuditUiProvidesOperationalFiltersSafeDetailsAndSeparateRetentionPolicy(): void
     {
-        $template = (string) file_get_contents(
-            dirname(__DIR__, 2) . '/templates/admin/audit.twig'
-        );
+        $root = dirname(__DIR__, 2);
+        $template = (string) file_get_contents($root . '/templates/admin/audit.twig');
+        $routes = (string) file_get_contents($root . '/src/Application/AppFactory.php');
 
         foreach ([
             'name="actor"',
@@ -55,9 +58,15 @@ final class Audit20ContractTest extends TestCase
             'name="q"',
             'row.object_url',
             'row.metadata_text',
+            'action="/admin/audit/retention"',
+            'name="retention_days"',
         ] as $needle) {
             self::assertStringContainsString($needle, $template);
         }
+        self::assertStringContainsString(
+            '$group->post(\'/audit/retention\', self::controller($container, AuditController::class, \'saveRetention\'))',
+            $routes
+        );
         self::assertStringNotContainsString('|raw', $template);
     }
 
@@ -77,6 +86,7 @@ final class Audit20ContractTest extends TestCase
             'server.maintenance.start',
             'server.maintenance.cancel',
             'server.thresholds.save',
+            'server.services.save',
             'server.agent_update.request',
             'group.create',
             'group.update',
@@ -105,5 +115,20 @@ final class Audit20ContractTest extends TestCase
         foreach (['password', 'token', 'secret', 'credential', 'authorization', 'api[_-]?key'] as $needle) {
             self::assertStringContainsString($needle, $logger);
         }
+    }
+
+    public function testAuditRetentionRunsAsItsOwnWorkerAndNeverUsesTimescaleMetricPolicies(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $worker = (string) file_get_contents($root . '/bin/audit-retention-worker');
+        $supervisor = (string) file_get_contents($root . '/docker/supervisord.conf');
+        $service = (string) file_get_contents($root . '/src/Services/AuditRetentionService.php');
+        $documentation = (string) file_get_contents($root . '/docs/audit-log.md');
+
+        self::assertStringContainsString('AuditRetentionService', $worker);
+        self::assertStringContainsString('[program:audit-retention-worker]', $supervisor);
+        self::assertStringContainsString("public const SETTING_KEY = 'audit_retention_days'", $service);
+        self::assertStringContainsString('mirvmon_prune_audit_log', $service);
+        self::assertStringContainsString('independent from metrics/process retention', $documentation);
     }
 }
