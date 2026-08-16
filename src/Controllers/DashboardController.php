@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\I18n\Translator;
 use App\I18n\TwigTranslation;
+use App\Repositories\IncidentRepository;
 use App\Repositories\ServerRepository;
 use App\Services\ServerStatusService;
 use App\Services\SystemHealthService;
@@ -22,7 +23,8 @@ final class DashboardController
         private readonly ServerRepository $servers,
         private readonly ServerStatusService $status,
         private readonly Translator $translator = new Translator(),
-        private readonly ?SystemHealthService $systemHealth = null
+        private readonly ?SystemHealthService $systemHealth = null,
+        private readonly ?IncidentRepository $incidents = null
     ) {
         TwigTranslation::register($this->twig->getEnvironment(), $this->translator);
     }
@@ -53,7 +55,7 @@ final class DashboardController
             'title' => $this->translator->trans('dashboard.title'),
             'stats' => $this->status->summary($servers, $this->servers->groupCount()),
             'groups' => $groups,
-            'attention' => $this->attention($servers),
+            'attention' => $this->incidents?->attention() ?? $this->fallbackAttention($servers),
             'system_health' => $this->systemHealth?->summary() ?? [
                 'application_status' => 'unknown',
                 'host_status' => 'unknown',
@@ -116,10 +118,15 @@ final class DashboardController
     }
 
     /**
+     * Compatibility fallback for direct controller construction in tests and
+     * downstream integrations that have not injected IncidentRepository yet.
+     * Production Bootstrap wires the repository and therefore renders concrete
+     * incidents rather than this server-level approximation.
+     *
      * @param list<array<string, mixed>> $servers
      * @return list<array<string, mixed>>
      */
-    private function attention(array $servers): array
+    private function fallbackAttention(array $servers): array
     {
         $issues = array_values(array_filter(
             $servers,
@@ -146,6 +153,18 @@ final class DashboardController
             return strcasecmp((string) ($left['name'] ?? ''), (string) ($right['name'] ?? ''));
         });
 
-        return array_slice($issues, 0, 6);
+        return array_map(static function (array $server): array {
+            $status = (string) ($server['status'] ?? 'offline');
+            return [
+                'server_id' => $server['id'] ?? 0,
+                'server_name' => $server['name'] ?? '',
+                'group_id' => $server['group_id'] ?? null,
+                'group_name' => $server['group_name'] ?? null,
+                'kind' => $status === 'offline' ? 'offline' : 'metric',
+                'subject_name' => $status,
+                'severity' => $status === 'warning' ? 'warning' : 'critical',
+                'created_at' => $server['last_metrics_at'] ?? null,
+            ];
+        }, array_slice($issues, 0, 6));
     }
 }
