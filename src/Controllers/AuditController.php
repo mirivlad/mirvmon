@@ -7,16 +7,21 @@ namespace App\Controllers;
 use App\I18n\Translator;
 use App\I18n\TwigTranslation;
 use App\Repositories\AuditLogRepository;
+use App\Services\AuditLogger;
+use App\Services\AuditRetentionService;
 use JsonException;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Views\Twig;
+use Throwable;
 
 final class AuditController
 {
     public function __construct(
         private readonly Twig $twig,
         private readonly AuditLogRepository $audit,
+        private readonly AuditRetentionService $retention,
+        private readonly AuditLogger $logger,
         private readonly Translator $translator = new Translator()
     ) {
         TwigTranslation::register($this->twig->getEnvironment(), $this->translator);
@@ -58,9 +63,62 @@ final class AuditController
             'filters' => $displayFilters,
             'audit' => $result,
             'options' => $this->audit->filterOptions(),
+            'retention_days' => $this->retention->retentionDays(),
+            'retention_min_days' => AuditRetentionService::MINIMUM_DAYS,
+            'retention_max_days' => AuditRetentionService::MAXIMUM_DAYS,
             'previous_url' => $this->pageUrl($displayFilters, max(1, $result['page'] - 1)),
             'next_url' => $this->pageUrl($displayFilters, min($result['pages'], $result['page'] + 1)),
         ]);
+    }
+
+    /** @param array<string, string> $args */
+    public function saveRetention(Request $request, Response $response, array $args): Response
+    {
+        if (($_SESSION['role'] ?? null) !== 'admin') {
+            return $response->withHeader('Location', '/')->withStatus(302);
+        }
+
+        $body = $request->getParsedBody();
+        $value = is_array($body) ? ($body['retention_days'] ?? null) : null;
+        $validated = filter_var($value, FILTER_VALIDATE_INT);
+        if ($validated === false || !$this->validRetentionDays((int) $validated)) {
+            $this->flash($this->translator->trans('audit.retention.invalid'), 'error');
+            return $response->withHeader('Location', '/admin/audit')->withStatus(302);
+        }
+
+        $days = (int) $validated;
+        $before = $this->retention->retentionDays();
+        try {
+            $this->retention->saveRetentionDays($days);
+        } catch (Throwable) {
+            $this->flash($this->translator->trans('audit.retention.save_failed'), 'error');
+            return $response->withHeader('Location', '/admin/audit')->withStatus(302);
+        }
+
+        if ($before !== $days) {
+            try {
+                $this->logger->record(
+                    'audit.retention.save',
+                    'audit_policy',
+                    null,
+                    $this->translator->trans('audit.retention.object'),
+                    $days === AuditRetentionService::KEEP_FOREVER
+                        ? $this->translator->trans('audit.event.retention.forever')
+                        : $this->translator->trans('audit.event.retention.saved', ['days' => $days]),
+                    ['previous_days' => $before, 'retention_days' => $days]
+                );
+            } catch (Throwable $exception) {
+                error_log('[MirvMon audit] retention policy audit failed: ' . $exception->getMessage());
+            }
+        }
+
+        $this->flash(
+            $days === AuditRetentionService::KEEP_FOREVER
+                ? $this->translator->trans('audit.retention.saved_forever')
+                : $this->translator->trans('audit.retention.saved_days', ['days' => $days]),
+            'success'
+        );
+        return $response->withHeader('Location', '/admin/audit')->withStatus(302);
     }
 
     private function objectUrl(string $type, ?string $id): ?string
@@ -72,6 +130,7 @@ final class AuditController
                 'defaults', 'language' => '/admin/defaults',
                 'system' => '/admin/system',
                 'user' => '/admin/users',
+                'audit_policy' => '/admin/audit',
                 default => null,
             };
         }
@@ -126,5 +185,18 @@ final class AuditController
             $query['page'] = $page;
         }
         return '/admin/audit' . ($query === [] ? '' : '?' . http_build_query($query));
+    }
+
+    private function validRetentionDays(int $days): bool
+    {
+        return $days === AuditRetentionService::KEEP_FOREVER
+            || ($days >= AuditRetentionService::MINIMUM_DAYS
+                && $days <= AuditRetentionService::MAXIMUM_DAYS);
+    }
+
+    private function flash(string $message, string $type): void
+    {
+        $_SESSION['flash_message'] = $message;
+        $_SESSION['flash_type'] = $type;
     }
 }
