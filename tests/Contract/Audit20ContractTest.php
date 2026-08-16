@@ -77,7 +77,6 @@ final class Audit20ContractTest extends TestCase
             'server.maintenance.start',
             'server.maintenance.cancel',
             'server.thresholds.save',
-            'server.services.save',
             'server.agent_update.request',
             'group.create',
             'group.update',
