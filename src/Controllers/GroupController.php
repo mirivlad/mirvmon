@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\I18n\Translator;
 use App\I18n\TwigTranslation;
+use App\Repositories\IncidentRepository;
 use App\Services\ServerStatusService;
 use InvalidArgumentException;
 use PDO;
@@ -16,12 +17,16 @@ use Throwable;
 
 final class GroupController
 {
+    private IncidentRepository $incidents;
+
     public function __construct(
         private readonly PDO $pdo,
         private readonly Twig $twig,
         private readonly ServerStatusService $status,
-        private readonly Translator $translator = new Translator()
+        private readonly Translator $translator = new Translator(),
+        ?IncidentRepository $incidents = null
     ) {
+        $this->incidents = $incidents ?? new IncidentRepository($pdo);
         TwigTranslation::register($this->twig->getEnvironment(), $this->translator);
     }
 
@@ -45,8 +50,20 @@ final class GroupController
             }
             $this->addServerToSummary($summaries[$groupId], $server);
         }
+
+        /** @var array<int, int> $problemCounts */
+        $problemCounts = [];
+        foreach ($this->incidents->active() as $incident) {
+            $groupId = (int) ($incident['group_id'] ?? 0);
+            if ($groupId > 0) {
+                $problemCounts[$groupId] = ($problemCounts[$groupId] ?? 0) + 1;
+            }
+        }
+
         foreach ($groups as &$group) {
-            $group['summary'] = $summaries[(int) $group['id']] ?? $this->emptySummary();
+            $groupId = (int) $group['id'];
+            $group['summary'] = $summaries[$groupId] ?? $this->emptySummary();
+            $group['summary']['active_problems'] = $problemCounts[$groupId] ?? 0;
             $group['server_count'] = $group['summary']['total'];
         }
         unset($group);
@@ -156,11 +173,13 @@ final class GroupController
             return $this->redirect($response, '/groups');
         }
 
-        $servers = $this->status->enrich($this->loadServers((int) $group['id']));
+        $groupId = (int) $group['id'];
+        $servers = $this->status->enrich($this->loadServers($groupId));
         $summary = $this->emptySummary();
         foreach ($servers as $server) {
             $this->addServerToSummary($summary, $server);
         }
+        $summary['active_problems'] = count($this->incidents->active(['group_id' => $groupId]));
 
         return $this->twig->render($response, 'groups/show.twig', [
             'title' => (string) $group['name'],
@@ -237,7 +256,6 @@ final class GroupController
                 $summary['offline']++;
                 break;
         }
-        $summary['active_problems'] += (int) ($server['active_alerts'] ?? 0);
     }
 
     /** @param array<string, mixed> $args */

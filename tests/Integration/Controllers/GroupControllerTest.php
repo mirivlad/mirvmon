@@ -117,6 +117,38 @@ final class GroupControllerTest extends TestCase
         )->fetchColumn());
     }
 
+    public function testAvailabilityOnlyOfflineCountsAsActiveProblem(): void
+    {
+        $serverId = $this->insertServer('availability-only-offline', '20 minutes');
+        $statement = self::$pdo?->prepare(
+            "INSERT INTO server_availability_state (server_id, state, changed_at)
+             VALUES (:server_id, 'offline', CURRENT_TIMESTAMP - INTERVAL '10 minutes')"
+        );
+        $statement?->execute(['server_id' => $serverId]);
+
+        $response = $this->controller->show(
+            (new ServerRequestFactory())->createServerRequest(
+                'GET',
+                '/groups/' . $this->groupId
+            ),
+            (new ResponseFactory())->createResponse(),
+            ['id' => (string) $this->groupId]
+        );
+        $html = (string) $response->getBody();
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame(
+            0,
+            (int) self::$pdo?->query(
+                "SELECT count(*) FROM alerts WHERE server_id = {$serverId} AND resolved = FALSE"
+            )->fetchColumn()
+        );
+        self::assertMatchesRegularExpression(
+            '/Активных проблем<\/span>\s*<strong class="summary-value">1<\/strong>/u',
+            $html
+        );
+    }
+
     public function testInvalidGroupDataIsRejected(): void
     {
         $request = (new ServerRequestFactory())
