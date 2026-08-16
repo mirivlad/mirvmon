@@ -18,7 +18,7 @@ final class Audit20ContractTest extends TestCase
             '$group->get(\'/audit\', self::controller($container, AuditController::class, \'index\'))',
             $routes
         );
-        self::assertStringContainsString('$administration->add($csrf)->add($admin)->add($auth)', $routes);
+        self::assertStringContainsString('$administration->add($auditTrail)->add($csrf)->add($admin)->add($auth)', $routes);
         self::assertStringContainsString('href="/admin/audit"', $layout);
         self::assertStringContainsString("t('nav.audit')", $layout);
     }
@@ -59,5 +59,52 @@ final class Audit20ContractTest extends TestCase
             self::assertStringContainsString($needle, $template);
         }
         self::assertStringNotContainsString('|raw', $template);
+    }
+
+    public function testRequiredAdministrativeMutationsAreInsideAuditBoundary(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $routes = (string) file_get_contents($root . '/src/Application/AppFactory.php');
+        $middleware = (string) file_get_contents($root . '/src/Middlewares/AuditTrailMiddleware.php');
+
+        self::assertStringContainsString('$protected->add($auditTrail)->add($csrf)->add($auth)', $routes);
+        self::assertStringContainsString('$administration->add($auditTrail)->add($csrf)->add($admin)->add($auth)', $routes);
+
+        foreach ([
+            'server.update',
+            'server.delete',
+            'server.token.rotate',
+            'server.maintenance.start',
+            'server.maintenance.cancel',
+            'server.thresholds.save',
+            'server.services.save',
+            'server.agent_update.request',
+            'group.create',
+            'group.update',
+            'group.delete',
+            'user.create',
+            'user.update',
+            'user.delete',
+            'notifications.save',
+            'notification_queue.retry',
+            'notification_queue.job.retry',
+            'notification_queue.job.delete',
+            'notification_queue.delete',
+        ] as $action) {
+            self::assertStringContainsString("'{$action}'", $middleware, $action);
+        }
+    }
+
+    public function testAuditDescriptionsAreGeneratedAndMetadataHasSecretRedactionLayer(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $middleware = (string) file_get_contents($root . '/src/Middlewares/AuditTrailMiddleware.php');
+        $logger = (string) file_get_contents($root . '/src/Services/AuditLogger.php');
+
+        self::assertStringContainsString('$this->translator->trans($descriptionKey, $parameters)', $middleware);
+        self::assertStringContainsString('self::sanitizeMetadata($metadata)', $logger);
+        foreach (['password', 'token', 'secret', 'credential', 'authorization', 'api[_-]?key'] as $needle) {
+            self::assertStringContainsString($needle, $logger);
+        }
     }
 }
