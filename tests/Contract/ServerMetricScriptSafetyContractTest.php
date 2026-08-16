@@ -32,4 +32,14 @@ final class ServerMetricScriptSafetyContractTest extends TestCase
         self::assertStringContainsString('detailText.hours', $script);
         self::assertStringContainsString('detailText.minutes', $script);
     }
+
+    public function testThresholdSettingsKeepCanonicalDiskPaths(): void
+    {
+        $template = (string) file_get_contents(
+            dirname(__DIR__, 2) . '/templates/servers/edit.twig'
+        );
+
+        self::assertStringContainsString("disk_suffix == 'root' ? '/'", $template);
+        self::assertStringContainsString("'/' ~ (disk_suffix|replace({'_': '/'}))", $template);
+    }
 }
