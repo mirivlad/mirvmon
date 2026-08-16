@@ -39,4 +39,28 @@ final class AgentVersionServiceTest extends TestCase
             (new AgentVersionService())->isUpgrade($installed, $available)
         );
     }
+
+    /** @return iterable<string, array{string, string, bool}> */
+    public static function selfUpdateTargets(): iterable
+    {
+        yield 'old updater may still receive normal release' => ['v0.4.12', 'v0.4.17', true];
+        yield 'old updater must not receive four-part hotfix' => ['v0.4.12', 'v0.4.17.1', false];
+        yield 'last incompatible updater must not receive hotfix' => ['v0.4.15.2', 'v0.4.17.1', false];
+        yield 'first compatible updater accepts hotfix' => ['v0.4.15.3', 'v0.4.17.1', true];
+        yield 'modern three-part agent accepts hotfix' => ['v0.4.17', 'v0.4.17.1', true];
+        yield 'modern hotfix agent accepts later hotfix' => ['v0.4.17.1', 'v0.4.17.2', true];
+        yield 'invalid installed version is rejected' => ['development', 'v0.4.17.1', false];
+    }
+
+    #[DataProvider('selfUpdateTargets')]
+    public function testSelfUpdateTargetCompatibility(
+        string $installed,
+        string $available,
+        bool $expected
+    ): void {
+        self::assertSame(
+            $expected,
+            (new AgentVersionService())->supportsSelfUpdateTarget($installed, $available)
+        );
+    }
 }
