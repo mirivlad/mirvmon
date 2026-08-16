@@ -16,7 +16,7 @@ func platformApply(staged, installed string, parentPID int, targetVersion, healt
 		return err
 	}
 	restart := func() error { return startService() }
-	return replaceExecutable(staged, installed, restart, func() error {
+	return replaceExecutable(staged, installed, nil, restart, func() error {
 		return waitForTargetHealth(healthPath, targetVersion, 30*time.Second)
 	}, stopService)
 }
