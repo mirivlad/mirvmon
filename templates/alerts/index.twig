@@ -134,13 +134,17 @@
                         {% endif %}
                         {% if view == 'active' %}
                         <td>
-                            {% include "partials/action-button.twig" with {
-                                form_action: '/alerts/' ~ event.id ~ '/resolve',
-                                icon: 'fa-check',
-                                label: t('alerts.resolve'),
-                                class: 'btn-outline-success',
-                                confirm: t('alerts.resolve.confirm')
-                            } %}
+                            {% if event.id is not null %}
+                                {% include "partials/action-button.twig" with {
+                                    form_action: '/alerts/' ~ event.id ~ '/resolve',
+                                    icon: 'fa-check',
+                                    label: t('alerts.resolve'),
+                                    class: 'btn-outline-success',
+                                    confirm: t('alerts.resolve.confirm')
+                                } %}
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
                         </td>
                         {% endif %}
                     </tr>
