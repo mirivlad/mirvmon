@@ -137,7 +137,7 @@ final class DashboardReadModelTest extends TestCase
         self::assertStringContainsString('title="Debian GNU/Linux 12"', $dashboardHtml);
         self::assertStringContainsString('server-status-online', $dashboardHtml);
 
-        $detail = (new ServerDetailController(
+        $detailController = new ServerDetailController(
             self::$pdo,
             $twig,
             $servers,
@@ -145,7 +145,8 @@ final class DashboardReadModelTest extends TestCase
             new MaintenanceWindowRepository(self::$pdo),
             null,
             new ServerStatusService(new ServerPlatformService())
-        ))->show(
+        );
+        $detail = $detailController->show(
             $requestFactory->createServerRequest(
                 'GET',
                 'http://localhost/servers/' . $this->serverId . '?period=24h'
@@ -158,10 +159,24 @@ final class DashboardReadModelTest extends TestCase
         self::assertSame(200, $detail->getStatusCode());
         self::assertStringContainsString('CPU сейчас', $detailHtml);
         self::assertStringContainsString('40%', $detailHtml);
-        self::assertStringContainsString('id="agent-tab"', $detailHtml);
-        self::assertStringContainsString('Отозвать ключ', $detailHtml);
+        self::assertStringNotContainsString('Отозвать ключ', $detailHtml);
         self::assertStringContainsString('fab fa-linux', $detailHtml);
         self::assertStringContainsString('title="Debian GNU/Linux 12"', $detailHtml);
         self::assertStringContainsString('server-status-online', $detailHtml);
+
+        $agentDetail = $detailController->show(
+            $requestFactory->createServerRequest(
+                'GET',
+                'http://localhost/servers/' . $this->serverId . '?tab=agent'
+            ),
+            $responseFactory->createResponse(),
+            ['id' => (string) $this->serverId]
+        );
+        $agentHtml = (string) $agentDetail->getBody();
+
+        self::assertSame(200, $agentDetail->getStatusCode());
+        self::assertStringContainsString('Отозвать ключ', $agentHtml);
+        self::assertStringContainsString('?tab=agent', $agentHtml);
+        self::assertStringNotContainsString('CPU сейчас', $agentHtml);
     }
 }
