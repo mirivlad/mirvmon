@@ -41,6 +41,7 @@ use App\Services\AgentInstallerService;
 use App\Services\AgentUpdateService;
 use App\Services\AgentVersionService;
 use App\Services\AuditLogger;
+use App\Services\AuditRetentionService;
 use App\Services\MetricsIngestionService;
 use App\Services\PublicUrlResolver;
 use App\Services\ServerPlatformService;
@@ -128,6 +129,13 @@ final class Bootstrap
             AuditLogger::class,
             static fn (Container $container): AuditLogger => new AuditLogger(
                 $container->get(AuditLogRepository::class)
+            )
+        );
+        $container->set(
+            AuditRetentionService::class,
+            static fn (Container $container): AuditRetentionService => new AuditRetentionService(
+                $container->get(PDO::class),
+                $container->get(AppSettingsRepository::class)
             )
         );
         $container->set(
@@ -356,7 +364,8 @@ final class Bootstrap
                 $container->get(Twig::class),
                 $container->get(AppSettingsRepository::class),
                 $container->get(SystemHealthService::class),
-                $container->get(Translator::class)
+                $container->get(Translator::class),
+                $container->get(AuditLogger::class)
             )
         );
         $container->set(
@@ -391,6 +400,8 @@ final class Bootstrap
             static fn (Container $container): AuditController => new AuditController(
                 $container->get(Twig::class),
                 $container->get(AuditLogRepository::class),
+                $container->get(AuditRetentionService::class),
+                $container->get(AuditLogger::class),
                 $container->get(Translator::class)
             )
         );
