@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 return [
+    'nav.incidents' => 'Incidents',
     'incidents.title' => 'Incidents / Events',
     'incidents.subtitle' => 'Active problems and the history of completed monitoring events.',
     'incidents.tab.active' => 'Active',
@@ -31,7 +32,7 @@ return [
     'incidents.column.duration' => 'Duration',
     'incidents.column.resolved_by' => 'Resolved by',
     'incidents.empty.active.heading' => 'No active incidents',
-    'incidents.empty.active.text' => 'MirvMon has no active alerts matching the selected filters.',
+    'incidents.empty.active.text' => 'MirvMon has no active problems matching the selected filters.',
     'incidents.empty.history.heading' => 'History is empty',
     'incidents.empty.history.text' => 'There are no completed events in the selected period.',
     'incidents.resolved.automatic' => 'automatic',
