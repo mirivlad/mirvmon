@@ -1,6 +1,6 @@
 ARG APP_VERSION=development
 
-FROM --platform=$BUILDPLATFORM golang:1.26.5-bookworm@sha256:53eeac89074db483fdf0ab3be1df32bf6e47562263d2d0d6baa7f26acb4957dd AS agent-modern
+FROM --platform=$BUILDPLATFORM golang:1.26.6-bookworm@sha256:116d58cbd88c1297624acc6e967a060012422bacf9930927e23fb719189c6f36 AS agent-modern
 
 ARG APP_VERSION
 
@@ -30,7 +30,7 @@ RUN set -eux; \
         -o /tmp/mirvmon-agent-windows-amd64.exe ./cmd/mirvmon-agent; \
     cmp /out/mirvmon-agent-windows-amd64.exe /tmp/mirvmon-agent-windows-amd64.exe
 
-FROM --platform=$BUILDPLATFORM golang:1.20.14-bookworm@sha256:9fa9101141c01e9440216d32eb2b380b3c3079bea07aeab3546020cc91b3662c AS agent-legacy
+FROM --platform=$BUILDPLATFORM golang:1.26.6-bookworm@sha256:116d58cbd88c1297624acc6e967a060012422bacf9930927e23fb719189c6f36 AS agent-legacy
 
 ARG APP_VERSION
 
