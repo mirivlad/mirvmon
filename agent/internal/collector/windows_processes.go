@@ -20,7 +20,7 @@ type windowsProcessCommand struct {
 	CommandLine string
 }
 
-func (collector *windowsCollector) collectProcesses(includeCommands bool, totalMemory uint64) *protocol.ProcessSnapshot {
+func (collector *windowsCollector) collectProcesses(includeCommands bool) *protocol.ProcessSnapshot {
 	var performance []windowsProcessPerformance
 	if collector.source.query("SELECT IDProcess, Name, PercentProcessorTime, WorkingSetPrivate FROM Win32_PerfFormattedData_PerfProc_Process", &performance) != nil {
 		return &protocol.ProcessSnapshot{}
@@ -39,16 +39,12 @@ func (collector *windowsCollector) collectProcesses(includeCommands bool, totalM
 		if process.IDProcess == 0 || process.Name == "_Total" || process.Name == "Idle" {
 			continue
 		}
-		memory := float64(0)
-		if totalMemory > 0 {
-			memory = float64(process.WorkingSetPrivate) * 100 / float64(totalMemory)
-		}
 		processes = append(processes, windowsCollectedProcess{
 			pid:     int(process.IDProcess),
 			name:    truncateString(process.Name, 255),
 			command: commands[process.IDProcess],
 			cpu:     float64(process.PercentProcessorTime) / float64(collector.source.logicalProcessors),
-			memory:  memory,
+			memory:  float64(process.WorkingSetPrivate) / 1024,
 		})
 	}
 	sort.Slice(processes, func(left, right int) bool {
