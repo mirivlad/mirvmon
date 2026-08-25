@@ -6,6 +6,11 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.4.21
+
+- Fixed the RAM chart process tooltip so per-process memory is shown as human-readable KiB/MiB/GiB/TiB instead of a raw number mislabeled as a percentage.
+- Normalized native-agent process-memory values to KiB on both Linux and Windows while preserving CPU process usage as percentages, with regression coverage for the Windows collector contract.
+
 ## 0.4.20
 
 - Added an administrator-only, append-only **Audit log / Журнал действий** with
