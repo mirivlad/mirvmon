@@ -67,7 +67,7 @@ func (collector *windowsCollector) Collect(context context.Context, includeComma
 	if err != nil {
 		services = nil
 	}
-	processes := collector.collectProcesses(includeCommands, operatingSystem.TotalVisibleMemorySize*1024)
+	processes := collector.collectProcesses(includeCommands)
 
 	return protocol.Measurement{
 		OSVersion:       normalizeWindowsVersion(operatingSystem.Caption, servicePack(operatingSystem.ServicePackMajorVersion), operatingSystem.BuildNumber),
