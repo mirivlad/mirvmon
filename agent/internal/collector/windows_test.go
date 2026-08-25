@@ -75,4 +75,7 @@ func TestWindowsCollectorUsesWMIContractFixtures(t *testing.T) {
 		measurement.ProcessSnapshot.TopCPU[0].Command != "sshd --token [REDACTED]" {
 		t.Fatalf("unexpected processes: %#v", measurement.ProcessSnapshot)
 	}
+	if len(measurement.ProcessSnapshot.TopMemory) != 1 || measurement.ProcessSnapshot.TopMemory[0].Value != 2 {
+		t.Fatalf("top memory value=%#v, want 2 KiB", measurement.ProcessSnapshot.TopMemory)
+	}
 }
