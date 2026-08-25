@@ -28,6 +28,20 @@ function fetchProcesses(serverId, time) {
         .catch(() => ({ top_cpu: [], top_ram: [] }));
 }
 
+function formatProcessMemoryKiB(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric < 0) return '—';
+    const units = ['KiB', 'MiB', 'GiB', 'TiB'];
+    let scaled = numeric;
+    let unitIndex = 0;
+    while (scaled >= 1024 && unitIndex < units.length - 1) {
+        scaled /= 1024;
+        unitIndex += 1;
+    }
+    const precision = scaled >= 100 ? 0 : (scaled >= 10 ? 1 : 2);
+    return Number(scaled.toFixed(precision)) + ' ' + units[unitIndex];
+}
+
 function renderProcessTooltip(context, chartMeta) {
     let tooltipEl = document.getElementById('chartjs-tooltip-' + chartMeta.id);
     if (!tooltipEl) {
@@ -76,7 +90,10 @@ function renderProcessTooltip(context, chartMeta) {
             lines.push('');
             lines.push((chartMeta.id === 'cpu_load' ? detailText.topCpu : detailText.topRam) + ':');
             processList.slice(0, 5).forEach(function(proc) {
-                lines.push(`${proc.command || proc.name}: ${proc.value}%`);
+                const processValue = chartMeta.id === 'cpu_load'
+                    ? window.MirvMon.formatMetricValue(proc.value, '%')
+                    : formatProcessMemoryKiB(proc.value);
+                lines.push(`${proc.command || proc.name}: ${processValue}`);
             });
         }
         tooltipEl.textContent = lines.join('\n');
