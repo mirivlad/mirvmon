@@ -12,7 +12,7 @@ import (
 	"github.com/mirivlad/mirvmon/agent/internal/atomicfile"
 )
 
-var sensitiveErrorValue = regexp.MustCompile(`(?i)(token|authorization|password|secret)(=|:|\s+)[^\s]+`)
+var sensitiveErrorValue = regexp.MustCompile(`(?i)(token|authorization|password|secret)(?:\s*(?:=|:)\s*|\s+)[^\s]+`)
 
 // Status is the durable status contract consumed by transactional installers.
 type Status struct {
@@ -82,5 +82,5 @@ func (store Store) Clear() error {
 }
 
 func sanitizeError(value string) string {
-	return sensitiveErrorValue.ReplaceAllString(value, "$1$2[redacted]")
+	return sensitiveErrorValue.ReplaceAllString(value, "$1=[redacted]")
 }

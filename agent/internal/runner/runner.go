@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mirivlad/mirvmon/agent/internal/config"
+	"github.com/mirivlad/mirvmon/agent/internal/diagnostic"
 	"github.com/mirivlad/mirvmon/agent/internal/health"
 	"github.com/mirivlad/mirvmon/agent/internal/protocol"
 	"github.com/mirivlad/mirvmon/agent/internal/transport"
@@ -121,10 +122,10 @@ func (runner *Runner) Cycle(context context.Context) error {
 	if runner.configDue() {
 		runner.lastConfigPull = runner.now().UTC()
 		if err := runner.refreshConfig(context); err != nil {
-			runner.writeHealth("authentication_error", err, false, false)
+			runner.writeHealth(diagnostic.Classify(err), err, false, false)
 			if errors.Is(err, transport.ErrAuthentication) {
 				runner.authPaused = true
-				return ErrAuthentication
+				return fmt.Errorf("%w: %w", ErrAuthentication, err)
 			}
 			return err
 		}
@@ -219,8 +220,8 @@ func (runner *Runner) flushOne(context context.Context) error {
 	}
 	outcome, err := runner.api.Send(context, raw)
 	if err != nil {
-		runner.writeHealth("retrying", err, false, false)
-		return ErrDeliveryPending
+		runner.writeHealth(diagnostic.Classify(err), err, false, false)
+		return fmt.Errorf("%w: %w", ErrDeliveryPending, err)
 	}
 	switch outcome {
 	case transport.Accepted:
@@ -237,8 +238,8 @@ func (runner *Runner) flushOne(context context.Context) error {
 		return nil
 	case transport.Authentication:
 		runner.authPaused = true
-		runner.writeHealth("authentication_error", ErrAuthentication, false, false)
-		return ErrAuthentication
+		runner.writeHealth(diagnostic.AuthenticationError, transport.ErrAuthentication, false, false)
+		return fmt.Errorf("%w: %w", ErrAuthentication, transport.ErrAuthentication)
 	default:
 		runner.writeHealth("retrying", nil, false, false)
 		return ErrDeliveryPending
