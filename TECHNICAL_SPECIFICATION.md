@@ -95,7 +95,13 @@ notifications. Запоздалый допустимый sample записыва
 - старые EOL ОС поддерживаются только как compatibility target агента и не
   считаются безопасными production platform;
 - конфигурация и queue записываются атомарно с ограниченными правами;
-- логи не содержат token, proxy credential или URL query secrets.
+- `health.json` рядом с queue хранит безопасный operator-visible state, времена
+  последней коллекции/доставки и очищенный `last_error`;
+- transport failures классифицируются как `authentication_error`, `dns_error`,
+  `network_timeout`, `network_error`, `tls_error`, `server_error`,
+  `configuration_error` или `runtime_error`;
+- логи и диагностические сообщения не содержат token, proxy credential или URL
+  query secrets.
 
 Удалённое обновление:
 

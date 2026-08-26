@@ -142,8 +142,12 @@ SHA-256 hash и никогда не попадает в query string или Wind
 
 Агент использует outbound HTTPS, стандартные proxy environment variables и
 локальную bounded persistent retry queue; входящий сетевой доступ ему не нужен.
-На Linux процесс работает под отдельным `mirvmon-agent`, на Windows code и
-state разделены между `Program Files` и `ProgramData`.
+Рядом с queue сохраняется `health.json` с последним безопасным состоянием;
+transport errors разделяются на auth, DNS, timeout/network, TLS, server и local
+configuration/runtime categories, чтобы работающий service не маскировал
+неработающую доставку. На Linux процесс работает под отдельным
+`mirvmon-agent`, на Windows code и state разделены между `Program Files` и
+`ProgramData`.
 
 Linux runtime — статический Go 1.26.5 x64 binary. Windows 10/11 и Server 2016+
 используют ту же версию Go; Windows 7 SP1/8/8.1 и Server 2008 R2 SP1/2012/2012

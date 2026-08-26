@@ -29,6 +29,7 @@ var (
 	ErrInvalidTLSConfiguration = errors.New("insecure TLS is only allowed for loopback HTTP")
 	ErrAuthentication          = errors.New("agent authentication failed")
 	ErrUnexpectedConfig        = errors.New("unexpected configuration response")
+	ErrUnexpectedMetrics       = errors.New("unexpected metrics response")
 	ErrResponseTooLarge        = errors.New("response body exceeds limit")
 	ErrInvalidRemoteConfig     = errors.New("invalid remote configuration")
 )
@@ -141,7 +142,7 @@ func (client *Client) Send(context context.Context, envelope []byte) (Outcome, e
 	case http.StatusUnauthorized, http.StatusForbidden:
 		return Authentication, nil
 	default:
-		return Retry, nil
+		return Retry, fmt.Errorf("%w: HTTP %d", ErrUnexpectedMetrics, response.StatusCode)
 	}
 }
 

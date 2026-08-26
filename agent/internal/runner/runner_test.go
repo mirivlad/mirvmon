@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/mirivlad/mirvmon/agent/internal/config"
+	"github.com/mirivlad/mirvmon/agent/internal/diagnostic"
 	"github.com/mirivlad/mirvmon/agent/internal/protocol"
 	"github.com/mirivlad/mirvmon/agent/internal/transport"
 	"github.com/mirivlad/mirvmon/agent/internal/update"
@@ -74,6 +76,38 @@ func TestAuthenticationConfigurationPullIsNotRetriedBeforeOneMinute(t *testing.T
 	}
 }
 
+func TestConfigPullTimeoutHasNetworkHealthState(t *testing.T) {
+	api := &fakeAPI{pullErr: context.DeadlineExceeded}
+	runner := newTestRunner(t, newRecordingQueue(), api)
+
+	if err := runner.Cycle(context.Background()); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("got %v", err)
+	}
+	status, err := runner.health.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.State != diagnostic.NetworkTimeout {
+		t.Fatalf("state=%q error=%q", status.State, status.LastError)
+	}
+}
+
+func TestDeliveryDNSErrorHasDNSHealthState(t *testing.T) {
+	api := &fakeAPI{sendErr: &net.DNSError{Err: "temporary failure", Name: "monitor.example"}}
+	runner := newTestRunner(t, newRecordingQueue(envelopeBytes("queued")), api)
+
+	if err := runner.Cycle(context.Background()); !errors.Is(err, ErrDeliveryPending) {
+		t.Fatalf("got %v", err)
+	}
+	status, err := runner.health.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.State != diagnostic.DNSError {
+		t.Fatalf("state=%q error=%q", status.State, status.LastError)
+	}
+}
+
 func TestHealthRetainsCollectionTimeAfterAcceptedDelivery(t *testing.T) {
 	runner := newTestRunner(t, newRecordingQueue(), &fakeAPI{outcome: transport.Accepted})
 	if err := runner.Cycle(context.Background()); err != nil {
@@ -129,11 +163,12 @@ type fakeAPI struct {
 	outcome transport.Outcome
 	remote  config.Remote
 	pullErr error
+	sendErr error
 	pulls   int
 }
 
 func (api *fakeAPI) Send(context.Context, []byte) (transport.Outcome, error) {
-	return api.outcome, nil
+	return api.outcome, api.sendErr
 }
 
 func (api *fakeAPI) PullConfig(context.Context) (config.Remote, error) {

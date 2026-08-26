@@ -27,6 +27,9 @@ func TestSendClassifiesResponsesWithoutLosingAuthFailures(t *testing.T) {
 			if err != nil && want != Retry {
 				t.Fatalf("%d: %v", code, err)
 			}
+			if want == Retry && err == nil {
+				t.Fatalf("%d: retry response lost diagnostic error", code)
+			}
 			if got != want {
 				t.Fatalf("%d: got %v want %v", code, got, want)
 			}

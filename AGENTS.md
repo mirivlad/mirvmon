@@ -122,8 +122,9 @@ Production Compose использует готовый `MIRVMON_IMAGE`; build ov
 только для исходников. БД не публикует порт, а приложение по умолчанию
 привязано к `127.0.0.1`.
 
-Release image публикует `.github/workflows/release-image.yml` только по
-semver-тегам `vX.Y.Z`/prerelease. Не публикуйте floating production release без
+Release image публикует `.github/workflows/ci.yml` на semver-тегах
+`vX.Y.Z`/prerelease; helper `.github/workflows/release.yml` создаёт tag из
+ветки `release/v...` и запускает tag CI. Не публикуйте floating production release без
 успешного полного CI.
 
 ## Обязательные проверки
@@ -181,5 +182,6 @@ Integration suite требует чистую TimescaleDB и переменны�
 - не добавляйте CDN-зависимости: production assets находятся в
   `public/vendor`.
 
-Главные документы: `README.md`, `ARCHITECTURE.md`,
-`TECHNICAL_SPECIFICATION.md`, `INSTALL.md`, `docker/README.md`.
+Главные документы: `README.md`, `docs/README.md`, `docs/agent.md`,
+`docs/troubleshooting.md`, `ARCHITECTURE.md`, `TECHNICAL_SPECIFICATION.md`,
+`INSTALL.md`, `docker/README.md`.

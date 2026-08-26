@@ -6,6 +6,10 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+- Classify native-agent failures into operator-facing authentication, DNS, network timeout, network, TLS, server, configuration and runtime states instead of labeling every remote-config failure as an authentication error.
+- Preserve retry diagnostics for unexpected metrics HTTP responses and show classified, credential-sanitized details from `check`/`once` CLI failures.
+- Reorganized public documentation around an agent operator guide, troubleshooting, FAQ, use cases and a documentation index; historical redesign plans are no longer linked as current user documentation.
+
 ## 0.4.21
 
 - Fixed the RAM chart process tooltip so per-process memory is shown as human-readable KiB/MiB/GiB/TiB instead of a raw number mislabeled as a percentage.

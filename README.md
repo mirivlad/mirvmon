@@ -140,178 +140,63 @@ docker compose -f docker/docker-compose.yml logs -f db
 приложения под advisory lock; изменённый checksum уже применённой миграции
 считается ошибкой.
 
-## Установка агента
+## Агент
 
-Добавьте сервер в веб-интерфейсе и скачайте один из двух установщиков: Linux
-shell или единый Windows x64 EXE. Ссылка действует один час и передаёт
-installer credential, а не постоянный ключ агента. Linux погашает credential
-при скачивании; Windows — при нативной активации на целевой системе. Обычные
-установки используют действующий ключ; его отзыв выполняется только явным
-действием администратора. Постоянный ключ не передаётся в URL и в БД хранится
-только как SHA-256.
+Добавьте сервер в веб-интерфейсе и скачайте персонализированный установщик:
+Linux shell либо единый Windows x64 EXE. Installer credential действует один
+час и не является permanent agent token. Постоянный token не передаётся в URL,
+а на стороне MirvMon хранится только его SHA-256.
 
-Если задан `PUBLIC_BASE_URL`, установщик привязывается к нему. Иначе используется
-scheme, host и port запроса, уже нормализованные middleware доверенного reverse
-proxy. В исходниках нет предустановленного домена.
+Агент работает по push-модели: получает remote config и отправляет метрики
+исходящими HTTPS-запросами, поэтому наблюдаемому серверу не нужен входящий порт
+или белый IP. Недоставленные замеры сохраняются в bounded disk queue и
+досылаются после восстановления связи.
 
-Все агентские сборки — только x64. Linux-сборка Go 1.26.5 поддерживает Debian
-11+, Ubuntu 20.04+, RHEL/CentOS 7+, Oracle Linux 7+, AlmaLinux/Rocky Linux 8+,
-NethServer 7 и их современные преемники с systemd. Windows 10/11 и Windows
-Server 2016/2019/2022/2025 используют сборку Go 1.26.5. Для Windows 7 SP1,
-8, 8.1 и Windows Server 2008 R2 SP1, 2012, 2012 R2 используется сборка Go
-1.20.14. Windows Server 2008 без R2 и любые 32-битные системы не
-поддерживаются.
+Официальные сборки — x64. Поддерживаются Linux systemd (Debian 11+, Ubuntu
+20.04+, RHEL/CentOS/Oracle Linux 7+, Alma/Rocky Linux 8+, NethServer 7),
+современные Windows 10/11 и Server 2016–2025, а также legacy Windows 7 SP1,
+8/8.1 и Server 2008 R2 SP1/2012/2012 R2. Windows Server 2008 без R2 и 32-bit
+системы не поддерживаются.
 
-Установщик скачивает один проверяемый нативный бинарник, создаёт пользователя
-`mirvmon-agent` на Linux, записывает конфигурацию `/etc/mirvmon-agent/config.json`
-и очередь `/var/lib/mirvmon-agent/queue.json`. При обновлении сначала
-мигрируются старые Python/PowerShell config и queue в отдельные файлы; прежние
-файлы заменяются только после успешной миграции и сохраняются как backup.
-После переключения Linux-установщик удаляет только известные runtime-файлы
-старого Python-агента из `/opt/mirvmon-agent`.
+На Linux основные файлы находятся здесь:
 
-На systemd (включая systemd 219 CentOS/RHEL 7) используйте:
-
-```bash
-sudo systemctl status mirvmon-agent
-sudo journalctl -u mirvmon-agent -f
+```text
+/opt/mirvmon-agent/mirvmon-agent
+/etc/mirvmon-agent/config.json
+/var/lib/mirvmon-agent/queue.json
+/var/lib/mirvmon-agent/health.json
 ```
 
-Для outbound proxy задайте `HTTPS_PROXY`, `HTTP_PROXY` и при необходимости
-`NO_PROXY` в systemd unit override. TLS certificate verification включена по
-умолчанию; агент использует системный CA store.
-
-### Windows x64
-
-Во вкладке «Агент» скачайте единый персонализированный
-`MirvMon-Agent-Setup.exe` и запустите его от имени Administrator. Установщик
-содержит обе Windows-сборки и сам выбирает совместимую по версии Windows. EXE не
-подписан: Windows может показать SmartScreen/Unknown publisher, поэтому запуск
-нужно подтвердить вручную.
-
-Permanent agent token в EXE не встраивается. Внутри находится одноразовый
-installer credential со сроком действия один час. После проверки ОС выбранный
-нативный агент обменивает его по HTTPS на конфигурацию; только успешный обмен
-погашает credential. Поэтому скачанный EXE нужно запустить до истечения часа.
-NSIS напрямую запускает команду `install-windows` выбранного Go-агента; в
-пакете нет PowerShell/BAT и установка от них не зависит.
-
-До остановки прежнего агента installer проверяет размер, SHA-256, version и
-artifact identity нового EXE, выполняет `check`, мигрирует config/queue в
-staging и повторно проверяет итоговый config. Затем он сохраняет backups с
-суффиксом `.legacy-<timestamp>`, блокирует повторный запуск старой scheduled
-task и ещё раз мигрирует остановленную очередь. После этого он переключает
-службу и подтверждает состояние
-`Running`. Ошибка после переключения запускает rollback; ошибка проверки или
-миграции вообще не изменяет работающий старый агент. ACL назначаются по
-well-known SID и не зависят от языка Windows.
-
-Legacy-сборка собирает те же метрики, службы, процессы, версию ОС и получает
-удалённую конфигурацию, что и современная Windows-сборка.
-
-Сервис постоянно работает под LocalSystem; недоставленные замеры хранятся в
-`%ProgramData%\MirvMon\Agent\queue.json` (до 1000) и досылаются следующим
-циклом. Агент и установщик не требуют PowerShell.
-
-Для outbound proxy задайте `HTTPS_PROXY`, `HTTP_PROXY` и при необходимости
-`NO_PROXY` в `/etc/default/mirvmon-agent`. TLS-сертификаты проверяются по
-умолчанию. При недоступности сервиса bounded disk queue переживает перезапуск,
-а повтор одного `sample_id` обрабатывается сервером идемпотентно.
-
-Агент сообщает свою версию в каждом замере, она видна в колонке «Агент» в
-списке серверов. Пустое значение означает агента старее 0.2.5: поле
-необязательное, и замер без него принимается как раньше, а последняя известная
-версия не затирается.
-
-### Удалённое обновление агента
-
-`v0.4.3` — первая версия с поддержкой самостоятельного обновления. Более старый
-агент, включая `v0.4.2`, нужно один раз обновить обычным установщиком. После
-этого вкладка «Агент» сравнивает установленную версию с версией артефакта в
-контейнере мониторинга. Если совместимая версия новее, администратор может
-выдать команду «Обновить агент»; массового автоматического обновления нет.
-
-Команда приходит через существующий исходящий `GET /api/v1/agent/config` и не
-содержит shell-команду, URL или путь. Агент сам выбирает фиксированный артефакт
-`linux-amd64`, `windows-amd64` либо `windows-legacy-amd64`, скачивает его с того
-же origin, проверяет размер, SHA-256, версию и платформу. Конфигурация, token и
-очередь метрик не заменяются.
-
-Если target version уже была установлена вручную или предыдущим перезапуском,
-агент не блокирует рабочий цикл повторной командой. Первый новый metrics
-envelope с target version (либо более новой) и совпадающим artifact завершает ожидающую команду в UI;
-локальное состояние предыдущего обновления также переводится в terminal.
-
-Если контейнер мониторинга обновился, пока команда ещё находится в `pending`,
-следующий config poll атомарно помечает прежнюю команду как
-`target_superseded`, но не выдаёт автоматически новый UUID: агент мог локально
-принять прежнюю команду до недоставленного HTTP-report. После локальной очистки
-администратор явно нажимает «Повторить обновление».
-Команды, уже подтверждённые агентом (`accepted` и далее), автоматически не
-заменяются.
-
-На Linux непривилегированный агент только подготавливает файл; root-owned
-`mirvmon-agent-update.path` запускает ограниченный one-shot updater. На Windows
-защищённая копия текущего LocalSystem-бинарника выполняет замену после остановки
-service. На обеих платформах прежний бинарник сохраняется как `.previous`, а
-при ошибке запуска или отсутствии `health.json` новой версии выполняется откат.
-
-Диагностика Linux:
+Быстрая диагностика:
 
 ```bash
-sudo systemctl status mirvmon-agent-update.path mirvmon-agent-update.service
-sudo journalctl -u mirvmon-agent-update.service -n 100 --no-pager
-```
-
-#### Однократное восстановление Linux-агента v0.4.5
-
-У v0.4.5 локальный update state мог остаться в `awaiting_restart` уже после
-успешной установки и блокировать принятие следующей команды. После redeploy
-MirvMon v0.4.8 сначала проверьте, что узел действительно имеет именно это
-состояние:
-
-```bash
+sudo systemctl status mirvmon-agent --no-pager -l
 sudo /opt/mirvmon-agent/mirvmon-agent version
-sudo cat /var/lib/mirvmon-agent/update-state.json
+sudo -u mirvmon-agent /opt/mirvmon-agent/mirvmon-agent check \
+  --config /etc/mirvmon-agent/config.json --server
+sudo -u mirvmon-agent /opt/mirvmon-agent/mirvmon-agent once \
+  --config /etc/mirvmon-agent/config.json --require-delivery
 ```
 
-Если binary сообщает `v0.4.5`, а JSON содержит target `v0.4.5` и state
-`awaiting_restart`, остановите agent, path и one-shot updater, переместите только служебные файлы
-обновления в recoverable backup и снова запустите unit:
+Новые версии агента различают `authentication_error`, `dns_error`,
+`network_timeout`, `network_error`, `tls_error`, `server_error`,
+`configuration_error` и `runtime_error`; подробность сохраняется в
+`health.json` и выводится диагностическими командами.
 
-```bash
-sudo systemctl stop mirvmon-agent-update.path mirvmon-agent-update.service mirvmon-agent.service
-sudo sh -c 'recovery_dir="/var/lib/mirvmon-agent/recovery-v045-$(date -u +%Y%m%dT%H%M%SZ)"; install -d -m 0700 "$recovery_dir"; for file in update-state.json update-request.json update-handoff update-staged; do if [ -e "/var/lib/mirvmon-agent/$file" ]; then mv "/var/lib/mirvmon-agent/$file" "$recovery_dir/"; fi; done; printf "Backup: %s\n" "$recovery_dir"'
-sudo systemctl start mirvmon-agent-update.path mirvmon-agent.service
-```
+Полная эксплуатационная справка: **[docs/agent.md](docs/agent.md)**. Пошаговая
+диагностика DNS/TCP/TLS/auth/server response: **[docs/troubleshooting.md](docs/troubleshooting.md)**.
 
-Permanent token, config и metrics queue не затрагиваются. Обновите страницу
-сервера и нажмите «Повторить обновление»: будет создана команда для актуальной
-версии.
+Capable agent начиная с `v0.4.3` поддерживает отдельную self-update команду из
+UI. Агент получает только типизированное описание проверенного artifact, а не
+произвольную shell-команду, URL или путь. Детали установки, rollback и
+обновления вынесены в документацию агента.
 
 ### Протокол отправки
 
-`POST /api/v1/metrics` принимает JSON v2:
-
-```json
-{
-  "version": 2,
-  "sample_id": "018f47a2-8e4c-7d0a-8d8b-45de8fd746a1",
-  "sample_time": "2026-07-30T12:00:00Z",
-  "token": "<agent-token>",
-  "agent_version": "v0.4.3",
-  "agent_artifact": "linux-amd64",
-  "agent_capabilities": ["self_update_v1"],
-  "os_version": "Debian GNU/Linux 12",
-  "metrics": {"cpu_load": 12.5, "ram_used": 48.1},
-  "services": [],
-  "process_snapshot": {"top_cpu": [], "top_memory": []}
-}
-```
-
-Новый sample получает `202`, уже принятый — `200`. Конфигурацию агент
-периодически получает исходящим запросом `GET /api/v1/agent/config` с Bearer
-token.
+`POST /api/v1/metrics` принимает JSON envelope v2. Новый `sample_id` получает
+`202`, уже принятый — `200`. Remote config агент периодически получает через
+`GET /api/v1/agent/config` с Bearer token. Полный контракт описан в
+[TECHNICAL_SPECIFICATION.md](TECHNICAL_SPECIFICATION.md).
 
 ## Уведомления
 
@@ -431,10 +316,15 @@ NSIS-сборку Windows EXE, а также production Docker image. Release wo
 публикует multi-arch image в GHCR, а Dependabot следит за Composer, npm, Docker
 и GitHub Actions.
 
-## Дополнительная документация
+## Документация
 
+- [Навигатор по документации](docs/README.md)
+- [Установка](INSTALL.md)
+- [Агент](docs/agent.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [FAQ](docs/faq.md)
+- [Use cases](docs/use-cases.md)
 - [Архитектура](ARCHITECTURE.md)
 - [Техническая спецификация](TECHNICAL_SPECIFICATION.md)
-- [Установка](INSTALL.md)
 - [Docker и Portainer](docker/README.md)
-- [Утверждённый redesign](docs/superpowers/specs/2026-07-30-platform-redesign-design.md)
+- [Roadmap](ROADMAP.md) и [Changelog](CHANGELOG.md)

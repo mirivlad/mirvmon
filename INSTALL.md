@@ -124,91 +124,57 @@ curl --fail http://127.0.0.1:8080/readyz
 
 ## Нативные агенты
 
-Поддерживаются только x64-системы. Linux-агент Go 1.26.5 работает на systemd
-хостах Debian 11+, Ubuntu 20.04+, CentOS/RHEL/Oracle Linux 7+,
-AlmaLinux/Rocky Linux 8+ и NethServer 7. Он не требует Python, пакетного
-менеджера или сторонних репозиториев: нужен только `curl` либо `wget`.
+После добавления сервера откройте его вкладку «Агент» и скачайте
+персонализированный installer. Официальные сборки — только x64.
 
-Windows 10/11 и Windows Server 2016/2019/2022/2025 используют Go 1.26.5.
-Windows 7 SP1, 8, 8.1 и Windows Server 2008 R2 SP1, 2012, 2012 R2 используют
-отдельную сборку Go 1.20.14. Windows Server 2008 без R2 и 32-bit платформы не
-поддерживаются.
+Linux installer поддерживает systemd-хосты Debian 11+, Ubuntu 20.04+,
+CentOS/RHEL/Oracle Linux 7+, AlmaLinux/Rocky Linux 8+ и NethServer 7. Он
+устанавливает нативный binary, отдельного пользователя `mirvmon-agent`,
+конфигурацию и durable queue; Python после перехода не требуется.
 
-Для любой поддерживаемой Windows скачайте во вкладке «Агент» единый файл
-`MirvMon-Agent-Setup.exe` и запустите его от имени Administrator. Установщик не
-подписан, поэтому Windows может потребовать явного подтверждения запуска. NSIS
-определяет семейство ОС и запускает нужную из двух встроенных x64-сборок.
+Для Windows используется единый неподписанный `MirvMon-Agent-Setup.exe`. Он
+содержит modern и legacy x64 builds и сам выбирает подходящий вариант:
+Windows 10/11 и Server 2016–2025 используют modern build, Windows 7 SP1/8/8.1
+и Server 2008 R2 SP1/2012/2012 R2 — legacy build. Windows Server 2008 без R2 и
+32-bit системы не поддерживаются. PowerShell/BAT установщику не нужны.
 
-Permanent agent token в установщик не помещается. EXE содержит одноразовый
-installer credential, действующий один час; выбранный нативный агент обменивает
-его по HTTPS на конфигурацию непосредственно перед изменением системы и сам
-выполняет транзакцию установки. PowerShell и BAT в пакет не входят и не нужны.
-Успешное завершение сообщает, что `MirvMonAgent` находится в состоянии
-`Running`. Предыдущие config,
-queue и установленный EXE сохраняются рядом с суффиксом
-`.legacy-YYYYMMDDHHMMSS`. При ошибке до переключения старый агент не
-останавливается; при ошибке запуска выполняется rollback.
+Installer credential действует один час и не является permanent agent token.
+Windows получает постоянную конфигурацию по HTTPS непосредственно перед
+локальной транзакцией установки; Linux также не помещает permanent token в URL.
+При обновлении существующей установки прежний config/queue мигрируется до
+переключения, а post-commit failure приводит к rollback.
 
-### Проверка на целевой Windows
+Capable agent начиная с `v0.4.3` может принимать отдельную self-update команду
+из UI. На Linux для привилегированной части создаются
+`mirvmon-agent-update.path` и `mirvmon-agent-update.service`; основной процесс
+остаётся непривилегированным.
 
-Автоматическая сборка обеих Go-версий, реальная компиляция NSIS и тесты native
-transaction не заменяют runtime-тесты на Windows Server 2008 R2
-SP1 x64 и современной Windows x64. Перед production rollout проверьте
-чек-лист как минимум на трёх границах матрицы:
+После установки на Linux проверьте:
 
-- Windows 7 SP1 или Server 2008 R2 SP1;
-- Windows 8.1 или Server 2012 R2;
-- Windows 11 или Server 2022.
+```bash
+sudo systemctl status mirvmon-agent --no-pager -l
+sudo /opt/mirvmon-agent/mirvmon-agent version
+sudo -u mirvmon-agent /opt/mirvmon-agent/mirvmon-agent check \
+  --config /etc/mirvmon-agent/config.json --server
+```
 
-На каждой выбранной системе проверьте последовательно:
+Полная справка по файлам, командам, `health.json`, proxy и self-update:
+[docs/agent.md](docs/agent.md). Пошаговая диагностика проблем доставки:
+[docs/troubleshooting.md](docs/troubleshooting.md).
 
-1. UAC/предупреждение о неподписанном издателе, clean install из каталога с
-   пробелами и `sc.exe query MirvMonAgent`;
-2. получение метрик и remote config текущим server API;
-3. повторный запуск того же типа пакета;
-4. переход со старого Python config/JSON queue;
-5. переход с PowerShell `queue.txt`;
-6. испорченный bundled EXE и невалидный config — старый агент продолжает
-   работать, его service/task и файлы не изменены;
-7. наличие timestamped backups и отсутствие двух одновременно работающих
-   агентов;
-8. последующее обновление capable native agent из вкладки «Агент».
+### Runtime-проверка Windows перед rollout
 
-Все установщики создают native service, сохраняют configuration и bounded queue
-в защищённых каталогах и перед переключением импортируют state старого
-Python/PowerShell агента в отдельные файлы. При неудаче исходные state files
-не изменяются. После успешного переключения Linux-установщик удаляет только
-известные runtime-файлы старого Python-агента.
+CI собирает обе Go-версии, компилирует NSIS и проверяет native transaction, но
+это не заменяет runtime smoke-test на реальных Windows. Перед широким rollout
+желательно проверить хотя бы legacy boundary (Windows 7 SP1/Server 2008 R2
+SP1), Windows 8.1/Server 2012 R2 и современную Windows 11/Server 2022:
 
-### Первый переход и последующие обновления агента
-
-Агенты до `v0.4.3` не умеют принимать команду обновления. После обновления
-серверного контейнера до `v0.4.3` один раз скачайте новый установщик во вкладке
-«Агент» каждого сервера и запустите его вручную. Установленный `v0.4.3` сможет
-самостоятельно переходить на следующие версии по отдельной команде
-администратора в этой вкладке.
-
-Linux installer дополнительно создаёт и включает:
-
-- `/etc/systemd/system/mirvmon-agent-update.path`;
-- `/etc/systemd/system/mirvmon-agent-update.service`.
-
-Основной service продолжает работать от `mirvmon-agent`; updater запускается от
-root только при появлении фиксированного
-`/var/lib/mirvmon-agent/update-request.json`. Windows использует уже защищённый
-LocalSystem service и helper в `%ProgramData%\MirvMon\Agent`. В update-команде
-нет URL, пути или credential; скачивание выполняется с origin мониторинга с
-обязательной проверкой TLS, размера, SHA-256 и identity бинарника. Неуспешный
-запуск автоматически возвращает `.previous`.
-
-Если update-команда ещё не была подтверждена агентом и её target version
-устарела после redeploy, первый config poll атомарно завершает её с
-`target_superseded`, но не создаёт автоматически новый UUID. После local
-cleanup администратор явно повторяет обновление; уже подтверждённые стадии
-(`accepted` и далее) сохраняются без изменения. Для
-однократного восстановления Linux v0.4.5 со stale `awaiting_restart` используйте
-recoverable процедуру из раздела «Удалённое обновление агента» в `README.md`;
-она не меняет permanent token, config или metrics queue.
+1. clean install и `sc.exe query MirvMonAgent`;
+2. получение remote config и метрик;
+3. повторный запуск installer;
+4. миграцию legacy Python/PowerShell state, если такой узел есть;
+5. отсутствие двух одновременно работающих агентов;
+6. self-update capable agent из вкладки «Агент».
 
 ## Обновление
 

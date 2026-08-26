@@ -14,6 +14,7 @@ import (
 	"github.com/mirivlad/mirvmon/agent/internal/buildinfo"
 	"github.com/mirivlad/mirvmon/agent/internal/collector"
 	"github.com/mirivlad/mirvmon/agent/internal/config"
+	"github.com/mirivlad/mirvmon/agent/internal/diagnostic"
 	"github.com/mirivlad/mirvmon/agent/internal/enroll"
 	"github.com/mirivlad/mirvmon/agent/internal/migrate"
 	"github.com/mirivlad/mirvmon/agent/internal/protocol"
@@ -231,7 +232,7 @@ func executeConfigured(arguments []string, _ io.Writer, stderr io.Writer) int {
 		if *checkServer {
 			remote, err := api.PullConfig(context.Background())
 			if err != nil {
-				fmt.Fprintln(stderr, "server check failed")
+				fmt.Fprintf(stderr, "server check failed (%s): %s\n", diagnostic.Classify(err), diagnostic.SafeMessage(err))
 				return exitPending
 			}
 			updated, ok := config.ApplyRemote(configuration, remote)
@@ -277,14 +278,26 @@ func executeConfigured(arguments []string, _ io.Writer, stderr io.Writer) int {
 	if err == nil {
 		return exitSuccess
 	}
-	if errors.Is(err, runner.ErrDeliveryPending) || errors.Is(err, runner.ErrAuthentication) || errors.Is(err, runner.ErrDisabled) {
-		fmt.Fprintln(stderr, "delivery pending")
+	if errors.Is(err, runner.ErrDisabled) {
+		fmt.Fprintln(stderr, "agent disabled by server")
+		return exitPending
+	}
+	if errors.Is(err, runner.ErrAuthentication) {
+		fmt.Fprintf(stderr, "authentication failed (%s): %s\n", diagnostic.Classify(err), diagnostic.SafeMessage(err))
+		return exitPending
+	}
+	if errors.Is(err, runner.ErrDeliveryPending) {
+		fmt.Fprintf(stderr, "delivery pending (%s): %s\n", diagnostic.Classify(err), diagnostic.SafeMessage(err))
+		return exitPending
+	}
+	if diagnostic.IsDeliveryPending(err) {
+		fmt.Fprintf(stderr, "delivery pending (%s): %s\n", diagnostic.Classify(err), diagnostic.SafeMessage(err))
 		return exitPending
 	}
 	if errors.Is(err, context.Canceled) {
 		return exitSuccess
 	}
-	fmt.Fprintln(stderr, "agent runtime failed")
+	fmt.Fprintf(stderr, "agent runtime failed (%s): %s\n", diagnostic.Classify(err), diagnostic.SafeMessage(err))
 	return exitRuntime
 }
 
