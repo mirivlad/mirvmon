@@ -64,6 +64,33 @@ func TestExecuteMigrateConvertsLegacyState(t *testing.T) {
 	}
 }
 
+func TestExecuteCheckReportsClassifiedServerError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+	directory := t.TempDir()
+	configPath := filepath.Join(directory, "config.json")
+	queuePath := filepath.Join(directory, "queue.json")
+	token := strings.Repeat("a", 64)
+	configJSON := `{"api_url":"` + server.URL + `/api/v1/metrics","config_url":"` + server.URL + `/api/v1/agent/config","token":"` + token + `","queue_path":"` + queuePath + `","verify_tls":false}`
+	if err := os.WriteFile(configPath, []byte(configJSON), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := execute([]string{"check", "--config", configPath, "--server"}, &stdout, &stderr)
+	if code != exitPending {
+		t.Fatalf("exit=%d stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "server_error") || !strings.Contains(stderr.String(), "HTTP 500") {
+		t.Fatalf("missing classified diagnostic: %q", stderr.String())
+	}
+	if strings.Contains(stderr.String(), token) {
+		t.Fatalf("token leaked: %q", stderr.String())
+	}
+}
+
 func TestExecuteRejectsUnknownCommandWithoutLeakingArguments(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := execute([]string{"invalid", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}, &stdout, &stderr)
