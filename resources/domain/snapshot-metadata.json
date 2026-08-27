@@ -1,0 +1,12 @@
+{
+  "iana_rdap_bootstrap": {
+    "source": "https://data.iana.org/rdap/dns.json",
+    "retrieved_at": "2026-08-28T00:00:00Z",
+    "sha256": "fb297362ea4d0b627bd92fe18dc251a3af594fa60b0b7da58ff708181e3d7bb5"
+  },
+  "public_suffix_list": {
+    "source": "https://publicsuffix.org/list/public_suffix_list.dat",
+    "retrieved_at": "2026-08-28T00:00:00Z",
+    "sha256": "14ef61b1c212f701f3636c1d01ab9254daf841f57eb6433bcbbef56c726ca656"
+  }
+}
