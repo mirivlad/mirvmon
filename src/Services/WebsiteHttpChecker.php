@@ -17,10 +17,15 @@ final class WebsiteHttpChecker
     private const MAX_BODY_BYTES = 1048576;
 
     private readonly WebsiteAssertionEvaluator $assertions;
+    private readonly TlsCertificateInspector $tlsInspector;
 
-    public function __construct(?WebsiteAssertionEvaluator $assertions = null)
+    public function __construct(
+        ?WebsiteAssertionEvaluator $assertions = null,
+        ?TlsCertificateInspector $tlsInspector = null,
+    )
     {
         $this->assertions = $assertions ?? new WebsiteAssertionEvaluator();
+        $this->tlsInspector = $tlsInspector ?? new TlsCertificateInspector();
     }
 
     public function check(
@@ -29,6 +34,21 @@ final class WebsiteHttpChecker
         int $endpointId,
         bool $manual = false,
     ): WebsiteCheckResult {
+        $checkedAt = new DateTimeImmutable();
+        if (!$this->configuredSelfSignedCertificateIsValid($endpoint, $endpointId, $checkedAt)) {
+            return $this->failure(
+                $websiteId,
+                $endpointId,
+                $checkedAt,
+                $endpoint->url,
+                $endpoint->url,
+                [],
+                $this->emptyTimings(),
+                WebsiteCheckError::Tls,
+                $manual,
+            );
+        }
+
         return $this->checkUntil($endpoint, $websiteId, $endpointId, $manual, microtime(true) + $endpoint->timeoutSeconds);
     }
 
@@ -163,14 +183,31 @@ final class WebsiteHttpChecker
 
         $multi = curl_multi_init();
         $pending = [];
+        $active = [];
+        $results = [];
         foreach (array_values($checks) as $index => $check) {
             $endpoint = $check['definition'];
+            $checkedAt = new DateTimeImmutable();
+            if (!$this->configuredSelfSignedCertificateIsValid($endpoint, $check['endpoint_id'], $checkedAt)) {
+                $results[$index] = $this->failure(
+                    $check['website_id'],
+                    $check['endpoint_id'],
+                    $checkedAt,
+                    $endpoint->url,
+                    $endpoint->url,
+                    [],
+                    $this->emptyTimings(),
+                    WebsiteCheckError::Tls,
+                    $check['manual'],
+                );
+                continue;
+            }
             $pending[] = (object) [
                 'index' => $index,
                 'check' => $check,
                 'url' => $endpoint->url,
                 'configured_origin' => $this->origin($endpoint->url),
-                'checked_at' => new DateTimeImmutable(),
+                'checked_at' => $checkedAt,
                 'deadline' => microtime(true) + $endpoint->timeoutSeconds,
                 'redirect_chain' => [],
                 'timings' => $this->emptyTimings(),
@@ -178,9 +215,6 @@ final class WebsiteHttpChecker
                 'hop' => 0,
             ];
         }
-        $active = [];
-        $results = [];
-
         try {
             while ($pending !== [] || $active !== []) {
                 while ($pending !== [] && count($active) < $concurrency) {
@@ -344,6 +378,8 @@ final class WebsiteHttpChecker
                 CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
                 CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
                 CURLOPT_PROXY => '',
+                CURLOPT_SSL_VERIFYPEER => !$this->allowsSelfSignedForUrl($endpoint, $url, $configuredOrigin),
+                CURLOPT_SSL_VERIFYHOST => 2,
                 CURLOPT_CONNECTTIMEOUT_MS => min(5000, $remainingMs),
                 CURLOPT_TIMEOUT_MS => $remainingMs,
                 CURLOPT_HEADERFUNCTION => static function ($handle, string $line) use (&$headers): int {
@@ -407,6 +443,8 @@ final class WebsiteHttpChecker
             CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
             CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
             CURLOPT_PROXY => '',
+            CURLOPT_SSL_VERIFYPEER => !$this->allowsSelfSignedForUrl($endpoint, $url, $configuredOrigin),
+            CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_CONNECTTIMEOUT_MS => min(5000, $timeoutMs),
             CURLOPT_TIMEOUT_MS => $timeoutMs,
             CURLOPT_HEADERFUNCTION => static function ($handle, string $line) use (&$headers): int {
@@ -536,6 +574,40 @@ final class WebsiteHttpChecker
             : '';
 
         return $scheme . '://' . $host . $portPart;
+    }
+
+    private function configuredSelfSignedCertificateIsValid(
+        WebsiteEndpointDefinition $endpoint,
+        int $endpointId,
+        DateTimeImmutable $checkedAt,
+    ): bool {
+        if (!$endpoint->allowSelfSigned || !str_starts_with(strtolower($endpoint->url), 'https://')) {
+            return true;
+        }
+        $parts = parse_url($endpoint->url);
+        if ($parts === false || !isset($parts['host'])) {
+            return false;
+        }
+        $inspection = $this->tlsInspector->inspect(
+            null,
+            $endpointId,
+            (string) $parts['host'],
+            (int) ($parts['port'] ?? 443),
+            true,
+            $checkedAt,
+        );
+
+        return $inspection->valid;
+    }
+
+    private function allowsSelfSignedForUrl(
+        WebsiteEndpointDefinition $endpoint,
+        string $url,
+        string $configuredOrigin,
+    ): bool {
+        return $endpoint->allowSelfSigned
+            && str_starts_with(strtolower($url), 'https://')
+            && $this->origin($url) === $configuredOrigin;
     }
 
     private function canonicalUrl(string $url): string
