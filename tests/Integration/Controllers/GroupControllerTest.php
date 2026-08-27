@@ -49,7 +49,7 @@ final class GroupControllerTest extends TestCase
             new ServerStatusService(new ServerPlatformService())
         );
         $this->groupId = (int) self::$pdo?->query(
-            "INSERT INTO server_groups (name, icon, color)
+            "INSERT INTO monitoring_groups (name, icon, color)
              VALUES ('Production', 'fa-server', '#3157d5')
              RETURNING id"
         )->fetchColumn();
@@ -169,7 +169,7 @@ final class GroupControllerTest extends TestCase
         self::assertSame(
             0,
             (int) self::$pdo?->query(
-                "SELECT count(*) FROM server_groups WHERE description = 'invalid'"
+                "SELECT count(*) FROM monitoring_groups WHERE description = 'invalid'"
             )->fetchColumn()
         );
     }

@@ -34,7 +34,7 @@ final class GroupController
     public function index(Request $request, Response $response, array $args): Response
     {
         $groups = $this->pdo->query(
-            'SELECT * FROM server_groups ORDER BY sort_order, name, id'
+            'SELECT * FROM monitoring_groups ORDER BY sort_order, name, id'
         )?->fetchAll() ?? [];
         $servers = $this->status->enrich($this->loadServers());
 
@@ -88,7 +88,7 @@ final class GroupController
         try {
             $group = $this->validatedGroup($request->getParsedBody());
             $statement = $this->pdo->prepare(
-                'INSERT INTO server_groups (name, description, icon, color)
+                'INSERT INTO monitoring_groups (name, description, icon, color)
                  VALUES (:name, :description, :icon, :color)'
             );
             $statement->execute($group);
@@ -127,7 +127,7 @@ final class GroupController
         try {
             $group = $this->validatedGroup($request->getParsedBody());
             $statement = $this->pdo->prepare(
-                'UPDATE server_groups
+                'UPDATE monitoring_groups
                  SET name = :name, description = :description, icon = :icon, color = :color
                  WHERE id = :id'
             );
@@ -151,7 +151,7 @@ final class GroupController
             return $this->redirect($response, '/groups');
         }
         try {
-            $statement = $this->pdo->prepare('DELETE FROM server_groups WHERE id = :id');
+            $statement = $this->pdo->prepare('DELETE FROM monitoring_groups WHERE id = :id');
             $statement->execute(['id' => $groupId]);
             $deleted = $statement->rowCount() === 1;
             $this->flashKey(
@@ -271,7 +271,7 @@ final class GroupController
         if ($groupId === null) {
             return null;
         }
-        $statement = $this->pdo->prepare('SELECT * FROM server_groups WHERE id = :id');
+        $statement = $this->pdo->prepare('SELECT * FROM monitoring_groups WHERE id = :id');
         $statement->execute(['id' => $groupId]);
         $group = $statement->fetch();
         return is_array($group) ? $group : null;
