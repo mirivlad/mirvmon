@@ -122,6 +122,19 @@ final class MaintenanceWindowRepositoryTest extends TestCase
         $this->repository->start($this->serverId, 5, null, null);
     }
 
+    public function testWebsiteMaintenanceUsesTheSameWindowRules(): void
+    {
+        $websiteId = (int) self::$pdo?->query(
+            "INSERT INTO websites (name) VALUES ('Portal') RETURNING id"
+        )->fetchColumn();
+
+        $this->repository->startWebsite($websiteId, 3600, 'Deploy', 'operator');
+
+        self::assertSame('Deploy', $this->repository->activeWebsite($websiteId)['reason']);
+        self::assertSame(1, $this->repository->cancelWebsite($websiteId));
+        self::assertNull($this->repository->activeWebsite($websiteId));
+    }
+
     private function enqueue(NotificationOutboxRepository $outbox, string $key): int
     {
         return $outbox->enqueueConfigured(
