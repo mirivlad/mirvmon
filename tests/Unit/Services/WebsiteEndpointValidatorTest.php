@@ -124,4 +124,20 @@ final class WebsiteEndpointValidatorTest extends TestCase
         self::assertTrue($definition->allowSelfSigned);
         self::assertTrue($definition->tlsExpiryEnabled);
     }
+
+    public function testExistingEndpointCanKeepAnEncryptedCredentialWithoutResubmittingIt(): void
+    {
+        $definition = (new WebsiteEndpointValidator())->validate([
+            'id' => 42,
+            'is_primary' => true,
+            'name' => 'API',
+            'url' => 'https://example.com/api',
+            'auth_type' => 'bearer',
+        ]);
+
+        self::assertSame(42, $definition->id);
+        self::assertTrue($definition->isPrimary);
+        self::assertSame('bearer', $definition->authType);
+        self::assertNull($definition->authSecret);
+    }
 }

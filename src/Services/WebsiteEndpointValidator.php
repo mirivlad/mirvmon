@@ -29,6 +29,7 @@ final class WebsiteEndpointValidator
     /** @param array<string, mixed> $input */
     public function validate(array $input): WebsiteEndpointDefinition
     {
+        $id = $this->optionalPositiveInt($input, 'id');
         $name = trim($this->string($input, 'name'));
         if ($name === '' || mb_strlen($name) > 100) {
             throw new InvalidArgumentException('Website name must contain between 1 and 100 characters.');
@@ -58,7 +59,10 @@ final class WebsiteEndpointValidator
             throw new InvalidArgumentException('Critical response time must not be below warning response time.');
         }
 
-        [$authType, $authUsername, $authSecret] = $this->auth($input);
+        [$authType, $authUsername, $authSecret] = $this->auth($input, $id !== null);
+        $clearHeaders = $this->bool($input['clear_headers'] ?? false);
+        $headersSpecified = array_key_exists('headers', $input) || $clearHeaders;
+        $headers = $clearHeaders ? [] : $this->headers($input['headers'] ?? []);
 
         return new WebsiteEndpointDefinition(
             name: $name,
@@ -76,12 +80,15 @@ final class WebsiteEndpointValidator
             authType: $authType,
             authUsername: $authUsername,
             authSecret: $authSecret,
-            headers: $this->headers($input['headers'] ?? []),
+            headers: $headers,
             credentialRedirectHosts: $this->credentialRedirectOrigins(
                 $input['credential_redirect_hosts'] ?? []
             ),
             allowSelfSigned: $this->bool($input['allow_self_signed'] ?? false),
             tlsExpiryEnabled: $this->bool($input['tls_expiry_enabled'] ?? false),
+            id: $id,
+            isPrimary: $this->bool($input['is_primary'] ?? false),
+            headersSpecified: $headersSpecified,
         );
     }
 
@@ -166,7 +173,7 @@ final class WebsiteEndpointValidator
      * @param array<string, mixed> $input
      * @return array{string, ?string, ?string}
      */
-    private function auth(array $input): array
+    private function auth(array $input, bool $existing): array
     {
         $type = strtolower($this->optionalString($input, 'auth_type', 'none'));
         $username = isset($input['auth_username']) ? trim((string) $input['auth_username']) : null;
@@ -174,6 +181,10 @@ final class WebsiteEndpointValidator
 
         if ($type === 'none') {
             return ['none', null, null];
+        }
+        if ($existing && $secret === null && $username === null
+            && in_array($type, ['basic', 'bearer'], true)) {
+            return [$type, null, null];
         }
         if ($type === 'basic' && $username !== null && $username !== '' && mb_strlen($username) <= 255
             && $secret !== null && $secret !== '' && strlen($secret) <= 8192) {
@@ -296,6 +307,22 @@ final class WebsiteEndpointValidator
         }
 
         return $this->boundedInt($input, $key, $min, $min, $max);
+    }
+
+    /** @param array<string, mixed> $input */
+    private function optionalPositiveInt(array $input, string $key): ?int
+    {
+        if (!isset($input[$key]) || $input[$key] === '') {
+            return null;
+        }
+        $value = filter_var($input[$key], FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1],
+        ]);
+        if ($value === false) {
+            throw new InvalidArgumentException(sprintf('%s must be a positive integer.', $key));
+        }
+
+        return $value;
     }
 
     private function bool(mixed $value): bool

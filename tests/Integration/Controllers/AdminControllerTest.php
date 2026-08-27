@@ -162,6 +162,13 @@ final class AdminControllerTest extends TestCase
                 'default_critical_threshold' => '91',
                 'default_duration_seconds' => '120',
                 'default_recovery_duration_seconds' => '600',
+                'website_default_interval_seconds' => '90',
+                'website_http_timeout_seconds' => '20',
+                'website_tls_warning_days' => '28',
+                'website_tls_critical_days' => '5',
+                'website_domain_warning_days' => '45',
+                'website_domain_critical_days' => '10',
+                'website_worker_concurrency' => '12',
             ]);
         $this->controller->saveDefaultSettings(
             $request,
@@ -180,6 +187,20 @@ final class AdminControllerTest extends TestCase
         self::assertSame('91', $rows['default_critical_threshold']);
         self::assertSame('120', $rows['default_duration_seconds']);
         self::assertSame('600', $rows['default_recovery_duration_seconds']);
+        self::assertSame(
+            '90',
+            (string) self::$pdo?->query(
+                "SELECT setting_value #>> '{}' FROM app_settings
+                 WHERE setting_key = 'website_default_interval_seconds'"
+            )->fetchColumn()
+        );
+        self::assertSame(
+            '12',
+            (string) self::$pdo?->query(
+                "SELECT setting_value #>> '{}' FROM app_settings
+                 WHERE setting_key = 'website_worker_concurrency'"
+            )->fetchColumn()
+        );
 
         $page = $this->controller->defaultSettings(
             (new ServerRequestFactory())->createServerRequest('GET', '/admin/defaults'),
@@ -189,7 +210,40 @@ final class AdminControllerTest extends TestCase
         $html = (string) $page->getBody();
         self::assertStringContainsString('value="420"', $html);
         self::assertStringContainsString('value="120"', $html);
+        self::assertStringContainsString('value="90"', $html);
+        self::assertStringContainsString('value="12"', $html);
         self::assertStringNotContainsString('CRON', $html);
+    }
+
+    public function testWebsiteDefaultsRejectCriticalThresholdAboveWarning(): void
+    {
+        $request = (new ServerRequestFactory())
+            ->createServerRequest('POST', '/admin/defaults/save')
+            ->withParsedBody([
+                'default_offline_timeout' => '420',
+                'default_warning_threshold' => '65',
+                'default_critical_threshold' => '90',
+                'default_duration_seconds' => '0',
+                'default_recovery_duration_seconds' => '0',
+                'website_default_interval_seconds' => '60',
+                'website_http_timeout_seconds' => '15',
+                'website_tls_warning_days' => '7',
+                'website_tls_critical_days' => '21',
+                'website_domain_warning_days' => '30',
+                'website_domain_critical_days' => '7',
+                'website_worker_concurrency' => '10',
+            ]);
+
+        $this->controller->saveDefaultSettings(
+            $request,
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+
+        self::assertStringContainsString(
+            'критичес',
+            mb_strtolower((string) ($_SESSION['flash_message'] ?? ''))
+        );
     }
 
     private function insertUser(string $username, string $role): int

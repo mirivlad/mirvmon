@@ -31,6 +31,9 @@ final readonly class WebsiteEndpointDefinition
         public array $credentialRedirectHosts,
         public bool $allowSelfSigned,
         public bool $tlsExpiryEnabled,
+        public ?int $id = null,
+        public bool $isPrimary = false,
+        public bool $headersSpecified = true,
     ) {
     }
 }

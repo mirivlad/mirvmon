@@ -31,6 +31,22 @@ final class SecretCipherTest extends TestCase
         $cipher->decrypt($encrypted);
     }
 
+    public function testStructuredWebsiteCredentialsRemainOpaque(): void
+    {
+        $cipher = new SecretCipher(str_repeat('w', 32));
+        $plaintext = json_encode([
+            'type' => 'basic',
+            'username' => 'monitor',
+            'secret' => 'website-password',
+        ], JSON_THROW_ON_ERROR);
+
+        $encrypted = $cipher->encrypt($plaintext);
+
+        self::assertStringNotContainsString('monitor', $encrypted);
+        self::assertStringNotContainsString('website-password', $encrypted);
+        self::assertSame($plaintext, $cipher->decrypt($encrypted));
+    }
+
     public function testKeyMustContainExactlyThirtyTwoBytes(): void
     {
         $this->expectException(RuntimeException::class);
