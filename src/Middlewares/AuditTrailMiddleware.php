@@ -566,7 +566,7 @@ final class AuditTrailMiddleware implements MiddlewareInterface
     private function groupState(int $groupId): ?array
     {
         $statement = $this->pdo->prepare(
-            'SELECT id, name, description, icon, color FROM server_groups WHERE id = :id'
+            'SELECT id, name, description, icon, color FROM monitoring_groups WHERE id = :id'
         );
         $statement->execute(['id' => $groupId]);
         $row = $statement->fetch();
@@ -587,7 +587,7 @@ final class AuditTrailMiddleware implements MiddlewareInterface
             return null;
         }
         $statement = $this->pdo->prepare(
-            'SELECT id FROM server_groups WHERE name = :name ORDER BY id DESC LIMIT 1'
+            'SELECT id FROM monitoring_groups WHERE name = :name ORDER BY id DESC LIMIT 1'
         );
         $statement->execute(['name' => $name]);
         $id = $statement->fetchColumn();

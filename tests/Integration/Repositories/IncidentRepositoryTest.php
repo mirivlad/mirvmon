@@ -39,7 +39,7 @@ final class IncidentRepositoryTest extends TestCase
         self::$pdo?->beginTransaction();
         $this->repository = new IncidentRepository(self::$pdo);
         $this->groupId = (int) self::$pdo?->query(
-            "INSERT INTO server_groups (name) VALUES ('Production') RETURNING id"
+            "INSERT INTO monitoring_groups (name) VALUES ('Production') RETURNING id"
         )->fetchColumn();
         $this->serverId = (int) self::$pdo?->query(
             "INSERT INTO servers (name, group_id) VALUES ('edge-01', {$this->groupId}) RETURNING id"

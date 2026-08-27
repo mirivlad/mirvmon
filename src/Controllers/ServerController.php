@@ -40,7 +40,7 @@ final class ServerController
         $sortColumns = [
             'name' => 'servers.name',
             'address' => 'servers.address',
-            'group' => 'server_groups.name',
+            'group' => 'monitoring_groups.name',
             'description' => 'servers.description',
             'last_metrics' => 'servers.last_metrics_at',
         ];
@@ -54,7 +54,7 @@ final class ServerController
         foreach ([
             'name' => 'servers.name',
             'address' => 'servers.address',
-            'group' => 'server_groups.name',
+            'group' => 'monitoring_groups.name',
             'description' => 'servers.description',
             'last_metrics' => 'CAST(servers.last_metrics_at AS text)',
         ] as $key => $column) {
@@ -69,14 +69,14 @@ final class ServerController
             'SELECT
                 servers.*,
                 agent_tokens.last_used_at AS last_contact_at,
-                server_groups.name AS group_name,
-                server_groups.icon AS group_icon,
-                server_groups.color AS group_color,
+                monitoring_groups.name AS group_name,
+                monitoring_groups.icon AS group_icon,
+                monitoring_groups.color AS group_color,
                 COALESCE(alert_counts.warning_alerts, 0) AS warning_alerts,
                 COALESCE(alert_counts.critical_alerts, 0) AS critical_alerts
              FROM servers
              LEFT JOIN agent_tokens ON agent_tokens.server_id = servers.id
-             LEFT JOIN server_groups ON server_groups.id = servers.group_id
+             LEFT JOIN monitoring_groups ON monitoring_groups.id = servers.group_id
              LEFT JOIN LATERAL (
                 SELECT
                     count(*) FILTER (WHERE severity = \'warning\') AS warning_alerts,
@@ -346,7 +346,7 @@ final class ServerController
     /** @return list<array<string, mixed>> */
     private function groups(): array
     {
-        return $this->pdo->query('SELECT * FROM server_groups ORDER BY name, id')?->fetchAll() ?? [];
+        return $this->pdo->query('SELECT * FROM monitoring_groups ORDER BY name, id')?->fetchAll() ?? [];
     }
 
     private function defaultOfflineTimeout(): int

@@ -40,13 +40,13 @@ final class IncidentRepository
                     NULL::varchar AS resolved_by_username,
                     EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - alerts.created_at))::bigint AS duration_seconds,
                     servers.name AS server_name,
-                    server_groups.id AS group_id,
-                    server_groups.name AS group_name,
+                    monitoring_groups.id AS group_id,
+                    monitoring_groups.name AS group_name,
                     COALESCE(metric_names.name, alerts.subject, alerts.kind) AS subject_name,
                     metric_names.unit
                 FROM alerts
                 INNER JOIN servers ON servers.id = alerts.server_id
-                LEFT JOIN server_groups ON server_groups.id = servers.group_id
+                LEFT JOIN monitoring_groups ON monitoring_groups.id = servers.group_id
                 LEFT JOIN metric_names ON metric_names.id = alerts.metric_id
                 WHERE alerts.resolved = FALSE
 
@@ -65,13 +65,13 @@ final class IncidentRepository
                     NULL::varchar AS resolved_by_username,
                     EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - availability.changed_at))::bigint AS duration_seconds,
                     servers.name AS server_name,
-                    server_groups.id AS group_id,
-                    server_groups.name AS group_name,
+                    monitoring_groups.id AS group_id,
+                    monitoring_groups.name AS group_name,
                     'agent'::varchar AS subject_name,
                     NULL::varchar AS unit
                 FROM server_availability_state AS availability
                 INNER JOIN servers ON servers.id = availability.server_id
-                LEFT JOIN server_groups ON server_groups.id = servers.group_id
+                LEFT JOIN monitoring_groups ON monitoring_groups.id = servers.group_id
                 WHERE availability.state = 'offline'
                   AND servers.is_active = TRUE
                   AND NOT EXISTS (
@@ -150,13 +150,13 @@ final class IncidentRepository
                     alerts.resolved_by_username,
                     EXTRACT(EPOCH FROM (alerts.resolved_at - alerts.created_at))::bigint AS duration_seconds,
                     servers.name AS server_name,
-                    server_groups.id AS group_id,
-                    server_groups.name AS group_name,
+                    monitoring_groups.id AS group_id,
+                    monitoring_groups.name AS group_name,
                     COALESCE(metric_names.name, alerts.subject, alerts.kind) AS subject_name,
                     metric_names.unit
                 FROM alerts
                 INNER JOIN servers ON servers.id = alerts.server_id
-                LEFT JOIN server_groups ON server_groups.id = servers.group_id
+                LEFT JOIN monitoring_groups ON monitoring_groups.id = servers.group_id
                 LEFT JOIN metric_names ON metric_names.id = alerts.metric_id
                 WHERE alerts.resolved = TRUE
                   AND alerts.kind <> 'offline'
@@ -177,13 +177,13 @@ final class IncidentRepository
                         completed_outages.resolved_at - completed_outages.created_at
                     ))::bigint AS duration_seconds,
                     servers.name AS server_name,
-                    server_groups.id AS group_id,
-                    server_groups.name AS group_name,
+                    monitoring_groups.id AS group_id,
+                    monitoring_groups.name AS group_name,
                     'agent'::varchar AS subject_name,
                     NULL::varchar AS unit
                 FROM completed_outages
                 INNER JOIN servers ON servers.id = completed_outages.server_id
-                LEFT JOIN server_groups ON server_groups.id = servers.group_id
+                LEFT JOIN monitoring_groups ON monitoring_groups.id = servers.group_id
                 WHERE completed_outages.resolved_at IS NOT NULL
             )
             SELECT *
@@ -212,7 +212,7 @@ final class IncidentRepository
     public function groupOptions(): array
     {
         return $this->pdo->query(
-            'SELECT id, name FROM server_groups ORDER BY sort_order, lower(name), id'
+            'SELECT id, name FROM monitoring_groups ORDER BY sort_order, lower(name), id'
         )?->fetchAll() ?? [];
     }
 
@@ -230,11 +230,11 @@ final class IncidentRepository
                     alerts.created_at,
                     COALESCE(metric_names.name, alerts.subject, alerts.kind) AS subject_name,
                     servers.name AS server_name,
-                    server_groups.id AS group_id,
-                    server_groups.name AS group_name
+                    monitoring_groups.id AS group_id,
+                    monitoring_groups.name AS group_name
                 FROM alerts
                 INNER JOIN servers ON servers.id = alerts.server_id
-                LEFT JOIN server_groups ON server_groups.id = servers.group_id
+                LEFT JOIN monitoring_groups ON monitoring_groups.id = servers.group_id
                 LEFT JOIN metric_names ON metric_names.id = alerts.metric_id
                 WHERE alerts.resolved = FALSE
 
@@ -247,11 +247,11 @@ final class IncidentRepository
                     availability.changed_at AS created_at,
                     'agent'::varchar AS subject_name,
                     servers.name AS server_name,
-                    server_groups.id AS group_id,
-                    server_groups.name AS group_name
+                    monitoring_groups.id AS group_id,
+                    monitoring_groups.name AS group_name
                 FROM server_availability_state AS availability
                 INNER JOIN servers ON servers.id = availability.server_id
-                LEFT JOIN server_groups ON server_groups.id = servers.group_id
+                LEFT JOIN monitoring_groups ON monitoring_groups.id = servers.group_id
                 WHERE availability.state = 'offline'
                   AND servers.is_active = TRUE
                   AND NOT EXISTS (
