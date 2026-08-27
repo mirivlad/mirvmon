@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use DateTimeInterface;
 use InvalidArgumentException;
 use PDO;
+use RuntimeException;
 use Throwable;
 
 final class WebsiteCheckQueueRepository
@@ -25,17 +26,30 @@ final class WebsiteCheckQueueRepository
         $this->assertLimit($limit);
 
         return $this->transaction('website_check_schedule', function () use ($now, $limit): int {
-            $scheduled = $this->scheduleHttp($now, $limit);
-            if ($scheduled === $limit) {
-                return $scheduled;
+            $baseQuota = intdiv($limit, 3);
+            $remainder = $limit % 3;
+            $quotas = [
+                'scheduleTls' => $baseQuota + ($remainder > 0 ? 1 : 0),
+                'scheduleDomain' => $baseQuota + ($remainder > 1 ? 1 : 0),
+                'scheduleHttp' => $baseQuota,
+            ];
+            $scheduled = 0;
+
+            foreach ($quotas as $schedule => $quota) {
+                if ($quota > 0) {
+                    $scheduled += $this->{$schedule}($now, $quota);
+                }
             }
 
-            $scheduled += $this->scheduleTls($now, $limit - $scheduled);
-            if ($scheduled === $limit) {
-                return $scheduled;
+            foreach (['scheduleDomain', 'scheduleTls', 'scheduleHttp'] as $schedule) {
+                if ($scheduled === $limit) {
+                    break;
+                }
+
+                $scheduled += $this->{$schedule}($now, $limit - $scheduled);
             }
 
-            return $scheduled + $this->scheduleDomain($now, $limit - $scheduled);
+            return $scheduled;
         });
     }
 
@@ -46,11 +60,13 @@ final class WebsiteCheckQueueRepository
         }
 
         return $this->transaction('website_check_manual', function () use ($websiteId, $now): int {
+            $this->pdo->exec("SET LOCAL lock_timeout = '2s'");
+
             $website = $this->pdo->prepare(
                 'SELECT id, domain_check_enabled
                  FROM websites
                  WHERE id = :website_id AND is_active = TRUE
-                 FOR UPDATE SKIP LOCKED'
+                 FOR UPDATE'
             );
             $website->execute(['website_id' => $websiteId]);
             $row = $website->fetch();
@@ -63,7 +79,7 @@ final class WebsiteCheckQueueRepository
                 'SELECT id FROM website_endpoints
                  WHERE website_id = :website_id
                  ORDER BY id
-                 FOR UPDATE SKIP LOCKED'
+                 FOR UPDATE'
             );
             $endpoints->execute(['website_id' => $websiteId]);
             foreach ($endpoints->fetchAll() as $endpoint) {
@@ -77,7 +93,7 @@ final class WebsiteCheckQueueRepository
                  WHERE targets.website_id = :website_id
                    AND endpoints.tls_expiry_enabled = TRUE
                  ORDER BY targets.id
-                 FOR UPDATE OF targets, endpoints SKIP LOCKED'
+                 FOR UPDATE OF targets'
             );
             $tlsTargets->execute(['website_id' => $websiteId]);
             foreach ($tlsTargets->fetchAll() as $target) {
@@ -156,9 +172,15 @@ final class WebsiteCheckQueueRepository
     {
         $statement = $this->pdo->prepare(
             "DELETE FROM website_check_jobs
-             WHERE id = :id AND state = 'leased' AND lease_owner = :lease_owner"
+             WHERE id = :id
+               AND state = 'leased'
+               AND lease_owner = :lease_owner
+               AND lease_until > clock_timestamp()"
         );
         $statement->execute(['id' => $jobId, 'lease_owner' => $leaseOwner]);
+        if ($statement->rowCount() !== 1) {
+            throw new RuntimeException('Website check lease is not owned or has expired.');
+        }
     }
 
     public function release(
@@ -182,6 +204,7 @@ final class WebsiteCheckQueueRepository
             WHERE id = :id
               AND state = 'leased'
               AND lease_owner = :lease_owner
+              AND lease_until > clock_timestamp()
             SQL
         );
         $statement->execute([
@@ -190,6 +213,9 @@ final class WebsiteCheckQueueRepository
             'available_at' => $this->timestamp($availableAt),
             'safe_error_kind' => $safeError,
         ]);
+        if ($statement->rowCount() !== 1) {
+            throw new RuntimeException('Website check lease is not owned or has expired.');
+        }
     }
 
     private function scheduleHttp(DateTimeImmutable $now, int $limit): int
@@ -395,7 +421,7 @@ final class WebsiteCheckQueueRepository
                 WHERE existing.website_id = :existing_website_id
                   AND existing.kind = CAST(:existing_kind AS varchar(10))
                   AND existing.manual = TRUE
-                  AND existing.state = 'pending'
+                  AND existing.state IN ('pending', 'leased')
                   AND existing.endpoint_id IS NOT DISTINCT FROM CAST(:existing_endpoint_id AS bigint)
                   AND existing.tls_target_id IS NOT DISTINCT FROM CAST(:existing_tls_target_id AS bigint)
             )
