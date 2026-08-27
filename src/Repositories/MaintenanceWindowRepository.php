@@ -27,6 +27,25 @@ final class MaintenanceWindowRepository
         ?string $reason,
         ?string $createdBy
     ): void {
+        $this->startForSource('server_id', $serverId, $durationSeconds, $reason, $createdBy);
+    }
+
+    public function startWebsite(
+        int $websiteId,
+        int $durationSeconds,
+        ?string $reason,
+        ?string $createdBy
+    ): void {
+        $this->startForSource('website_id', $websiteId, $durationSeconds, $reason, $createdBy);
+    }
+
+    private function startForSource(
+        string $column,
+        int $sourceId,
+        int $durationSeconds,
+        ?string $reason,
+        ?string $createdBy
+    ): void {
         if ($durationSeconds < 60 || $durationSeconds > self::MAX_DURATION_SECONDS) {
             throw new InvalidArgumentException(
                 'Окно обслуживания должно длиться от минуты до недели'
@@ -35,19 +54,19 @@ final class MaintenanceWindowRepository
 
         $statement = $this->pdo->prepare(
             "INSERT INTO maintenance_windows (
-                server_id,
+                {$column},
                 ends_at,
                 reason,
                 created_by
              ) VALUES (
-                :server_id,
+                :source_id,
                 CURRENT_TIMESTAMP + CAST(:duration AS integer) * INTERVAL '1 second',
                 :reason,
                 :created_by
              )"
         );
         $statement->execute([
-            'server_id' => $serverId,
+            'source_id' => $sourceId,
             'duration' => $durationSeconds,
             'reason' => $this->trimmed($reason, 255),
             'created_by' => $this->trimmed($createdBy, 80),
@@ -57,16 +76,27 @@ final class MaintenanceWindowRepository
     /** @return int Windows closed. */
     public function cancel(int $serverId): int
     {
+        return $this->cancelForSource('server_id', $serverId);
+    }
+
+    public function cancelWebsite(int $websiteId): int
+    {
+        return $this->cancelForSource('website_id', $websiteId);
+    }
+
+    /** @return int Windows closed. */
+    private function cancelForSource(string $column, int $sourceId): int
+    {
         $statement = $this->pdo->prepare(
             // GREATEST keeps the period valid when a window is cancelled
             // within the transaction that opened it.
-            'UPDATE maintenance_windows
+            "UPDATE maintenance_windows
              SET ends_at = GREATEST(starts_at, CURRENT_TIMESTAMP)
-             WHERE server_id = :server_id
+             WHERE {$column} = :source_id
                AND starts_at <= CURRENT_TIMESTAMP
-               AND ends_at > CURRENT_TIMESTAMP'
+               AND ends_at > CURRENT_TIMESTAMP"
         );
-        $statement->execute(['server_id' => $serverId]);
+        $statement->execute(['source_id' => $sourceId]);
 
         return $statement->rowCount();
     }
@@ -74,16 +104,28 @@ final class MaintenanceWindowRepository
     /** @return null|array{id: int, ends_at: string, reason: ?string, created_by: ?string} */
     public function active(int $serverId): ?array
     {
+        return $this->activeForSource('server_id', $serverId);
+    }
+
+    /** @return null|array{id: int, ends_at: string, reason: ?string, created_by: ?string} */
+    public function activeWebsite(int $websiteId): ?array
+    {
+        return $this->activeForSource('website_id', $websiteId);
+    }
+
+    /** @return null|array{id: int, ends_at: string, reason: ?string, created_by: ?string} */
+    private function activeForSource(string $column, int $sourceId): ?array
+    {
         $statement = $this->pdo->prepare(
-            'SELECT id, ends_at, reason, created_by
+            "SELECT id, ends_at, reason, created_by
              FROM maintenance_windows
-             WHERE server_id = :server_id
+             WHERE {$column} = :source_id
                AND starts_at <= CURRENT_TIMESTAMP
                AND ends_at > CURRENT_TIMESTAMP
              ORDER BY ends_at DESC
-             LIMIT 1'
+             LIMIT 1"
         );
-        $statement->execute(['server_id' => $serverId]);
+        $statement->execute(['source_id' => $sourceId]);
         $row = $statement->fetch();
         if (!is_array($row)) {
             return null;

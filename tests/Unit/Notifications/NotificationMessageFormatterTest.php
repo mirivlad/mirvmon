@@ -108,4 +108,33 @@ final class NotificationMessageFormatterTest extends TestCase
             ])['body']
         );
     }
+
+    public function testWebsiteAlertUsesOnlySafeContextAndAnIncidentLink(): void
+    {
+        $message = (new NotificationMessageFormatter('https://monitor.example'))->format([
+            'event_type' => 'website_http_triggered',
+            'payload' => [
+                'type' => 'website_http',
+                'event' => 'triggered',
+                'severity' => 'critical',
+                'website_id' => 7,
+                'website_name' => 'Portal',
+                'endpoint_id' => 8,
+                'endpoint_name' => 'Home',
+                'safe_url' => 'https://example.com/?token=should-not-appear',
+                'expected' => '200-299',
+                'actual' => '503',
+                'event_time' => '2026-08-28T00:00:00+00:00',
+                'alert_id' => 12,
+                'headers' => ['Authorization' => 'Bearer do-not-appear'],
+            ],
+        ]);
+
+        self::assertStringContainsString('Portal', $message['subject']);
+        self::assertStringContainsString('Home', $message['body']);
+        self::assertStringContainsString('200-299', $message['body']);
+        self::assertStringContainsString('/sites/7?tab=events#incident-12', $message['body']);
+        self::assertStringNotContainsString('should-not-appear', $message['body']);
+        self::assertStringNotContainsString('Bearer do-not-appear', $message['body']);
+    }
 }
