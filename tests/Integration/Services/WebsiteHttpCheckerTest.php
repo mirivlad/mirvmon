@@ -9,6 +9,7 @@ use App\Domain\Websites\WebsiteEndpointDefinition;
 use App\Services\WebsiteHttpChecker;
 use PHPUnit\Framework\TestCase;
 use Tests\Support\WebsiteHttpFixture;
+use Tests\Support\WebsiteTlsFixture;
 
 final class WebsiteHttpCheckerTest extends TestCase
 {
@@ -190,6 +191,38 @@ final class WebsiteHttpCheckerTest extends TestCase
         self::assertTrue($results[1]->manual);
     }
 
+    public function testSelfSignedModeOnlyRelaxesTheConfiguredHttpsEndpoint(): void
+    {
+        $tls = new WebsiteTlsFixture();
+        $certificate = dirname(__DIR__, 2) . '/Fixtures/Websites/certs/valid-self-signed.pem';
+        $port = $tls->start($certificate);
+
+        try {
+            $url = 'https://localhost:' . $port . '/';
+            $strict = (new WebsiteHttpChecker())->check($this->definition($url), 1, 1);
+            $allowed = (new WebsiteHttpChecker())->check(
+                $this->definition($url, allowSelfSigned: true),
+                1,
+                1,
+            );
+            $many = (new WebsiteHttpChecker())->checkMany([[
+                'definition' => $this->definition($url),
+                'website_id' => 1,
+                'endpoint_id' => 1,
+                'manual' => false,
+            ]], 1);
+
+            self::assertFalse($strict->transportAvailable);
+            self::assertSame('tls', $strict->error?->value);
+            self::assertTrue($allowed->transportAvailable, $allowed->error?->value ?? 'missing error');
+            self::assertSame(200, $allowed->statusCode);
+            self::assertCount(1, $many);
+            self::assertSame('tls', $many[0]->error?->value);
+        } finally {
+            $tls->stop();
+        }
+    }
+
     /** @param list<array{kind:string,selector:?string,needle:string}> $contentChecks
      * @param array<string,string> $headers
      * @param list<string> $credentialRedirectHosts */
@@ -203,6 +236,7 @@ final class WebsiteHttpCheckerTest extends TestCase
         array $headers = [],
         array $credentialRedirectHosts = [],
         int $timeoutSeconds = 2,
+        bool $allowSelfSigned = false,
     ): WebsiteEndpointDefinition
     {
         return new WebsiteEndpointDefinition(
@@ -223,7 +257,7 @@ final class WebsiteHttpCheckerTest extends TestCase
             authSecret: $bearer,
             headers: $headers,
             credentialRedirectHosts: $credentialRedirectHosts,
-            allowSelfSigned: false,
+            allowSelfSigned: $allowSelfSigned,
             tlsExpiryEnabled: false,
         );
     }
