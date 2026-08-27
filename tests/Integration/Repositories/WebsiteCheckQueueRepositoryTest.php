@@ -37,6 +37,7 @@ final class WebsiteCheckQueueRepositoryTest extends TestCase
     protected function setUp(): void
     {
         $this->now = new DateTimeImmutable('2026-08-27T00:00:00Z');
+        self::pdo()->exec('UPDATE website_check_schedule_cursor SET next_kind = 0 WHERE id = 1');
         $this->queue = new WebsiteCheckQueueRepository(self::pdo());
         $this->websiteId = $this->createWebsite();
         $this->firstEndpointId = $this->createEndpoint(
@@ -125,6 +126,46 @@ final class WebsiteCheckQueueRepositoryTest extends TestCase
         );
     }
 
+    public function testScheduleLimitOneRotatesAcrossSustainedDueKinds(): void
+    {
+        $kinds = [];
+        for ($batch = 0; $batch < 6; $batch++) {
+            $queue = new WebsiteCheckQueueRepository($this->connection());
+            self::assertSame(1, $queue->scheduleDue($this->now->modify('+' . $batch . ' seconds'), 1));
+            $jobs = $this->jobs();
+            self::assertCount(1, $jobs);
+            $kinds[] = $jobs[0]['kind'];
+            $this->clearJobsAndResetDueTargets();
+        }
+
+        $counts = array_count_values($kinds);
+        ksort($counts);
+        self::assertSame(
+            ['domain' => 2, 'http' => 2, 'tls' => 2],
+            $counts
+        );
+    }
+
+    public function testScheduleLimitTwoRotatesAcrossSustainedDueKinds(): void
+    {
+        $kinds = [];
+        for ($batch = 0; $batch < 3; $batch++) {
+            $queue = new WebsiteCheckQueueRepository($this->connection());
+            self::assertSame(2, $queue->scheduleDue($this->now->modify('+' . $batch . ' seconds'), 2));
+            $jobs = $this->jobs();
+            self::assertCount(2, $jobs);
+            array_push($kinds, ...array_column($jobs, 'kind'));
+            $this->clearJobsAndResetDueTargets();
+        }
+
+        $counts = array_count_values($kinds);
+        ksort($counts);
+        self::assertSame(
+            ['domain' => 2, 'http' => 2, 'tls' => 2],
+            $counts
+        );
+    }
+
     public function testManualJobsCoalesceAndSortBeforeScheduledJobs(): void
     {
         self::assertSame(4, $this->queue->scheduleDue($this->now));
@@ -171,6 +212,24 @@ final class WebsiteCheckQueueRepositoryTest extends TestCase
         }
     }
 
+    public function testManualEnqueueRestoresCallerOwnedTransactionLockTimeout(): void
+    {
+        self::pdo()->beginTransaction();
+
+        try {
+            self::pdo()->exec("SET LOCAL lock_timeout = '750ms'");
+            self::assertSame('750ms', $this->lockTimeout());
+
+            self::assertSame(4, $this->queue->enqueueManual($this->websiteId, $this->now));
+
+            self::assertSame('750ms', $this->lockTimeout());
+        } finally {
+            if (self::pdo()->inTransaction()) {
+                self::pdo()->rollBack();
+            }
+        }
+    }
+
     public function testTwoClaimersNeverReceiveTheSameJob(): void
     {
         self::assertSame(4, $this->queue->scheduleDue($this->now));
@@ -190,16 +249,12 @@ final class WebsiteCheckQueueRepositoryTest extends TestCase
             $first = $this->queue->claim('worker-a', $this->now, 10);
 
             $this->advisoryLock($coordinator, $lockKey, false);
-            $stdout = stream_get_contents($pipes[1]);
-            $stderr = stream_get_contents($pipes[2]);
-            fclose($pipes[1]);
-            fclose($pipes[2]);
-            $pipes = [];
-            $exitCode = proc_close($process);
+            $result = $this->awaitProcess($process, $pipes, 3.0);
             $process = null;
+            $pipes = [];
 
-            self::assertSame(0, $exitCode, $stderr);
-            $second = json_decode($stdout, true, flags: JSON_THROW_ON_ERROR);
+            self::assertSame(0, $result['exit_code'], $result['stderr']);
+            $second = json_decode($result['stdout'], true, flags: JSON_THROW_ON_ERROR);
             self::assertIsArray($second);
             self::assertCount(4, $first);
             self::assertSame([], array_values(array_intersect(
@@ -212,13 +267,43 @@ final class WebsiteCheckQueueRepositoryTest extends TestCase
                 self::pdo()->rollBack();
             }
             if (is_resource($process)) {
-                proc_terminate($process);
-                foreach ($pipes as $pipe) {
-                    if (is_resource($pipe)) {
-                        fclose($pipe);
-                    }
-                }
-                proc_close($process);
+                $this->terminateProcess($process, $pipes);
+            }
+        }
+    }
+
+    public function testProcessWaitKillsHungChildAtDeadline(): void
+    {
+        $pipes = [];
+        $process = proc_open(
+            [
+                PHP_BINARY,
+                '-r',
+                'pcntl_async_signals(true); pcntl_signal(SIGTERM, static function (): void {});'
+                . ' while (true) { usleep(100000); }',
+            ],
+            [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes,
+            dirname(__DIR__, 3)
+        );
+        self::assertIsResource($process);
+        fclose($pipes[0]);
+        unset($pipes[0]);
+
+        $startedAt = hrtime(true);
+        try {
+            $this->awaitProcess($process, $pipes, 0.1);
+            self::fail('Hung child process completed without hitting the deadline.');
+        } catch (RuntimeException $exception) {
+            self::assertSame('Queue claimer process timed out.', $exception->getMessage());
+            self::assertLessThan(2.0, (hrtime(true) - $startedAt) / 1_000_000_000);
+        } finally {
+            if (is_resource($process)) {
+                $this->terminateProcess($process, $pipes);
             }
         }
     }
@@ -413,6 +498,30 @@ final class WebsiteCheckQueueRepositoryTest extends TestCase
         )->fetchAll();
     }
 
+    private function clearJobsAndResetDueTargets(): void
+    {
+        self::pdo()->prepare('DELETE FROM website_check_jobs WHERE website_id = :website_id')
+            ->execute(['website_id' => $this->websiteId]);
+        self::pdo()->prepare(
+            'UPDATE website_endpoints SET next_http_check_at = :due_at WHERE website_id = :website_id'
+        )->execute([
+            'website_id' => $this->websiteId,
+            'due_at' => $this->now->modify('-1 day')->format(DateTimeInterface::ATOM),
+        ]);
+        self::pdo()->prepare(
+            'UPDATE website_tls_targets SET next_check_at = :due_at WHERE website_id = :website_id'
+        )->execute([
+            'website_id' => $this->websiteId,
+            'due_at' => $this->now->modify('-1 day')->format(DateTimeInterface::ATOM),
+        ]);
+        self::pdo()->prepare(
+            'UPDATE websites SET domain_next_check_at = :due_at WHERE id = :website_id'
+        )->execute([
+            'website_id' => $this->websiteId,
+            'due_at' => $this->now->modify('-1 day')->format(DateTimeInterface::ATOM),
+        ]);
+    }
+
     /** @return array<string, mixed> */
     private function job(int $id): array
     {
@@ -445,6 +554,11 @@ final class WebsiteCheckQueueRepositoryTest extends TestCase
     private function databaseNow(): DateTimeImmutable
     {
         return new DateTimeImmutable((string) self::pdo()->query('SELECT clock_timestamp()')->fetchColumn());
+    }
+
+    private function lockTimeout(): string
+    {
+        return (string) self::pdo()->query("SELECT current_setting('lock_timeout')")->fetchColumn();
     }
 
     private function advisoryLock(PDO $pdo, int $lockKey, bool $acquire): void
@@ -512,6 +626,166 @@ final class WebsiteCheckQueueRepositoryTest extends TestCase
         unset($pipes[0]);
 
         return [$process, $pipes];
+    }
+
+    /**
+     * @param resource $process
+     * @param array<int, resource> $pipes
+     * @return array{stdout:string,stderr:string,exit_code:int}
+     */
+    private function awaitProcess($process, array &$pipes, float $timeoutSeconds): array
+    {
+        foreach ($pipes as $pipe) {
+            stream_set_blocking($pipe, false);
+        }
+
+        $stdout = '';
+        $stderr = '';
+        $deadline = hrtime(true) + (int) ($timeoutSeconds * 1_000_000_000);
+
+        while (true) {
+            $this->pollProcessPipes($pipes, $stdout, $stderr, $deadline);
+            $status = proc_get_status($process);
+            if (!$status['running']) {
+                $this->drainProcessPipes($pipes, $stdout, $stderr);
+                $this->closeProcessPipes($pipes);
+                $closeExitCode = proc_close($process);
+
+                return [
+                    'stdout' => $stdout,
+                    'stderr' => $stderr,
+                    'exit_code' => $status['exitcode'] >= 0 ? $status['exitcode'] : $closeExitCode,
+                ];
+            }
+
+            if (hrtime(true) >= $deadline) {
+                $this->terminateProcess($process, $pipes);
+                throw new RuntimeException('Queue claimer process timed out.');
+            }
+        }
+    }
+
+    /**
+     * @param resource $process
+     * @param array<int, resource> $pipes
+     */
+    private function terminateProcess($process, array &$pipes): void
+    {
+        foreach ($pipes as $pipe) {
+            if (is_resource($pipe)) {
+                stream_set_blocking($pipe, false);
+            }
+        }
+
+        $stdout = '';
+        $stderr = '';
+        $status = proc_get_status($process);
+        if ($status['running']) {
+            proc_terminate($process, 15);
+            if (!$this->waitForProcessExit($process, $pipes, $stdout, $stderr, 0.25)) {
+                proc_terminate($process, 9);
+                $this->waitForProcessExit($process, $pipes, $stdout, $stderr, 0.75);
+            }
+        }
+
+        $this->drainProcessPipes($pipes, $stdout, $stderr);
+        $this->closeProcessPipes($pipes);
+        $status = proc_get_status($process);
+        if (!$status['running']) {
+            proc_close($process);
+        }
+    }
+
+    /**
+     * @param resource $process
+     * @param array<int, resource> $pipes
+     */
+    private function waitForProcessExit(
+        $process,
+        array $pipes,
+        string &$stdout,
+        string &$stderr,
+        float $timeoutSeconds,
+    ): bool {
+        $deadline = hrtime(true) + (int) ($timeoutSeconds * 1_000_000_000);
+        do {
+            $this->pollProcessPipes($pipes, $stdout, $stderr, $deadline);
+            if (!proc_get_status($process)['running']) {
+                return true;
+            }
+        } while (hrtime(true) < $deadline);
+
+        return false;
+    }
+
+    /** @param array<int, resource> $pipes */
+    private function pollProcessPipes(array $pipes, string &$stdout, string &$stderr, int $deadline): void
+    {
+        $read = [];
+        foreach ([1, 2] as $index) {
+            if (isset($pipes[$index]) && is_resource($pipes[$index])) {
+                $read[] = $pipes[$index];
+            }
+        }
+        if ($read === []) {
+            return;
+        }
+
+        $remaining = $deadline - hrtime(true);
+        if ($remaining <= 0) {
+            return;
+        }
+        $wait = min($remaining, 50_000_000);
+        $seconds = intdiv($wait, 1_000_000_000);
+        $microseconds = intdiv($wait % 1_000_000_000, 1_000);
+        $write = [];
+        $except = [];
+        $ready = stream_select($read, $write, $except, $seconds, $microseconds);
+        if ($ready === false || $ready === 0) {
+            return;
+        }
+
+        foreach ($read as $pipe) {
+            $chunk = stream_get_contents($pipe);
+            if ($chunk === false || $chunk === '') {
+                continue;
+            }
+            if (isset($pipes[1]) && $pipe === $pipes[1]) {
+                $stdout .= $chunk;
+            } else {
+                $stderr .= $chunk;
+            }
+        }
+    }
+
+    /** @param array<int, resource> $pipes */
+    private function drainProcessPipes(array $pipes, string &$stdout, string &$stderr): void
+    {
+        foreach ([1 => 'stdout', 2 => 'stderr'] as $index => $target) {
+            if (!isset($pipes[$index]) || !is_resource($pipes[$index])) {
+                continue;
+            }
+            $chunk = stream_get_contents($pipes[$index]);
+            if ($chunk === false) {
+                continue;
+            }
+            if ($target === 'stdout') {
+                $stdout .= $chunk;
+            } else {
+                $stderr .= $chunk;
+            }
+        }
+    }
+
+    /** @param array<int, resource> $pipes */
+    private function closeProcessPipes(array &$pipes): void
+    {
+        foreach ($pipes as $pipe) {
+            if (is_resource($pipe)) {
+                fclose($pipe);
+            }
+        }
+        $pipes = [];
     }
 
     /** @return array<string, string> */

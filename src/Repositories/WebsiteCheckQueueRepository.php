@@ -16,6 +16,7 @@ final class WebsiteCheckQueueRepository
     private const LEASE_SECONDS = 60;
     private const MAX_ATTEMPTS = 10;
     private const MANUAL_PRIORITY = 100;
+    private const SCHEDULE_METHODS = ['scheduleTls', 'scheduleDomain', 'scheduleHttp'];
 
     public function __construct(private readonly PDO $pdo)
     {
@@ -26,28 +27,42 @@ final class WebsiteCheckQueueRepository
         $this->assertLimit($limit);
 
         return $this->transaction('website_check_schedule', function () use ($now, $limit): int {
+            $cursor = $this->pdo->query(
+                'SELECT next_kind FROM website_check_schedule_cursor WHERE id = 1 FOR UPDATE'
+            )->fetchColumn();
+            if ($cursor === false) {
+                throw new RuntimeException('Website check schedule cursor is missing.');
+            }
+            $offset = (int) $cursor;
             $baseQuota = intdiv($limit, 3);
             $remainder = $limit % 3;
-            $quotas = [
-                'scheduleTls' => $baseQuota + ($remainder > 0 ? 1 : 0),
-                'scheduleDomain' => $baseQuota + ($remainder > 1 ? 1 : 0),
-                'scheduleHttp' => $baseQuota,
-            ];
+            $quotas = array_fill(0, 3, $baseQuota);
+            for ($index = 0; $index < $remainder; $index++) {
+                $quotas[($offset + $index) % 3]++;
+            }
             $scheduled = 0;
 
-            foreach ($quotas as $schedule => $quota) {
+            foreach (self::SCHEDULE_METHODS as $index => $schedule) {
+                $quota = $quotas[$index];
                 if ($quota > 0) {
                     $scheduled += $this->{$schedule}($now, $quota);
                 }
             }
 
-            foreach (['scheduleDomain', 'scheduleTls', 'scheduleHttp'] as $schedule) {
+            for ($index = 0; $index < 3 && $scheduled < $limit; $index++) {
+                $schedule = self::SCHEDULE_METHODS[($offset + $remainder + $index) % 3];
                 if ($scheduled === $limit) {
                     break;
                 }
 
                 $scheduled += $this->{$schedule}($now, $limit - $scheduled);
             }
+
+            $nextOffset = ($offset + $remainder) % 3;
+            $cursorUpdate = $this->pdo->prepare(
+                'UPDATE website_check_schedule_cursor SET next_kind = :next_kind WHERE id = 1'
+            );
+            $cursorUpdate->execute(['next_kind' => $nextOffset]);
 
             return $scheduled;
         });
@@ -60,7 +75,10 @@ final class WebsiteCheckQueueRepository
         }
 
         return $this->transaction('website_check_manual', function () use ($websiteId, $now): int {
-            $this->pdo->exec("SET LOCAL lock_timeout = '2s'");
+            $previousLockTimeout = (string) $this->pdo
+                ->query("SELECT current_setting('lock_timeout')")
+                ->fetchColumn();
+            $this->setLocalLockTimeout('2s');
 
             $website = $this->pdo->prepare(
                 'SELECT id, domain_check_enabled
@@ -71,6 +89,8 @@ final class WebsiteCheckQueueRepository
             $website->execute(['website_id' => $websiteId]);
             $row = $website->fetch();
             if (!is_array($row)) {
+                $this->setLocalLockTimeout($previousLockTimeout);
+
                 return 0;
             }
 
@@ -103,6 +123,8 @@ final class WebsiteCheckQueueRepository
             if ($this->databaseBool($row['domain_check_enabled'])) {
                 $count += $this->insertManualDomain($websiteId, $now);
             }
+
+            $this->setLocalLockTimeout($previousLockTimeout);
 
             return $count;
         });
@@ -495,6 +517,12 @@ final class WebsiteCheckQueueRepository
     private function databaseBool(mixed $value): bool
     {
         return $value === true || $value === 1 || $value === '1' || $value === 't';
+    }
+
+    private function setLocalLockTimeout(string $value): void
+    {
+        $statement = $this->pdo->prepare("SELECT set_config('lock_timeout', :value, TRUE)");
+        $statement->execute(['value' => $value]);
     }
 
     /**
