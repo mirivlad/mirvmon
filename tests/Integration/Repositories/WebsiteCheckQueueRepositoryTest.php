@@ -10,7 +10,9 @@ use App\Repositories\WebsiteCheckQueueRepository;
 use DateTimeImmutable;
 use DateTimeInterface;
 use PDO;
+use PDOException;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 final class WebsiteCheckQueueRepositoryTest extends TestCase
 {
@@ -54,6 +56,10 @@ final class WebsiteCheckQueueRepositoryTest extends TestCase
 
     protected function tearDown(): void
     {
+        if (self::pdo()->inTransaction()) {
+            self::pdo()->rollBack();
+        }
+
         if ($this->websiteId > 0) {
             $statement = self::pdo()->prepare('DELETE FROM websites WHERE id = :id');
             $statement->execute(['id' => $this->websiteId]);
@@ -96,13 +102,27 @@ final class WebsiteCheckQueueRepositoryTest extends TestCase
         self::assertSame([], $this->jobs());
     }
 
-    public function testScheduleLimitBoundsAllTargetKindsInOneRun(): void
+    public function testScheduleLimitFairlyIncludesTlsAndDomainDespiteHttpBacklog(): void
     {
+        for ($index = 0; $index < 4; $index++) {
+            $this->createEndpoint(
+                'Backlog ' . $index,
+                'https://example.com/backlog/' . $index,
+                30,
+                false
+            );
+        }
+
         self::assertSame(2, $this->queue->scheduleDue($this->now, 2));
         self::assertCount(2, $this->jobs());
+        self::assertSame(['domain', 'tls'], array_column($this->jobs(), 'kind'));
 
         self::assertSame(2, $this->queue->scheduleDue($this->now->modify('+1 second'), 2));
         self::assertCount(4, $this->jobs());
+        self::assertSame(
+            ['domain' => 1, 'http' => 2, 'tls' => 1],
+            array_count_values(array_column($this->jobs(), 'kind'))
+        );
     }
 
     public function testManualJobsCoalesceAndSortBeforeScheduledJobs(): void
@@ -112,25 +132,95 @@ final class WebsiteCheckQueueRepositoryTest extends TestCase
         self::assertSame(0, $this->queue->enqueueManual($this->websiteId, $this->now));
 
         $claimed = $this->queue->claim('worker-a', $this->now, 1);
+        self::assertSame(
+            0,
+            $this->queue->enqueueManual($this->websiteId, $this->now->modify('+1 second'))
+        );
 
         self::assertCount(1, $claimed);
         self::assertTrue($claimed[0]['manual']);
         self::assertSame(100, $claimed[0]['priority']);
     }
 
+    public function testManualEnqueueTimesOutRatherThanOmittingLockedTarget(): void
+    {
+        $locker = $this->connection();
+        $locker->beginTransaction();
+
+        try {
+            $lock = $locker->prepare(
+                'SELECT id FROM website_endpoints WHERE id = :id FOR UPDATE'
+            );
+            $lock->execute(['id' => $this->firstEndpointId]);
+            self::assertSame($this->firstEndpointId, (int) $lock->fetchColumn());
+
+            $startedAt = microtime(true);
+            try {
+                $this->queue->enqueueManual($this->websiteId, $this->now);
+                self::fail('Manual enqueue silently omitted a locked target.');
+            } catch (PDOException $exception) {
+                self::assertSame('55P03', $exception->getCode());
+                self::assertLessThan(5.0, microtime(true) - $startedAt);
+            }
+
+            self::assertSame([], $this->jobs());
+        } finally {
+            if ($locker->inTransaction()) {
+                $locker->rollBack();
+            }
+        }
+    }
+
     public function testTwoClaimersNeverReceiveTheSameJob(): void
     {
         self::assertSame(4, $this->queue->scheduleDue($this->now));
 
-        $first = $this->queue->claim('worker-a', $this->now, 10);
-        $second = (new WebsiteCheckQueueRepository($this->connection()))
-            ->claim('worker-b', $this->now, 10);
+        $coordinator = $this->connection();
+        $lockKey = random_int(1, PHP_INT_MAX);
+        $process = null;
+        $pipes = [];
 
-        self::assertCount(4, $first);
-        self::assertSame([], array_values(array_intersect(
-            array_column($first, 'id'),
-            array_column($second, 'id')
-        )));
+        try {
+            $this->advisoryLock($coordinator, $lockKey, true);
+            [$process, $pipes] = $this->startClaimProcess($lockKey);
+
+            self::pdo()->beginTransaction();
+            self::pdo()->exec("SET LOCAL statement_timeout = '3s'");
+            self::pdo()->exec("SET LOCAL lock_timeout = '2s'");
+            $first = $this->queue->claim('worker-a', $this->now, 10);
+
+            $this->advisoryLock($coordinator, $lockKey, false);
+            $stdout = stream_get_contents($pipes[1]);
+            $stderr = stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            $pipes = [];
+            $exitCode = proc_close($process);
+            $process = null;
+
+            self::assertSame(0, $exitCode, $stderr);
+            $second = json_decode($stdout, true, flags: JSON_THROW_ON_ERROR);
+            self::assertIsArray($second);
+            self::assertCount(4, $first);
+            self::assertSame([], array_values(array_intersect(
+                array_column($first, 'id'),
+                array_column($second, 'id')
+            )));
+        } finally {
+            $this->advisoryLock($coordinator, $lockKey, false);
+            if (self::pdo()->inTransaction()) {
+                self::pdo()->rollBack();
+            }
+            if (is_resource($process)) {
+                proc_terminate($process);
+                foreach ($pipes as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+                proc_close($process);
+            }
+        }
     }
 
     public function testExpiredLeaseIsReclaimedByAnotherWorker(): void
@@ -151,8 +241,9 @@ final class WebsiteCheckQueueRepositoryTest extends TestCase
     public function testReleaseUsesProvidedRetryTimeAndRetainsOnlySafeErrorCategory(): void
     {
         $this->queue->enqueueManual($this->websiteId, $this->now);
-        $job = $this->queue->claim('worker-a', $this->now, 1)[0];
-        $availableAt = $this->now->modify('+2 seconds');
+        $leaseNow = $this->databaseNow();
+        $job = $this->queue->claim('worker-a', $leaseNow, 1)[0];
+        $availableAt = $leaseNow->modify('+2 seconds');
 
         $this->queue->release((int) $job['id'], 'worker-a', $availableAt, 'timeout');
 
@@ -167,10 +258,57 @@ final class WebsiteCheckQueueRepositoryTest extends TestCase
         self::assertNull($released['lease_until']);
     }
 
+    public function testCompleteRejectsAnExpiredLease(): void
+    {
+        $this->queue->enqueueManual($this->websiteId, $this->now);
+        $job = $this->queue->claim('worker-a', $this->databaseNow(), 1)[0];
+        self::pdo()->prepare(
+            "UPDATE website_check_jobs
+             SET lease_until = clock_timestamp() - INTERVAL '1 second'
+             WHERE id = :id"
+        )->execute(['id' => $job['id']]);
+
+        try {
+            $this->queue->complete((int) $job['id'], 'worker-a');
+            self::fail('Completion accepted an expired lease.');
+        } catch (RuntimeException $exception) {
+            self::assertSame('Website check lease is not owned or has expired.', $exception->getMessage());
+        }
+
+        self::assertNotNull($this->jobOrNull((int) $job['id']));
+    }
+
+    public function testReleaseRejectsAnExpiredLease(): void
+    {
+        $this->queue->enqueueManual($this->websiteId, $this->now);
+        $leaseNow = $this->databaseNow();
+        $job = $this->queue->claim('worker-a', $leaseNow, 1)[0];
+        self::pdo()->prepare(
+            "UPDATE website_check_jobs
+             SET lease_until = clock_timestamp() - INTERVAL '1 second'
+             WHERE id = :id"
+        )->execute(['id' => $job['id']]);
+
+        try {
+            $this->queue->release(
+                (int) $job['id'],
+                'worker-a',
+                $leaseNow->modify('+1 minute'),
+                'timeout'
+            );
+            self::fail('Release accepted an expired lease.');
+        } catch (RuntimeException $exception) {
+            self::assertSame('Website check lease is not owned or has expired.', $exception->getMessage());
+        }
+
+        self::assertSame('leased', $this->job((int) $job['id'])['state']);
+    }
+
     public function testAttemptCapPreventsAnEleventhClaimAndCompleteDeletesOwnedJob(): void
     {
         $this->queue->enqueueManual($this->websiteId, $this->now);
-        $job = $this->queue->claim('worker-a', $this->now, 1)[0];
+        $leaseNow = $this->databaseNow();
+        $job = $this->queue->claim('worker-a', $leaseNow, 1)[0];
 
         self::pdo()->prepare(
             "UPDATE website_check_jobs
@@ -179,15 +317,15 @@ final class WebsiteCheckQueueRepositoryTest extends TestCase
              WHERE id = :id"
         )->execute([
             'id' => $job['id'],
-            'lease_until' => $this->now->modify('+60 seconds')->format(DateTimeInterface::ATOM),
+            'lease_until' => $leaseNow->modify('+60 seconds')->format(DateTimeInterface::ATOM),
         ]);
         $this->queue->release(
             (int) $job['id'],
             'worker-a',
-            $this->now->modify('+1 hour'),
+            $leaseNow->modify('+1 hour'),
             'timeout'
         );
-        $remaining = $this->queue->claim('worker-b', $this->now->modify('+2 hours'), 10);
+        $remaining = $this->queue->claim('worker-b', $leaseNow->modify('+2 hours'), 10);
         self::assertNotContains((int) $job['id'], array_column($remaining, 'id'));
 
         $next = $remaining[0];
@@ -302,6 +440,78 @@ final class WebsiteCheckQueueRepositoryTest extends TestCase
     private function connection(): PDO
     {
         return ConnectionFactory::connect(self::databaseEnvironment());
+    }
+
+    private function databaseNow(): DateTimeImmutable
+    {
+        return new DateTimeImmutable((string) self::pdo()->query('SELECT clock_timestamp()')->fetchColumn());
+    }
+
+    private function advisoryLock(PDO $pdo, int $lockKey, bool $acquire): void
+    {
+        $statement = $pdo->prepare(sprintf(
+            'SELECT pg_advisory_%s(:lock_key)',
+            $acquire ? 'lock' : 'unlock'
+        ));
+        $statement->execute(['lock_key' => $lockKey]);
+    }
+
+    /** @return array{0:resource,1:array<int,resource>} */
+    private function startClaimProcess(int $lockKey): array
+    {
+        $autoload = dirname(__DIR__, 3) . '/vendor/autoload.php';
+        $claimAt = $this->now->format(DateTimeInterface::ATOM);
+        $code = sprintf(
+            <<<'PHP'
+            require %s;
+
+            $pdo = App\Database\ConnectionFactory::connect([
+                'DB_HOST' => (string) getenv('TEST_DB_HOST'),
+                'DB_PORT' => (string) getenv('TEST_DB_PORT'),
+                'DB_NAME' => (string) getenv('TEST_DB_NAME'),
+                'DB_USERNAME' => (string) getenv('TEST_DB_USERNAME'),
+                'DB_PASSWORD' => (string) getenv('TEST_DB_PASSWORD'),
+                'DB_SSLMODE' => (string) getenv('TEST_DB_SSLMODE'),
+            ]);
+            $pdo->exec("SET statement_timeout = '3s'");
+            $pdo->exec("SET lock_timeout = '2s'");
+            $gate = $pdo->prepare('SELECT pg_advisory_lock(:lock_key)');
+            $gate->execute(['lock_key' => %d]);
+            try {
+                $jobs = (new App\Repositories\WebsiteCheckQueueRepository($pdo))->claim(
+                    'worker-b',
+                    new DateTimeImmutable(%s),
+                    10
+                );
+                fwrite(STDOUT, json_encode($jobs, JSON_THROW_ON_ERROR));
+            } finally {
+                $gate = $pdo->prepare('SELECT pg_advisory_unlock(:lock_key)');
+                $gate->execute(['lock_key' => %d]);
+            }
+            PHP,
+            var_export($autoload, true),
+            $lockKey,
+            var_export($claimAt, true),
+            $lockKey
+        );
+        $pipes = [];
+        $process = proc_open(
+            [PHP_BINARY, '-r', $code],
+            [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes,
+            dirname(__DIR__, 3)
+        );
+        if (!is_resource($process)) {
+            throw new RuntimeException('Unable to start overlapping queue claimer.');
+        }
+        fclose($pipes[0]);
+        unset($pipes[0]);
+
+        return [$process, $pipes];
     }
 
     /** @return array<string, string> */
