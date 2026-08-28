@@ -52,14 +52,20 @@ final class RouteSecurityContractTest extends TestCase
             '/admin/notifications/queue/delete',
             '/servers/{id}/maintenance',
             '/servers/{id}/maintenance/cancel',
-            '/sites/{id}',
             '/sites/{id}/delete',
             '/sites/{id}/pause',
             '/sites/{id}/resume',
             '/sites/{id}/check',
+            '/sites/{id}/settings',
+            '/sites/{id}/maintenance',
+            '/sites/{id}/maintenance/cancel',
         ] as $pattern) {
             self::assertSame(['POST'], $routes[$pattern] ?? null, $pattern);
         }
+        self::assertContains('GET', $routes['/sites/{id}'] ?? []);
+        self::assertContains('POST', $routes['/sites/{id}'] ?? []);
+        self::assertSame(['GET'], $routes['/api/sites/{id}/metrics'] ?? null);
+        self::assertSame(['GET'], $routes['/api/sites/{id}/status'] ?? null);
 
         self::assertContains('GET', $routes['/sites'] ?? []);
         self::assertContains('POST', $routes['/sites'] ?? []);
