@@ -33,14 +33,17 @@ final class DocumentationContractTest extends TestCase
 
         self::assertMatchesRegularExpression('/## Интерфейс\n\n.*?(?=\n## |\z)/s', $readme);
 
-        foreach ([
-            'dashboard',
-            'servers',
-            'server-overview',
-            'server-metrics',
-            'websites',
-            'website-settings',
-        ] as $name) {
+        $expected = ['dashboard', 'server-metrics', 'website-metrics'];
+        $actual = array_map(
+            static fn (string $path): string => pathinfo($path, PATHINFO_FILENAME),
+            glob($root . '/docs/screenshots/*.webp') ?: []
+        );
+        sort($actual);
+        $sortedExpected = $expected;
+        sort($sortedExpected);
+        self::assertSame($sortedExpected, $actual);
+
+        foreach ($expected as $name) {
             $relativePath = 'docs/screenshots/' . $name . '.webp';
             $imagePath = $root . '/' . $relativePath;
 
@@ -51,8 +54,7 @@ final class DocumentationContractTest extends TestCase
             self::assertSame(IMAGETYPE_WEBP, $image[2]);
             self::assertGreaterThan(0, $image[0]);
             self::assertGreaterThan(0, $image[1]);
-            self::assertStringContainsString('href="' . $relativePath . '"', $readme);
-            self::assertStringContainsString('src="' . $relativePath . '"', $readme);
+            self::assertStringContainsString('](' . $relativePath . ')', $readme);
         }
     }
 

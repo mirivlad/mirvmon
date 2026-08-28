@@ -83,6 +83,76 @@ final class MetricChartRendererTest extends TestCase
         ]));
     }
 
+    public function testServerOfflineAlertBecomesAnAvailabilityPng(): void
+    {
+        $insert = self::$pdo?->prepare(
+            'INSERT INTO server_availability_events (server_id, state, occurred_at)
+             VALUES (:server_id, :state, :occurred_at)'
+        );
+        $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        $insert?->execute([
+            'server_id' => $this->serverId,
+            'state' => 'online',
+            'occurred_at' => $now->modify('-30 minutes')->format(DATE_ATOM),
+        ]);
+        $insert?->execute([
+            'server_id' => $this->serverId,
+            'state' => 'offline',
+            'occurred_at' => $now->modify('-2 minutes')->format(DATE_ATOM),
+        ]);
+
+        $png = $this->renderer->render([
+            'type' => 'offline',
+            'server_id' => $this->serverId,
+            'server_name' => 'Сервер-01',
+        ]);
+
+        self::assertIsString($png);
+        $size = getimagesizefromstring($png);
+        self::assertNotFalse($size);
+        self::assertSame(IMAGETYPE_PNG, $size[2]);
+    }
+
+    public function testWebsiteAvailabilityAlertBecomesAPng(): void
+    {
+        $websiteId = (int) self::$pdo?->query(
+            "INSERT INTO websites (name) VALUES ('Portal') RETURNING id"
+        )->fetchColumn();
+        $endpointId = (int) self::$pdo?->query(
+            "INSERT INTO website_endpoints (website_id, name, url, is_primary)
+             VALUES ({$websiteId}, 'Home', 'https://example.com/', TRUE) RETURNING id"
+        )->fetchColumn();
+        $insert = self::$pdo?->prepare(
+            'INSERT INTO website_check_samples
+                (sample_time, website_id, endpoint_id, sample_id, transport_available, assertions_passed, configured_url, ttfb_ms, total_ms)
+             VALUES (:sample_time, :website_id, :endpoint_id, gen_random_uuid(), :available, :available, :url, 5, 10)'
+        );
+        $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        foreach ([3 => true, 2 => true, 1 => false] as $minutesAgo => $available) {
+            $insert?->execute([
+                'sample_time' => $now->modify("-{$minutesAgo} minutes")->format(DATE_ATOM),
+                'website_id' => $websiteId,
+                'endpoint_id' => $endpointId,
+                'available' => $available ? 'true' : 'false',
+                'url' => 'https://example.com/',
+            ]);
+        }
+
+        $png = $this->renderer->render([
+            'type' => 'website_http',
+            'website_id' => $websiteId,
+            'website_name' => 'Portal',
+            'endpoint_id' => $endpointId,
+            'endpoint_name' => 'Home',
+            'severity' => 'critical',
+        ]);
+
+        self::assertIsString($png);
+        $size = getimagesizefromstring($png);
+        self::assertNotFalse($size);
+        self::assertSame(IMAGETYPE_PNG, $size[2]);
+    }
+
     public function testEventsWithoutAMetricProduceNoChart(): void
     {
         $this->seed('cpu_load', 10);

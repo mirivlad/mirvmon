@@ -79,10 +79,6 @@ final class NotificationDeliveryService
         if ($this->charts === null) {
             return null;
         }
-        if (!str_starts_with((string) ($job['event_type'] ?? ''), 'metric_')) {
-            return null;
-        }
-
         try {
             return $this->charts->render(
                 is_array($job['payload'] ?? null) ? $job['payload'] : []
