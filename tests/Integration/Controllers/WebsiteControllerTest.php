@@ -87,6 +87,20 @@ final class WebsiteControllerTest extends TestCase
         self::assertSame(2, (int) self::$pdo?->query("SELECT count(*) FROM website_check_jobs WHERE website_id = {$this->websiteId}")->fetchColumn());
     }
 
+    public function testCreateFormRendersTheDefaultEndpoint(): void
+    {
+        $response = $this->controller->create(
+            $this->request('GET', '/sites/create'),
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+        $html = (string) $response->getBody();
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertStringContainsString('name="endpoints[0][name]"', $html);
+        self::assertStringContainsString('data-add-endpoint', $html);
+    }
+
     public function testValidationRendersNonSecretFieldsWithoutSubmittedSecret(): void
     {
         $secret = 'never-render-this-secret';
