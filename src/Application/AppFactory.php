@@ -19,6 +19,7 @@ use App\Controllers\ServerController;
 use App\Controllers\ServerDetailController;
 use App\Controllers\SetupController;
 use App\Controllers\SystemController;
+use App\Controllers\WebsiteController;
 use App\Http\ErrorResponder;
 use App\I18n\Translator;
 use App\Middlewares\AdminMiddleware;
@@ -111,6 +112,16 @@ final class AppFactory
             $group->post('/servers/{id}/thresholds', self::controller($container, ServerDetailController::class, 'saveThresholds'));
             $group->post('/servers/{id}/services', self::controller($container, ServerDetailController::class, 'saveServices'));
             $group->get('/servers/{id}', self::controller($container, ServerDetailController::class, 'show'));
+
+            $group->get('/sites', self::controller($container, WebsiteController::class, 'index'));
+            $group->get('/sites/create', self::controller($container, WebsiteController::class, 'create'))->add($admin);
+            $group->post('/sites', self::controller($container, WebsiteController::class, 'store'))->add($admin);
+            $group->get('/sites/{id}/edit', self::controller($container, WebsiteController::class, 'edit'))->add($admin);
+            $group->post('/sites/{id}', self::controller($container, WebsiteController::class, 'update'))->add($admin);
+            $group->post('/sites/{id}/delete', self::controller($container, WebsiteController::class, 'delete'))->add($admin);
+            $group->post('/sites/{id}/pause', self::controller($container, WebsiteController::class, 'pause'))->add($admin);
+            $group->post('/sites/{id}/resume', self::controller($container, WebsiteController::class, 'resume'))->add($admin);
+            $group->post('/sites/{id}/check', self::controller($container, WebsiteController::class, 'check'))->add($admin);
 
             $group->get('/alerts', self::controller($container, AlertController::class, 'index'));
             $group->post('/alerts/{id}/resolve', self::controller($container, AlertController::class, 'markAsResolved'));

@@ -19,6 +19,7 @@ use App\Controllers\ServerController;
 use App\Controllers\ServerDetailController;
 use App\Controllers\SetupController;
 use App\Controllers\SystemController;
+use App\Controllers\WebsiteController;
 use App\Database\ConnectionFactory;
 use App\Domain\Metrics\MetricsValidator;
 use App\I18n\Translator;
@@ -34,6 +35,8 @@ use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\NotificationSettingsRepository;
 use App\Repositories\ServerRepository;
 use App\Repositories\WorkerHeartbeatRepository;
+use App\Repositories\WebsiteCheckQueueRepository;
+use App\Repositories\WebsiteRepository;
 use App\Security\SecretCipher;
 use App\Services\AgentArtifactCatalog;
 use App\Services\AgentCredentialIssuer;
@@ -49,6 +52,7 @@ use App\Services\ServerStatusService;
 use App\Services\SystemHealthService;
 use App\Services\ThresholdEvaluator;
 use App\Services\WindowsInstallerPackageService;
+use App\Services\WebsiteEndpointValidator;
 use DateTimeZone;
 use PDO;
 use RuntimeException;
@@ -141,6 +145,21 @@ final class Bootstrap
         $container->set(
             ServerRepository::class,
             static fn (Container $container): ServerRepository => new ServerRepository(
+                $container->get(PDO::class)
+            )
+        );
+        $container->set(
+            WebsiteRepository::class,
+            static fn (Container $container): WebsiteRepository => new WebsiteRepository(
+                $container->get(PDO::class),
+                $container->get(SecretCipher::class),
+                $container->get(AppSettingsRepository::class),
+            )
+        );
+        $container->set(WebsiteEndpointValidator::class, static fn (): WebsiteEndpointValidator => new WebsiteEndpointValidator());
+        $container->set(
+            WebsiteCheckQueueRepository::class,
+            static fn (Container $container): WebsiteCheckQueueRepository => new WebsiteCheckQueueRepository(
                 $container->get(PDO::class)
             )
         );
@@ -321,6 +340,16 @@ final class Bootstrap
                 $container->get(AgentUpdateService::class),
                 $container->get(ServerStatusService::class),
                 $container->get(Translator::class)
+            )
+        );
+        $container->set(
+            WebsiteController::class,
+            static fn (Container $container): WebsiteController => new WebsiteController(
+                $container->get(Twig::class),
+                $container->get(WebsiteRepository::class),
+                $container->get(WebsiteEndpointValidator::class),
+                $container->get(WebsiteCheckQueueRepository::class),
+                $container->get(Translator::class),
             )
         );
         $container->set(

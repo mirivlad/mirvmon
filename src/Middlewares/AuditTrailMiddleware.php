@@ -99,6 +99,11 @@ final class AuditTrailMiddleware implements MiddlewareInterface
             '#^/admin/users/([1-9][0-9]*)/delete$#' => 'user_delete',
             '#^/admin/notifications/queue/([1-9][0-9]*)/retry$#' => 'queue_job_retry',
             '#^/admin/notifications/queue/([1-9][0-9]*)/delete$#' => 'queue_job_delete',
+            '#^/sites/([1-9][0-9]*)/delete$#' => 'website_delete',
+            '#^/sites/([1-9][0-9]*)/pause$#' => 'website_pause',
+            '#^/sites/([1-9][0-9]*)/resume$#' => 'website_resume',
+            '#^/sites/([1-9][0-9]*)/check$#' => 'website_check',
+            '#^/sites/([1-9][0-9]*)$#' => 'website_update',
         ] as $pattern => $kind) {
             if (preg_match($pattern, $path, $matches) === 1) {
                 return ['kind' => $kind, 'id' => (int) $matches[1]];
@@ -112,6 +117,7 @@ final class AuditTrailMiddleware implements MiddlewareInterface
             '/admin/notifications/save' => ['kind' => 'notifications_save', 'id' => null],
             '/admin/notifications/queue/retry' => ['kind' => 'queue_retry', 'id' => null],
             '/admin/notifications/queue/delete' => ['kind' => 'queue_delete', 'id' => null],
+            '/sites' => ['kind' => 'website_create', 'id' => null],
             default => null,
         };
     }
@@ -138,6 +144,9 @@ final class AuditTrailMiddleware implements MiddlewareInterface
             'queue_retry' => $this->queueRetryState(),
             'queue_job_retry', 'queue_job_delete' => $id === null ? null : $this->queueJobState($id),
             'queue_delete' => $this->queueDeleteState($body),
+            'website_create' => $this->websiteByName($body['name'] ?? null),
+            'website_update', 'website_delete', 'website_pause', 'website_resume', 'website_check'
+                => $id === null ? null : $this->websiteState($id),
             default => null,
         };
     }
@@ -155,6 +164,67 @@ final class AuditTrailMiddleware implements MiddlewareInterface
         $id = $operation['id'];
 
         switch ($operation['kind']) {
+            case 'website_create':
+                if (!is_array($after) || $after === $before) {
+                    return null;
+                }
+                return $this->eventData(
+                    'website.create', 'website', (int) $after['id'], (string) $after['name'],
+                    'audit.event.website.created', ['name' => (string) $after['name']],
+                    ['endpoints' => $after['endpoint_count']]
+                );
+
+            case 'website_update':
+                if (!is_array($before) || !is_array($after) || $before === $after) {
+                    return null;
+                }
+                return $this->eventData(
+                    'website.update', 'website', $id, (string) $after['name'],
+                    'audit.event.website.updated', ['name' => (string) $after['name']],
+                    ['changed_fields' => $this->changedFields($before, $after, [
+                        'auth_fingerprints' => 'auth_secret',
+                        'header_fingerprints' => 'custom_headers',
+                        'self_signed' => 'self_signed',
+                    ])]
+                );
+
+            case 'website_delete':
+                if (!is_array($before) || $after !== null) {
+                    return null;
+                }
+                return $this->eventData(
+                    'website.delete', 'website', $id, (string) $before['name'],
+                    'audit.event.website.deleted', ['name' => (string) $before['name']]
+                );
+
+            case 'website_pause':
+                if (!is_array($before) || !is_array($after) || $before['is_active'] === $after['is_active']) {
+                    return null;
+                }
+                return $this->eventData(
+                    'website.pause', 'website', $id, (string) $after['name'],
+                    'audit.event.website.paused', ['name' => (string) $after['name']]
+                );
+
+            case 'website_resume':
+                if (!is_array($before) || !is_array($after) || $before['is_active'] === $after['is_active']) {
+                    return null;
+                }
+                return $this->eventData(
+                    'website.resume', 'website', $id, (string) $after['name'],
+                    'audit.event.website.resumed', ['name' => (string) $after['name']]
+                );
+
+            case 'website_check':
+                if (!is_array($after) || (int) ($after['queued'] ?? 0) <= (int) ($before['queued'] ?? 0)) {
+                    return null;
+                }
+                return $this->eventData(
+                    'website.check.request', 'website', $id, (string) $after['name'],
+                    'audit.event.website.check_requested', ['name' => (string) $after['name']],
+                    ['endpoint_count' => $after['endpoint_count']]
+                );
+
             case 'server_create':
                 if (!is_array($after) || $after === $before) {
                     return null;
@@ -592,6 +662,104 @@ final class AuditTrailMiddleware implements MiddlewareInterface
         $statement->execute(['name' => $name]);
         $id = $statement->fetchColumn();
         return $id === false ? null : $this->groupState((int) $id);
+    }
+
+    /** @return array<string, mixed>|null */
+    private function websiteByName(mixed $name): ?array
+    {
+        $name = is_string($name) ? trim($name) : '';
+        if ($name === '') {
+            return null;
+        }
+        $statement = $this->pdo->prepare(
+            'SELECT id FROM websites WHERE name = :name ORDER BY id DESC LIMIT 1'
+        );
+        $statement->execute(['name' => $name]);
+        $id = $statement->fetchColumn();
+        return $id === false ? null : $this->websiteState((int) $id);
+    }
+
+    /** @return array<string, mixed>|null */
+    private function websiteState(int $websiteId): ?array
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT id, name, description, group_id, registration_domain,
+                    domain_check_enabled, default_interval_seconds,
+                    tls_warning_days, tls_critical_days,
+                    domain_warning_days, domain_critical_days,
+                    notification_telegram_chat_id, notification_emails, is_active
+             FROM websites WHERE id = :id'
+        );
+        $statement->execute(['id' => $websiteId]);
+        $website = $statement->fetch();
+        if (!is_array($website)) {
+            return null;
+        }
+        $endpoints = $this->pdo->prepare(
+            'SELECT id, url, auth_encrypted, headers_encrypted, allow_self_signed
+             FROM website_endpoints WHERE website_id = :website_id ORDER BY id'
+        );
+        $endpoints->execute(['website_id' => $websiteId]);
+        $endpointList = [];
+        $authFingerprints = [];
+        $headerFingerprints = [];
+        $selfSigned = [];
+        foreach ($endpoints->fetchAll() as $endpoint) {
+            $endpointList[] = [
+                'id' => (int) $endpoint['id'],
+                'url' => $this->safeUrl((string) $endpoint['url']),
+            ];
+            $authFingerprints[] = $endpoint['auth_encrypted'] === null
+                ? null : hash('sha256', (string) $endpoint['auth_encrypted']);
+            $headerFingerprints[] = $endpoint['headers_encrypted'] === null
+                ? null : hash('sha256', (string) $endpoint['headers_encrypted']);
+            $selfSigned[] = $this->databaseBool($endpoint['allow_self_signed']);
+        }
+        return [
+            'id' => (int) $website['id'],
+            'name' => (string) $website['name'],
+            'description' => $website['description'] ?? null,
+            'group_id' => $website['group_id'] === null ? null : (int) $website['group_id'],
+            'registration_domain' => $website['registration_domain'] ?? null,
+            'domain_check_enabled' => $this->databaseBool($website['domain_check_enabled']),
+            'default_interval_seconds' => (int) $website['default_interval_seconds'],
+            'tls_warning_days' => (int) $website['tls_warning_days'],
+            'tls_critical_days' => (int) $website['tls_critical_days'],
+            'domain_warning_days' => (int) $website['domain_warning_days'],
+            'domain_critical_days' => (int) $website['domain_critical_days'],
+            'notification_telegram_chat_id' => $website['notification_telegram_chat_id'] ?? null,
+            'notification_emails' => $this->stringList($website['notification_emails'] ?? []),
+            'is_active' => $this->databaseBool($website['is_active']),
+            'endpoint_count' => count($endpointList),
+            'endpoints' => $endpointList,
+            'auth_fingerprints' => $authFingerprints,
+            'header_fingerprints' => $headerFingerprints,
+            'self_signed' => $selfSigned,
+            'queued' => $this->websiteQueueCount($websiteId),
+        ];
+    }
+
+    private function websiteQueueCount(int $websiteId): int
+    {
+        $statement = $this->pdo->prepare('SELECT count(*) FROM website_check_jobs WHERE website_id = :id');
+        $statement->execute(['id' => $websiteId]);
+        return (int) $statement->fetchColumn();
+    }
+
+    private function safeUrl(string $url): string
+    {
+        $parts = parse_url($url);
+        if ($parts === false || !isset($parts['scheme'], $parts['host'])) {
+            return '[invalid-url]';
+        }
+        return strtolower((string) $parts['scheme']) . '://' . $parts['host']
+            . (isset($parts['port']) ? ':' . $parts['port'] : '')
+            . ($parts['path'] ?? '/') . (isset($parts['query']) ? '?' . $parts['query'] : '');
+    }
+
+    private function databaseBool(mixed $value): bool
+    {
+        return $value === true || $value === 1 || $value === '1' || $value === 't';
     }
 
     /**
