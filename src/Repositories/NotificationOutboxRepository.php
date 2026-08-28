@@ -961,7 +961,7 @@ final class NotificationOutboxRepository
         $allowed = [
             'type', 'event', 'severity', 'kind', 'website_id', 'website_name',
             'endpoint_id', 'endpoint_name', 'safe_url', 'expected', 'actual',
-            'event_time', 'effective_at', 'alert_id', 'reason',
+            'event_time', 'effective_at', 'alert_id', 'reason', 'hostname', 'domain',
         ];
         foreach ($payload as $key => $value) {
             if (!is_string($key) || !in_array($key, $allowed, true)) {
