@@ -47,22 +47,183 @@ final class MetricChartRenderer
             ['options' => ['min_range' => 1]]
         );
         $metric = trim((string) ($payload['metric'] ?? ''));
-        if ($serverId === false || $metric === '') {
+        if ($serverId !== false && $metric !== '') {
+            $series = $this->series($serverId, $metric, $windowSeconds);
+            if (count($series) < 2) {
+                return null;
+            }
+
+            return $this->draw(
+                $series,
+                $metric,
+                $this->unit($metric),
+                (string) ($payload['server_name'] ?? ''),
+                $this->threshold($payload)
+            );
+        }
+
+        if ($serverId !== false && ($payload['type'] ?? null) === 'offline') {
+            $series = $this->availabilitySeries($serverId, $windowSeconds);
+            if (count($series) < 2) {
+                return null;
+            }
+
+            return $this->draw(
+                $series,
+                'Доступность',
+                '%',
+                (string) ($payload['server_name'] ?? ''),
+                null,
+                true
+            );
+        }
+
+        $websiteId = filter_var(
+            $payload['website_id'] ?? null,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1]]
+        );
+        $endpointId = filter_var(
+            $payload['endpoint_id'] ?? null,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1]]
+        );
+        $kind = trim((string) ($payload['type'] ?? $payload['kind'] ?? ''));
+        if ($websiteId === false || $endpointId === false) {
             return null;
         }
 
-        $series = $this->series($serverId, $metric, $windowSeconds);
+        $websiteMetric = match ($kind) {
+            'website_http' => 'transport_available',
+            'website_assertion' => 'assertions_passed',
+            'website_performance' => 'total_ms',
+            default => null,
+        };
+        if ($websiteMetric === null) {
+            return null;
+        }
+
+        $series = $this->websiteSeries($websiteId, $endpointId, $websiteMetric, $windowSeconds);
         if (count($series) < 2) {
             return null;
         }
 
+        $label = match ($websiteMetric) {
+            'transport_available' => 'Доступность',
+            'assertions_passed' => 'Проверки содержимого',
+            default => 'Время ответа',
+        };
+        $source = trim((string) ($payload['website_name'] ?? ''));
+        $endpoint = trim((string) ($payload['endpoint_name'] ?? ''));
+        if ($endpoint !== '') {
+            $source = $source === '' ? $endpoint : $source . ' / ' . $endpoint;
+        }
+
         return $this->draw(
             $series,
-            $metric,
-            $this->unit($metric),
-            (string) ($payload['server_name'] ?? ''),
-            $this->threshold($payload)
+            $label,
+            $websiteMetric === 'total_ms' ? 'ms' : '%',
+            $source,
+            $websiteMetric === 'total_ms'
+                ? $this->websiteThreshold($endpointId, (string) ($payload['severity'] ?? 'critical'))
+                : null,
+            $websiteMetric !== 'total_ms'
         );
+    }
+
+    /**
+     * @return list<array{0: int, 1: float}> Unix time and value.
+     */
+    private function availabilitySeries(int $serverId, int $windowSeconds): array
+    {
+        $start = time() - $windowSeconds;
+        $before = $this->pdo->prepare(
+            'SELECT state, CAST(EXTRACT(EPOCH FROM occurred_at) AS bigint) AS at
+             FROM server_availability_events
+             WHERE server_id = :server_id AND occurred_at <= to_timestamp(:start)
+             ORDER BY occurred_at DESC, id DESC LIMIT 1'
+        );
+        $before->execute(['server_id' => $serverId, 'start' => $start]);
+        $initial = $before->fetch();
+
+        $events = $this->pdo->prepare(
+            'SELECT state, CAST(EXTRACT(EPOCH FROM occurred_at) AS bigint) AS at
+             FROM server_availability_events
+             WHERE server_id = :server_id AND occurred_at > to_timestamp(:start)
+             ORDER BY occurred_at, id'
+        );
+        $events->execute(['server_id' => $serverId, 'start' => $start]);
+        $rows = $events->fetchAll();
+
+        if (!is_array($initial) && $rows === []) {
+            return [];
+        }
+
+        if (is_array($initial)) {
+            $state = (string) $initial['state'];
+            $points = [[$start, $state === 'online' ? 100.0 : 0.0]];
+        } else {
+            $first = array_shift($rows);
+            if (!is_array($first)) {
+                return [];
+            }
+            $state = (string) $first['state'];
+            $points = [[(int) $first['at'], $state === 'online' ? 100.0 : 0.0]];
+        }
+
+        foreach ($rows as $row) {
+            $state = (string) $row['state'];
+            $points[] = [(int) $row['at'], $state === 'online' ? 100.0 : 0.0];
+        }
+        $points[] = [time(), $state === 'online' ? 100.0 : 0.0];
+
+        return $this->downsample($points);
+    }
+
+    /**
+     * @return list<array{0: int, 1: float}> Unix time and value.
+     */
+    private function websiteSeries(int $websiteId, int $endpointId, string $metric, int $windowSeconds): array
+    {
+        $column = match ($metric) {
+            'transport_available' => 'transport_available::integer * 100',
+            'assertions_passed' => 'assertions_passed::integer * 100',
+            'total_ms' => 'total_ms',
+            default => throw new \InvalidArgumentException('Unsupported website chart metric.'),
+        };
+        $statement = $this->pdo->prepare(
+            "SELECT CAST(EXTRACT(EPOCH FROM sample_time) AS bigint) AS at, {$column} AS value
+             FROM website_check_samples
+             WHERE website_id = :website_id
+               AND endpoint_id = :endpoint_id
+               AND sample_time > CURRENT_TIMESTAMP - CAST(:window AS integer) * INTERVAL '1 second'
+               AND {$column} IS NOT NULL
+             ORDER BY sample_time"
+        );
+        $statement->execute([
+            'website_id' => $websiteId,
+            'endpoint_id' => $endpointId,
+            'window' => $windowSeconds,
+        ]);
+
+        $points = [];
+        foreach ($statement->fetchAll() as $row) {
+            $points[] = [(int) $row['at'], (float) $row['value']];
+        }
+
+        return $this->downsample($points);
+    }
+
+    private function websiteThreshold(int $endpointId, string $severity): ?float
+    {
+        $column = $severity === 'warning' ? 'warning_total_ms' : 'critical_total_ms';
+        $statement = $this->pdo->prepare(
+            "SELECT {$column} FROM website_endpoints WHERE id = :endpoint_id"
+        );
+        $statement->execute(['endpoint_id' => $endpointId]);
+        $value = $statement->fetchColumn();
+
+        return is_numeric($value) ? (float) $value : null;
     }
 
     /**
@@ -167,7 +328,8 @@ final class MetricChartRenderer
         string $metric,
         ?string $unit,
         string $serverName,
-        ?float $threshold
+        ?float $threshold,
+        bool $stepped = false
     ): ?string {
         $image = imagecreatetruecolor(self::WIDTH, self::HEIGHT);
         if ($image === false) {
@@ -244,14 +406,14 @@ final class MetricChartRenderer
         for ($index = 1, $total = count($series); $index < $total; $index++) {
             [$previousAt, $previousValue] = $series[$index - 1];
             [$currentAt, $currentValue] = $series[$index];
-            imageline(
-                $image,
-                (int) round($plotLeft + ($previousAt - $firstAt) / $duration * $plotWidth),
-                $y($previousValue),
-                (int) round($plotLeft + ($currentAt - $firstAt) / $duration * $plotWidth),
-                $y($currentValue),
-                $line
-            );
+            $previousX = (int) round($plotLeft + ($previousAt - $firstAt) / $duration * $plotWidth);
+            $currentX = (int) round($plotLeft + ($currentAt - $firstAt) / $duration * $plotWidth);
+            if ($stepped) {
+                imageline($image, $previousX, $y($previousValue), $currentX, $y($previousValue), $line);
+                imageline($image, $currentX, $y($previousValue), $currentX, $y($currentValue), $line);
+            } else {
+                imageline($image, $previousX, $y($previousValue), $currentX, $y($currentValue), $line);
+            }
         }
         imagesetthickness($image, 1);
 

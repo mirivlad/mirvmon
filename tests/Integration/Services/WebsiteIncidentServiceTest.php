@@ -100,6 +100,29 @@ final class WebsiteIncidentServiceTest extends TestCase
         )->fetchColumn());
     }
 
+    public function testWebsiteNotificationPayloadIncludesWebsiteName(): void
+    {
+        self::$pdo?->exec(
+            "UPDATE notification_settings
+             SET telegram_enabled = TRUE, telegram_chat_id = '-100', notify_on_critical = TRUE
+             WHERE id = 1"
+        );
+
+        $this->service->recordHttp($this->makeResult(false, '00:00:00'));
+        $this->service->recordHttp($this->makeResult(false, '00:01:00'));
+        $this->service->recordHttp($this->makeResult(false, '00:02:00'));
+
+        $payload = self::$pdo?->query(
+            "SELECT payload::text FROM notification_outbox
+             WHERE website_id = {$this->websiteId} AND event_type = 'website_http_triggered'
+             ORDER BY id DESC LIMIT 1"
+        )->fetchColumn();
+        self::assertIsString($payload);
+        $decoded = json_decode($payload, true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame('Portal', $decoded['website_name'] ?? null);
+        self::assertSame('Home', $decoded['endpoint_name'] ?? null);
+    }
+
     public function testPauseClosesActiveWebsiteIncidentWithoutRecoveryNotification(): void
     {
         $this->service->recordHttp($this->makeResult(false, '00:00:00'));
