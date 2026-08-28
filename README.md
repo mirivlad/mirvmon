@@ -65,15 +65,24 @@ headers или response body. Проверить его состояние мо�
 показывает отдельные сводки servers/sites и объединённый список attention.
 Адаптивный интерфейс поддерживает desktop и viewport 390 px.
 
+В `v0.5.0` добавлен полный централизованный мониторинг сайтов: HTTP-проверки,
+TLS и срок регистрации домена, история метрик, инциденты и уведомления, а также
+сводки на dashboard, в группах и в списке инцидентов. Подробности изменений и
+upgrade notes: [v0.5.0](docs/releases/v0.5.0.md).
+
 ## Интерфейс
 
 <p align="center">
   <a href="docs/screenshots/dashboard.webp"><img src="docs/screenshots/dashboard.webp" alt="Дашборд MirvMon с состоянием серверов" width="49%"></a>
-  <a href="docs/screenshots/server-detail.webp"><img src="docs/screenshots/server-detail.webp" alt="Карточка сервера с графиками метрик" width="49%"></a>
+  <a href="docs/screenshots/servers.webp"><img src="docs/screenshots/servers.webp" alt="Список серверов с фильтрами, статусами и версиями агентов" width="49%"></a>
 </p>
 <p align="center">
-  <a href="docs/screenshots/groups.webp"><img src="docs/screenshots/groups.webp" alt="Управление группами серверов" width="49%"></a>
-  <a href="docs/screenshots/notification-settings.webp"><img src="docs/screenshots/notification-settings.webp" alt="Настройки SMTP, Telegram и proxy" width="49%"></a>
+  <a href="docs/screenshots/server-overview.webp"><img src="docs/screenshots/server-overview.webp" alt="Состояние отдельного сервера" width="49%"></a>
+  <a href="docs/screenshots/server-metrics.webp"><img src="docs/screenshots/server-metrics.webp" alt="Метрики отдельного сервера с графиками" width="49%"></a>
+</p>
+<p align="center">
+  <a href="docs/screenshots/websites.webp"><img src="docs/screenshots/websites.webp" alt="Список сайтов централизованного мониторинга" width="49%"></a>
+  <a href="docs/screenshots/website-settings.webp"><img src="docs/screenshots/website-settings.webp" alt="Настройки отдельного сайта и его endpoint" width="49%"></a>
 </p>
 
 ## Запуск через Portainer
