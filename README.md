@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-MirvMon — self-hosted система мониторинга серверов. Агенты сами отправляют
+MirvMon — self-hosted система мониторинга серверов и сайтов. Агенты сами отправляют
 метрики исходящими HTTPS-запросами, поэтому для наблюдаемых серверов не нужны
 входящие порты и белые IP-адреса.
 
@@ -37,6 +37,33 @@ Production stack состоит ровно из двух контейнеров:
 История метрик хранится в TimescaleDB hypertable и continuous aggregates.
 Dashboard читает отдельный компактный `current_metric_values`, поэтому его
 время ответа не растёт вместе с 60-дневной raw-историей.
+
+## Мониторинг сайтов
+
+Сайты проверяет централизованный `website-check-worker` внутри `app`; отдельного
+Compose-сервиса и проб на native agent нет. Администратор задаёт endpoint,
+ожидаемый HTTP status, page-text assertions, deadline, TTFB/total thresholds,
+redirect origins, auth/headers и TLS. Внутренние targets разрешены только как
+осознанная модель trusted-admin deployment: SSRF-защита блокирует loopback,
+private/link-local и metadata адреса, а redirect проверяется на каждом переходе.
+
+Результаты хранятся в `website_state`, endpoint state и TimescaleDB samples.
+Текущие страницы используют state read model, а история за 30 days и 365 days
+читается через raw/hourly/daily retention path. Инциденты, maintenance и
+доставка уведомлений разделены: maintenance продолжает создавать события, но
+подавляет delivery; pause выключает проверки сайта. Self-signed сертификат
+разрешается только явной настройкой endpoint и всё равно отображается как
+отдельное предупреждение. Domain expiry targets получают данные через RDAP,
+затем WHOIS fallback; отсутствие authoritative ответа не считается здоровым.
+
+Worker отмечает heartbeat, claim-ит очередь с lease, выполняет HTTP/TLS/domain
+checks вне длинной DB-транзакции и записывает безопасную диагностику без auth,
+headers или response body. Проверить его состояние можно в `/admin/system` и
+одноразовым `bin/website-check-worker --once`.
+
+Основные UI routes: `/sites`, `/sites/{id}`, `/alerts`, `/groups`; dashboard
+показывает отдельные сводки servers/sites и объединённый список attention.
+Адаптивный интерфейс поддерживает desktop и viewport 390 px.
 
 ## Интерфейс
 

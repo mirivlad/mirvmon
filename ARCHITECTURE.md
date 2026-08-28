@@ -209,6 +209,15 @@ worker, что production-события.
 - ingestion и notification delivery разделены;
 - один `app` контейнер содержит web runtime и управляемые supervisor workers.
 
+Website monitoring использует тот же границу: один `app` запускает
+централизованный `website-check-worker`, а production Compose по-прежнему имеет
+ровно `app` и `db`. Native agent не выполняет website probes. Текущая сводка
+читает `website_state` и `website_endpoint_state`; raw `website_check_samples`
+используется только для исторических графиков, с hourly/daily aggregates и
+retention ориентиром 30 days / 365 days. Internal targets разрешены лишь в
+trusted-admin модели и проходят SSRF/redirect проверки. RDAP — основной источник
+domain expiry, WHOIS — fallback; self-signed TLS является явным предупреждением.
+
 Bootstrap, Font Awesome, Chart.js, Hammer.js и chart zoom plugin фиксируются
 через npm lockfile, но готовые bundles входят в image и обслуживаются самим
 приложением. Production-контейнер не содержит Node.js и не зависит от CDN.

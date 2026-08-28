@@ -502,11 +502,20 @@ final class WebsiteRepository
         return array_values($groups);
     }
 
-    /** @return array<string, int> */
-    public function dashboardSummary(): array
+    /**
+     * @param array{search?: string} $filters
+     * @return array<string, int>
+     */
+    public function dashboardSummary(array $filters = []): array
     {
-        $row = $this->pdo->query(
-            <<<'SQL'
+        $where = '';
+        $parameters = [];
+        if (isset($filters['search']) && trim($filters['search']) !== '') {
+            $where = 'WHERE websites.name ILIKE :search';
+            $parameters['search'] = '%' . $this->escapeLike(trim($filters['search'])) . '%';
+        }
+        $statement = $this->pdo->prepare(
+            <<<SQL
             SELECT
                 count(*) AS total,
                 count(*) FILTER (WHERE COALESCE(state.status, 'no_data') = 'healthy') AS healthy,
@@ -520,8 +529,11 @@ final class WebsiteRepository
                 count(*) FILTER (WHERE COALESCE(state.status, 'no_data') = 'paused') AS paused
             FROM websites
             LEFT JOIN website_state AS state ON state.website_id = websites.id
+            {$where}
             SQL
-        )?->fetch();
+        );
+        $statement->execute($parameters);
+        $row = $statement->fetch();
         if (!is_array($row)) {
             return ['total' => 0, 'healthy' => 0, 'warning' => 0, 'critical' => 0, 'no_data' => 0, 'paused' => 0];
         }

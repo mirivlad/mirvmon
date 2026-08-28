@@ -97,4 +97,27 @@ final class DocumentationContractTest extends TestCase
             $dockerReadme
         );
     }
+
+    public function testWebsiteMonitoringOperationalDocsArePresent(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $docs = implode("\n", array_map(
+            static fn (string $file): string => (string) file_get_contents($root . '/' . $file),
+            ['README.md', 'ARCHITECTURE.md', 'TECHNICAL_SPECIFICATION.md', 'INSTALL.md', 'docker/README.md', 'docs/use-cases.md', 'docs/troubleshooting.md']
+        ));
+
+        foreach (['website-check-worker', '30 days', '365 days', 'self-signed', 'RDAP', 'WHOIS', '390'] as $needle) {
+            self::assertStringContainsString($needle, $docs);
+        }
+        self::assertTrue(is_executable($root . '/bin/benchmark-websites'));
+    }
+
+    public function testWebsiteWorkerIntervalIsConfiguredOnlyInBothEnvironmentExamples(): void
+    {
+        $root = dirname(__DIR__, 2);
+        foreach (['.env.example', 'docker/.env.example'] as $file) {
+            $contents = (string) file_get_contents($root . '/' . $file);
+            self::assertStringContainsString('WEBSITE_CHECK_LOOP_INTERVAL', $contents);
+        }
+    }
 }
