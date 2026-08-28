@@ -389,6 +389,13 @@ final class WebsiteRepository
             ] as $boolean) {
                 $row[$boolean] = $this->databaseBool($row[$boolean]);
             }
+            $row['expected_statuses'] = $this->expectedStatusExpression(
+                $row['expected_status_ranges'] ?? null
+            );
+            $row['credential_redirect_hosts'] = $this->jsonStringList(
+                $row['credential_redirect_hosts'] ?? null
+            );
+            unset($row['expected_status_ranges']);
             $row['content_checks'] = [];
             $endpoints[$row['id']] = $row;
         }
@@ -461,13 +468,37 @@ final class WebsiteRepository
                 COALESCE(state.active_problem_count, 0) AS active_problem_count,
                 state.possible_problem_text,
                 primary_endpoint.id AS primary_endpoint_id,
-                primary_endpoint.url AS primary_url
+                primary_endpoint.url AS primary_url,
+                primary_state.last_total_ms,
+                primary_state.last_sample_at,
+                metrics_24h.availability_24h,
+                tls_deadline.not_after AS tls_not_after,
+                domain_state.expires_at AS domain_expires_at
             FROM websites
             LEFT JOIN monitoring_groups AS groups ON groups.id = websites.group_id
             LEFT JOIN website_state AS state ON state.website_id = websites.id
             LEFT JOIN website_endpoints AS primary_endpoint
               ON primary_endpoint.website_id = websites.id
              AND primary_endpoint.is_primary = TRUE
+            LEFT JOIN website_endpoint_state AS primary_state
+              ON primary_state.endpoint_id = primary_endpoint.id
+            LEFT JOIN website_domain_state AS domain_state
+              ON domain_state.website_id = websites.id
+            LEFT JOIN LATERAL (
+                SELECT avg(samples.transport_available::integer)::double precision AS availability_24h
+                FROM website_check_samples AS samples
+                WHERE samples.website_id = websites.id
+                  AND samples.endpoint_id = primary_endpoint.id
+                  AND samples.sample_time >= CURRENT_TIMESTAMP - INTERVAL '24 hours'
+            ) AS metrics_24h ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT min(tls_state.not_after) AS not_after
+                FROM website_tls_targets AS tls_target
+                INNER JOIN website_tls_state AS tls_state
+                  ON tls_state.tls_target_id = tls_target.id
+                WHERE tls_target.website_id = websites.id
+                  AND tls_state.not_after IS NOT NULL
+            ) AS tls_deadline ON TRUE
             {$whereSql}
             ORDER BY groups.sort_order NULLS LAST, lower(groups.name) NULLS LAST,
                      lower(websites.name), websites.id
@@ -496,6 +527,13 @@ final class WebsiteRepository
                 'primary_endpoint_id' => $row['primary_endpoint_id'] === null
                     ? null : (int) $row['primary_endpoint_id'],
                 'primary_url' => $row['primary_url'] === null ? null : (string) $row['primary_url'],
+                'last_total_ms' => $row['last_total_ms'] === null ? null : (float) $row['last_total_ms'],
+                'last_sample_at' => $row['last_sample_at'] === null ? null : (string) $row['last_sample_at'],
+                'availability_24h' => $row['availability_24h'] === null
+                    ? null : (float) $row['availability_24h'],
+                'tls_not_after' => $row['tls_not_after'] === null ? null : (string) $row['tls_not_after'],
+                'domain_expires_at' => $row['domain_expires_at'] === null
+                    ? null : (string) $row['domain_expires_at'],
             ];
         }
 
@@ -946,6 +984,43 @@ final class WebsiteRepository
         $row['notification_emails'] = is_array($emails) ? $emails : [];
 
         return $row;
+    }
+
+    private function expectedStatusExpression(mixed $value): string
+    {
+        $ranges = is_array($value) ? $value : json_decode((string) $value, true);
+        if (!is_array($ranges)) {
+            return '200-299';
+        }
+
+        $parts = [];
+        foreach ($ranges as $range) {
+            if (!is_array($range) || !isset($range['min'], $range['max'])) {
+                continue;
+            }
+            $min = (int) $range['min'];
+            $max = (int) $range['max'];
+            $parts[] = $min === $max ? (string) $min : $min . '-' . $max;
+        }
+
+        return $parts === [] ? '200-299' : implode(',', $parts);
+    }
+
+    /** @return list<string> */
+    private function jsonStringList(mixed $value): array
+    {
+        $items = is_array($value) ? $value : json_decode((string) $value, true);
+        if (!is_array($items)) {
+            return [];
+        }
+
+        $result = [];
+        foreach ($items as $item) {
+            if (is_string($item)) {
+                $result[] = $item;
+            }
+        }
+        return $result;
     }
 
     /** @return array<string, mixed> */

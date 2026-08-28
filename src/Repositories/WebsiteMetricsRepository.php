@@ -144,9 +144,11 @@ final class WebsiteMetricsRepository
      *         ttfb_min_ms: ?float,
      *         ttfb_avg_ms: ?float,
      *         ttfb_max_ms: ?float,
+     *         ttfb_sample_count: int,
      *         total_min_ms: ?float,
      *         total_avg_ms: ?float,
      *         total_max_ms: ?float,
+     *         total_sample_count: int,
      *         sample_count: int
      *     }>
      * }
@@ -179,9 +181,11 @@ final class WebsiteMetricsRepository
                     min(ttfb_ms) AS ttfb_min_ms,
                     avg(ttfb_ms) AS ttfb_avg_ms,
                     max(ttfb_ms) AS ttfb_max_ms,
+                    count(ttfb_ms) AS ttfb_sample_count,
                     min(total_ms) AS total_min_ms,
                     avg(total_ms) AS total_avg_ms,
                     max(total_ms) AS total_max_ms,
+                    count(total_ms) AS total_sample_count,
                     count(*) AS sample_count
                 FROM website_check_samples
                 WHERE website_id = :website_id
@@ -210,10 +214,12 @@ final class WebsiteMetricsRepository
                     sum(ttfb_avg_ms * ttfb_count)
                         / NULLIF(sum(ttfb_count), 0) AS ttfb_avg_ms,
                     max(ttfb_max_ms) AS ttfb_max_ms,
+                    sum(ttfb_count) AS ttfb_sample_count,
                     min(total_min_ms) AS total_min_ms,
                     sum(total_avg_ms * total_count)
                         / NULLIF(sum(total_count), 0) AS total_avg_ms,
                     max(total_max_ms) AS total_max_ms,
+                    sum(total_count) AS total_sample_count,
                     sum(sample_count) AS sample_count
                 FROM {$table}
                 WHERE website_id = :website_id
@@ -247,9 +253,11 @@ final class WebsiteMetricsRepository
                 'ttfb_min_ms' => $this->nullableFloat($row['ttfb_min_ms']),
                 'ttfb_avg_ms' => $this->nullableFloat($row['ttfb_avg_ms']),
                 'ttfb_max_ms' => $this->nullableFloat($row['ttfb_max_ms']),
+                'ttfb_sample_count' => (int) $row['ttfb_sample_count'],
                 'total_min_ms' => $this->nullableFloat($row['total_min_ms']),
                 'total_avg_ms' => $this->nullableFloat($row['total_avg_ms']),
                 'total_max_ms' => $this->nullableFloat($row['total_max_ms']),
+                'total_sample_count' => (int) $row['total_sample_count'],
                 'sample_count' => (int) $row['sample_count'],
             ];
         }

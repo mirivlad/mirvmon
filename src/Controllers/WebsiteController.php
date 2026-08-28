@@ -65,7 +65,7 @@ final class WebsiteController
                 $this->endpointInputs($body, false),
             );
             $this->flashKey('websites.flash.created', 'success');
-            return $this->redirect($response, '/sites/' . $websiteId . '/edit');
+            return $this->redirect($response, '/sites/' . $websiteId);
         } catch (InvalidArgumentException $exception) {
             return $this->renderForm($response, 'sites/create.twig', $this->safeForm($body), 422, $exception->getMessage());
         } catch (Throwable) {
@@ -102,7 +102,7 @@ final class WebsiteController
                 $this->endpointInputs($body, true),
             );
             $this->flashKey('websites.flash.updated', 'success');
-            return $this->redirect($response, '/sites/' . $websiteId . '/edit');
+            return $this->redirect($response, '/sites/' . $websiteId);
         } catch (InvalidArgumentException $exception) {
             $form = $this->safeForm($body);
             $form['id'] = $websiteId;
