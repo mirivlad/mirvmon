@@ -9,6 +9,8 @@ use App\Database\ConnectionFactory;
 use App\Database\Migrator;
 use App\Services\ServerStatusService;
 use App\Services\ServerPlatformService;
+use App\Repositories\WebsiteRepository;
+use App\Security\SecretCipher;
 use PDO;
 use PHPUnit\Framework\TestCase;
 use Slim\Psr7\Factory\ResponseFactory;
@@ -46,10 +48,13 @@ final class GroupControllerTest extends TestCase
         $this->controller = new GroupController(
             self::$pdo,
             $twig,
-            new ServerStatusService(new ServerPlatformService())
+            new ServerStatusService(new ServerPlatformService()),
+            new \App\I18n\Translator(),
+            null,
+            new WebsiteRepository(self::$pdo, new SecretCipher(str_repeat('k', 32)))
         );
         $this->groupId = (int) self::$pdo?->query(
-            "INSERT INTO server_groups (name, icon, color)
+            "INSERT INTO monitoring_groups (name, icon, color)
              VALUES ('Production', 'fa-server', '#3157d5')
              RETURNING id"
         )->fetchColumn();
@@ -117,6 +122,37 @@ final class GroupControllerTest extends TestCase
         )->fetchColumn());
     }
 
+    public function testGroupPageKeepsWebsiteStateSeparateFromServerState(): void
+    {
+        $websiteId = (int) self::$pdo?->query(
+            "INSERT INTO websites (group_id, name) VALUES ({$this->groupId}, 'group-site') RETURNING id"
+        )->fetchColumn();
+        self::$pdo?->prepare(
+            "INSERT INTO website_endpoints (website_id, name, url, is_primary)
+             VALUES (:website_id, 'homepage', 'https://example.test', TRUE)"
+        )->execute(['website_id' => $websiteId]);
+        $endpointId = (int) self::$pdo?->query(
+            'SELECT id FROM website_endpoints WHERE website_id = ' . $websiteId
+        )->fetchColumn();
+        self::$pdo?->prepare(
+            "INSERT INTO website_state (website_id, primary_endpoint_id, status, active_problem_count)
+             VALUES (:website_id, :endpoint_id, 'problem', 1)"
+        )->execute(['website_id' => $websiteId, 'endpoint_id' => $endpointId]);
+
+        $response = $this->controller->show(
+            (new ServerRequestFactory())->createServerRequest('GET', '/groups/' . $this->groupId),
+            (new ResponseFactory())->createResponse(),
+            ['id' => (string) $this->groupId]
+        );
+        $html = (string) $response->getBody();
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertStringContainsString('group-site', $html);
+        self::assertStringContainsString('group-websites-title', $html);
+        self::assertStringContainsString('Проблема', $html);
+        self::assertStringContainsString('>1</strong>', $html);
+    }
+
     public function testAvailabilityOnlyOfflineCountsAsActiveProblem(): void
     {
         $serverId = $this->insertServer('availability-only-offline', '20 minutes');
@@ -169,7 +205,7 @@ final class GroupControllerTest extends TestCase
         self::assertSame(
             0,
             (int) self::$pdo?->query(
-                "SELECT count(*) FROM server_groups WHERE description = 'invalid'"
+                "SELECT count(*) FROM monitoring_groups WHERE description = 'invalid'"
             )->fetchColumn()
         );
     }

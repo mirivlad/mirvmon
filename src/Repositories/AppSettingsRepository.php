@@ -9,6 +9,17 @@ use PDO;
 
 final class AppSettingsRepository
 {
+    /** @var array<string, int> */
+    public const WEBSITE_DEFAULTS = [
+        'website_default_interval_seconds' => 60,
+        'website_http_timeout_seconds' => 15,
+        'website_tls_warning_days' => 21,
+        'website_tls_critical_days' => 7,
+        'website_domain_warning_days' => 30,
+        'website_domain_critical_days' => 7,
+        'website_worker_concurrency' => 10,
+    ];
+
     public function __construct(private readonly PDO $pdo)
     {
     }
@@ -82,6 +93,19 @@ final class AppSettingsRepository
     public function set(string $key, mixed $value): void
     {
         $this->setMany([$key => $value]);
+    }
+
+    /** @return array<string, int> */
+    public function websiteDefaults(): array
+    {
+        $stored = $this->getMany(array_keys(self::WEBSITE_DEFAULTS));
+        $defaults = [];
+        foreach (self::WEBSITE_DEFAULTS as $key => $fallback) {
+            $value = $stored[$key] ?? $fallback;
+            $defaults[$key] = is_int($value) ? $value : $fallback;
+        }
+
+        return $defaults;
     }
 
     /** @param array<string, mixed> $settings */

@@ -46,7 +46,10 @@ final class AlertController
             'events' => $events,
             'filters' => [
                 'server_id' => $filters['server_id'] ?? '',
+                'source_type' => $filters['source_type'] ?? '',
                 'group_id' => $filters['group_id'] ?? '',
+                'website_id' => $filters['website_id'] ?? '',
+                'endpoint_id' => $filters['endpoint_id'] ?? '',
                 'kind' => $filters['kind'] ?? '',
                 'severity' => $filters['severity'] ?? '',
                 'from' => $this->displayDate($query['from'] ?? null),
@@ -54,6 +57,8 @@ final class AlertController
             ],
             'server_options' => $this->incidents->serverOptions(),
             'group_options' => $this->incidents->groupOptions(),
+            'website_options' => $this->incidents->websiteOptions(),
+            'endpoint_options' => $this->incidents->endpointOptions(),
         ]);
     }
 
@@ -150,12 +155,16 @@ final class AlertController
 
     /**
      * @param array<string, mixed> $query
-     * @return array{server_id?: int, group_id?: int, kind?: string, severity?: string, from?: string, to?: string}
+     * @return array{source_type?: string, server_id?: int, website_id?: int, endpoint_id?: int, group_id?: int, kind?: string, severity?: string, from?: string, to?: string}
      */
     private function filters(array $query): array
     {
         $filters = [];
-        foreach (['server_id', 'group_id'] as $name) {
+        $sourceType = $query['source_type'] ?? null;
+        if (is_string($sourceType) && in_array($sourceType, ['server', 'website'], true)) {
+            $filters['source_type'] = $sourceType;
+        }
+        foreach (['server_id', 'website_id', 'endpoint_id', 'group_id'] as $name) {
             $value = filter_var(
                 $query[$name] ?? null,
                 FILTER_VALIDATE_INT,

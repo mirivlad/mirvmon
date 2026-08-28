@@ -7,6 +7,7 @@ namespace App\Controllers;
 use App\I18n\Translator;
 use App\I18n\TwigTranslation;
 use App\Repositories\IncidentRepository;
+use App\Repositories\WebsiteRepository;
 use App\Services\ServerStatusService;
 use InvalidArgumentException;
 use PDO;
@@ -24,7 +25,8 @@ final class GroupController
         private readonly Twig $twig,
         private readonly ServerStatusService $status,
         private readonly Translator $translator = new Translator(),
-        ?IncidentRepository $incidents = null
+        ?IncidentRepository $incidents = null,
+        private readonly ?WebsiteRepository $websites = null
     ) {
         $this->incidents = $incidents ?? new IncidentRepository($pdo);
         TwigTranslation::register($this->twig->getEnvironment(), $this->translator);
@@ -34,9 +36,11 @@ final class GroupController
     public function index(Request $request, Response $response, array $args): Response
     {
         $groups = $this->pdo->query(
-            'SELECT * FROM server_groups ORDER BY sort_order, name, id'
+            'SELECT * FROM monitoring_groups ORDER BY sort_order, name, id'
         )?->fetchAll() ?? [];
         $servers = $this->status->enrich($this->loadServers());
+        $websiteGroups = $this->websites?->groupedList([]) ?? [];
+        $websitesByGroup = $this->websitesByGroup($websiteGroups);
 
         /** @var array<int, array{total: int, online: int, warning: int, critical: int, offline: int, active_problems: int}> $summaries */
         $summaries = [];
@@ -53,7 +57,7 @@ final class GroupController
 
         /** @var array<int, int> $problemCounts */
         $problemCounts = [];
-        foreach ($this->incidents->active() as $incident) {
+        foreach ($this->incidents->active(['source_type' => 'server']) as $incident) {
             $groupId = (int) ($incident['group_id'] ?? 0);
             if ($groupId > 0) {
                 $problemCounts[$groupId] = ($problemCounts[$groupId] ?? 0) + 1;
@@ -63,7 +67,15 @@ final class GroupController
         foreach ($groups as &$group) {
             $groupId = (int) $group['id'];
             $group['summary'] = $summaries[$groupId] ?? $this->emptySummary();
+            $group['websites'] = $websitesByGroup[$groupId] ?? [];
+            $group['summary']['website_total'] = count($group['websites']);
+            $group['summary']['website_problems'] = array_sum(array_map(
+                static fn (array $website): int => (int) $website['active_problem_count'],
+                $group['websites']
+            ));
+            $group['summary']['total'] += $group['summary']['website_total'];
             $group['summary']['active_problems'] = $problemCounts[$groupId] ?? 0;
+            $group['summary']['active_problems'] += $group['summary']['website_problems'];
             $group['server_count'] = $group['summary']['total'];
         }
         unset($group);
@@ -88,7 +100,7 @@ final class GroupController
         try {
             $group = $this->validatedGroup($request->getParsedBody());
             $statement = $this->pdo->prepare(
-                'INSERT INTO server_groups (name, description, icon, color)
+                'INSERT INTO monitoring_groups (name, description, icon, color)
                  VALUES (:name, :description, :icon, :color)'
             );
             $statement->execute($group);
@@ -127,7 +139,7 @@ final class GroupController
         try {
             $group = $this->validatedGroup($request->getParsedBody());
             $statement = $this->pdo->prepare(
-                'UPDATE server_groups
+                'UPDATE monitoring_groups
                  SET name = :name, description = :description, icon = :icon, color = :color
                  WHERE id = :id'
             );
@@ -151,7 +163,7 @@ final class GroupController
             return $this->redirect($response, '/groups');
         }
         try {
-            $statement = $this->pdo->prepare('DELETE FROM server_groups WHERE id = :id');
+            $statement = $this->pdo->prepare('DELETE FROM monitoring_groups WHERE id = :id');
             $statement->execute(['id' => $groupId]);
             $deleted = $statement->rowCount() === 1;
             $this->flashKey(
@@ -175,18 +187,46 @@ final class GroupController
 
         $groupId = (int) $group['id'];
         $servers = $this->status->enrich($this->loadServers($groupId));
+        $websiteGroups = $this->websites?->groupedList(['group_id' => $groupId]) ?? [];
+        $websites = $websiteGroups[0]['websites'] ?? [];
         $summary = $this->emptySummary();
         foreach ($servers as $server) {
             $this->addServerToSummary($summary, $server);
         }
-        $summary['active_problems'] = count($this->incidents->active(['group_id' => $groupId]));
+        $summary['active_problems'] = count($this->incidents->active([
+            'group_id' => $groupId,
+            'source_type' => 'server',
+        ]));
+        $summary['website_total'] = count($websites);
+        $summary['website_problems'] = array_sum(array_map(
+            static fn (array $website): int => (int) $website['active_problem_count'],
+            $websites
+        ));
+        $summary['total'] += $summary['website_total'];
+        $summary['active_problems'] += $summary['website_problems'];
 
         return $this->twig->render($response, 'groups/show.twig', [
             'title' => (string) $group['name'],
             'group' => $group,
             'servers' => $servers,
             'summary' => $summary,
+            'websites' => $websites,
         ]);
+    }
+
+    /**
+     * @param list<array{id: ?int, websites: list<array<string, mixed>>}> $groups
+     * @return array<int, list<array<string, mixed>>>
+     */
+    private function websitesByGroup(array $groups): array
+    {
+        $result = [];
+        foreach ($groups as $group) {
+            if ($group['id'] !== null) {
+                $result[(int) $group['id']] = $group['websites'];
+            }
+        }
+        return $result;
     }
 
     /** @return list<array<string, mixed>> */
@@ -222,7 +262,7 @@ final class GroupController
         return $statement->fetchAll();
     }
 
-    /** @return array{total: int, online: int, warning: int, critical: int, offline: int, active_problems: int} */
+    /** @return array{total: int, online: int, warning: int, critical: int, offline: int, active_problems: int, website_total: int, website_problems: int} */
     private function emptySummary(): array
     {
         return [
@@ -232,11 +272,13 @@ final class GroupController
             'critical' => 0,
             'offline' => 0,
             'active_problems' => 0,
+            'website_total' => 0,
+            'website_problems' => 0,
         ];
     }
 
     /**
-     * @param array{total: int, online: int, warning: int, critical: int, offline: int, active_problems: int} $summary
+     * @param array{total: int, online: int, warning: int, critical: int, offline: int, active_problems: int, website_total: int, website_problems: int} $summary
      * @param array<string, mixed> $server
      */
     private function addServerToSummary(array &$summary, array $server): void
@@ -271,7 +313,7 @@ final class GroupController
         if ($groupId === null) {
             return null;
         }
-        $statement = $this->pdo->prepare('SELECT * FROM server_groups WHERE id = :id');
+        $statement = $this->pdo->prepare('SELECT * FROM monitoring_groups WHERE id = :id');
         $statement->execute(['id' => $groupId]);
         $group = $statement->fetch();
         return is_array($group) ? $group : null;

@@ -122,6 +122,20 @@ curl --fail http://127.0.0.1:8080/readyz
 - `/readyz` проверяет приложение и соединение с TimescaleDB;
 - healthcheck контейнера использует `/readyz`.
 
+## Мониторинг сайтов
+
+Сайты добавляются после входа администратора в `/sites`; проверки выполняет
+`website-check-worker` внутри единственного `app` контейнера. Задайте endpoint,
+assertions, timeout/deadline, TTFB/total thresholds и при необходимости TLS,
+self-signed, redirect origins или domain registration. Состояние worker видно в
+`/admin/system`; ручная проверка — `bin/website-check-worker --once`.
+
+Для внутреннего URL используется только explicit trusted-admin модель. Worker
+блокирует loopback, private/link-local и metadata targets и повторно проверяет
+redirect origins. Секреты auth и headers шифруются, в диагностику и HTML не
+попадают. Не добавляйте для сайтов третий Compose service и не настраивайте
+website probes на native agent.
+
 ## Нативные агенты
 
 После добавления сервера откройте его вкладку «Агент» и скачайте

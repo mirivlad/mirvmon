@@ -40,10 +40,25 @@
                         <strong class="group-stat-value">{{ summary.total }}</strong>
                     </div>
                     <div class="group-stat">
+                        <span class="group-stat-label">{{ t('ui19.groups.websites') }}</span>
+                        <strong class="group-stat-value">{{ summary.website_total }}</strong>
+                    </div>
+                    <div class="group-stat">
                         <span class="group-stat-label">{{ t('ui19.groups.active_problems') }}</span>
                         <strong class="group-stat-value">{{ summary.active_problems }}</strong>
                     </div>
                 </div>
+
+                {% if group.websites|length > 0 %}
+                <div class="small text-muted mt-3">
+                    <i class="fas fa-globe me-1" aria-hidden="true"></i>{{ t('ui19.groups.website_statuses') }}
+                    {% for website in group.websites %}
+                    <a href="/sites/{{ website.id }}" class="badge rounded-pill bg-light text-dark border text-decoration-none ms-1">
+                        {{ website.name }} · {{ t('websites.status.' ~ website.status) }}
+                    </a>
+                    {% endfor %}
+                </div>
+                {% endif %}
 
                 <div>
                     <div class="small text-muted fw-semibold mb-2">{{ t('ui19.groups.statuses') }}</div>

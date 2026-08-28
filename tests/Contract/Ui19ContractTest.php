@@ -77,6 +77,7 @@ final class Ui19ContractTest extends TestCase
             'summary.warning',
             'summary.critical',
             'summary.offline',
+            'summary.website_total',
         ] as $needle) {
             self::assertStringContainsString($needle, $index);
         }
@@ -86,6 +87,8 @@ final class Ui19ContractTest extends TestCase
             'summary.active_problems',
             'server-list-table',
             "t('status.' ~ server.status)",
+            'group-websites-title',
+            'websites|length',
         ] as $needle) {
             self::assertStringContainsString($needle, $show);
         }

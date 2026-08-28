@@ -56,6 +56,7 @@ final class ComposeContractTest extends TestCase
         self::assertStringContainsString('127.0.0.1', $application);
         self::assertStringContainsString('healthcheck:', $application);
         self::assertStringContainsString('/readyz', $application);
+        self::assertStringContainsString('WEBSITE_CHECK_LOOP_INTERVAL', $application);
         self::assertStringContainsString('host.docker.internal:host-gateway', $application);
         self::assertStringContainsString('read_only: true', $application);
         self::assertStringContainsString('no-new-privileges:true', $application);

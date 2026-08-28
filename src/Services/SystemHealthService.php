@@ -176,6 +176,7 @@ final class SystemHealthService
             [
                 WorkerHeartbeatRepository::NOTIFICATION_WORKER,
                 WorkerHeartbeatRepository::OFFLINE_WORKER,
+                WorkerHeartbeatRepository::WEBSITE_CHECK_WORKER,
             ] as $worker
         ) {
             $heartbeat = $byName[$worker] ?? null;

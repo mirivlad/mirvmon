@@ -137,11 +137,19 @@ docker compose -f docker/docker-compose.yml exec -T db \
   > mirvmon.dump
 ```
 
-Контейнер `app` запускает под `supervisord` три процесса от
+Контейнер `app` запускает под `supervisord` четыре процесса от
 непривилегированного пользователя: FrankenPHP, проверку offline-переходов и
-доставку уведомлений. `NOTIFICATION_POLL_INTERVAL` задаёт паузу worker при
+централизованный `website-check-worker`, а также доставку уведомлений.
+`WEBSITE_CHECK_LOOP_INTERVAL` задаёт паузу website worker (1–60 секунд),
+`NOTIFICATION_POLL_INTERVAL` задаёт паузу worker при
 пустой очереди (1–60 секунд), а `NOTIFICATION_BATCH_SIZE` — размер одного claim
 (1–100). Telegram/SMTP delivery никогда не выполняется в процессе ingestion.
+
+Website worker получает задания из БД, выполняет HTTP/TLS/RDAP/WHOIS проверки
+вне длинной транзакции, продлевает lease и пишет heartbeat. `maintenance`
+подавляет только delivery, а `pause` сайта останавливает его проверки. Сырые
+samples хранятся 30 days ориентировочно; hourly/daily aggregates позволяют
+строить историю до 365 days при соответствующей retention policy.
 
 Database migrations run under an advisory lock whenever the app container
 starts. Applied files are checksum-protected in `schema_migrations`.

@@ -25,6 +25,9 @@ final class SchemaTest extends TestCase
         self::assertFileExists(dirname(__DIR__, 3) . '/migrations/017_incident_history.sql');
         self::assertFileExists(dirname(__DIR__, 3) . '/migrations/018_audit_log.sql');
         self::assertFileExists(dirname(__DIR__, 3) . '/migrations/019_audit_retention.sql');
+        self::assertFileExists(dirname(__DIR__, 3) . '/migrations/020_website_monitoring.sql');
+        self::assertFileExists(dirname(__DIR__, 3) . '/migrations/021_website_timeseries.sql');
+        self::assertFileExists(dirname(__DIR__, 3) . '/migrations/022_website_schedule_cursor.sql');
 
         if (getenv('TEST_DB_HOST') === false) {
             self::markTestSkipped('Set TEST_DB_* to run the TimescaleDB integration suite.');
@@ -52,18 +55,36 @@ final class SchemaTest extends TestCase
         $hypertables = self::$pdo?->query(
             "SELECT hypertable_name
              FROM timescaledb_information.hypertables
-             WHERE hypertable_name IN ('metric_samples', 'process_snapshots')
+             WHERE hypertable_name IN (
+                 'metric_samples',
+                 'process_snapshots',
+                 'website_check_samples'
+             )
              ORDER BY hypertable_name"
         )->fetchAll(PDO::FETCH_COLUMN);
-        self::assertSame(['metric_samples', 'process_snapshots'], $hypertables);
+        self::assertSame([
+            'metric_samples',
+            'process_snapshots',
+            'website_check_samples',
+        ], $hypertables);
 
         $aggregates = self::$pdo?->query(
             "SELECT view_name
              FROM timescaledb_information.continuous_aggregates
-             WHERE view_name IN ('metric_samples_daily', 'metric_samples_hourly')
+             WHERE view_name IN (
+                 'metric_samples_daily',
+                 'metric_samples_hourly',
+                 'website_check_samples_daily',
+                 'website_check_samples_hourly'
+             )
              ORDER BY view_name"
         )->fetchAll(PDO::FETCH_COLUMN);
-        self::assertSame(['metric_samples_daily', 'metric_samples_hourly'], $aggregates);
+        self::assertSame([
+            'metric_samples_daily',
+            'metric_samples_hourly',
+            'website_check_samples_daily',
+            'website_check_samples_hourly',
+        ], $aggregates);
     }
 
     public function testSecurityAndQueueTablesExistWithoutSeededAdministrator(): void
@@ -157,7 +178,7 @@ final class SchemaTest extends TestCase
                    'agent_tokens'::regclass
                )"
         )->fetchColumn();
-        self::assertSame('8', (string) $foreignKeys);
+        self::assertSame('9', (string) $foreignKeys);
     }
 
     public function testTimescaleMaintenancePoliciesAreInstalled(): void
@@ -169,7 +190,10 @@ final class SchemaTest extends TestCase
                  'metric_samples',
                  'process_snapshots',
                  'metric_samples_hourly',
-                 'metric_samples_daily'
+                 'metric_samples_daily',
+                 'website_check_samples',
+                 'website_check_samples_hourly',
+                 'website_check_samples_daily'
              )
              ORDER BY 1, hypertable_name"
         )->fetchAll(PDO::FETCH_COLUMN);
@@ -177,8 +201,13 @@ final class SchemaTest extends TestCase
         self::assertSame([
             'Columnstore Policy',
             'Columnstore Policy',
+            'Columnstore Policy',
             'Refresh Continuous Aggregate Policy',
             'Refresh Continuous Aggregate Policy',
+            'Refresh Continuous Aggregate Policy',
+            'Refresh Continuous Aggregate Policy',
+            'Retention Policy',
+            'Retention Policy',
             'Retention Policy',
             'Retention Policy',
             'Retention Policy',
@@ -191,7 +220,7 @@ final class SchemaTest extends TestCase
         self::assertSame([], $migrator->migrate());
 
         $count = self::$pdo?->query('SELECT count(*) FROM schema_migrations')->fetchColumn();
-        self::assertSame('19', (string) $count);
+        self::assertSame('22', (string) $count);
     }
 
     public function testAvailabilitySchemaExists(): void

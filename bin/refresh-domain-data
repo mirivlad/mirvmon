@@ -1,0 +1,142 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+const DOMAIN_SOURCES = [
+    'iana_rdap_bootstrap' => ['url' => 'https://data.iana.org/rdap/dns.json', 'file' => 'iana-rdap-bootstrap.json'],
+    'public_suffix_list' => ['url' => 'https://publicsuffix.org/list/public_suffix_list.dat', 'file' => 'public_suffix_list.dat'],
+];
+
+$directory = dirname(__DIR__) . '/resources/domain';
+$temporary = [];
+$backups = [];
+$replaced = [];
+try {
+    foreach (DOMAIN_SOURCES as $name => $source) {
+        $path = tempnam($directory, '.refresh-');
+        if ($path === false) {
+            throw new RuntimeException('Unable to create refresh staging file.');
+        }
+        $temporary[$name] = $path;
+        $output = fopen($path, 'wb');
+        if ($output === false) {
+            throw new RuntimeException('Unable to open refresh staging file.');
+        }
+        $curl = curl_init($source['url']);
+        if ($curl === false) {
+            fclose($output);
+            throw new RuntimeException('Unable to initialize source download.');
+        }
+        try {
+            curl_setopt_array($curl, [
+                CURLOPT_FILE => $output,
+                CURLOPT_FOLLOWLOCATION => false,
+                CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
+                CURLOPT_PROXY => '',
+                CURLOPT_CONNECTTIMEOUT_MS => 5000,
+                CURLOPT_TIMEOUT_MS => 30000,
+                CURLOPT_FAILONERROR => true,
+            ]);
+            if (curl_exec($curl) !== true) {
+                throw new RuntimeException('Source download failed.');
+            }
+        } finally {
+            curl_close($curl);
+            fflush($output);
+            if (function_exists('fsync')) {
+                fsync($output);
+            }
+            fclose($output);
+        }
+    }
+    validateBootstrap($temporary['iana_rdap_bootstrap']);
+    validatePsl($temporary['public_suffix_list']);
+    $metadata = [];
+    foreach (DOMAIN_SOURCES as $name => $source) {
+        $metadata[$name] = [
+            'source' => $source['url'],
+            'retrieved_at' => gmdate(DATE_ATOM),
+            'sha256' => hash_file('sha256', $temporary[$name]),
+        ];
+    }
+    $metadataPath = tempnam($directory, '.refresh-');
+    if ($metadataPath === false) {
+        throw new RuntimeException('Unable to create metadata staging file.');
+    }
+    $metadataOutput = fopen($metadataPath, 'wb');
+    if ($metadataOutput === false) {
+        throw new RuntimeException('Unable to open metadata staging file.');
+    }
+    try {
+        if (fwrite($metadataOutput, json_encode($metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n") === false) {
+            throw new RuntimeException('Unable to write metadata staging file.');
+        }
+        fflush($metadataOutput);
+        if (function_exists('fsync')) {
+            fsync($metadataOutput);
+        }
+    } finally {
+        fclose($metadataOutput);
+    }
+    $temporary['metadata'] = $metadataPath;
+    $targets = [];
+    foreach (DOMAIN_SOURCES as $name => $source) {
+        $targets[$name] = $directory . '/' . $source['file'];
+    }
+    $targets['metadata'] = $directory . '/snapshot-metadata.json';
+    foreach ($targets as $name => $target) {
+        $backup = tempnam($directory, '.refresh-backup-');
+        if ($backup === false || !copy($target, $backup)) {
+            throw new RuntimeException('Unable to back up domain snapshot.');
+        }
+        $backups[$target] = $backup;
+    }
+    foreach ($targets as $name => $target) {
+        if (!rename($temporary[$name], $target)) {
+            throw new RuntimeException('Unable to replace domain snapshot.');
+        }
+        unset($temporary[$name]);
+        $replaced[] = $target;
+    }
+    foreach ($backups as $backup) {
+        unlink($backup);
+    }
+    $backups = [];
+    fwrite(STDOUT, "Domain data snapshots refreshed.\n");
+} catch (Throwable $exception) {
+    foreach (array_reverse($replaced) as $target) {
+        if (isset($backups[$target]) && is_file($backups[$target])) {
+            rename($backups[$target], $target);
+            unset($backups[$target]);
+        }
+    }
+    foreach ($temporary as $path) {
+        if (is_file($path)) {
+            unlink($path);
+        }
+    }
+    foreach ($backups as $backup) {
+        if (is_file($backup)) {
+            unlink($backup);
+        }
+    }
+    fwrite(STDERR, "Domain data refresh failed.\n");
+    exit(1);
+}
+
+function validateBootstrap(string $path): void
+{
+    $decoded = json_decode((string) file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
+    if (!is_array($decoded) || !isset($decoded['services']) || !is_array($decoded['services']) || $decoded['services'] === []) {
+        throw new RuntimeException('RDAP bootstrap is invalid.');
+    }
+}
+
+function validatePsl(string $path): void
+{
+    $contents = file_get_contents($path);
+    if ($contents === false || !str_contains($contents, '===BEGIN ICANN DOMAINS===')) {
+        throw new RuntimeException('Public suffix list is invalid.');
+    }
+}

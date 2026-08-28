@@ -19,7 +19,7 @@
     </a>
 </header>
 
-<section class="summary-grid" aria-label="{{ t('dashboard.title') }}">
+<section class="summary-grid" data-summary-section="servers" aria-label="{{ t('dashboard.servers') }}">
     <article class="summary-card summary-card-total">
         <span class="summary-icon" aria-hidden="true"><i class="fas fa-server"></i></span>
         <div>
@@ -57,6 +57,42 @@
     </a>
 </section>
 
+<section class="card mb-4" data-summary-section="websites" aria-labelledby="dashboard-websites-title">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <h2 class="h5 mb-0" id="dashboard-websites-title">
+            <i class="fas fa-globe" aria-hidden="true"></i> {{ t('dashboard.websites') }}
+        </h2>
+        <a href="/sites" class="btn btn-sm btn-outline-primary">{{ t('dashboard.websites_open') }}</a>
+    </div>
+    <div class="card-body">
+        <div class="summary-grid mb-0">
+            <a href="/sites?status=healthy" class="summary-card text-reset text-decoration-none">
+                <span class="summary-icon" aria-hidden="true"><i class="fas fa-circle-check"></i></span>
+                <div><span class="summary-label">{{ t('websites.status.healthy') }}</span><strong class="summary-value" data-website-summary="healthy">{{ website_stats.healthy }}</strong></div>
+            </a>
+            <a href="/sites?status=warning" class="summary-card summary-card-warning text-reset text-decoration-none">
+                <span class="summary-icon" aria-hidden="true"><i class="fas fa-triangle-exclamation"></i></span>
+                <div><span class="summary-label">{{ t('websites.status.warning') }}</span><strong class="summary-value" data-website-summary="warning">{{ website_stats.warning }}</strong></div>
+            </a>
+            <a href="/sites?status=critical" class="summary-card summary-card-critical text-reset text-decoration-none">
+                <span class="summary-icon" aria-hidden="true"><i class="fas fa-circle-exclamation"></i></span>
+                <div><span class="summary-label">{{ t('websites.status.critical') }}</span><strong class="summary-value" data-website-summary="critical">{{ website_stats.critical }}</strong></div>
+            </a>
+            <a href="/sites?status=no_data" class="summary-card summary-card-offline text-reset text-decoration-none">
+                <span class="summary-icon" aria-hidden="true"><i class="fas fa-circle-question"></i></span>
+                <div><span class="summary-label">{{ t('websites.status.no_data') }}</span><strong class="summary-value" data-website-summary="no_data">{{ website_stats.no_data }}</strong></div>
+            </a>
+            <a href="/sites?status=paused" class="summary-card text-reset text-decoration-none">
+                <span class="summary-icon" aria-hidden="true"><i class="fas fa-pause"></i></span>
+                <div><span class="summary-label">{{ t('websites.status.paused') }}</span><strong class="summary-value" data-website-summary="paused">{{ website_stats.paused }}</strong></div>
+            </a>
+        </div>
+        {% if website_stats.total == 0 %}
+        <p class="text-muted mb-0 mt-3">{{ t('dashboard.websites_empty') }}</p>
+        {% endif %}
+    </div>
+</section>
+
 <section class="card mb-4" aria-labelledby="dashboard-attention-title">
     <div class="card-header d-flex justify-content-between align-items-center gap-3">
         <h2 class="h5 mb-0" id="dashboard-attention-title">
@@ -71,7 +107,11 @@
         <div class="list-group-item d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
             <div class="min-w-0">
                 <div class="d-flex flex-wrap align-items-center gap-2">
+                    {% if issue.source_type == 'website' %}
+                    <a href="/sites/{{ issue.website_id }}?tab=events" class="fw-semibold text-decoration-none">{{ issue.source_name }}</a>
+                    {% else %}
                     <a href="/servers/{{ issue.server_id }}" class="fw-semibold text-decoration-none">{{ issue.server_name }}</a>
+                    {% endif %}
                     {% if issue.group_id %}
                     <a href="/groups/{{ issue.group_id }}" class="text-muted small text-decoration-none">· {{ issue.group_name }}</a>
                     {% endif %}
@@ -88,7 +128,7 @@
                 <span class="badge {{ issue.severity == 'critical' ? 'bg-danger' : 'bg-warning text-dark' }}">
                     {{ issue.severity == 'critical' ? t('alerts.level.critical') : t('alerts.level.warning') }}
                 </span>
-                <a href="/alerts?view=active&server_id={{ issue.server_id }}" class="btn btn-sm btn-outline-secondary">
+                <a href="/alerts?view=active&{{ issue.source_type == 'website' ? 'website_id=' ~ issue.website_id : 'server_id=' ~ issue.server_id }}" class="btn btn-sm btn-outline-secondary">
                     {{ t('common.details') }}
                 </a>
             </div>

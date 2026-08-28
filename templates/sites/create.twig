@@ -1,0 +1,6 @@
+{% extends "layout.twig" %}
+{% set page_title = t('websites.create') %}
+{% block content %}
+    {% include "sites/form.twig" with {form_action: '/sites', submit_label: t('websites.create')} %}
+    <script src="/js/sites-form.js" defer></script>
+{% endblock %}
