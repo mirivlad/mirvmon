@@ -3,6 +3,33 @@
 Практическая последовательность проверки, когда MirvMon или агент перестали
 показывать свежие данные.
 
+## Website monitoring
+
+Проверка сайта выполняется worker-ом внутри `app`, а не native agent. Сначала
+проверьте его heartbeat в `/admin/system` и логи:
+
+```bash
+docker compose -f docker/docker-compose.yml logs --tail=200 app | grep website
+docker compose -f docker/docker-compose.yml exec -T app bin/website-check-worker --once
+```
+
+`unavailable` обычно означает DNS/network/TLS/HTTP transport failure,
+`problem` — неверный status или content assertion, `slow`/`warning` — превышение
+порога времени. `self-signed` работает только при явном разрешении в endpoint;
+предупреждение о таком сертификате не следует трактовать как обычный healthy
+TLS. Redirect проверяется на каждом hop и может быть отклонён из-за origin,
+которого нет в allowlist.
+
+Для domain expiry проверьте configured domain и записи RDAP; WHOIS fallback
+может отсутствовать у registry. Ошибка источника оставляет безопасную причину
+в состоянии domain target, но не публикует SQL, auth, headers или тело ответа.
+
+Не используйте `curl` к arbitrary internal target для обхода SSRF-защиты:
+внутренние targets допустимы только в trusted-admin deployment и проходят ту
+же проверку адресов/redirects, что и worker. Для периода history: до 48 часов
+используется raw path, далее hourly/daily aggregates; 30 days и 365 days — это
+retention ориентиры, а не причина читать сырые таблицы на dashboard.
+
 ## 1. Сначала разделите «сервер MirvMon» и «агент»
 
 На хосте MirvMon:

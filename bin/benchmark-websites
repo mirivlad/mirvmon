@@ -1,0 +1,205 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use App\Database\ConnectionFactory;
+use App\Repositories\WebsiteRepository;
+use App\Security\SecretCipher;
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+$environment = [];
+foreach (['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USERNAME', 'DB_PASSWORD', 'DB_SSLMODE'] as $name) {
+    $value = getenv($name);
+    if ($value !== false) {
+        $environment[$name] = $value;
+    }
+}
+
+$pdo = new WebsiteBenchmarkPdo(
+    ConnectionFactory::dsn($environment),
+    $environment['DB_USERNAME'] ?? '',
+    $environment['DB_PASSWORD'] ?? '',
+    [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES => false,
+        PDO::ATTR_STRINGIFY_FETCHES => false,
+    ]
+);
+
+$results = [];
+foreach ([50, 1000] as $websiteCount) {
+    $results[] = benchmarkWebsites($pdo, $websiteCount);
+}
+
+echo json_encode(
+    ['benchmarks' => $results],
+    JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES
+) . PHP_EOL;
+
+/** @return array<string, mixed> */
+function benchmarkWebsites(WebsiteBenchmarkPdo $pdo, int $websiteCount): array
+{
+    $pdo->beginTransaction();
+
+    try {
+        $prefix = 'benchmark-site-' . bin2hex(random_bytes(5)) . '-';
+        $insertWebsites = $pdo->prepare(
+            "INSERT INTO websites (name, default_interval_seconds)
+             SELECT :prefix || number, 60
+             FROM generate_series(1, :website_count) AS items(number)"
+        );
+        $insertWebsites->execute(['prefix' => $prefix, 'website_count' => $websiteCount]);
+
+        $insertEndpoints = $pdo->prepare(
+            "INSERT INTO website_endpoints (website_id, name, url, is_primary)
+             SELECT websites.id, 'endpoint-' || items.number,
+                    'https://example.test/' || items.number,
+                    items.number = 1
+             FROM websites
+             CROSS JOIN generate_series(1, 3) AS items(number)
+             WHERE websites.name LIKE :prefix_pattern"
+        );
+        $insertEndpoints->execute(['prefix_pattern' => $prefix . '%']);
+
+        $insertStates = $pdo->prepare(
+            "INSERT INTO website_state (website_id, primary_endpoint_id, status, active_problem_count)
+             SELECT websites.id, endpoints.id,
+                    CASE WHEN websites.id % 10 = 0 THEN 'problem' ELSE 'healthy' END,
+                    CASE WHEN websites.id % 10 = 0 THEN 1 ELSE 0 END
+             FROM websites
+             INNER JOIN website_endpoints AS endpoints
+                ON endpoints.website_id = websites.id AND endpoints.is_primary = TRUE
+             WHERE websites.name LIKE :prefix_pattern"
+        );
+        $insertStates->execute(['prefix_pattern' => $prefix . '%']);
+
+        $insertAlerts = $pdo->prepare(
+            "INSERT INTO alerts (website_id, endpoint_id, kind, subject, severity)
+             SELECT websites.id, endpoints.id, 'service', endpoints.name, 'critical'
+             FROM websites
+             INNER JOIN website_endpoints AS endpoints
+                ON endpoints.website_id = websites.id AND endpoints.is_primary = TRUE
+             WHERE websites.name LIKE :prefix_pattern AND websites.id % 10 = 0"
+        );
+        $insertAlerts->execute(['prefix_pattern' => $prefix . '%']);
+
+        $insertSamples = $pdo->prepare(
+            "INSERT INTO website_check_samples (
+                sample_time, website_id, endpoint_id, sample_id, transport_available,
+                assertions_passed, status_code, configured_url, ttfb_ms, total_ms
+             )
+             SELECT CURRENT_TIMESTAMP - samples.number * INTERVAL '1 minute',
+                    websites.id, endpoints.id,
+                    md5(websites.id::text || ':' || endpoints.id::text || ':' || samples.number::text)::uuid,
+                    TRUE, TRUE, 200, endpoints.url, 40 + samples.number, 80 + samples.number
+             FROM websites
+             INNER JOIN website_endpoints AS endpoints ON endpoints.website_id = websites.id
+             CROSS JOIN generate_series(0, 2) AS samples(number)
+             WHERE websites.name LIKE :prefix_pattern"
+        );
+        $insertSamples->execute(['prefix_pattern' => $prefix . '%']);
+
+        $pdo->resetRecording();
+        $startedAt = hrtime(true);
+        $repository = new WebsiteRepository($pdo, new SecretCipher(str_repeat('b', 32)));
+        $summary = $repository->dashboardSummary(['search' => $prefix]);
+        $groups = $repository->groupedList(['search' => $prefix]);
+        $applicationMilliseconds = (hrtime(true) - $startedAt) / 1_000_000;
+        $queryCount = $pdo->queryCount;
+        $readSql = $pdo->lastReadSql;
+        if ($readSql === null) {
+            throw new RuntimeException('Website read-model query was not recorded.');
+        }
+        if ($queryCount > 5) {
+            throw new RuntimeException('Website read models used more than five SQL statements.');
+        }
+        if (stripos($readSql, 'website_check_samples') !== false) {
+            throw new RuntimeException('Website current-state read model scanned raw samples.');
+        }
+
+        $pdo->recording = false;
+        $planStatement = $pdo->prepare('EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ' . $readSql);
+        $planStatement->execute(['search' => '%' . $prefix . '%']);
+        $planJson = $planStatement->fetchColumn();
+        $plan = json_decode((string) $planJson, true, 512, JSON_THROW_ON_ERROR);
+        $nodeTypes = [];
+        collectWebsitePlanNodes($plan[0]['Plan'] ?? [], $nodeTypes);
+
+        return [
+            'websites' => $websiteCount,
+            'endpoints' => $websiteCount * 3,
+            'samples' => $websiteCount * 3 * 3,
+            'returned_rows' => count(array_merge(...array_map(
+                static fn (array $group): array => $group['websites'],
+                $groups
+            ))),
+            'healthy' => $summary['healthy'],
+            'critical' => $summary['critical'],
+            'query_count' => $queryCount,
+            'application_ms' => round($applicationMilliseconds, 3),
+            'planning_ms' => round((float) ($plan[0]['Planning Time'] ?? 0), 3),
+            'execution_ms' => round((float) ($plan[0]['Execution Time'] ?? 0), 3),
+            'plan_nodes' => array_values(array_unique($nodeTypes)),
+            'raw_hypertable_scan' => false,
+        ];
+    } finally {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+    }
+}
+
+/** @param array<string, mixed> $node @param list<string> $nodeTypes */
+function collectWebsitePlanNodes(array $node, array &$nodeTypes): void
+{
+    if (isset($node['Node Type']) && is_string($node['Node Type'])) {
+        $nodeTypes[] = $node['Node Type'];
+    }
+    foreach ($node['Plans'] ?? [] as $child) {
+        if (is_array($child)) {
+            collectWebsitePlanNodes($child, $nodeTypes);
+        }
+    }
+}
+
+final class WebsiteBenchmarkPdo extends PDO
+{
+    public bool $recording = false;
+    public int $queryCount = 0;
+    public ?string $lastReadSql = null;
+
+    public function query(
+        string $query,
+        ?int $fetchMode = null,
+        mixed ...$fetchModeArgs
+    ): PDOStatement|false {
+        if ($this->recording) {
+            $this->queryCount++;
+        }
+        if ($this->recording && stripos($query, 'EXPLAIN') !== 0) {
+            $this->lastReadSql = $query;
+        }
+        return parent::query($query, $fetchMode, ...$fetchModeArgs);
+    }
+
+    public function prepare(string $query, array $options = []): PDOStatement|false
+    {
+        if ($this->recording) {
+            $this->queryCount++;
+            if (stripos($query, 'INSERT') !== 0 && stripos($query, 'UPDATE') !== 0) {
+                $this->lastReadSql = $query;
+            }
+        }
+        return parent::prepare($query, $options);
+    }
+
+    public function resetRecording(): void
+    {
+        $this->recording = true;
+        $this->queryCount = 0;
+        $this->lastReadSql = null;
+    }
+}
