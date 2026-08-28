@@ -1,1 +1,97 @@
-<section class="card"><div class="card-body"><div class="d-flex flex-wrap justify-content-between gap-2"><h2 class="h5">{{ t('websites.detail.metrics') }}</h2><select class="form-select w-auto" id="website-metrics-endpoint"><option value="">{{ t('websites.detail.all_endpoints') }}</option>{% for endpoint in website.endpoints %}<option value="{{ endpoint.id }}">{{ endpoint.name }}</option>{% endfor %}</select></div><div class="row g-3 mt-1"><div class="col-lg-6"><canvas data-website-chart="availability" aria-label="{{ t('websites.detail.availability') }}"></canvas></div><div class="col-lg-6"><canvas data-website-chart="latency" aria-label="{{ t('websites.detail.latency') }}"></canvas></div></div><div id="data-website-metrics-chart" class="small text-muted mt-3"></div></div></section>
+<section
+    class="card"
+    data-website-metrics
+    data-api-url="/api/sites/{{ website.id }}/metrics"
+    data-loading-text="{{ t('websites.detail.loading_metrics') }}"
+    data-error-text="{{ t('websites.detail.metrics_error') }}"
+    data-empty-text="{{ t('websites.detail.metrics_empty') }}"
+    data-meta-template="{{ t('websites.detail.metrics_meta', {source: '__SOURCE__', bucket: '__BUCKET__', samples: '__SAMPLES__'}) }}"
+    data-incidents-template="{{ t('websites.detail.incidents_period', {count: '__COUNT__'}) }}"
+>
+    <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+            <div>
+                <h2 class="h5 mb-1">{{ t('websites.detail.metrics') }}</h2>
+                <p class="text-muted small mb-0">{{ t('websites.detail.metrics_help') }}</p>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                <div>
+                    <label class="form-label small mb-1" for="website-metrics-endpoint">{{ t('websites.form.endpoint') }}</label>
+                    <select class="form-select form-select-sm" id="website-metrics-endpoint" data-metrics-endpoint>
+                        <option value="">{{ t('websites.detail.all_endpoints') }}</option>
+                        {% for endpoint in website.endpoints %}
+                            <option value="{{ endpoint.id }}" {% if endpoint.is_primary %}selected{% endif %}>{{ endpoint.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label small mb-1" for="website-metrics-period">{{ t('websites.detail.period') }}</label>
+                    <select class="form-select form-select-sm" id="website-metrics-period" data-metrics-period>
+                        {% for period in ['1h', '6h', '24h', '7d', '30d', '365d'] %}
+                            <option value="{{ period }}" {% if period == '24h' %}selected{% endif %}>{{ t('websites.detail.period.' ~ period) }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-xl-3">
+                <div class="border rounded-3 h-100 p-3">
+                    <div class="text-muted small">{{ t('websites.detail.transport_availability') }}</div>
+                    <div class="fs-4 fw-semibold mt-1" data-metric-kpi="transport_availability">—</div>
+                </div>
+            </div>
+            <div class="col-6 col-xl-3">
+                <div class="border rounded-3 h-100 p-3">
+                    <div class="text-muted small">{{ t('websites.detail.assertion_success') }}</div>
+                    <div class="fs-4 fw-semibold mt-1" data-metric-kpi="assertion_success">—</div>
+                </div>
+            </div>
+            <div class="col-6 col-xl-3">
+                <div class="border rounded-3 h-100 p-3">
+                    <div class="text-muted small">{{ t('websites.detail.ttfb') }}</div>
+                    <div class="fs-4 fw-semibold mt-1" data-metric-kpi="ttfb_ms">—</div>
+                </div>
+            </div>
+            <div class="col-6 col-xl-3">
+                <div class="border rounded-3 h-100 p-3">
+                    <div class="text-muted small">{{ t('websites.detail.total_response') }}</div>
+                    <div class="fs-4 fw-semibold mt-1" data-metric-kpi="total_ms">—</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3" id="data-website-metrics-chart">
+            <div class="col-xl-6">
+                <div class="border rounded-3 p-3 h-100">
+                    <h3 class="h6 mb-3">{{ t('websites.detail.transport_chart') }}</h3>
+                    <div style="height: 260px"><canvas data-website-chart="transport_availability" aria-label="{{ t('websites.detail.transport_chart') }}"></canvas></div>
+                </div>
+            </div>
+            <div class="col-xl-6">
+                <div class="border rounded-3 p-3 h-100">
+                    <h3 class="h6 mb-3">{{ t('websites.detail.assertion_chart') }}</h3>
+                    <div style="height: 260px"><canvas data-website-chart="assertion_success" aria-label="{{ t('websites.detail.assertion_chart') }}"></canvas></div>
+                </div>
+            </div>
+            <div class="col-xl-6">
+                <div class="border rounded-3 p-3 h-100">
+                    <h3 class="h6 mb-3">{{ t('websites.detail.ttfb_chart') }}</h3>
+                    <div style="height: 260px"><canvas data-website-chart="ttfb_ms" aria-label="{{ t('websites.detail.ttfb_chart') }}"></canvas></div>
+                </div>
+            </div>
+            <div class="col-xl-6">
+                <div class="border rounded-3 p-3 h-100">
+                    <h3 class="h6 mb-3">{{ t('websites.detail.total_chart') }}</h3>
+                    <div style="height: 260px"><canvas data-website-chart="total_ms" aria-label="{{ t('websites.detail.total_chart') }}"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex flex-wrap justify-content-between gap-2 small text-muted mt-3">
+            <div data-metrics-state aria-live="polite">{{ t('websites.detail.loading_metrics') }}</div>
+            <div data-metrics-incidents></div>
+        </div>
+    </div>
+</section>

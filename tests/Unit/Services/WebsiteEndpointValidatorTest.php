@@ -125,6 +125,22 @@ final class WebsiteEndpointValidatorTest extends TestCase
         self::assertTrue($definition->tlsExpiryEnabled);
     }
 
+    public function testExistingEndpointCanKeepCredentialWhenFormSubmitsBlankFields(): void
+    {
+        $definition = (new WebsiteEndpointValidator())->validate([
+            'id' => 42,
+            'name' => 'API',
+            'url' => 'https://example.com/api',
+            'auth_type' => 'basic',
+            'auth_username' => '',
+            'auth_secret' => '',
+        ]);
+
+        self::assertSame('basic', $definition->authType);
+        self::assertNull($definition->authUsername);
+        self::assertNull($definition->authSecret);
+    }
+
     public function testExistingEndpointCanKeepAnEncryptedCredentialWithoutResubmittingIt(): void
     {
         $definition = (new WebsiteEndpointValidator())->validate([

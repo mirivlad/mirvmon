@@ -182,7 +182,7 @@ final class WebsiteEndpointValidator
         if ($type === 'none') {
             return ['none', null, null];
         }
-        if ($existing && $secret === null && $username === null
+        if ($existing && ($secret === null || $secret === '') && ($username === null || $username === '')
             && in_array($type, ['basic', 'bearer'], true)) {
             return [$type, null, null];
         }

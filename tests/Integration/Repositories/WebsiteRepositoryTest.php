@@ -102,6 +102,31 @@ final class WebsiteRepositoryTest extends TestCase
         self::assertSame(['X-Api-Key' => 'header-secret'], $worker['headers'] ?? null);
     }
 
+    public function testDetailReturnsEndpointValuesReadyForEditForm(): void
+    {
+        $siteId = $this->repository->create(
+            ['name' => 'Portal', 'group_id' => $this->groupId],
+            [$this->endpoint([
+                'expected_statuses' => '200,204-206',
+                'credential_redirect_hosts' => [
+                    'https://login.example.com',
+                    'https://api.example.com:8443',
+                ],
+            ])]
+        );
+
+        $detail = $this->repository->detail($siteId);
+        self::assertIsArray($detail);
+        self::assertCount(1, $detail['endpoints']);
+        $endpoint = $detail['endpoints'][0];
+        self::assertSame('200,204-206', $endpoint['expected_statuses']);
+        self::assertSame([
+            'https://login.example.com',
+            'https://api.example.com:8443',
+        ], $endpoint['credential_redirect_hosts']);
+        self::assertArrayNotHasKey('expected_status_ranges', $endpoint);
+    }
+
     public function testUpdateKeepsOmittedSecretAndCanClearAuthentication(): void
     {
         $siteId = $this->repository->create(
@@ -245,6 +270,11 @@ final class WebsiteRepositoryTest extends TestCase
         self::assertCount(1, $groups);
         self::assertSame('Web', $groups[0]['name']);
         self::assertCount(50, $groups[0]['websites']);
+        self::assertArrayHasKey('availability_24h', $groups[0]['websites'][0]);
+        self::assertArrayHasKey('last_total_ms', $groups[0]['websites'][0]);
+        self::assertArrayHasKey('last_sample_at', $groups[0]['websites'][0]);
+        self::assertArrayHasKey('tls_not_after', $groups[0]['websites'][0]);
+        self::assertArrayHasKey('domain_expires_at', $groups[0]['websites'][0]);
     }
 
     /** @param array<string, mixed> $overrides */

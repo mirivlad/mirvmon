@@ -56,6 +56,7 @@ final class WebsiteMetricsApiController
                 'source' => $series['source'],
                 'bucket_seconds' => $series['bucket_seconds'],
                 'series' => $this->series($series['points']),
+                'summary' => $this->summary($series['points']),
                 'incidents' => $this->incidents($websiteId, $from, $to),
                 'availability_intervals' => $this->availability($websiteId, $endpointId, $from, $to),
             ]);
@@ -119,6 +120,59 @@ final class WebsiteMetricsApiController
         return $result;
     }
 
+    /**
+     * @param list<array{
+     *     transport_ratio: float,
+     *     assertion_ratio: float,
+     *     ttfb_avg_ms: ?float,
+     *     total_avg_ms: ?float,
+     *     ttfb_sample_count: int,
+     *     total_sample_count: int,
+     *     sample_count: int
+     * }> $points
+     * @return array{
+     *     transport_availability: ?float,
+     *     assertion_success: ?float,
+     *     ttfb_ms: ?float,
+     *     total_ms: ?float,
+     *     sample_count: int
+     * }
+     */
+    private function summary(array $points): array
+    {
+        $samples = 0;
+        $transport = 0.0;
+        $assertions = 0.0;
+        $ttfbSamples = 0;
+        $ttfb = 0.0;
+        $totalSamples = 0;
+        $total = 0.0;
+
+        foreach ($points as $point) {
+            $count = $point['sample_count'];
+            $samples += $count;
+            $transport += $point['transport_ratio'] * $count;
+            $assertions += $point['assertion_ratio'] * $count;
+
+            if ($point['ttfb_avg_ms'] !== null && $point['ttfb_sample_count'] > 0) {
+                $ttfbSamples += $point['ttfb_sample_count'];
+                $ttfb += $point['ttfb_avg_ms'] * $point['ttfb_sample_count'];
+            }
+            if ($point['total_avg_ms'] !== null && $point['total_sample_count'] > 0) {
+                $totalSamples += $point['total_sample_count'];
+                $total += $point['total_avg_ms'] * $point['total_sample_count'];
+            }
+        }
+
+        return [
+            'transport_availability' => $samples > 0 ? $transport / $samples : null,
+            'assertion_success' => $samples > 0 ? $assertions / $samples : null,
+            'ttfb_ms' => $ttfbSamples > 0 ? $ttfb / $ttfbSamples : null,
+            'total_ms' => $totalSamples > 0 ? $total / $totalSamples : null,
+            'sample_count' => $samples,
+        ];
+    }
+
     /** @return list<array<string, mixed>> */
     private function incidents(int $websiteId, DateTimeImmutable $from, DateTimeImmutable $to): array
     {
@@ -146,12 +200,12 @@ final class WebsiteMetricsApiController
         return $result;
     }
 
-    /** @return list<array{state:string,start:string,end:?string,alert_id:?int}> */
+    /** @return list<array{endpoint_id:int,state:string,start:string,end:?string,alert_id:?int}> */
     private function availability(int $websiteId, ?int $endpointId, DateTimeImmutable $from, DateTimeImmutable $to): array
     {
         $filter = $endpointId === null ? '' : 'AND endpoint_id = :endpoint_id';
         $statement = $this->pdo->prepare(
-            "SELECT state, occurred_at, alert_id,
+            "SELECT endpoint_id, state, occurred_at, alert_id,
                     LEAD(state) OVER (PARTITION BY endpoint_id ORDER BY occurred_at, id) AS next_state,
                     LEAD(occurred_at) OVER (PARTITION BY endpoint_id ORDER BY occurred_at, id) AS next_at
              FROM website_availability_events
@@ -163,10 +217,23 @@ final class WebsiteMetricsApiController
         $statement->execute($params);
         $result = [];
         foreach ($statement->fetchAll() as $row) {
-            if ($row['state'] !== 'unavailable' || ($row['next_state'] ?? null) === 'available') continue;
+            if ($row['state'] !== 'unavailable') {
+                continue;
+            }
+            $startedAt = new DateTimeImmutable((string) $row['occurred_at']);
+            $endedAt = ($row['next_state'] ?? null) === 'available' && $row['next_at'] !== null
+                ? new DateTimeImmutable((string) $row['next_at'])
+                : null;
+            if (($endedAt !== null && $endedAt <= $from) || $startedAt > $to) {
+                continue;
+            }
+            $clippedStart = $startedAt < $from ? $from : $startedAt;
+            $clippedEnd = $endedAt !== null && $endedAt > $to ? $to : $endedAt;
             $result[] = [
-                'state' => 'unavailable', 'start' => max($from->format(DateTimeInterface::ATOM), (string) $row['occurred_at']),
-                'end' => $row['next_at'] === null ? null : (string) $row['next_at'],
+                'endpoint_id' => (int) $row['endpoint_id'],
+                'state' => 'unavailable',
+                'start' => $clippedStart->format(DateTimeInterface::ATOM),
+                'end' => $clippedEnd?->format(DateTimeInterface::ATOM),
                 'alert_id' => $row['alert_id'] === null ? null : (int) $row['alert_id'],
             ];
         }
