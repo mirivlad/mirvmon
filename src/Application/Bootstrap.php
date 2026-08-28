@@ -10,6 +10,7 @@ use App\Controllers\AgentUpdateController;
 use App\Controllers\AlertController;
 use App\Controllers\Api\MetricsApiController;
 use App\Controllers\Api\MetricsController;
+use App\Controllers\Api\WebsiteMetricsApiController;
 use App\Controllers\AuditController;
 use App\Controllers\AuthController;
 use App\Controllers\DashboardController;
@@ -20,6 +21,7 @@ use App\Controllers\ServerDetailController;
 use App\Controllers\SetupController;
 use App\Controllers\SystemController;
 use App\Controllers\WebsiteController;
+use App\Controllers\WebsiteDetailController;
 use App\Database\ConnectionFactory;
 use App\Domain\Metrics\MetricsValidator;
 use App\I18n\Translator;
@@ -37,6 +39,7 @@ use App\Repositories\ServerRepository;
 use App\Repositories\WorkerHeartbeatRepository;
 use App\Repositories\WebsiteCheckQueueRepository;
 use App\Repositories\WebsiteRepository;
+use App\Repositories\WebsiteMetricsRepository;
 use App\Security\SecretCipher;
 use App\Services\AgentArtifactCatalog;
 use App\Services\AgentCredentialIssuer;
@@ -350,6 +353,33 @@ final class Bootstrap
                 $container->get(WebsiteEndpointValidator::class),
                 $container->get(WebsiteCheckQueueRepository::class),
                 $container->get(Translator::class),
+            )
+        );
+        $container->set(
+            WebsiteMetricsRepository::class,
+            static fn (Container $container): WebsiteMetricsRepository => new WebsiteMetricsRepository(
+                $container->get(PDO::class)
+            )
+        );
+        $container->set(
+            WebsiteDetailController::class,
+            static fn (Container $container): WebsiteDetailController => new WebsiteDetailController(
+                $container->get(PDO::class),
+                $container->get(Twig::class),
+                $container->get(WebsiteRepository::class),
+                $container->get(WebsiteMetricsRepository::class),
+                $container->get(MaintenanceWindowRepository::class),
+                $container->get(Translator::class),
+                $container->get(IncidentRepository::class),
+            )
+        );
+        $container->set(
+            WebsiteMetricsApiController::class,
+            static fn (Container $container): WebsiteMetricsApiController => new WebsiteMetricsApiController(
+                $container->get(PDO::class),
+                $container->get(WebsiteRepository::class),
+                $container->get(WebsiteMetricsRepository::class),
+                $container->get(IncidentRepository::class),
             )
         );
         $container->set(

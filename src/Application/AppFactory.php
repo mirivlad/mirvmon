@@ -10,6 +10,7 @@ use App\Controllers\AgentUpdateController;
 use App\Controllers\AlertController;
 use App\Controllers\Api\MetricsApiController;
 use App\Controllers\Api\MetricsController;
+use App\Controllers\Api\WebsiteMetricsApiController;
 use App\Controllers\AuditController;
 use App\Controllers\AuthController;
 use App\Controllers\DashboardController;
@@ -20,6 +21,7 @@ use App\Controllers\ServerDetailController;
 use App\Controllers\SetupController;
 use App\Controllers\SystemController;
 use App\Controllers\WebsiteController;
+use App\Controllers\WebsiteDetailController;
 use App\Http\ErrorResponder;
 use App\I18n\Translator;
 use App\Middlewares\AdminMiddleware;
@@ -122,6 +124,12 @@ final class AppFactory
             $group->post('/sites/{id}/pause', self::controller($container, WebsiteController::class, 'pause'))->add($admin);
             $group->post('/sites/{id}/resume', self::controller($container, WebsiteController::class, 'resume'))->add($admin);
             $group->post('/sites/{id}/check', self::controller($container, WebsiteController::class, 'check'))->add($admin);
+            $group->get('/sites/{id}', self::controller($container, WebsiteDetailController::class, 'show'));
+            $group->post('/sites/{id}/settings', self::controller($container, WebsiteDetailController::class, 'saveSettings'))->add($admin);
+            $group->post('/sites/{id}/maintenance', self::controller($container, WebsiteDetailController::class, 'startMaintenance'))->add($admin);
+            $group->post('/sites/{id}/maintenance/cancel', self::controller($container, WebsiteDetailController::class, 'cancelMaintenance'))->add($admin);
+            $group->get('/api/sites/{id}/metrics', self::controller($container, WebsiteMetricsApiController::class, 'metrics'));
+            $group->get('/api/sites/{id}/status', self::controller($container, WebsiteMetricsApiController::class, 'status'));
 
             $group->get('/alerts', self::controller($container, AlertController::class, 'index'));
             $group->post('/alerts/{id}/resolve', self::controller($container, AlertController::class, 'markAsResolved'));

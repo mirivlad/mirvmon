@@ -211,6 +211,18 @@ final class WebsiteRepository
         });
     }
 
+    /** @param array<string, mixed> $settings */
+    public function updateSettings(int $websiteId, array $settings): void
+    {
+        $this->transaction(function () use ($websiteId, $settings): void {
+            $current = $this->find($websiteId);
+            if ($current === null) {
+                throw new InvalidArgumentException('Website does not exist.');
+            }
+            $this->saveSite($websiteId, $this->normalizeSite(array_replace($current, $settings)));
+        });
+    }
+
     public function delete(int $websiteId): void
     {
         $statement = $this->pdo->prepare('DELETE FROM websites WHERE id = :id');
