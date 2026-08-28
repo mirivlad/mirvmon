@@ -32,7 +32,10 @@ final class RouteSecurityContractTest extends TestCase
 
         $routes = [];
         foreach (AppFactory::create($container)->getRouteCollector()->getRoutes() as $route) {
-            $routes[$route->getPattern()] = $route->getMethods();
+            $routes[$route->getPattern()] = array_values(array_unique([
+                ...($routes[$route->getPattern()] ?? []),
+                ...$route->getMethods(),
+            ]));
         }
 
         foreach ([
@@ -49,9 +52,19 @@ final class RouteSecurityContractTest extends TestCase
             '/admin/notifications/queue/delete',
             '/servers/{id}/maintenance',
             '/servers/{id}/maintenance/cancel',
+            '/sites/{id}',
+            '/sites/{id}/delete',
+            '/sites/{id}/pause',
+            '/sites/{id}/resume',
+            '/sites/{id}/check',
         ] as $pattern) {
             self::assertSame(['POST'], $routes[$pattern] ?? null, $pattern);
         }
+
+        self::assertContains('GET', $routes['/sites'] ?? []);
+        self::assertContains('POST', $routes['/sites'] ?? []);
+        self::assertSame(['GET'], $routes['/sites/create'] ?? null);
+        self::assertSame(['GET'], $routes['/sites/{id}/edit'] ?? null);
 
         self::assertSame(
             ['GET'],

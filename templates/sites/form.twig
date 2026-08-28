@@ -1,0 +1,55 @@
+<div class="d-flex flex-wrap justify-content-between align-items-end mb-4 gap-3">
+    <div><p class="page-eyebrow">{{ t('websites.eyebrow') }}</p><h1 class="h2 mb-0">{{ website.id|default(null) ? t('websites.edit') : t('websites.create') }}</h1></div>
+    <a class="btn btn-outline-secondary" href="/sites">{{ t('common.back') }}</a>
+</div>
+{% if form_error %}<div class="alert alert-danger" role="alert">{{ form_error }}</div>{% endif %}
+<form method="post" action="{{ form_action }}" data-sites-form>
+    {% include "partials/csrf.twig" %}
+    <section class="card mb-4"><div class="card-body">
+        <h2 class="h5">{{ t('websites.form.identity') }}</h2>
+        <div class="row g-3">
+            <div class="col-md-6"><label class="form-label" for="website-name">{{ t('common.name') }}</label><input class="form-control" id="website-name" name="name" maxlength="100" required value="{{ website.name|default('') }}"></div>
+            <div class="col-md-6"><label class="form-label" for="website-group-id">{{ t('websites.form.group') }}</label><select class="form-select" id="website-group-id" name="group_id"><option value="">{{ t('websites.no_group') }}</option>{% for group in groups %}<option value="{{ group.id }}" {% if website.group_id == group.id %}selected{% endif %}>{{ group.name }}</option>{% endfor %}</select></div>
+            <div class="col-12"><label class="form-label" for="website-description">{{ t('common.description') }}</label><textarea class="form-control" id="website-description" name="description" rows="2" maxlength="10000">{{ website.description|default('') }}</textarea></div>
+        </div>
+    </div></section>
+
+    <section class="card mb-4"><div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3"><h2 class="h5 mb-0">{{ t('websites.form.endpoints') }}</h2><button type="button" class="btn btn-sm btn-outline-primary" data-add-endpoint><i class="fas fa-plus me-1" aria-hidden="true"></i>{{ t('websites.form.add_endpoint') }}</button></div>
+        <div data-endpoints>
+        {% for endpoint in website.endpoints|default([]) %}
+        <article class="border rounded p-3 mb-3" data-endpoint>
+            <div class="d-flex justify-content-between align-items-center mb-3"><h3 class="h6 mb-0" data-endpoint-title>{{ t('websites.form.endpoint') }}</h3><button type="button" class="btn btn-sm btn-outline-danger" data-remove-endpoint>{{ t('common.delete') }}</button></div>
+            {% if endpoint.id %}<input type="hidden" name="endpoints[{{ loop.index0 }}][id]" value="{{ endpoint.id }}">{% endif %}
+            <div class="row g-3">
+                <div class="col-md-5"><label class="form-label">{{ t('common.name') }}</label><input class="form-control" data-field="name" name="endpoints[{{ loop.index0 }}][name]" value="{{ endpoint.name|default('') }}" maxlength="100" required></div>
+                <div class="col-md-2 d-flex align-items-end"><label class="form-check mb-2"><input class="form-check-input" type="radio" data-field="is_primary" name="primary_endpoint" value="{{ loop.index0 }}" {% if endpoint.is_primary %}checked{% endif %}><span class="form-check-label">{{ t('websites.form.primary') }}</span></label><input type="hidden" data-primary-value name="endpoints[{{ loop.index0 }}][is_primary]" value="{{ endpoint.is_primary ? '1' : '0' }}"></div>
+                <div class="col-md-5"><label class="form-label">URL</label><input class="form-control" type="url" data-field="url" name="endpoints[{{ loop.index0 }}][url]" value="{{ endpoint.url|default('') }}" required></div>
+                <div class="col-md-2"><label class="form-label">{{ t('websites.form.method') }}</label><select class="form-select" name="endpoints[{{ loop.index0 }}][method]"><option {% if endpoint.method|default('GET') == 'GET' %}selected{% endif %}>GET</option><option {% if endpoint.method|default('GET') == 'HEAD' %}selected{% endif %}>HEAD</option></select></div>
+                <div class="col-md-2"><label class="form-label">{{ t('websites.form.interval') }}</label><input class="form-control" type="number" name="endpoints[{{ loop.index0 }}][interval_seconds]" value="{{ endpoint.interval_seconds|default(60) }}" min="10" max="86400"></div>
+                <div class="col-md-2"><label class="form-label">{{ t('websites.form.timeout') }}</label><input class="form-control" type="number" name="endpoints[{{ loop.index0 }}][timeout_seconds]" value="{{ endpoint.timeout_seconds|default(15) }}" min="1" max="60"></div>
+                <div class="col-md-3"><label class="form-label">{{ t('websites.form.statuses') }}</label><input class="form-control" name="endpoints[{{ loop.index0 }}][expected_statuses]" value="{{ endpoint.expected_statuses|default('200-299') }}"></div>
+                <div class="col-md-3 d-flex align-items-end"><label class="form-check mb-2"><input class="form-check-input" type="checkbox" name="endpoints[{{ loop.index0 }}][status_check_enabled]" value="1" {% if endpoint.status_check_enabled|default(true) %}checked{% endif %}><span class="form-check-label">{{ t('websites.form.status_check') }}</span></label></div>
+                <div class="col-md-3"><label class="form-label">{{ t('websites.form.warning_ms') }}</label><input class="form-control" type="number" name="endpoints[{{ loop.index0 }}][warning_total_ms]" value="{{ endpoint.warning_total_ms|default('') }}" min="1" max="60000"></div>
+                <div class="col-md-3"><label class="form-label">{{ t('websites.form.critical_ms') }}</label><input class="form-control" type="number" name="endpoints[{{ loop.index0 }}][critical_total_ms]" value="{{ endpoint.critical_total_ms|default('') }}" min="1" max="60000"></div>
+                <div class="col-md-3 d-flex align-items-end"><label class="form-check mb-2"><input class="form-check-input" type="checkbox" name="endpoints[{{ loop.index0 }}][follow_redirects]" value="1" {% if endpoint.follow_redirects|default(true) %}checked{% endif %}><span class="form-check-label">{{ t('websites.form.redirects') }}</span></label></div>
+                <div class="col-md-3 d-flex align-items-end"><label class="form-check mb-2"><input class="form-check-input" type="checkbox" name="endpoints[{{ loop.index0 }}][tls_expiry_enabled]" value="1" {% if endpoint.tls_expiry_enabled|default(false) %}checked{% endif %}><span class="form-check-label">{{ t('websites.form.tls') }}</span></label></div>
+                <div class="col-md-3 d-flex align-items-end"><label class="form-check mb-2"><input class="form-check-input" type="checkbox" name="endpoints[{{ loop.index0 }}][allow_self_signed]" value="1" {% if endpoint.allow_self_signed|default(false) %}checked{% endif %}><span class="form-check-label">{{ t('websites.form.self_signed') }}</span></label></div>
+                <div class="col-md-6"><label class="form-label">{{ t('websites.form.content') }}</label><textarea class="form-control" name="endpoints[{{ loop.index0 }}][content_checks_text]" rows="2" placeholder="{{ t('websites.form.content_help') }}">{% for check in endpoint.content_checks|default([]) %}{{ check.needle|default(check.expected_text|default('')) }}{% if not loop.last %}\n{% endif %}{% endfor %}</textarea></div>
+                <div class="col-md-6"><label class="form-label">{{ t('websites.form.redirect_hosts') }}</label><textarea class="form-control" name="endpoints[{{ loop.index0 }}][credential_redirect_hosts]" rows="2">{{ endpoint.credential_redirect_hosts|default([])|join('\n') }}</textarea></div>
+                <div class="col-md-4"><label class="form-label">{{ t('websites.form.auth') }}</label><select class="form-select" name="endpoints[{{ loop.index0 }}][auth_type]"><option value="none" {% if endpoint.auth_type|default('none') == 'none' %}selected{% endif %}>{{ t('websites.form.auth_none') }}</option><option value="basic" {% if endpoint.auth_type|default('none') == 'basic' %}selected{% endif %}>Basic</option><option value="bearer" {% if endpoint.auth_type|default('none') == 'bearer' %}selected{% endif %}>Bearer</option></select></div>
+                <div class="col-md-4"><label class="form-label">{{ t('websites.form.username') }}</label><input class="form-control" name="endpoints[{{ loop.index0 }}][auth_username]" value="" autocomplete="off"></div>
+                <div class="col-md-4"><label class="form-label">{{ t('websites.form.secret') }}{% if endpoint.has_auth|default(false) %} ({{ t('websites.form.keep_existing') }}){% endif %}</label><input class="form-control" type="password" name="endpoints[{{ loop.index0 }}][auth_secret]" value="" autocomplete="new-password"></div>
+                <div class="col-12"><label class="form-label">{{ t('websites.form.headers') }}</label><textarea class="form-control" name="endpoints[{{ loop.index0 }}][headers_text]" rows="2" placeholder="X-Api-Key: value"></textarea><div class="form-text">{{ t('websites.form.headers_help') }}</div>{% if endpoint.has_headers|default(false) %}<label class="form-check mt-2"><input class="form-check-input" type="checkbox" name="endpoints[{{ loop.index0 }}][clear_headers]" value="1"><span class="form-check-label">{{ t('websites.form.clear_headers') }}</span></label>{% endif %}</div>
+            </div>
+        </article>
+        {% endfor %}
+        </div>
+    </div></section>
+
+    <section class="card mb-4"><div class="card-body"><h2 class="h5">{{ t('websites.form.registration') }}</h2><div class="row g-3">
+        <div class="col-md-6"><label class="form-label" for="registration_domain">{{ t('websites.form.domain') }}</label><input class="form-control" id="registration_domain" name="registration_domain" value="{{ website.registration_domain|default('') }}" maxlength="253"></div>
+        <div class="col-md-6 d-flex align-items-end"><label class="form-check mb-2"><input class="form-check-input" type="checkbox" name="domain_check_enabled" value="1" {% if website.domain_check_enabled|default(false) %}checked{% endif %}><span class="form-check-label">{{ t('websites.form.domain_enabled') }}</span></label></div>
+    </div></div></section>
+    <div class="d-flex justify-content-end gap-2"><a class="btn btn-outline-secondary" href="/sites">{{ t('common.cancel') }}</a><button class="btn btn-primary" type="submit">{{ submit_label }}</button></div>
+</form>
