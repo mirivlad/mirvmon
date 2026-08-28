@@ -33,7 +33,14 @@ final class DocumentationContractTest extends TestCase
 
         self::assertMatchesRegularExpression('/## Интерфейс\n\n.*?(?=\n## |\z)/s', $readme);
 
-        foreach (['dashboard', 'server-detail', 'groups', 'notification-settings'] as $name) {
+        foreach ([
+            'dashboard',
+            'servers',
+            'server-overview',
+            'server-metrics',
+            'websites',
+            'website-settings',
+        ] as $name) {
             $relativePath = 'docs/screenshots/' . $name . '.webp';
             $imagePath = $root . '/' . $relativePath;
 
