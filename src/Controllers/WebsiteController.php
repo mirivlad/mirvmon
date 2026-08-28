@@ -198,7 +198,7 @@ final class WebsiteController
             'registration_domain' => '', 'domain_check_enabled' => false,
             'notification_telegram_chat_id' => '', 'notification_emails' => [],
             'endpoints' => [[
-                'name' => 'Главная', 'is_primary' => true, 'url' => '', 'method' => 'GET',
+                'id' => null, 'name' => 'Главная', 'is_primary' => true, 'url' => '', 'method' => 'GET',
                 'interval_seconds' => 60, 'timeout_seconds' => 15, 'follow_redirects' => true,
                 'max_redirects' => 10, 'status_check_enabled' => true,
                 'expected_statuses' => '200-299', 'content_checks' => [],
