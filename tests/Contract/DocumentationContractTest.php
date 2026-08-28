@@ -87,6 +87,22 @@ final class DocumentationContractTest extends TestCase
         self::assertStringNotContainsString('mysqldump', $readme);
     }
 
+    public function testReleaseWorkflowRequiresNotesAndPublishesAfterImageManifest(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $ci = (string) file_get_contents($root . '/.github/workflows/ci.yml');
+        $release = (string) file_get_contents($root . '/.github/workflows/release.yml');
+
+        self::assertStringContainsString('notes="docs/releases/${GITHUB_REF_NAME}.md"', $ci);
+        self::assertStringContainsString('needs: publish-manifest', $ci);
+        self::assertStringContainsString('gh release create "$tag"', $ci);
+        self::assertStringContainsString('permissions:', $ci);
+        self::assertStringContainsString('contents: write', $ci);
+
+        self::assertStringContainsString('notes="docs/releases/${tag}.md"', $release);
+        self::assertStringContainsString('Release notes are required before tagging', $release);
+    }
+
     public function testReleaseDocumentationMapsGitAndDockerTagsExplicitly(): void
     {
         $root = dirname(__DIR__, 2);

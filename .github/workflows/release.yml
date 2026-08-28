@@ -32,6 +32,11 @@ jobs:
             echo "Tag already exists: $tag" >&2
             exit 1
           fi
+          notes="docs/releases/${tag}.md"
+          if [ ! -s "$notes" ]; then
+            echo "Release notes are required before tagging: $notes" >&2
+            exit 1
+          fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Create and push tag
