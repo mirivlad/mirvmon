@@ -12,7 +12,7 @@ final class WorkerRuntimeContractTest extends TestCase
     {
         $root = dirname(__DIR__, 2);
 
-        foreach (['bin/notification-worker', 'bin/offline-worker'] as $file) {
+        foreach (['bin/notification-worker', 'bin/offline-worker', 'bin/website-check-worker'] as $file) {
             $source = (string) file_get_contents($root . '/' . $file);
             self::assertMatchesRegularExpression(
                 '/catch \\(Throwable \\$exception\\).*?exit\\(1\\);/s',
@@ -20,7 +20,7 @@ final class WorkerRuntimeContractTest extends TestCase
                 $file . ' must terminate after an infrastructure failure.'
             );
             self::assertMatchesRegularExpression(
-                '/catch \\(PDOException\\).*?\\$worker = null;/s',
+                '/catch \\(PDOException\\).*?\\$(?:worker|runtime) = null;/s',
                 $source,
                 $file . ' must discard a disconnected PDO graph.'
             );
