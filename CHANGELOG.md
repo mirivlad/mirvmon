@@ -10,6 +10,14 @@ Git history. Until a release tag is created, current work stays under
 - Preserve retry diagnostics for unexpected metrics HTTP responses and show classified, credential-sanitized details from `check`/`once` CLI failures.
 - Reorganized public documentation around an agent operator guide, troubleshooting, FAQ, use cases and a documentation index; historical redesign plans are no longer linked as current user documentation.
 
+## 0.5.1
+
+- Reworked website create/edit forms around common monitoring tasks, with advanced HTTP, authentication, redirect, self-signed and header settings kept out of the primary flow.
+- Made the website detail page the primary navigation target and restored the intended operational UX instead of dropping users into CRUD editing.
+- Expanded website cards with 24-hour availability, latest response time, last check time and TLS/domain expiry information when available.
+- Restored and expanded website metrics UI with Chart.js, endpoint/period selection, KPI summaries and graphs for transport availability, assertion success, TTFB and total response time.
+- Fixed multi-endpoint metrics rendering, weighted metric summaries, closed downtime interval reporting, existing credential preservation and edit-form normalization for status ranges and redirect origins.
+
 ## 0.4.21
 
 - Fixed the RAM chart process tooltip so per-process memory is shown as human-readable KiB/MiB/GiB/TiB instead of a raw number mislabeled as a percentage.

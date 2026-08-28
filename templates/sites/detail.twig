@@ -12,5 +12,6 @@
 {% if active_tab == 'metrics' %}{% include 'sites/partials/detail-metrics.twig' %}{% endif %}
 {% if active_tab == 'events' %}{% include 'sites/partials/detail-events.twig' %}{% endif %}
 {% if active_tab == 'settings' %}{% include 'sites/partials/detail-settings.twig' %}{% endif %}
+{% if active_tab == 'metrics' %}<script src="/vendor/chart.js/chart.umd.js" defer></script>{% endif %}
 <script src="/js/site-detail.js" defer></script>
 {% endblock %}

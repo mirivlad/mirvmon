@@ -90,6 +90,9 @@ final class WebsiteDetailControllerTest extends TestCase
         self::assertSame(200, $response->getStatusCode());
         self::assertSame('raw', $payload['source']);
         self::assertArrayHasKey('transport_availability', $payload['series']);
+        self::assertArrayHasKey('summary', $payload);
+        self::assertArrayHasKey('transport_availability', $payload['summary']);
+        self::assertArrayHasKey('sample_count', $payload['summary']);
         self::assertArrayHasKey('availability_intervals', $payload);
         self::assertArrayNotHasKey('body', $payload);
 
