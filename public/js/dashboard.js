@@ -219,23 +219,39 @@
         });
     }
 
+    function updateWebsiteSummary(stats) {
+        if (!stats || typeof stats !== 'object') {
+            return;
+        }
+        Object.entries(stats).forEach(([status, count]) => {
+            const target = document.querySelector(`[data-website-summary="${status}"]`);
+            if (target && Number.isFinite(Number(count))) {
+                target.textContent = String(count);
+            }
+        });
+    }
+
     async function refreshDashboard() {
         if (document.visibilityState !== 'visible') {
             return;
         }
         try {
-            const response = await fetch('/api/dashboard/stats', {
+            const response = await fetch('/api/dashboard/stats?include_websites=1', {
                 headers: { Accept: 'application/json' },
                 credentials: 'same-origin'
             });
             if (!response.ok) {
                 return;
             }
-            const servers = await response.json();
+            const payload = await response.json();
+            const servers = Array.isArray(payload) ? payload : payload.servers;
             if (!Array.isArray(servers)) {
                 return;
             }
             servers.forEach(updateStatus);
+            if (!Array.isArray(payload)) {
+                updateWebsiteSummary(payload.website_stats);
+            }
             updateSummary();
             refreshRelativeTimes();
             applyView();

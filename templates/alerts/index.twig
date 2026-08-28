@@ -32,11 +32,37 @@
     <div class="card-body py-3">
         <div class="row g-2">
             <div class="col-sm-6 col-xl-2">
+                <label class="form-label small mb-1" for="incident-source">{{ t('incidents.filter.source') }}</label>
+                <select class="form-select form-select-sm" id="incident-source" name="source_type">
+                    <option value="">{{ t('incidents.filter.all_sources') }}</option>
+                    <option value="server" {{ filters.source_type == 'server' ? 'selected' : '' }}>{{ t('incidents.source.server') }}</option>
+                    <option value="website" {{ filters.source_type == 'website' ? 'selected' : '' }}>{{ t('incidents.source.website') }}</option>
+                </select>
+            </div>
+            <div class="col-sm-6 col-xl-2">
                 <label class="form-label small mb-1" for="incident-server">{{ t('incidents.filter.server') }}</label>
                 <select class="form-select form-select-sm" id="incident-server" name="server_id">
                     <option value="">{{ t('incidents.filter.all_servers') }}</option>
                     {% for server in server_options %}
                     <option value="{{ server.id }}" {{ filters.server_id == server.id ? 'selected' : '' }}>{{ server.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-sm-6 col-xl-2">
+                <label class="form-label small mb-1" for="incident-website">{{ t('incidents.filter.website') }}</label>
+                <select class="form-select form-select-sm" id="incident-website" name="website_id">
+                    <option value="">{{ t('incidents.filter.all_websites') }}</option>
+                    {% for website in website_options %}
+                    <option value="{{ website.id }}" {{ filters.website_id == website.id ? 'selected' : '' }}>{{ website.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-sm-6 col-xl-2">
+                <label class="form-label small mb-1" for="incident-endpoint">{{ t('incidents.filter.endpoint') }}</label>
+                <select class="form-select form-select-sm" id="incident-endpoint" name="endpoint_id">
+                    <option value="">{{ t('incidents.filter.all_endpoints') }}</option>
+                    {% for endpoint in endpoint_options %}
+                    <option value="{{ endpoint.id }}" {{ filters.endpoint_id == endpoint.id ? 'selected' : '' }}>{{ endpoint.name }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -85,7 +111,7 @@
             <table class="table table-hover align-middle mb-0">
                 <thead>
                     <tr>
-                        <th>{{ t('incidents.column.server') }}</th>
+                        <th>{{ t('incidents.column.source') }}</th>
                         <th>{{ t('incidents.column.problem') }}</th>
                         <th>{{ t('incidents.column.level') }}</th>
                         <th>{{ t('incidents.column.period') }}</th>
@@ -114,7 +140,12 @@
                     {% endif %}
                     <tr>
                         <td>
+                            {% if event.source_type == 'website' %}
+                            <a href="/sites/{{ event.website_id }}?tab=events" class="fw-semibold text-decoration-none">{{ event.source_name }}</a>
+                            {% else %}
                             <a href="/servers/{{ event.server_id }}" class="fw-semibold text-decoration-none">{{ event.server_name }}</a>
+                            {% endif %}
+                            <div class="small text-muted mt-1">{{ t('incidents.source.' ~ event.source_type) }}{% if event.endpoint_name %} · {{ event.endpoint_name }}{% endif %}</div>
                             {% if event.group_id %}
                                 <div class="small mt-1">
                                     <i class="fas fa-layer-group text-muted me-1" aria-hidden="true"></i>

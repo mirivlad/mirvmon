@@ -141,11 +141,11 @@ final class ServerControllerTest extends TestCase
     public function testIndexUsesPerServerGroupDataAndFiltersByAllowedSearchAndSort(): void
     {
         $redGroupId = (int) self::$pdo?->query(
-            "INSERT INTO server_groups (name, icon, color)
+            "INSERT INTO monitoring_groups (name, icon, color)
              VALUES ('Red group', 'fa-circle', '#dc3545') RETURNING id"
         )->fetchColumn();
         $blueGroupId = (int) self::$pdo?->query(
-            "INSERT INTO server_groups (name, icon, color)
+            "INSERT INTO monitoring_groups (name, icon, color)
              VALUES ('Blue group', 'fa-square', '#0d6efd') RETURNING id"
         )->fetchColumn();
         $insert = self::$pdo?->prepare(

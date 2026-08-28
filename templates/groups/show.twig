@@ -48,7 +48,51 @@
             <span class="summary-label">{{ t('ui19.groups.active_problems') }}</span>
             <strong class="summary-value">{{ summary.active_problems }}</strong>
         </div>
+        <div class="group-summary-card">
+            <span class="summary-label">{{ t('ui19.groups.websites') }}</span>
+            <strong class="summary-value">{{ summary.website_total }}</strong>
+        </div>
     </div>
+</section>
+
+<section class="app-panel" aria-labelledby="group-websites-title">
+    <div class="app-panel-header">
+        <h2 class="app-panel-title" id="group-websites-title">
+            <i class="fas fa-globe" aria-hidden="true"></i> {{ t('ui19.groups.websites') }}
+        </h2>
+        <span class="badge bg-light text-dark">{{ websites|length }}</span>
+    </div>
+    {% if websites|length > 0 %}
+    <div class="table-responsive">
+        <table class="table app-table server-list-table">
+            <thead><tr><th>{{ t('common.name') }}</th><th>{{ t('websites.filters.status') }}</th><th>{{ t('common.actions') }}</th></tr></thead>
+            <tbody>
+            {% for website in websites %}
+                <tr>
+                    <td data-label="{{ t('common.name') }}">
+                        <a class="server-list-name" href="/sites/{{ website.id }}">{{ website.name }}</a>
+                        <span class="server-list-secondary">{{ website.primary_url|default('—') }}</span>
+                    </td>
+                    <td data-label="{{ t('websites.filters.status') }}">
+                        <span class="app-status-badge status-{{ website.status }}"><span class="app-status-dot" aria-hidden="true"></span>{{ t('websites.status.' ~ website.status) }}</span>
+                        {% if website.active_problem_count > 0 %}<span class="small text-danger ms-1">{{ website.active_problem_count }}</span>{% endif %}
+                    </td>
+                    <td data-label="{{ t('common.actions') }}">
+                        {% include "partials/action-button.twig" with {href: '/sites/' ~ website.id, icon: 'fa-eye', label: t('common.view'), class: 'btn-primary'} %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="app-empty-state">
+        <span class="app-empty-state-icon"><i class="fas fa-globe" aria-hidden="true"></i></span>
+        <h3>{{ t('ui19.groups.no_websites') }}</h3>
+        <p>{{ t('ui19.groups.no_websites_text') }}</p>
+        <a href="/sites/create" class="btn btn-primary">{{ t('website.create') }}</a>
+    </div>
+    {% endif %}
 </section>
 
 <section class="app-panel" aria-labelledby="group-servers-title">

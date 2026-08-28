@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Services\WebsiteUrlSanitizer;
+
 final class NotificationMessageFormatter
 {
     private readonly ?string $publicBaseUrl;
@@ -27,9 +29,8 @@ final class NotificationMessageFormatter
     public function format(array $job): array
     {
         $message = $this->message($job);
-        $link = $this->serverLink(
-            is_array($job['payload'] ?? null) ? $job['payload'] : []
-        );
+        $payload = is_array($job['payload'] ?? null) ? $job['payload'] : [];
+        $link = $this->websiteLink($payload) ?? $this->serverLink($payload);
         if ($link !== null) {
             $message['body'] .= "\n" . $link;
         }
@@ -58,6 +59,10 @@ final class NotificationMessageFormatter
                     'Время события: ' . $time,
                 ]),
             ];
+        }
+
+        if (str_starts_with($eventType, 'website_')) {
+            return $this->websiteMessage($eventType, $payload, $time);
         }
 
         if ($eventType === 'alert_resolved') {
@@ -172,6 +177,78 @@ final class NotificationMessageFormatter
         }
 
         return 'Открыть сервер: ' . $this->publicBaseUrl . '/servers/' . $serverId;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array{subject: string, body: string}
+     */
+    private function websiteMessage(string $eventType, array $payload, string $time): array
+    {
+        $website = $this->text($payload['website_name'] ?? 'unknown');
+        $endpoint = $this->text($payload['endpoint_name'] ?? '');
+        $severity = $this->text($payload['severity'] ?? 'warning');
+        $recovered = str_ends_with($eventType, '_recovered')
+            || ($payload['event'] ?? null) === 'recovered';
+        $kind = match ((string) ($payload['kind'] ?? $payload['type'] ?? 'website')) {
+            'website_http' => 'доступность сайта',
+            'website_assertion' => 'проверка содержимого',
+            'website_performance' => 'скорость ответа',
+            'website_tls' => 'сертификат TLS',
+            'website_domain' => 'срок регистрации домена',
+            default => 'проверка сайта',
+        };
+        $object = $endpoint === '' ? $website : $website . ' / ' . $endpoint;
+        $lines = [
+            'Сайт: ' . $website,
+            'Проверка: ' . $kind,
+        ];
+        if ($endpoint !== '') {
+            $lines[] = 'Точка проверки: ' . $endpoint;
+        }
+        $safeUrl = (new WebsiteUrlSanitizer())->forDisplay($this->text($payload['safe_url'] ?? ''));
+        if ($safeUrl !== '') {
+            $lines[] = 'URL: ' . $safeUrl;
+        }
+        if (isset($payload['expected'])) {
+            $lines[] = 'Ожидание: ' . $this->text($payload['expected']);
+        }
+        if (isset($payload['actual'])) {
+            $lines[] = 'Факт: ' . $this->text($payload['actual']);
+        }
+        $lines[] = 'Серьёзность: ' . $severity;
+        $lines[] = 'Время события: ' . $this->text($payload['effective_at'] ?? $time);
+
+        return [
+            'subject' => $recovered
+                ? '✅ Сайт восстановлен: ' . $object
+                : ($severity === 'critical' ? '🚨' : '⚠️') . ' Проблема сайта: ' . $object,
+            'body' => implode("\n", $lines),
+        ];
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function websiteLink(array $payload): ?string
+    {
+        $websiteId = filter_var(
+            $payload['website_id'] ?? null,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1]]
+        );
+        if ($this->publicBaseUrl === null || $websiteId === false) {
+            return null;
+        }
+        $url = $this->publicBaseUrl . '/sites/' . $websiteId . '?tab=events';
+        $alertId = filter_var(
+            $payload['alert_id'] ?? null,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1]]
+        );
+        if ($alertId !== false) {
+            $url .= '#incident-' . $alertId;
+        }
+
+        return 'Открыть сайт: ' . $url;
     }
 
     private function text(mixed $value): string

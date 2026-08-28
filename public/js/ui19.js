@@ -34,6 +34,7 @@
         if (path === '/') return 'ui-section-dashboard';
         if (path.startsWith('/groups')) return 'ui-section-groups';
         if (path.startsWith('/servers')) return 'ui-section-servers';
+        if (path.startsWith('/sites')) return 'ui-section-websites';
         if (path.startsWith('/alerts')) return 'ui-section-incidents';
         if (path.startsWith('/admin/system')) return 'ui-section-system';
         if (path.startsWith('/admin/')) return 'ui-section-settings';

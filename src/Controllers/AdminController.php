@@ -356,7 +356,14 @@ final class AdminController
                 'default_warning_threshold',
                 'default_critical_threshold',
                 'default_duration_seconds',
-                'default_recovery_duration_seconds'
+                'default_recovery_duration_seconds',
+                'website_default_interval_seconds',
+                'website_http_timeout_seconds',
+                'website_tls_warning_days',
+                'website_tls_critical_days',
+                'website_domain_warning_days',
+                'website_domain_critical_days',
+                'website_worker_concurrency'
             )
             ORDER BY setting_key
             SQL
@@ -570,13 +577,75 @@ final class AdminController
         if ($critical < $warning) {
             throw new InvalidArgumentException($this->translator->trans('admin.defaults.validation.threshold_order'));
         }
+        $websiteInterval = $this->boundedInteger(
+            $body['website_default_interval_seconds'] ?? null,
+            10,
+            86400
+        );
+        $websiteTimeout = $this->boundedInteger(
+            $body['website_http_timeout_seconds'] ?? null,
+            1,
+            60
+        );
+        $tlsWarning = $this->boundedInteger(
+            $body['website_tls_warning_days'] ?? null,
+            1,
+            3650
+        );
+        $tlsCritical = $this->boundedInteger(
+            $body['website_tls_critical_days'] ?? null,
+            0,
+            3650
+        );
+        $domainWarning = $this->boundedInteger(
+            $body['website_domain_warning_days'] ?? null,
+            1,
+            3650
+        );
+        $domainCritical = $this->boundedInteger(
+            $body['website_domain_critical_days'] ?? null,
+            0,
+            3650
+        );
+        $workerConcurrency = $this->boundedInteger(
+            $body['website_worker_concurrency'] ?? null,
+            1,
+            50
+        );
+        if ($websiteInterval === null || $websiteTimeout === null
+            || $tlsWarning === null || $tlsCritical === null
+            || $domainWarning === null || $domainCritical === null
+            || $workerConcurrency === null) {
+            throw new InvalidArgumentException($this->translator->trans('admin.defaults.validation.range'));
+        }
+        if ($tlsCritical > $tlsWarning || $domainCritical > $domainWarning) {
+            throw new InvalidArgumentException(
+                $this->translator->trans('admin.defaults.validation.expiry_order')
+            );
+        }
         return [
             'default_offline_timeout' => $offlineTimeout,
             'default_warning_threshold' => $warning,
             'default_critical_threshold' => $critical,
             'default_duration_seconds' => $duration,
             'default_recovery_duration_seconds' => $recovery,
+            'website_default_interval_seconds' => $websiteInterval,
+            'website_http_timeout_seconds' => $websiteTimeout,
+            'website_tls_warning_days' => $tlsWarning,
+            'website_tls_critical_days' => $tlsCritical,
+            'website_domain_warning_days' => $domainWarning,
+            'website_domain_critical_days' => $domainCritical,
+            'website_worker_concurrency' => $workerConcurrency,
         ];
+    }
+
+    private function boundedInteger(mixed $value, int $minimum, int $maximum): ?int
+    {
+        $number = filter_var($value, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => $minimum, 'max_range' => $maximum],
+        ]);
+
+        return $number === false ? null : $number;
     }
 
     private function boundedFloat(mixed $value, float $minimum, float $maximum): ?float

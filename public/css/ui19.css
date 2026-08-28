@@ -620,3 +620,8 @@
         margin-bottom: 0.3rem;
     }
 }
+/* Website monitoring */
+.website-card { border-top: 3px solid var(--bs-secondary); }
+.website-status-healthy { border-top-color: var(--app-online); }
+.website-status-critical, .website-status-unavailable, .website-status-problem { border-top-color: var(--app-critical); }
+.website-status-warning, .website-status-slow, .website-status-degraded { border-top-color: var(--app-warning); }

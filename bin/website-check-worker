@@ -1,0 +1,111 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use App\Database\ConnectionFactory;
+use App\Repositories\DomainRegistrationRepository;
+use App\Repositories\NotificationOutboxRepository;
+use App\Repositories\WebsiteCheckQueueRepository;
+use App\Repositories\WebsiteMetricsRepository;
+use App\Repositories\WebsiteRepository;
+use App\Repositories\WebsiteTlsRepository;
+use App\Repositories\WorkerHeartbeatRepository;
+use App\Security\SecretCipher;
+use App\Services\CentralWebsiteProbeExecutor;
+use App\Services\DomainRegistrationChecker;
+use App\Services\TlsCertificateInspector;
+use App\Services\WebsiteEndpointValidator;
+use App\Services\WebsiteHttpChecker;
+use App\Services\WebsiteIncidentService;
+use App\Services\WebsiteStateEvaluator;
+use App\Workers\WebsiteCheckWorker;
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+$interval = filter_var(
+    getenv('WEBSITE_CHECK_LOOP_INTERVAL') ?: 15,
+    FILTER_VALIDATE_INT,
+    ['options' => ['min_range' => 1, 'max_range' => 60]],
+);
+$concurrency = filter_var(
+    getenv('WEBSITE_CHECK_CONCURRENCY') ?: 10,
+    FILTER_VALIDATE_INT,
+    ['options' => ['min_range' => 1, 'max_range' => 50]],
+);
+if ($interval === false || $concurrency === false) {
+    fwrite(STDERR, "WEBSITE_CHECK_LOOP_INTERVAL must be 1-60 and WEBSITE_CHECK_CONCURRENCY must be 1-50.\n");
+    exit(1);
+}
+
+$key = base64_decode((string) getenv('APP_KEY'), true);
+if ($key === false || strlen($key) !== 32) {
+    fwrite(STDERR, "APP_KEY must be a base64-encoded 32-byte key.\n");
+    exit(1);
+}
+
+$once = in_array('--once', $argv, true);
+$running = true;
+if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
+    pcntl_async_signals(true);
+    pcntl_signal(SIGTERM, static function () use (&$running): void { $running = false; });
+    pcntl_signal(SIGINT, static function () use (&$running): void { $running = false; });
+}
+
+$runtime = null;
+$leaseOwner = gethostname() . ':' . getmypid();
+do {
+    try {
+        $runtime ??= createWebsiteRuntime($key, $leaseOwner, $concurrency);
+        $runtime['worker']->runOnce();
+        $runtime['heartbeat']->record(WorkerHeartbeatRepository::WEBSITE_CHECK_WORKER);
+    } catch (PDOException) {
+        fwrite(STDERR, "website_check_worker_database_unavailable\n");
+        $runtime = null;
+        if ($once) {
+            exit(1);
+        }
+    } catch (Throwable $exception) {
+        fwrite(STDERR, "website_check_worker_failed\n");
+        exit(1);
+    }
+    if ($once) {
+        break;
+    }
+    for ($second = 0; $second < $interval && $running; $second++) {
+        sleep(1);
+    }
+} while ($running);
+
+/** @return array{worker: WebsiteCheckWorker, heartbeat: WorkerHeartbeatRepository} */
+function createWebsiteRuntime(string $key, string $leaseOwner, int $concurrency): array
+{
+    $pdo = ConnectionFactory::fromEnvironment();
+    $cipher = new SecretCipher($key);
+    $websites = new WebsiteRepository($pdo, $cipher);
+    $incidents = new WebsiteIncidentService(
+        $pdo,
+        new WebsiteStateEvaluator(),
+        new WebsiteMetricsRepository($pdo),
+        new NotificationOutboxRepository($pdo),
+    );
+
+    return [
+        'worker' => new WebsiteCheckWorker(
+            new WebsiteCheckQueueRepository($pdo),
+            new CentralWebsiteProbeExecutor(
+                $pdo,
+                $websites,
+                new WebsiteHttpChecker(),
+                new TlsCertificateInspector(),
+                new DomainRegistrationChecker(),
+                new WebsiteEndpointValidator(),
+            ),
+            $incidents,
+            new WebsiteTlsRepository($pdo),
+            new DomainRegistrationRepository($pdo),
+            $leaseOwner,
+            $concurrency,
+        ),
+        'heartbeat' => new WorkerHeartbeatRepository($pdo),
+    ];
+}

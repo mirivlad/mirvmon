@@ -101,7 +101,7 @@ final class ServerRepository
                 COALESCE(server_thresholds.thresholds, '{}'::jsonb) AS thresholds
             FROM servers
             LEFT JOIN agent_tokens ON agent_tokens.server_id = servers.id
-            LEFT JOIN server_groups AS groups ON groups.id = servers.group_id
+            LEFT JOIN monitoring_groups AS groups ON groups.id = servers.group_id
             LEFT JOIN latest_metrics ON latest_metrics.server_id = servers.id
             LEFT JOIN active_alerts ON active_alerts.server_id = servers.id
             LEFT JOIN server_thresholds ON server_thresholds.server_id = servers.id
@@ -121,7 +121,7 @@ final class ServerRepository
 
     public function groupCount(): int
     {
-        $count = $this->pdo->query('SELECT count(*) FROM server_groups')?->fetchColumn();
+        $count = $this->pdo->query('SELECT count(*) FROM monitoring_groups')?->fetchColumn();
 
         return (int) $count;
     }
@@ -142,7 +142,7 @@ final class ServerRepository
                 agent_tokens.last_used_at AS last_seen
             FROM servers
             LEFT JOIN agent_tokens ON agent_tokens.server_id = servers.id
-            LEFT JOIN server_groups AS groups ON groups.id = servers.group_id
+            LEFT JOIN monitoring_groups AS groups ON groups.id = servers.group_id
             LEFT JOIN LATERAL (
                 SELECT
                     count(*) FILTER (WHERE severity = 'warning') AS warning_alerts,

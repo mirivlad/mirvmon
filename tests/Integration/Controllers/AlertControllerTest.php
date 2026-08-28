@@ -98,6 +98,41 @@ final class AlertControllerTest extends TestCase
         self::assertStringContainsString('95.5 %', $html);
     }
 
+    public function testWebsiteIncidentsRenderSourceAndEndpointFilters(): void
+    {
+        $websiteId = (int) self::$pdo?->query(
+            "INSERT INTO websites (name) VALUES ('alert-website') RETURNING id"
+        )->fetchColumn();
+        self::$pdo?->prepare(
+            "INSERT INTO website_endpoints (website_id, name, url, is_primary)
+             VALUES (:website_id, 'homepage', 'https://example.test', TRUE)"
+        )?->execute(['website_id' => $websiteId]);
+        $endpointId = (int) self::$pdo?->query(
+            'SELECT id FROM website_endpoints WHERE website_id = ' . $websiteId
+        )->fetchColumn();
+        self::$pdo?->prepare(
+            "INSERT INTO alerts (website_id, endpoint_id, kind, subject, severity)
+             VALUES (:website_id, :endpoint_id, 'service', 'homepage', 'critical')"
+        )->execute(['website_id' => $websiteId, 'endpoint_id' => $endpointId]);
+
+        $response = $this->controller->index(
+            (new ServerRequestFactory())->createServerRequest(
+                'GET',
+                '/alerts?source_type=website&website_id=' . $websiteId . '&endpoint_id=' . $endpointId
+            ),
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+        $html = (string) $response->getBody();
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertStringContainsString('alert-website', $html);
+        self::assertStringContainsString('homepage', $html);
+        self::assertStringContainsString('name="source_type"', $html);
+        self::assertStringContainsString('name="website_id"', $html);
+        self::assertStringContainsString('name="endpoint_id"', $html);
+    }
+
     public function testResolveUsesPostgresBoolean(): void
     {
         $response = $this->controller->markAsResolved(

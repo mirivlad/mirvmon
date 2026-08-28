@@ -61,6 +61,7 @@ final class SystemHealthServiceTest extends TestCase
         $heartbeats = new WorkerHeartbeatRepository(self::$pdo);
         $heartbeats->record(WorkerHeartbeatRepository::NOTIFICATION_WORKER);
         $heartbeats->record(WorkerHeartbeatRepository::OFFLINE_WORKER);
+        $heartbeats->record(WorkerHeartbeatRepository::WEBSITE_CHECK_WORKER);
         (new AppSettingsRepository(self::$pdo))->set(SystemHealthService::HOST_SETTING, $serverId);
 
         foreach ([
@@ -85,7 +86,7 @@ final class SystemHealthServiceTest extends TestCase
         self::assertTrue($details['database']['available']);
         self::assertNotSame('', $details['database']['timescale_version']);
         self::assertSame('ok', $details['workers']['status']);
-        self::assertCount(2, $details['workers']['items']);
+        self::assertCount(3, $details['workers']['items']);
         self::assertSame('ok', $details['queue']['status']);
         self::assertSame([
             'pending' => 0,
@@ -124,6 +125,7 @@ final class SystemHealthServiceTest extends TestCase
         $heartbeats = new WorkerHeartbeatRepository(self::$pdo);
         $heartbeats->record(WorkerHeartbeatRepository::NOTIFICATION_WORKER);
         $heartbeats->record(WorkerHeartbeatRepository::OFFLINE_WORKER);
+        $heartbeats->record(WorkerHeartbeatRepository::WEBSITE_CHECK_WORKER);
 
         $details = $this->service()->details();
 

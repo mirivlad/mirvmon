@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Repositories;
 
 use DateTimeImmutable;
+use InvalidArgumentException;
 use JsonException;
 use PDO;
 use RuntimeException;
@@ -26,6 +27,48 @@ final class NotificationOutboxRepository
         array $payload,
         string $deduplicationKey
     ): int {
+        return $this->enqueueForSource(
+            $serverId,
+            null,
+            $alertId,
+            $eventType,
+            $payload,
+            $deduplicationKey,
+        );
+    }
+
+    /** @param array<string, mixed> $payload */
+    public function enqueueWebsiteConfigured(
+        int $websiteId,
+        int $alertId,
+        string $eventType,
+        array $payload,
+        string $deduplicationKey
+    ): int {
+        $this->validateWebsitePayload($payload);
+
+        return $this->enqueueForSource(
+            null,
+            $websiteId,
+            $alertId,
+            $eventType,
+            $payload,
+            $deduplicationKey,
+        );
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function enqueueForSource(
+        ?int $serverId,
+        ?int $websiteId,
+        int $alertId,
+        string $eventType,
+        array $payload,
+        string $deduplicationKey,
+    ): int {
+        if (($serverId === null) === ($websiteId === null) || $alertId <= 0) {
+            throw new InvalidArgumentException('Notification source is invalid.');
+        }
         $settings = $this->pdo->query(
             'SELECT
                 email_enabled,
@@ -42,13 +85,14 @@ final class NotificationOutboxRepository
         if (!is_array($settings) || !$this->severityIsEnabled($settings, $payload)) {
             return 0;
         }
-        if ($this->underMaintenance($serverId)) {
+        if ($this->underMaintenance($serverId, $websiteId)) {
             return 0;
         }
         if (
             $this->withinCooldown(
                 (int) ($settings['cooldown_seconds'] ?? 0),
                 $serverId,
+                $websiteId,
                 $eventType,
                 $payload
             )
@@ -56,7 +100,7 @@ final class NotificationOutboxRepository
             return 0;
         }
 
-        $deliveries = $this->deliveries($settings, $serverId);
+        $deliveries = $this->deliveries($settings, $serverId, $websiteId);
         if ($deliveries === []) {
             return 0;
         }
@@ -70,6 +114,7 @@ final class NotificationOutboxRepository
         $statement = $this->pdo->prepare(
             'INSERT INTO notification_outbox (
                 server_id,
+                website_id,
                 alert_id,
                 channel,
                 recipient,
@@ -78,6 +123,7 @@ final class NotificationOutboxRepository
                 deduplication_key
              ) VALUES (
                 :server_id,
+                :website_id,
                 :alert_id,
                 :channel,
                 :recipient,
@@ -92,6 +138,7 @@ final class NotificationOutboxRepository
         foreach ($deliveries as [$channel, $recipient]) {
             $statement->execute([
                 'server_id' => $serverId,
+                'website_id' => $websiteId,
                 'alert_id' => $alertId,
                 'channel' => $channel,
                 'recipient' => $recipient,
@@ -112,30 +159,35 @@ final class NotificationOutboxRepository
     /**
      * A metric sitting on its threshold can trigger and recover repeatedly.
      * The cooldown rate-limits one kind of event about one subject on one
-     * server; recoveries carry a different event type, so the all-clear is
+     * source; recoveries carry a different event type, so the all-clear is
      * never swallowed.
      *
      * @param array<string, mixed> $payload
      */
     private function withinCooldown(
         int $cooldownSeconds,
-        int $serverId,
+        ?int $serverId,
+        ?int $websiteId,
         string $eventType,
         array $payload
     ): bool {
         if ($cooldownSeconds <= 0) {
             return false;
         }
+        $column = $serverId === null ? 'website_id' : 'server_id';
+        $sourceId = $serverId ?? $websiteId;
 
         $statement = $this->pdo->prepare(
             "SELECT EXISTS(
                 SELECT 1
                 FROM notification_outbox
-                WHERE server_id = :server_id
+                WHERE {$column} = :source_id
                   AND event_type = :event_type
                   AND COALESCE(
                         payload->>'metric',
                         payload->>'service',
+                        payload->>'endpoint_id',
+                        payload->>'kind',
                         ''
                       ) = :subject
                   AND created_at > CURRENT_TIMESTAMP
@@ -143,10 +195,10 @@ final class NotificationOutboxRepository
              )"
         );
         $statement->execute([
-            'server_id' => $serverId,
+            'source_id' => $sourceId,
             'event_type' => $eventType,
             'subject' => (string) (
-                $payload['metric'] ?? $payload['service'] ?? ''
+                $payload['metric'] ?? $payload['service'] ?? $payload['endpoint_id'] ?? $payload['kind'] ?? ''
             ),
             'cooldown' => $cooldownSeconds,
         ]);
@@ -157,18 +209,20 @@ final class NotificationOutboxRepository
     /**
      * Planned work still produces alerts, it just does not wake anybody.
      */
-    private function underMaintenance(int $serverId): bool
+    private function underMaintenance(?int $serverId, ?int $websiteId): bool
     {
+        $column = $serverId === null ? 'website_id' : 'server_id';
+        $sourceId = $serverId ?? $websiteId;
         $statement = $this->pdo->prepare(
             'SELECT EXISTS(
                 SELECT 1
                 FROM maintenance_windows
-                WHERE server_id = :server_id
+                WHERE ' . $column . ' = :source_id
                   AND starts_at <= CURRENT_TIMESTAMP
                   AND ends_at > CURRENT_TIMESTAMP
              )'
         );
-        $statement->execute(['server_id' => $serverId]);
+        $statement->execute(['source_id' => $sourceId]);
 
         return $this->toBool($statement->fetchColumn());
     }
@@ -181,16 +235,18 @@ final class NotificationOutboxRepository
      * @param array<string, mixed> $settings
      * @return list<array{0: string, 1: ?string}>
      */
-    private function deliveries(array $settings, ?int $serverId): array
+    private function deliveries(array $settings, ?int $serverId, ?int $websiteId = null): array
     {
         $override = ['telegram' => null, 'emails' => []];
-        if ($serverId !== null) {
+        if ($serverId !== null || $websiteId !== null) {
+            $table = $serverId !== null ? 'servers' : 'websites';
+            $sourceId = $serverId ?? $websiteId;
             $statement = $this->pdo->prepare(
                 'SELECT notification_telegram_chat_id, notification_emails
-                 FROM servers
+                 FROM ' . $table . '
                  WHERE id = :id'
             );
-            $statement->execute(['id' => $serverId]);
+            $statement->execute(['id' => $sourceId]);
             $row = $statement->fetch();
             if (is_array($row)) {
                 $chatId = trim((string) ($row['notification_telegram_chat_id'] ?? ''));
@@ -897,6 +953,35 @@ final class NotificationOutboxRepository
             'delay_seconds' => $delaySeconds,
             'last_error' => substr($safeError, 0, 500),
         ]);
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function validateWebsitePayload(array $payload): void
+    {
+        $allowed = [
+            'type', 'event', 'severity', 'kind', 'website_id', 'website_name',
+            'endpoint_id', 'endpoint_name', 'safe_url', 'expected', 'actual',
+            'event_time', 'effective_at', 'alert_id', 'reason', 'hostname', 'domain',
+        ];
+        foreach ($payload as $key => $value) {
+            if (!is_string($key) || !in_array($key, $allowed, true)) {
+                throw new InvalidArgumentException('Website notification payload is invalid.');
+            }
+            $this->assertNoSensitivePayloadKeys($value, $key);
+        }
+    }
+
+    private function assertNoSensitivePayloadKeys(mixed $value, string $key): void
+    {
+        if (preg_match('/body|header|authorization|token|password|secret|credential/i', $key) === 1) {
+            throw new InvalidArgumentException('Website notification payload contains a secret.');
+        }
+        if (!is_array($value)) {
+            return;
+        }
+        foreach ($value as $nestedKey => $nestedValue) {
+            $this->assertNoSensitivePayloadKeys($nestedValue, (string) $nestedKey);
+        }
     }
 
     /** @param array<string, mixed> $settings
