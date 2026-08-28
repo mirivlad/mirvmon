@@ -189,9 +189,29 @@ jobs:
           cache-from: type=gha,scope=release-linux-arm64
           cache-to: type=gha,mode=max,scope=release-linux-arm64
 
+  release-notes:
+    name: Release notes
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate release notes
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          set -euo pipefail
+          notes="docs/releases/${GITHUB_REF_NAME}.md"
+          if [ ! -s "$notes" ]; then
+            echo "Release notes are required: $notes" >&2
+            exit 1
+          fi
+
   publish-platform:
     name: Publish ${{ matrix.platform }}
-    needs: [php, frontend, agent, container, container-arm64]
+    needs: [php, frontend, agent, container, container-arm64, release-notes]
     if: github.ref_type == 'tag'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
@@ -328,3 +348,40 @@ jobs:
 
           first_tag="${TAGS%%$'\n'*}"
           docker buildx imagetools inspect "$first_tag"
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: publish-manifest
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          notes="docs/releases/${tag}.md"
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "GitHub Release $tag already exists; nothing to do."
+            exit 0
+          fi
+
+          args=(
+            --verify-tag
+            --title "MirvMon $tag"
+            --notes-file "$notes"
+          )
+          if [[ "$tag" == *-* ]]; then
+            args+=(--prerelease)
+          fi
+
+          gh release create "$tag" "${args[@]}"
