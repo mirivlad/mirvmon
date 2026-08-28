@@ -18,12 +18,16 @@ final class IncidentUiContractTest extends TestCase
             '/alerts?view=active',
             '/alerts?view=history',
             'name="server_id"',
+            'name="source_type"',
+            'name="website_id"',
+            'name="endpoint_id"',
             'name="group_id"',
             'name="kind"',
             'name="severity"',
             'name="from"',
             'name="to"',
             '/servers/{{ event.server_id }}',
+            '/sites/{{ event.website_id }}?tab=events',
             '/groups/{{ event.group_id }}',
             'event.id is not null',
         ] as $needle) {
@@ -39,14 +43,18 @@ final class IncidentUiContractTest extends TestCase
         foreach (['online', 'warning', 'critical', 'offline'] as $status) {
             self::assertStringContainsString('/?status=' . $status, $template);
         }
+        self::assertStringContainsString('data-summary-section="servers"', $template);
+        self::assertStringContainsString('data-summary-section="websites"', $template);
         foreach ([
             "t('incidents.attention.title')",
             '/alerts?view=active',
             '/servers/{{ issue.server_id }}',
+            '/sites/{{ issue.website_id }}?tab=events',
             '/groups/{{ issue.group_id }}',
             "t('incidents.kind.' ~ issue.kind)",
             'issue.subject_name',
             'issue.severity',
+            'issue.source_type',
         ] as $needle) {
             self::assertStringContainsString($needle, $template);
         }

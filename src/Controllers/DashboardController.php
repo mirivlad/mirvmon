@@ -8,6 +8,7 @@ use App\I18n\Translator;
 use App\I18n\TwigTranslation;
 use App\Repositories\IncidentRepository;
 use App\Repositories\ServerRepository;
+use App\Repositories\WebsiteRepository;
 use App\Services\ServerStatusService;
 use App\Services\SystemHealthService;
 use DateTimeImmutable;
@@ -24,7 +25,8 @@ final class DashboardController
         private readonly ServerStatusService $status,
         private readonly Translator $translator = new Translator(),
         private readonly ?SystemHealthService $systemHealth = null,
-        private readonly ?IncidentRepository $incidents = null
+        private readonly ?IncidentRepository $incidents = null,
+        private readonly ?WebsiteRepository $websites = null
     ) {
         TwigTranslation::register($this->twig->getEnvironment(), $this->translator);
     }
@@ -56,6 +58,7 @@ final class DashboardController
             'stats' => $this->status->summary($servers, $this->servers->groupCount()),
             'groups' => $groups,
             'attention' => $this->incidents?->attention() ?? $this->fallbackAttention($servers),
+            'website_stats' => $this->websites?->dashboardSummary() ?? $this->emptyWebsiteSummary(),
             'system_health' => $this->systemHealth?->summary() ?? [
                 'application_status' => 'unknown',
                 'host_status' => 'unknown',
@@ -109,12 +112,31 @@ final class DashboardController
             ];
         }
 
+        $websiteStats = $this->websites?->dashboardSummary() ?? $this->emptyWebsiteSummary();
+        $websiteGroups = $this->websites?->groupedList([]) ?? [];
+        $payload = isset($request->getQueryParams()['include_websites'])
+            ? ['servers' => $result, 'website_stats' => $websiteStats, 'website_groups' => $websiteGroups]
+            : $result;
+
         $response->getBody()->write(json_encode(
-            $result,
+            $payload,
             JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
         ));
 
         return $response->withHeader('Content-Type', 'application/json');
+    }
+
+    /** @return array<string, int> */
+    private function emptyWebsiteSummary(): array
+    {
+        return [
+            'total' => 0,
+            'healthy' => 0,
+            'warning' => 0,
+            'critical' => 0,
+            'no_data' => 0,
+            'paused' => 0,
+        ];
     }
 
     /**

@@ -17,7 +17,7 @@ final class IncidentRepository
      * already have an offline alert. Availability is operational truth; alert
      * creation remains controlled by notification preferences.
      *
-     * @param array{server_id?: int, website_id?: int, group_id?: int, kind?: string, severity?: string, from?: string, to?: string} $filters
+     * @param array{source_type?: string, server_id?: int, website_id?: int, endpoint_id?: int, group_id?: int, kind?: string, severity?: string, from?: string, to?: string} $filters
      * @return list<array<string, mixed>>
      */
     public function active(array $filters = []): array
@@ -145,7 +145,7 @@ final class IncidentRepository
      * availability transition log. Offline alert rows are intentionally omitted
      * here so a single outage is not shown twice.
      *
-     * @param array{server_id?: int, website_id?: int, group_id?: int, kind?: string, severity?: string, from?: string, to?: string} $filters
+     * @param array{source_type?: string, server_id?: int, website_id?: int, endpoint_id?: int, group_id?: int, kind?: string, severity?: string, from?: string, to?: string} $filters
      * @return list<array<string, mixed>>
      */
     public function history(array $filters = []): array
@@ -295,6 +295,25 @@ final class IncidentRepository
         )?->fetchAll() ?? [];
     }
 
+    /** @return list<array{id: int|string, name: string}> */
+    public function websiteOptions(): array
+    {
+        return $this->pdo->query(
+            'SELECT id, name FROM websites ORDER BY lower(name), id'
+        )?->fetchAll() ?? [];
+    }
+
+    /** @return list<array{id: int|string, website_id: int|string, name: string}> */
+    public function endpointOptions(): array
+    {
+        return $this->pdo->query(
+            'SELECT endpoints.id, endpoints.website_id, endpoints.name
+             FROM website_endpoints AS endpoints
+             INNER JOIN websites ON websites.id = endpoints.website_id
+             ORDER BY lower(websites.name), lower(endpoints.name), endpoints.id'
+        )?->fetchAll() ?? [];
+    }
+
     /** @return list<array<string, mixed>> */
     public function attention(int $limit = 6): array
     {
@@ -303,12 +322,17 @@ final class IncidentRepository
             <<<'SQL'
             WITH issues AS (
                 SELECT
+                    'server'::varchar AS source_type,
                     alerts.server_id,
+                    NULL::bigint AS website_id,
+                    NULL::bigint AS endpoint_id,
                     alerts.kind,
                     alerts.severity,
                     alerts.created_at,
                     COALESCE(metric_names.name, alerts.subject, alerts.kind) AS subject_name,
                     servers.name AS server_name,
+                    NULL::varchar AS source_name,
+                    NULL::varchar AS endpoint_name,
                     monitoring_groups.id AS group_id,
                     monitoring_groups.name AS group_name
                 FROM alerts
@@ -320,12 +344,17 @@ final class IncidentRepository
                 UNION ALL
 
                 SELECT
+                    'website'::varchar AS source_type,
                     NULL::bigint AS server_id,
+                    alerts.website_id,
+                    alerts.endpoint_id,
                     alerts.kind,
                     alerts.severity,
                     alerts.created_at,
                     COALESCE(endpoints.name, alerts.subject, alerts.kind) AS subject_name,
                     NULL::varchar AS server_name,
+                    websites.name AS source_name,
+                    endpoints.name AS endpoint_name,
                     monitoring_groups.id AS group_id,
                     monitoring_groups.name AS group_name
                 FROM alerts
@@ -337,12 +366,17 @@ final class IncidentRepository
                 UNION ALL
 
                 SELECT
+                    'server'::varchar AS source_type,
                     servers.id AS server_id,
+                    NULL::bigint AS website_id,
+                    NULL::bigint AS endpoint_id,
                     'offline'::varchar AS kind,
                     'critical'::varchar AS severity,
                     availability.changed_at AS created_at,
                     'agent'::varchar AS subject_name,
                     servers.name AS server_name,
+                    NULL::varchar AS source_name,
+                    NULL::varchar AS endpoint_name,
                     monitoring_groups.id AS group_id,
                     monitoring_groups.name AS group_name
                 FROM server_availability_state AS availability
@@ -375,13 +409,17 @@ final class IncidentRepository
     }
 
     /**
-     * @param array{server_id?: int, group_id?: int, kind?: string, severity?: string, from?: string, to?: string} $filters
+     * @param array{source_type?: string, server_id?: int, website_id?: int, endpoint_id?: int, group_id?: int, kind?: string, severity?: string, from?: string, to?: string} $filters
      * @return array{0: list<string>, 1: array<string, int|string>}
      */
     private function eventFilters(array $filters, string $alias): array
     {
         $conditions = [];
         $parameters = [];
+        if (isset($filters['source_type'])) {
+            $conditions[] = $alias . '.source_type = :source_type';
+            $parameters['source_type'] = $filters['source_type'];
+        }
         if (isset($filters['server_id'])) {
             $conditions[] = $alias . '.server_id = :server_id';
             $parameters['server_id'] = $filters['server_id'];
@@ -389,6 +427,10 @@ final class IncidentRepository
         if (isset($filters['website_id'])) {
             $conditions[] = $alias . '.website_id = :website_id';
             $parameters['website_id'] = $filters['website_id'];
+        }
+        if (isset($filters['endpoint_id'])) {
+            $conditions[] = $alias . '.endpoint_id = :endpoint_id';
+            $parameters['endpoint_id'] = $filters['endpoint_id'];
         }
         if (isset($filters['group_id'])) {
             $conditions[] = $alias . '.group_id = :group_id';

@@ -322,7 +322,8 @@ final class Bootstrap
                 $container->get(ServerStatusService::class),
                 $container->get(Translator::class),
                 $container->get(SystemHealthService::class),
-                $container->get(IncidentRepository::class)
+                $container->get(IncidentRepository::class),
+                $container->get(WebsiteRepository::class)
             )
         );
         $container->set(
@@ -331,7 +332,9 @@ final class Bootstrap
                 $container->get(PDO::class),
                 $container->get(Twig::class),
                 $container->get(ServerStatusService::class),
-                $container->get(Translator::class)
+                $container->get(Translator::class),
+                null,
+                $container->get(WebsiteRepository::class)
             )
         );
         $container->set(

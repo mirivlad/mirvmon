@@ -11,6 +11,8 @@ use App\Database\Migrator;
 use App\Repositories\MaintenanceWindowRepository;
 use App\Repositories\MetricRepository;
 use App\Repositories\ServerRepository;
+use App\Repositories\WebsiteRepository;
+use App\Security\SecretCipher;
 use App\Services\ServerStatusService;
 use App\Services\ServerPlatformService;
 use PDO;
@@ -116,11 +118,29 @@ final class DashboardReadModelTest extends TestCase
         $metrics = new MetricRepository(self::$pdo);
         $responseFactory = new ResponseFactory();
         $requestFactory = new ServerRequestFactory();
+        $websiteId = (int) self::$pdo?->query(
+            "INSERT INTO websites (name) VALUES ('read-model-site') RETURNING id"
+        )->fetchColumn();
+        self::$pdo?->prepare(
+            "INSERT INTO website_endpoints (website_id, name, url, is_primary)
+             VALUES (:website_id, 'homepage', 'https://example.test', TRUE)"
+        )->execute(['website_id' => $websiteId]);
+        $endpointId = (int) self::$pdo?->query(
+            'SELECT id FROM website_endpoints WHERE website_id = ' . $websiteId
+        )->fetchColumn();
+        self::$pdo?->prepare(
+            "INSERT INTO website_state (website_id, primary_endpoint_id, status)
+             VALUES (:website_id, :endpoint_id, 'healthy')"
+        )->execute(['endpoint_id' => $endpointId, 'website_id' => $websiteId]);
 
         $dashboard = (new DashboardController(
             $twig,
             $servers,
-            new ServerStatusService(new ServerPlatformService())
+            new ServerStatusService(new ServerPlatformService()),
+            new \App\I18n\Translator(),
+            null,
+            null,
+            new WebsiteRepository(self::$pdo, new SecretCipher(str_repeat('k', 32)))
         ))->index(
             $requestFactory->createServerRequest('GET', 'http://localhost/'),
             $responseFactory->createResponse(),
@@ -136,6 +156,8 @@ final class DashboardReadModelTest extends TestCase
         self::assertStringContainsString('fab fa-linux', $dashboardHtml);
         self::assertStringContainsString('title="Debian GNU/Linux 12"', $dashboardHtml);
         self::assertStringContainsString('server-status-online', $dashboardHtml);
+        self::assertStringContainsString('data-summary-section="websites"', $dashboardHtml);
+        self::assertStringContainsString('data-website-summary="healthy">', $dashboardHtml);
 
         $detailController = new ServerDetailController(
             self::$pdo,
