@@ -311,6 +311,7 @@ final class WebsiteIncidentService
         ]);
         $alertId = (int) ($insert->fetchColumn() ?: $this->activeAlertId($websiteId, $endpointId, $kind));
         $payload['website_id'] = $websiteId;
+        $payload['website_name'] = $this->websiteName($websiteId);
         $this->notifications->enqueueWebsiteConfigured(
             $websiteId,
             $alertId,
@@ -342,6 +343,7 @@ final class WebsiteIncidentService
             'event' => 'recovered',
             'severity' => 'critical',
             'website_id' => $websiteId,
+            'website_name' => $this->websiteName($websiteId),
             'event_time' => ($at ?? new DateTimeImmutable())->format(DATE_ATOM),
         ];
         if ($endpointId !== null) {
@@ -393,6 +395,16 @@ final class WebsiteIncidentService
         $statement->execute(['endpoint_id' => $endpointId]);
 
         return (string) $statement->fetchColumn();
+    }
+
+    private function websiteName(int $websiteId): string
+    {
+        $statement = $this->pdo->prepare('SELECT name FROM websites WHERE id = :website_id');
+        $statement->execute(['website_id' => $websiteId]);
+
+        $name = trim((string) $statement->fetchColumn());
+
+        return $name === '' ? 'unknown' : $name;
     }
 
     private function refreshWebsiteState(int $websiteId, DateTimeImmutable $at): void
