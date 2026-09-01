@@ -155,6 +155,7 @@ RUN install -m 0644 /etc/ssl/certs/ca-certificates.crt /app/agent/internal/tlsro
 RUN chmod 0555 \
         /app/docker/entrypoint.sh \
         /app/bin/migrate \
+        /app/bin/dr-worker \
         /app/bin/offline-worker \
         /app/bin/notification-worker \
         /app/bin/website-check-worker \

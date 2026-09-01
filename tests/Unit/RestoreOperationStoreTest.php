@@ -89,6 +89,73 @@ final class RestoreOperationStoreTest extends TestCase
         }
     }
 
+    public function testQueuedOperationIsClaimedAndRequeuedAfterWorkerRestart(): void
+    {
+        $store = new RestoreOperationStore($this->root, 4096);
+        $started = $store->begin('backup.mmbak', 4);
+        $chunk = $this->chunk('abcd');
+        try {
+            $store->append($started['id'], 0, $chunk);
+            $workspace = $store->workspacePath($started['id']);
+            mkdir($workspace, 0700, true);
+            $store->markReady(
+                $started['id'],
+                ['backup_id' => '22222222-2222-4222-8222-222222222222'],
+                [],
+                $workspace
+            );
+            $store->queue($started['id']);
+
+            $claimed = $store->claimNext('test-worker:1');
+            self::assertIsArray($claimed);
+            self::assertSame($started['id'], $claimed['id']);
+            self::assertSame('running', $claimed['status']);
+            self::assertSame('test-worker:1', $claimed['worker_id']);
+
+            $store->requeueInterrupted();
+            $requeued = $store->operation($started['id']);
+            self::assertSame('queued', $requeued['status']);
+            self::assertTrue($requeued['recovered_after_worker_restart']);
+
+            $claimedAgain = $store->claimNext('test-worker:2');
+            self::assertIsArray($claimedAgain);
+            self::assertSame('running', $claimedAgain['status']);
+            self::assertSame('test-worker:2', $claimedAgain['worker_id']);
+        } finally {
+            @unlink($chunk);
+        }
+    }
+
+    public function testSuccessfulWorkerCompletionRemovesPlaintextRestorePayload(): void
+    {
+        $store = new RestoreOperationStore($this->root, 4096);
+        $started = $store->begin('backup.mmbak', 4);
+        $chunk = $this->chunk('abcd');
+        try {
+            $store->append($started['id'], 0, $chunk);
+            $workspace = $store->workspacePath($started['id']);
+            mkdir($workspace, 0700, true);
+            file_put_contents($workspace . '/secrets.json', '{"secret":"plaintext"}');
+            $store->markReady(
+                $started['id'],
+                ['backup_id' => '33333333-3333-4333-8333-333333333333'],
+                [],
+                $workspace
+            );
+            $store->queue($started['id']);
+            self::assertIsArray($store->claimNext('test-worker'));
+
+            $store->markSucceeded($started['id'], ['database' => 'mirvmon']);
+
+            $completed = $store->operation($started['id']);
+            self::assertSame('succeeded', $completed['status']);
+            self::assertSame(['database' => 'mirvmon'], $completed['result']);
+            self::assertDirectoryDoesNotExist($workspace);
+        } finally {
+            @unlink($chunk);
+        }
+    }
+
     private function chunk(string $contents): string
     {
         $path = tempnam(sys_get_temp_dir(), 'mirvmon-restore-chunk-');

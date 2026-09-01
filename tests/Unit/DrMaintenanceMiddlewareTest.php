@@ -59,7 +59,7 @@ final class DrMaintenanceMiddlewareTest extends TestCase
         self::assertFalse($handler->called);
     }
 
-    public function testLivezAndRestoreExecutionAreExempt(): void
+    public function testOnlyLivezIsExempt(): void
     {
         $lock = new DrMaintenanceLock($this->directory);
         $exclusive = $lock->beginExclusive();
@@ -85,6 +85,6 @@ final class DrMaintenanceMiddlewareTest extends TestCase
         }
 
         self::assertSame(204, $live->getStatusCode());
-        self::assertSame(204, $restore->getStatusCode());
+        self::assertSame(503, $restore->getStatusCode());
     }
 }

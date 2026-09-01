@@ -17,7 +17,7 @@ final class DrMaintenanceMiddleware implements MiddlewareInterface
     public function __construct(
         private readonly ResponseFactoryInterface $responseFactory,
         private readonly DrMaintenanceLock $maintenance,
-        private readonly array $exemptPaths = ['/livez', '/admin/system/restore/execute']
+        private readonly array $exemptPaths = ['/livez']
     ) {
     }
 

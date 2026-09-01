@@ -10,7 +10,8 @@ use Throwable;
 
 final class RestoreOperationStore
 {
-    private const MAX_AGE_SECONDS = 3600;
+    private const ACTIVE_MAX_AGE_SECONDS = 3600;
+    private const TERMINAL_MAX_AGE_SECONDS = 86400;
 
     public function __construct(
         private readonly string $root,
@@ -40,6 +41,7 @@ final class RestoreOperationStore
             throw new RuntimeException('Cannot create restore upload directory.');
         }
         @chmod($directory, 0700);
+        $now = time();
         $this->writeState($id, [
             'id' => $id,
             'status' => 'uploading',
@@ -47,8 +49,8 @@ final class RestoreOperationStore
             'total_bytes' => $totalBytes,
             'received_bytes' => 0,
             'next_chunk' => 0,
-            'created_at' => time(),
-            'updated_at' => time(),
+            'created_at' => $now,
+            'updated_at' => $now,
         ]);
         $part = $this->partPath($id);
         if (file_put_contents($part, '') === false) {
@@ -65,9 +67,7 @@ final class RestoreOperationStore
         ];
     }
 
-    /**
-     * @return array{id:string,next_chunk:int,received_bytes:int,total_bytes:int,complete:bool}
-     */
+    /** @return array{id:string,next_chunk:int,received_bytes:int,total_bytes:int,complete:bool} */
     public function append(string $id, int $index, string $chunkPath): array
     {
         $this->assertId($id);
@@ -163,7 +163,7 @@ final class RestoreOperationStore
             if (($state['status'] ?? null) !== 'uploaded') {
                 throw new RuntimeException('Restore operation is not ready for preflight result.');
             }
-            if (!is_dir($workspace)) {
+            if (!$this->workspaceIsOwned($id, $workspace) || !is_dir($workspace)) {
                 throw new RuntimeException('Restore preflight workspace is missing.');
             }
             $state['status'] = 'ready';
@@ -178,21 +178,140 @@ final class RestoreOperationStore
     /** @return array<string, mixed> */
     public function ready(string $id): array
     {
-        $state = $this->readState($id);
+        $state = $this->operation($id);
         if (($state['status'] ?? null) !== 'ready') {
             throw new RuntimeException('Restore operation has not passed preflight.');
         }
-        $workspace = $state['workspace'] ?? null;
-        $manifest = $state['manifest'] ?? null;
-        if (!is_string($workspace) || !is_dir($workspace) || !is_array($manifest)) {
-            throw new RuntimeException('Restore operation state is incomplete.');
-        }
+        $this->assertRunnableState($id, $state);
         return $state;
+    }
+
+    /** @return array<string, mixed> */
+    public function operation(string $id): array
+    {
+        return $this->readState($id);
+    }
+
+    public function queue(string $id): void
+    {
+        $this->withLock($id, function () use ($id): void {
+            $state = $this->readState($id);
+            if (($state['status'] ?? null) !== 'ready') {
+                throw new RuntimeException('Restore operation cannot be queued from its current state.');
+            }
+            $this->assertRunnableState($id, $state);
+            $state['status'] = 'queued';
+            $state['queued_at'] = time();
+            $state['updated_at'] = time();
+            unset($state['worker_id'], $state['started_at'], $state['error_code'], $state['result']);
+            $this->writeState($id, $state);
+        });
+    }
+
+    /** @return array<string, mixed>|null */
+    public function claimNext(string $workerId): ?array
+    {
+        $workerId = trim($workerId);
+        if ($workerId === '' || strlen($workerId) > 120 || str_contains($workerId, "\0")) {
+            throw new RuntimeException('Restore worker ID is invalid.');
+        }
+        $this->ensureRoot();
+        foreach ($this->operationIds() as $id) {
+            $claimed = $this->withLock($id, function () use ($id, $workerId): ?array {
+                $state = $this->readState($id);
+                if (($state['status'] ?? null) !== 'queued') {
+                    return null;
+                }
+                $this->assertRunnableState($id, $state);
+                $state['status'] = 'running';
+                $state['worker_id'] = $workerId;
+                $state['started_at'] = time();
+                $state['updated_at'] = time();
+                $this->writeState($id, $state);
+                return $state;
+            });
+            if (is_array($claimed)) {
+                return $claimed;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Requeues jobs that were left running when a DR worker process died.
+     * A missing plaintext workspace makes the job unrecoverable and is marked failed.
+     */
+    public function requeueInterrupted(): void
+    {
+        $this->ensureRoot();
+        foreach ($this->operationIds() as $id) {
+            $this->withLock($id, function () use ($id): void {
+                $state = $this->readState($id);
+                if (($state['status'] ?? null) !== 'running') {
+                    return;
+                }
+                $workspace = $state['workspace'] ?? null;
+                $manifest = $state['manifest'] ?? null;
+                if (!is_string($workspace)
+                    || !$this->workspaceIsOwned($id, $workspace)
+                    || !is_dir($workspace)
+                    || !is_array($manifest)) {
+                    $state['status'] = 'failed';
+                    $state['error_code'] = 'interrupted_workspace_missing';
+                    $state['finished_at'] = time();
+                } else {
+                    $state['status'] = 'queued';
+                    $state['recovered_after_worker_restart'] = true;
+                    unset($state['worker_id'], $state['started_at']);
+                }
+                $state['updated_at'] = time();
+                $this->writeState($id, $state);
+            });
+        }
+    }
+
+    /** @param array<string, mixed> $result */
+    public function markSucceeded(string $id, array $result): void
+    {
+        $this->withLock($id, function () use ($id, $result): void {
+            $state = $this->readState($id);
+            if (!in_array($state['status'] ?? null, ['running', 'succeeded'], true)) {
+                throw new RuntimeException('Restore operation cannot be completed from its current state.');
+            }
+            $state['status'] = 'succeeded';
+            $state['result'] = $result;
+            $state['finished_at'] = time();
+            $state['updated_at'] = time();
+            unset($state['worker_id'], $state['error_code']);
+            $this->writeState($id, $state);
+            $this->cleanupPayloadUnlocked($id, $state);
+        });
+    }
+
+    public function markFailed(string $id, string $errorCode = 'restore_failed'): void
+    {
+        if (preg_match('/^[a-z][a-z0-9_]{0,79}$/', $errorCode) !== 1) {
+            throw new RuntimeException('Restore failure code is invalid.');
+        }
+        $this->withLock($id, function () use ($id, $errorCode): void {
+            $state = $this->readState($id);
+            if (!in_array($state['status'] ?? null, ['running', 'queued', 'failed'], true)) {
+                throw new RuntimeException('Restore operation cannot fail from its current state.');
+            }
+            $state['status'] = 'failed';
+            $state['error_code'] = $errorCode;
+            $state['finished_at'] = time();
+            $state['updated_at'] = time();
+            unset($state['worker_id']);
+            $this->writeState($id, $state);
+            $this->cleanupPayloadUnlocked($id, $state);
+        });
     }
 
     public function finish(string $id): void
     {
         $this->assertId($id);
+        $this->removeTree($this->workspacePath($id));
         $this->removeTree($this->operationDirectory($id));
     }
 
@@ -200,27 +319,26 @@ final class RestoreOperationStore
     {
         $this->ensureRoot();
         $now = time();
-        foreach (scandir($this->root) ?: [] as $entry) {
-            if (!preg_match('/^[a-f0-9]{32}$/', $entry)) {
-                continue;
-            }
-            $directory = $this->root . DIRECTORY_SEPARATOR . $entry;
-            if (!is_dir($directory)) {
-                continue;
-            }
+        foreach ($this->operationIds() as $id) {
+            $directory = $this->operationDirectory($id);
             try {
-                $state = $this->readState($entry);
+                $state = $this->readState($id);
+                $status = $state['status'] ?? null;
+                if (in_array($status, ['queued', 'running'], true)) {
+                    continue;
+                }
                 $updated = $state['updated_at'] ?? null;
-                if (!is_int($updated) || $updated < $now - self::MAX_AGE_SECONDS) {
-                    $workspace = $state['workspace'] ?? null;
-                    if (is_string($workspace) && $this->workspaceIsOwned($entry, $workspace)) {
-                        $this->removeTree($workspace);
-                    }
+                $maximumAge = in_array($status, ['succeeded', 'failed'], true)
+                    ? self::TERMINAL_MAX_AGE_SECONDS
+                    : self::ACTIVE_MAX_AGE_SECONDS;
+                if (!is_int($updated) || $updated < $now - $maximumAge) {
+                    $this->cleanupPayloadUnlocked($id, $state);
                     $this->removeTree($directory);
                 }
             } catch (Throwable) {
                 $mtime = filemtime($directory);
-                if ($mtime !== false && $mtime < $now - self::MAX_AGE_SECONDS) {
+                if ($mtime !== false && $mtime < $now - self::ACTIVE_MAX_AGE_SECONDS) {
+                    $this->removeTree($this->workspacePath($id));
                     $this->removeTree($directory);
                 }
             }
@@ -231,6 +349,33 @@ final class RestoreOperationStore
     {
         $this->assertId($id);
         return dirname($this->root) . DIRECTORY_SEPARATOR . 'work' . DIRECTORY_SEPARATOR . 'restore-' . $id;
+    }
+
+    /** @param array<string, mixed> $state */
+    private function assertRunnableState(string $id, array $state): void
+    {
+        $workspace = $state['workspace'] ?? null;
+        $manifest = $state['manifest'] ?? null;
+        if (!is_string($workspace)
+            || !$this->workspaceIsOwned($id, $workspace)
+            || !is_dir($workspace)
+            || !is_array($manifest)) {
+            throw new RuntimeException('Restore operation state is incomplete.');
+        }
+    }
+
+    /** @return list<string> */
+    private function operationIds(): array
+    {
+        $ids = [];
+        foreach (scandir($this->root) ?: [] as $entry) {
+            if (preg_match('/^[a-f0-9]{32}$/', $entry) === 1
+                && is_dir($this->operationDirectory($entry))) {
+                $ids[] = $entry;
+            }
+        }
+        sort($ids, SORT_STRING);
+        return $ids;
     }
 
     /** @return array<string, mixed> */
@@ -342,6 +487,17 @@ final class RestoreOperationStore
     private function workspaceIsOwned(string $id, string $workspace): bool
     {
         return $workspace === $this->workspacePath($id);
+    }
+
+    /** @param array<string, mixed> $state */
+    private function cleanupPayloadUnlocked(string $id, array $state): void
+    {
+        $workspace = $state['workspace'] ?? null;
+        if (is_string($workspace) && $this->workspaceIsOwned($id, $workspace)) {
+            $this->removeTree($workspace);
+        }
+        @unlink($this->partPath($id));
+        @unlink($this->backupPath($id));
     }
 
     private function removeTree(string $path): void

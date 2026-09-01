@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Application;
 
+use App\Backup\DrMaintenanceLock;
 use App\Controllers\AdminController;
 use App\Controllers\AgentController;
 use App\Controllers\AgentFleetController;
@@ -29,6 +30,7 @@ use App\Middlewares\AdminMiddleware;
 use App\Middlewares\AuditTrailMiddleware;
 use App\Middlewares\AuthMiddleware;
 use App\Middlewares\CsrfMiddleware;
+use App\Middlewares\DrMaintenanceMiddleware;
 use App\Middlewares\LocaleMiddleware;
 use App\Middlewares\RequestIdMiddleware;
 use App\Middlewares\RequestSizeMiddleware;
@@ -212,6 +214,15 @@ final class AppFactory
             (bool) $settings['app_debug'],
             ($settings['app_env'] ?? 'production') !== 'test',
             $translator
+        ));
+        $drRoot = is_string($settings['dr_root'] ?? null) && trim((string) $settings['dr_root']) !== ''
+            ? (string) $settings['dr_root']
+            : (($settings['app_env'] ?? 'production') === 'test'
+                ? sys_get_temp_dir() . '/mirvmon-dr-test-' . getmypid()
+                : dirname(__DIR__, 2) . '/var/dr');
+        $app->add(new DrMaintenanceMiddleware(
+            $responseFactory,
+            new DrMaintenanceLock($drRoot)
         ));
         $app->add(new SecurityHeadersMiddleware(new StreamFactory()));
         $app->add(new RequestIdMiddleware());

@@ -8,8 +8,6 @@ use App\Backup\BackupContainer;
 use App\Backup\BackupManifest;
 use App\Backup\BackupPreflight;
 use App\Backup\BackupSecretCatalog;
-use App\Backup\DisasterRecoveryRestorer;
-use App\Backup\DrMaintenanceLock;
 use App\Backup\FullBackupCreator;
 use App\Backup\PostgresBackupTool;
 use App\Backup\RestoreOperationStore;
@@ -79,7 +77,7 @@ final class SystemController
         $restoreId = $request->getQueryParams()['restore'] ?? null;
         if (is_string($restoreId) && preg_match('/^[a-f0-9]{32}$/', $restoreId) === 1) {
             try {
-                $operation = $this->restoreStore()->ready($restoreId);
+                $operation = $this->restoreStore()->operation($restoreId);
             } catch (Throwable) {
                 $operation = null;
             }
@@ -295,34 +293,14 @@ final class SystemController
             return $this->redirect($response, '/admin/system/backup?restore=' . rawurlencode($id));
         }
 
-        @set_time_limit(0);
-        $store = $this->restoreStore();
         try {
-            $operation = $store->ready($id);
-            $workspace = $operation['workspace'] ?? null;
-            $manifest = $operation['manifest'] ?? null;
-            if (!is_string($workspace) || !is_array($manifest)) {
-                throw new RuntimeException('Restore operation is incomplete.');
-            }
-            $restorer = new DisasterRecoveryRestorer(
-                $this->databaseEnvironment(),
-                new PostgresBackupTool($this->databaseEnvironment()),
-                new DrMaintenanceLock(dirname(__DIR__, 2) . '/var/dr'),
-                dirname(__DIR__, 2) . '/migrations',
-                $this->applicationKey(),
-                dirname(__DIR__, 2) . '/var/sessions'
-            );
-            $restorer->restore($workspace, $manifest);
-            $store->finish($id);
-
-            return $this->redirect($response, '/login?restored=1');
+            $store = $this->restoreStore();
+            $store->ready($id);
+            $store->queue($id);
+            $this->flash('backup.restore.queued', 'success');
+            return $this->redirect($response, '/admin/system/backup?restore=' . rawurlencode($id));
         } catch (Throwable $exception) {
-            error_log('[mirvmon][restore][execute] ' . $exception->getMessage());
-            try {
-                $store->finish($id);
-            } catch (Throwable) {
-                // The original restore failure is more useful; stale operation data expires automatically.
-            }
+            error_log('[mirvmon][restore][queue] ' . $exception->getMessage());
             $this->flash('backup.restore.failed', 'error');
             return $this->redirect($response, '/admin/system/backup');
         }
