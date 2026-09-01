@@ -2,7 +2,8 @@
 <script src="/vendor/hammerjs/hammer.min.js"></script>
 <script src="/vendor/chartjs-plugin-zoom/chartjs-plugin-zoom.min.js"></script>
 <script nonce="__MIRVMON_CSP_NONCE__">
-const managedCharts = [];
+const managedCharts = new Map();
+let pendingMetricViewports = {};
 const detailText = {
     time: {{ t('metric.time')|json_encode|raw }},
     loading: {{ t('metric.loading')|json_encode|raw }},
@@ -21,6 +22,115 @@ const detailText = {
     hours: {{ t('common.hours')|json_encode|raw }},
     minutes: {{ t('common.minutes')|json_encode|raw }}
 };
+
+function readMetricsPayload() {
+    const payload = document.querySelector('[data-server-metrics-payload]');
+    if (!(payload instanceof HTMLElement)) return null;
+    try {
+        return JSON.parse(payload.textContent || '{}');
+    } catch {
+        return null;
+    }
+}
+
+function registerManagedChart(canvasId, chart, timestamps = []) {
+    managedCharts.set(canvasId, {
+        chart,
+        timestamps: Array.isArray(timestamps) ? timestamps : []
+    });
+    return chart;
+}
+
+function destroyManagedCharts() {
+    managedCharts.forEach(({ chart }) => {
+        if (chart && typeof chart.destroy === 'function') chart.destroy();
+    });
+    managedCharts.clear();
+    document.querySelectorAll('[id^="chartjs-tooltip-"]').forEach((tooltip) => {
+        if (tooltip instanceof HTMLElement) tooltip.style.opacity = '0';
+    });
+}
+
+function timestampIndex(timestamps, target, fallback) {
+    if (!Array.isArray(timestamps) || timestamps.length === 0 || !target) return fallback;
+    const targetTime = Date.parse(String(target));
+    if (!Number.isFinite(targetTime)) {
+        const exact = timestamps.indexOf(target);
+        return exact >= 0 ? exact : fallback;
+    }
+    let bestIndex = fallback;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    timestamps.forEach((value, index) => {
+        const time = Date.parse(String(value));
+        if (!Number.isFinite(time)) return;
+        const distance = Math.abs(time - targetTime);
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            bestIndex = index;
+        }
+    });
+    return bestIndex;
+}
+
+function scaleBoundIndex(scale, value) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return numeric;
+    if (scale && typeof scale.parse === 'function') {
+        const parsed = Number(scale.parse(value));
+        if (Number.isFinite(parsed)) return parsed;
+    }
+    return null;
+}
+
+function captureMetricViewports() {
+    const viewports = {};
+    managedCharts.forEach(({ chart, timestamps }, canvasId) => {
+        if (!chart || !chart.scales || !chart.scales.x || timestamps.length === 0) return;
+        if (typeof chart.isZoomedOrPanned === 'function' && !chart.isZoomedOrPanned()) return;
+        const zoomedBounds = typeof chart.getZoomedScaleBounds === 'function'
+            ? chart.getZoomedScaleBounds()
+            : null;
+        const bounds = zoomedBounds && zoomedBounds.x ? zoomedBounds.x : chart.scales.x;
+        const rawMin = scaleBoundIndex(chart.scales.x, bounds.min);
+        const rawMax = scaleBoundIndex(chart.scales.x, bounds.max);
+        if (rawMin === null || rawMax === null) return;
+        const minIndex = Math.max(0, Math.min(timestamps.length - 1, Math.floor(rawMin)));
+        const maxIndex = Math.max(0, Math.min(timestamps.length - 1, Math.ceil(rawMax)));
+        viewports[canvasId] = {
+            start: timestamps[minIndex],
+            end: timestamps[maxIndex]
+        };
+    });
+    return viewports;
+}
+
+function restoreMetricViewport(canvasId, timestamps, viewports) {
+    const viewport = viewports[canvasId];
+    const entry = managedCharts.get(canvasId);
+    if (!viewport || !entry || !Array.isArray(timestamps) || timestamps.length < 2) return;
+    let min = timestampIndex(timestamps, viewport.start, 0);
+    let max = timestampIndex(timestamps, viewport.end, timestamps.length - 1);
+    if (max < min) [min, max] = [max, min];
+    if (max === min) max = Math.min(timestamps.length - 1, min + 1);
+    if (max === min) min = Math.max(0, max - 1);
+    const chart = entry.chart;
+    if (typeof chart.zoomScale === 'function') {
+        chart.zoomScale('x', { min, max }, 'none');
+        return;
+    }
+    chart.options.scales = chart.options.scales || {};
+    chart.options.scales.x = chart.options.scales.x || {};
+    chart.options.scales.x.min = min;
+    chart.options.scales.x.max = max;
+    chart.update('none');
+}
+
+function metricInteractionActive() {
+    for (const { chart } of managedCharts.values()) {
+        if (chart && typeof chart.isZoomingOrPanning === 'function' && chart.isZoomingOrPanning()) return true;
+    }
+    return false;
+}
 
 function fetchProcesses(serverId, time) {
     return fetch('/api/v1/agent/' + serverId + '/processes?time=' + encodeURIComponent(time))
@@ -100,7 +210,7 @@ function renderProcessTooltip(context, chartMeta) {
     });
 }
 
-function createLineChart(canvasId, labels, datasets, unit, chartMeta = null) {
+function createLineChart(canvasId, labels, datasets, unit, chartMeta, timestamps, viewports) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return null;
     const chart = new Chart(canvas.getContext('2d'), {
@@ -137,7 +247,8 @@ function createLineChart(canvasId, labels, datasets, unit, chartMeta = null) {
             }
         }
     });
-    managedCharts.push(chart);
+    registerManagedChart(canvasId, chart, timestamps);
+    restoreMetricViewport(canvasId, timestamps, viewports);
     return chart;
 }
 
@@ -153,9 +264,10 @@ function formatUptimeSeconds(value) {
     return `${minutes} ${detailText.minutes}`;
 }
 
-function createUptimeChart(chartData) {
-    const canvas = document.getElementById('chart-uptime');
-    if (!canvas || !chartData.values) return;
+function createUptimeChart(chartData, viewports) {
+    const canvasId = 'chart-uptime';
+    const canvas = document.getElementById(canvasId);
+    if (!canvas || !Array.isArray(chartData.values)) return;
     const chart = new Chart(canvas.getContext('2d'), {
         type: 'line',
         data: {
@@ -177,12 +289,15 @@ function createUptimeChart(chartData) {
             scales: { y: { ticks: { callback: formatUptimeSeconds } } }
         }
     });
-    managedCharts.push(chart);
+    const timestamps = Array.isArray(chartData.timestamps) ? chartData.timestamps : [];
+    registerManagedChart(canvasId, chart, timestamps);
+    restoreMetricViewport(canvasId, timestamps, viewports);
 }
 
-function createAvailabilityChart(chartData) {
-    const canvas = document.getElementById('chart-availability');
-    if (!canvas || !chartData.values) return;
+function createAvailabilityChart(chartData, viewports) {
+    const canvasId = 'chart-availability';
+    const canvas = document.getElementById(canvasId);
+    if (!canvas || !Array.isArray(chartData.values)) return;
     const chart = new Chart(canvas.getContext('2d'), {
         type: 'line',
         data: {
@@ -209,14 +324,16 @@ function createAvailabilityChart(chartData) {
             }
         }
     });
-    managedCharts.push(chart);
+    const timestamps = Array.isArray(chartData.timestamps) ? chartData.timestamps : [];
+    registerManagedChart(canvasId, chart, timestamps);
+    restoreMetricViewport(canvasId, timestamps, viewports);
 }
 
 function createDoughnutChart(canvasId, percent) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
     const color = percent >= 85 ? '#dc3545' : (percent >= 70 ? '#fd7e14' : '#198754');
-    new Chart(canvas.getContext('2d'), {
+    const chart = new Chart(canvas.getContext('2d'), {
         type: 'doughnut',
         data: {
             labels: [detailText.diskUsed, detailText.diskFree],
@@ -231,10 +348,14 @@ function createDoughnutChart(canvasId, percent) {
             }
         }
     });
+    registerManagedChart(canvasId, chart);
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    const simpleMetricCharts = {{ simpleMetricCharts|json_encode|raw }};
+function renderMetrics(payload, viewports = {}) {
+    destroyManagedCharts();
+    if (!payload || typeof payload !== 'object') return;
+
+    const simpleMetricCharts = Array.isArray(payload.simple) ? payload.simple : [];
     simpleMetricCharts.forEach(function(chart) {
         const datasets = [{
             label: chart.title,
@@ -258,43 +379,61 @@ document.addEventListener('DOMContentLoaded', function() {
             timestamps: chart.timestamps || [],
             unit: chart.unit,
             details: chart.details || null
-        });
+        }, chart.timestamps || [], viewports);
     });
 
-    const networkCharts = {{ networkCharts|json_encode|raw }};
+    const networkCharts = Array.isArray(payload.network) ? payload.network : [];
     networkCharts.forEach(function(chart) {
         createLineChart('chart-net-' + chart.id, chart.labels, chart.datasets.map(function(dataset) {
             return { label: dataset.label, data: dataset.values, borderColor: dataset.color, backgroundColor: dataset.color + '22', fill: false, tension: 0.2, pointRadius: 0, borderWidth: 2 };
-        }), chart.unit, null);
+        }), chart.unit, null, chart.timestamps || [], viewports);
     });
 
-    const diskIoCharts = {{ diskIoCharts|json_encode|raw }};
+    const diskIoCharts = Array.isArray(payload.disk_io) ? payload.disk_io : [];
     diskIoCharts.forEach(function(chart) {
         createLineChart('chart-disk-io-' + chart.id, chart.labels, chart.datasets.map(function(dataset) {
             return { label: dataset.label, data: dataset.values, borderColor: dataset.color, backgroundColor: dataset.color + '22', fill: false, tension: 0.2, pointRadius: 0, borderWidth: 2 };
-        }), chart.unit, null);
+        }), chart.unit, null, chart.timestamps || [], viewports);
     });
 
-    const temperatureChart = {{ temperatureChart|json_encode|raw }};
-    if (temperatureChart.datasets && temperatureChart.datasets.length > 0) {
+    const temperatureChart = payload.temperature && typeof payload.temperature === 'object' ? payload.temperature : {};
+    if (Array.isArray(temperatureChart.datasets) && temperatureChart.datasets.length > 0) {
         createLineChart('chart-temperatures', temperatureChart.labels, temperatureChart.datasets.map(function(dataset) {
             return { label: dataset.label, data: dataset.values, borderColor: dataset.color, backgroundColor: dataset.color + '22', fill: false, tension: 0.2, pointRadius: 0, borderWidth: 2 };
-        }), temperatureChart.unit || '', null);
+        }), temperatureChart.unit || '', null, temperatureChart.timestamps || [], viewports);
     }
 
-    createUptimeChart({{ uptimeChart|json_encode|raw }});
-    createAvailabilityChart({{ availabilityChart|json_encode|raw }});
+    createUptimeChart(payload.uptime && typeof payload.uptime === 'object' ? payload.uptime : {}, viewports);
+    createAvailabilityChart(payload.availability && typeof payload.availability === 'object' ? payload.availability : {}, viewports);
 
-    const diskCharts = {{ diskCharts|json_encode|raw }};
+    const diskCharts = Array.isArray(payload.disks) ? payload.disks : [];
     diskCharts.forEach(function(disk) { createDoughnutChart('disk-chart-' + disk.id, disk.percent); });
+}
 
-    const resetZoomButton = document.getElementById('reset-all-zoom');
-    if (resetZoomButton) {
-        resetZoomButton.addEventListener('click', function() {
-            managedCharts.forEach(function(chart) {
-                if (chart && typeof chart.resetZoom === 'function') chart.resetZoom();
-            });
-        });
+document.addEventListener('DOMContentLoaded', function() {
+    renderMetrics(readMetricsPayload());
+});
+
+document.addEventListener('click', function(event) {
+    if (!(event.target instanceof Element) || !event.target.closest('#reset-all-zoom')) return;
+    managedCharts.forEach(({ chart }) => {
+        if (chart && typeof chart.resetZoom === 'function') chart.resetZoom('none');
+    });
+});
+
+document.addEventListener('mirvmon:live-fragment-before-update', function(event) {
+    if (!event.detail || event.detail.key !== 'server-metrics') return;
+    if (metricInteractionActive()) {
+        event.preventDefault();
+        return;
     }
+    pendingMetricViewports = captureMetricViewports();
+});
+
+document.addEventListener('mirvmon:live-fragment-updated', function(event) {
+    if (!event.detail || event.detail.key !== 'server-metrics') return;
+    const viewports = pendingMetricViewports;
+    pendingMetricViewports = {};
+    renderMetrics(readMetricsPayload(), viewports);
 });
 </script>

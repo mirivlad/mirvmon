@@ -104,7 +104,7 @@
     </div>
 </form>
 
-<div class="card">
+<div class="card"{% if view == 'active' %} data-live-fragment="active-incidents" data-live-interval-ms="10000"{% endif %}>
     <div class="card-body p-0">
         {% if events|length > 0 %}
         <div class="table-responsive">

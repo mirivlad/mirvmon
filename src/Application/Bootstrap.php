@@ -6,6 +6,7 @@ namespace App\Application;
 
 use App\Controllers\AdminController;
 use App\Controllers\AgentController;
+use App\Controllers\AgentFleetController;
 use App\Controllers\AgentUpdateController;
 use App\Controllers\AlertController;
 use App\Controllers\Api\MetricsApiController;
@@ -43,6 +44,7 @@ use App\Repositories\WebsiteMetricsRepository;
 use App\Security\SecretCipher;
 use App\Services\AgentArtifactCatalog;
 use App\Services\AgentCredentialIssuer;
+use App\Services\AgentFleetService;
 use App\Services\AgentInstallerService;
 use App\Services\AgentUpdateService;
 use App\Services\AgentVersionService;
@@ -275,6 +277,14 @@ final class Bootstrap
                 $container->get(AgentArtifactCatalog::class)
             )
         );
+        $container->set(
+            AgentFleetService::class,
+            static fn (Container $container): AgentFleetService => new AgentFleetService(
+                $container->get(PDO::class),
+                $container->get(AgentUpdateService::class),
+                $container->get(ServerStatusService::class)
+            )
+        );
 
         $applicationKey = base64_decode((string) $settings['app_key'], true);
         if ($applicationKey === false || strlen($applicationKey) !== 32) {
@@ -345,6 +355,14 @@ final class Bootstrap
                 $container->get(AgentCredentialIssuer::class),
                 $container->get(AgentUpdateService::class),
                 $container->get(ServerStatusService::class),
+                $container->get(Translator::class)
+            )
+        );
+        $container->set(
+            AgentFleetController::class,
+            static fn (Container $container): AgentFleetController => new AgentFleetController(
+                $container->get(Twig::class),
+                $container->get(AgentFleetService::class),
                 $container->get(Translator::class)
             )
         );

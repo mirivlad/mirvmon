@@ -33,6 +33,26 @@ final class ServerMetricScriptSafetyContractTest extends TestCase
         self::assertStringContainsString('detailText.minutes', $script);
     }
 
+    public function testLiveMetricRefreshPreservesTimestampViewport(): void
+    {
+        $script = (string) file_get_contents(
+            dirname(__DIR__, 2) . '/templates/servers/partials/detail-scripts.twig'
+        );
+        $metrics = (string) file_get_contents(
+            dirname(__DIR__, 2) . '/templates/servers/partials/detail-metrics.twig'
+        );
+
+        self::assertStringContainsString('data-live-fragment="server-metrics"', $metrics);
+        self::assertStringContainsString('data-server-metrics-payload', $metrics);
+        self::assertStringContainsString('captureMetricViewports()', $script);
+        self::assertStringContainsString('timestamps[minIndex]', $script);
+        self::assertStringContainsString("chart.zoomScale('x', { min, max }, 'none')", $script);
+        self::assertStringContainsString('metricInteractionActive()', $script);
+        self::assertStringContainsString('mirvmon:live-fragment-before-update', $script);
+        self::assertStringContainsString('mirvmon:live-fragment-updated', $script);
+        self::assertStringNotContainsString('window.location.reload()', $script);
+    }
+
     public function testThresholdSettingsKeepCanonicalDiskPaths(): void
     {
         $template = (string) file_get_contents(

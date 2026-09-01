@@ -6,6 +6,11 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+- Added an agent fleet overview with current/outdated/update/attention/contact summaries, version distribution, operational filtering and direct links to per-server agent management.
+- Fleet diagnostics reuse existing agent metadata, last contact, platform and update-command state; no database migration or agent protocol change is introduced for v0.5.4.
+- Added visibility-aware live refresh for operational UI state across server/site/group views, active incidents, notification queue and MirvMon system diagnostics.
+- Server metrics now refresh automatically every 30 seconds; unzoomed charts follow the moving period window, while zoomed/panned charts preserve their timestamp viewport across fresh data. Historical and configuration views remain stable.
+
 ## 0.5.3.1
 
 - Fixed bulk agent-update feedback so it follows the live polled agent states instead of remaining a stale snapshot from the moment the action was submitted.

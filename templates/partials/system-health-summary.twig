@@ -10,7 +10,7 @@
     'critical': 'danger',
     'unknown': 'secondary'
 } %}
-<aside class="card mb-4" aria-label="{{ t('dashboard.system_health.title') }}">
+<aside class="card mb-4" aria-label="{{ t('dashboard.system_health.title') }}" data-live-fragment="dashboard-system-health" data-live-interval-ms="30000">
     <div class="card-body py-3 d-flex flex-wrap justify-content-between align-items-center gap-3">
         <div class="d-flex flex-wrap align-items-center gap-3">
             <strong><i class="fas fa-heart-pulse me-1" aria-hidden="true"></i>{{ t('dashboard.system_health.title') }}</strong>

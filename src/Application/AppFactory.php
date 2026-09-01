@@ -6,6 +6,7 @@ namespace App\Application;
 
 use App\Controllers\AdminController;
 use App\Controllers\AgentController;
+use App\Controllers\AgentFleetController;
 use App\Controllers\AgentUpdateController;
 use App\Controllers\AlertController;
 use App\Controllers\Api\MetricsApiController;
@@ -85,6 +86,7 @@ final class AppFactory
             $group->post('/logout', self::controller($container, AuthController::class, 'logout'));
             $group->get('/api/dashboard/stats', self::controller($container, DashboardController::class, 'getDashboardData'));
             $group->get('/api/agent-updates/status', self::controller($container, AgentUpdateController::class, 'statuses'));
+            $group->get('/api/agents/fleet-status', self::controller($container, AgentFleetController::class, 'status'));
             $group->get('/api/servers/{id}/metrics', self::controller($container, MetricsApiController::class, 'getServerMetrics'));
             $group->get('/api/v1/agent/{id}/services', self::controller($container, MetricsController::class, 'getServices'));
             $group->get('/api/v1/agent/{id}/processes', self::controller($container, MetricsController::class, 'getProcesses'));
@@ -101,6 +103,7 @@ final class AppFactory
                 return $response->withHeader('Location', '/servers/' . $arguments['id'])->withStatus(301);
             });
             $group->get('/servers', self::controller($container, ServerController::class, 'index'));
+            $group->get('/agents', self::controller($container, AgentFleetController::class, 'index'));
             $group->get('/servers/create', self::controller($container, ServerController::class, 'create'));
             $group->post('/servers', self::controller($container, ServerController::class, 'store'));
             $group->get('/servers/{id}/edit', self::controller($container, ServerController::class, 'edit'));

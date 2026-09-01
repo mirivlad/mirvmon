@@ -195,17 +195,19 @@
                         {% endif %}
                     </td>
                     <td data-label="{{ t('ui19.servers.health') }}">
-                        <span class="app-status-badge status-{{ server.status }}">
-                            <span class="app-status-dot" aria-hidden="true"></span>
-                            {{ t('status.' ~ server.status) }}
-                        </span>
-                        <span class="server-list-secondary">
-                            {% if server.last_metrics_at %}
-                                {{ t('ui19.servers.last_sample', {time: server.last_metrics_at|date('d.m.Y H:i:s')}) }}
-                            {% else %}
-                                {{ t('ui19.servers.no_sample') }}
-                            {% endif %}
-                        </span>
+                        <div data-live-fragment="server-health-{{ server.id }}" data-live-server-status="{{ server.status }}" data-live-interval-ms="15000">
+                            <span class="app-status-badge status-{{ server.status }}">
+                                <span class="app-status-dot" aria-hidden="true"></span>
+                                {{ t('status.' ~ server.status) }}
+                            </span>
+                            <span class="server-list-secondary">
+                                {% if server.last_metrics_at %}
+                                    {{ t('ui19.servers.last_sample', {time: server.last_metrics_at|date('d.m.Y H:i:s')}) }}
+                                {% else %}
+                                    {{ t('ui19.servers.no_sample') }}
+                                {% endif %}
+                            </span>
+                        </div>
                     </td>
                     <td data-label="{{ t('servers.column.agent') }}">
                         <a href="/servers/{{ server.id }}?tab=agent" class="text-decoration-none">
@@ -613,6 +615,21 @@
 
     [groupFilter, statusFilter, agentFilter].forEach((control) => control?.addEventListener('change', applyFilters));
     search?.addEventListener('input', applyFilters);
+    document.addEventListener('mirvmon:live-fragment-updated', (event) => {
+        const fragment = event.target;
+        if (!(fragment instanceof HTMLElement) || !fragment.hasAttribute('data-live-server-status')) return;
+        const row = fragment.closest('[data-agent-row]');
+        if (!(row instanceof HTMLTableRowElement)) return;
+        const status = fragment.dataset.liveServerStatus || 'offline';
+        row.dataset.serverStatus = status;
+        const identity = row.querySelector('.server-list-identity');
+        if (identity instanceof HTMLElement) {
+            ['online', 'warning', 'critical', 'offline'].forEach((value) => identity.classList.remove(`server-status-${value}`));
+            identity.classList.add(`server-status-${status}`);
+        }
+        applyFilters();
+    });
+
     rows.forEach((row) => { if (activeStates.has(row.dataset.agentState)) trackedServerIds.add(row.dataset.serverId); });
     updateBulkControl();
     applyFilters();

@@ -130,6 +130,51 @@ notifications. Запоздалый допустимый sample записыва
   cleanup требуется явный retry администратора, а состояния `accepted` и далее
   автоматически не меняются.
 
+Обзор парка агентов:
+
+- read-only fleet view `/agents` строится из уже сохранённых `agent_version`,
+  `agent_artifact`, `agent_capabilities`, OS metadata, `agent_tokens.last_used_at`,
+  server health и последнего agent update command;
+- сводка отдельно показывает актуальные/устаревшие версии, активные обновления,
+  состояния ручного вмешательства и потерю контакта; эти счётчики могут
+  пересекаться, потому что версия, transport/contact и update state — разные
+  измерения состояния;
+- `failed` update показывает сохранённый безопасный `error_code`, а
+  `manual_required` объясняет необходимость ручного compatible update;
+- fleet view не читает файлы агента и не требует входящего соединения к host;
+- browser fleet view обновляет уже известные operational states через authenticated
+  read-only polling `/api/agents/fleet-status`; это polling web UI к MirvMon, а не
+  server-to-agent соединение;
+- локальный `health.json` и durable retry queue остаются локальными: пока protocol
+  не сообщает queue depth/oldest queued sample, UI не оценивает и не выдумывает
+  эти значения;
+- v0.5.4 не добавляет migration и не меняет metrics/config/update protocol.
+
+Operational UI live refresh:
+
+- server-rendered read-only фрагменты помечаются `data-live-fragment`; общий
+  browser helper периодически читает тот же authenticated GET и заменяет только
+  соответствующий свежий фрагмент, не дублируя status formatting и ACL в JS;
+- live GET отправляет `X-MirvMon-Live-Fragment: 1`; `SessionMiddleware` не
+  потребляет flash message на таком GET, но POST с тем же header сохраняет
+  обычную семантику session flash;
+- polling приостанавливается в скрытой вкладке, не заменяет фрагмент с текущим
+  keyboard focus и при ошибке оставляет последнее известное состояние;
+- live fragments применяются к dashboard attention/system health, server health
+  list/detail overview/events/agent, group summaries, website list/overview/events,
+  active incidents, notification queue и system diagnostics;
+- website metrics обновляют данные раз в 30 секунд, сохраняя выбранный endpoint и
+  период; server metrics используют тот же 30-секундный live refresh текущего
+  server-rendered metrics fragment;
+- перед заменой server metrics fragment browser сохраняет zoom/pan границы каждого
+  Chart.js-графика по исходным timestamps, после получения свежих series пересоздаёт
+  charts и восстанавливает соответствующий временной viewport; незумированный график
+  остаётся в live-режиме и двигается вместе со свежим period window;
+- replacement можно отменить через `mirvmon:live-fragment-before-update`; metrics UI
+  использует это, чтобы не заменять canvas во время активного zoom/pan gesture;
+- audit/history, settings/forms и server services не перерисовываются автоматически:
+  эти экраны либо исторические, либо содержат активное пользовательское состояние.
+
 ### Мониторинг сайтов
 
 - website checks выполняются централизованно внутри `app`; native agent не

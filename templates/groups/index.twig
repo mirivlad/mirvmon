@@ -16,6 +16,7 @@
     </div>
 </header>
 
+<div data-live-fragment="group-overview" data-live-interval-ms="20000">
 {% if groups|length > 0 %}
 <div class="group-dashboard-grid">
     {% for group in groups %}
@@ -107,4 +108,5 @@
     </div>
 </div>
 {% endif %}
+</div>
 {% endblock %}

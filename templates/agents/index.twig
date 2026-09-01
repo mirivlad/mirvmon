@@ -1,0 +1,304 @@
+{% extends "layout.twig" %}
+{% set page_title = t('fleet.title') %}
+{% set update_indicators = {
+    current: ['fa-circle-check', 'success'], unknown: ['fa-circle-question', 'secondary'],
+    manual_required: ['fa-triangle-exclamation', 'warning'], update_available: ['fa-circle-arrow-up', 'info'],
+    pending: ['fa-clock', 'secondary'], accepted: ['fa-circle-check', 'info'], downloading: ['fa-download', 'info'],
+    installing: ['fa-gears', 'warning'], awaiting_restart: ['fa-rotate', 'warning'], failed: ['fa-circle-xmark', 'danger']
+} %}
+{% set connection_indicators = {
+    connected: ['fa-link', 'success'], offline: ['fa-link-slash', 'danger'],
+    never: ['fa-circle-question', 'secondary'], disabled: ['fa-pause', 'secondary']
+} %}
+
+{% block content %}
+<header class="app-page-header">
+    <div class="app-page-header-main">
+        <p class="page-eyebrow">MirvMon</p>
+        <h1><i class="fas fa-microchip" aria-hidden="true"></i> {{ t('fleet.title') }}</h1>
+        <p class="page-subtitle">{{ t('fleet.subtitle') }}</p>
+    </div>
+    <div class="app-page-actions">
+        <a class="btn btn-outline-secondary" href="/agents"><i class="fas fa-rotate" aria-hidden="true"></i> {{ t('common.refresh') }}</a>
+        <a class="btn btn-outline-primary" href="/servers?agent=outdated"><i class="fas fa-arrows-rotate" aria-hidden="true"></i> {{ t('fleet.open_updates') }}</a>
+    </div>
+</header>
+
+<section class="fleet-summary-grid" aria-label="{{ t('fleet.summary') }}">
+    {% set cards = {
+        all: ['fa-microchip', summary.total, 'fleet.card.total'],
+        current: ['fa-circle-check', summary.current, 'fleet.card.current'],
+        outdated: ['fa-circle-arrow-up', summary.outdated, 'fleet.card.outdated'],
+        updating: ['fa-arrows-rotate', summary.updating, 'fleet.card.updating'],
+        attention: ['fa-triangle-exclamation', summary.attention, 'fleet.card.attention'],
+        offline: ['fa-link-slash', summary.offline, 'fleet.card.offline']
+    } %}
+    {% for key, card in cards %}
+    <a class="fleet-summary-card{% if view == key %} is-active{% endif %}" href="/agents?view={{ key }}{% if search %}&q={{ search|url_encode }}{% endif %}">
+        <span class="fleet-summary-icon"><i class="fas {{ card[0] }}" aria-hidden="true"></i></span>
+        <span><strong data-fleet-summary="{{ key == 'all' ? 'total' : key }}">{{ card[1] }}</strong><small>{{ t(card[2]) }}</small></span>
+    </a>
+    {% endfor %}
+</section>
+
+<div class="row g-3 mb-4">
+    <div class="col-lg-8">
+        <form method="get" action="/agents" class="app-filter-panel h-100">
+            <input type="hidden" name="view" value="{{ view }}">
+            <div class="app-filter-field">
+                <label for="fleet-search">{{ t('fleet.search') }}</label>
+                <div class="app-search-field">
+                    <i class="fas fa-search" aria-hidden="true"></i>
+                    <input id="fleet-search" class="form-control" type="search" name="q" value="{{ search }}" placeholder="{{ t('fleet.search_placeholder') }}">
+                </div>
+            </div>
+            <div class="d-flex gap-2 mt-3">
+                <button class="btn btn-primary" type="submit"><i class="fas fa-filter" aria-hidden="true"></i> {{ t('common.apply') }}</button>
+                <a class="btn btn-outline-secondary" href="/agents?view={{ view }}">{{ t('common.reset') }}</a>
+            </div>
+        </form>
+    </div>
+    <div class="col-lg-4">
+        <section class="app-panel h-100 fleet-version-panel">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h2 class="h6 mb-0">{{ t('fleet.versions') }}</h2>
+                <span class="badge text-bg-primary" data-fleet-target-version>{{ t('fleet.target', {version: target_version}) }}</span>
+            </div>
+            <span class="text-muted small{% if versions is not empty %} d-none{% endif %}" data-fleet-no-versions>{{ t('fleet.no_versions') }}</span>
+            <div class="d-flex flex-wrap gap-2{% if versions is empty %} d-none{% endif %}" data-fleet-versions>
+            {% for version, count in versions %}<span class="badge bg-light text-dark border">{{ version }} · {{ count }}</span>{% endfor %}
+            </div>
+        </section>
+    </div>
+</div>
+
+<section class="app-panel">
+    <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
+        <h2 class="h5 mb-0">{{ t('fleet.list') }}</h2>
+        <span class="text-muted small">{{ t('fleet.results', {count: servers|length}) }}</span>
+    </div>
+    {% if servers is empty %}
+        <div class="text-muted py-3">{{ t('fleet.empty') }}</div>
+    {% else %}
+    <div class="table-responsive">
+        <table class="table app-table fleet-table align-middle">
+            <thead><tr>
+                <th>{{ t('fleet.column.server') }}</th><th>{{ t('fleet.column.connection') }}</th>
+                <th>{{ t('fleet.column.version') }}</th><th>{{ t('fleet.column.platform') }}</th>
+                <th>{{ t('fleet.column.update') }}</th><th>{{ t('common.actions') }}</th>
+            </tr></thead>
+            <tbody>
+            {% for server in servers %}
+                {% set update = server.agent_update %}
+                {% set update_state = update.state|default('unknown') %}
+                {% set update_indicator = update_indicators[update_state]|default(update_indicators.unknown) %}
+                {% set connection = connection_indicators[server.connection_state]|default(connection_indicators.never) %}
+                <tr data-fleet-agent-row data-server-id="{{ server.id }}">
+                    <td data-label="{{ t('fleet.column.server') }}">
+                        <a class="fw-semibold text-decoration-none" href="/servers/{{ server.id }}">{{ server.name }}</a>
+                        {% if server.group_name %}<div class="text-muted small">{{ server.group_name }}</div>{% endif %}
+                    </td>
+                    <td data-label="{{ t('fleet.column.connection') }}">
+                        <span class="badge text-bg-{{ connection[1] }}" data-fleet-connection><i class="fas {{ connection[0] }} me-1" data-fleet-connection-icon></i><span data-fleet-connection-label>{{ t('fleet.connection.' ~ server.connection_state) }}</span></span>
+                        <div class="text-muted small mt-1{% if server.seconds_since_update is null %} d-none{% endif %}" data-fleet-last-contact>{% if server.seconds_since_update is not null %}{{ t('fleet.last_contact', {seconds: server.seconds_since_update}) }}{% endif %}</div><div class="small{% if server.status not in ['warning', 'critical'] %} d-none{% else %} text-{{ server.status == 'critical' ? 'danger' : 'warning' }}{% endif %}" data-fleet-runtime>{% if server.status in ['warning', 'critical'] %}{{ t('fleet.runtime') }}: {{ t('status.' ~ server.status) }}{% endif %}</div>
+                    </td>
+                    <td data-label="{{ t('fleet.column.version') }}">
+                        <span class="fw-semibold" data-fleet-installed>{{ update.installed_version|default('—') }}</span>
+                        <div class="small text-info{% if update.is_outdated is not same as(true) %} d-none{% endif %}" data-fleet-update-target>{% if update.is_outdated is same as(true) %}→ {{ update.available_version }}{% endif %}</div>
+                    </td>
+                    <td data-label="{{ t('fleet.column.platform') }}">
+                        <span title="{{ server.platform.tooltip }}" data-fleet-platform><i class="{{ server.platform.icon_class }} me-1" data-fleet-platform-icon></i><span data-fleet-platform-label>{{ server.platform.tooltip }}</span></span>
+                        <div class="text-muted small{% if not update.artifact %} d-none{% endif %}" data-fleet-artifact>{{ update.artifact|default('') }}</div>
+                    </td>
+                    <td data-label="{{ t('fleet.column.update') }}">
+                        <span class="text-{{ update_indicator[1] }}" data-fleet-update-state><i class="fas {{ update_indicator[0] }} me-1" data-fleet-update-icon></i><span data-fleet-update-label>{{ t('agent.state.' ~ update_state) }}</span></span>
+                        <div class="small mt-1{% if update_state not in ['failed', 'manual_required'] %} d-none{% elseif update_state == 'failed' %} text-danger{% else %} text-warning{% endif %}" data-fleet-update-detail>{% if update_state == 'failed' and update.command.error_code %}{{ t('agent.error.' ~ update.command.error_code) }}{% elseif update_state == 'manual_required' %}{{ update.requires_compatible_updater ? t('fleet.manual.compatibility') : t('fleet.manual.unsupported') }}{% endif %}</div>
+                    </td>
+                    <td data-label="{{ t('common.actions') }}"><a class="btn btn-sm btn-outline-primary" href="/servers/{{ server.id }}?tab=agent"><i class="fas fa-arrow-right" aria-hidden="true"></i> {{ t('fleet.open_agent') }}</a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</section>
+
+<div class="alert alert-light border mt-3 mb-0 small text-muted"><i class="fas fa-circle-info me-2" aria-hidden="true"></i>{{ t('fleet.queue_note') }}</div>
+<script nonce="__MIRVMON_CSP_NONCE__">
+(() => {
+    const rows = Array.from(document.querySelectorAll('[data-fleet-agent-row]'));
+    const rowsById = new Map(rows.map((row) => [String(row.dataset.serverId), row]));
+    const connectionStyles = {
+        connected: ['fa-link', 'success'], offline: ['fa-link-slash', 'danger'],
+        never: ['fa-circle-question', 'secondary'], disabled: ['fa-pause', 'secondary']
+    };
+    const updateStyles = {
+        current: ['fa-circle-check', 'success'], unknown: ['fa-circle-question', 'secondary'],
+        manual_required: ['fa-triangle-exclamation', 'warning'], update_available: ['fa-circle-arrow-up', 'info'],
+        pending: ['fa-clock', 'secondary'], accepted: ['fa-circle-check', 'info'],
+        downloading: ['fa-download', 'info'], installing: ['fa-gears', 'warning'],
+        awaiting_restart: ['fa-rotate', 'warning'], failed: ['fa-circle-xmark', 'danger']
+    };
+    const text = {
+        connections: {
+            connected: {{ t('fleet.connection.connected')|json_encode|raw }},
+            offline: {{ t('fleet.connection.offline')|json_encode|raw }},
+            never: {{ t('fleet.connection.never')|json_encode|raw }},
+            disabled: {{ t('fleet.connection.disabled')|json_encode|raw }}
+        },
+        updates: {
+            current: {{ t('agent.state.current')|json_encode|raw }},
+            unknown: {{ t('agent.state.unknown')|json_encode|raw }},
+            manual_required: {{ t('agent.state.manual_required')|json_encode|raw }},
+            update_available: {{ t('agent.state.update_available')|json_encode|raw }},
+            pending: {{ t('agent.state.pending')|json_encode|raw }},
+            accepted: {{ t('agent.state.accepted')|json_encode|raw }},
+            downloading: {{ t('agent.state.downloading')|json_encode|raw }},
+            installing: {{ t('agent.state.installing')|json_encode|raw }},
+            awaiting_restart: {{ t('agent.state.awaiting_restart')|json_encode|raw }},
+            failed: {{ t('agent.state.failed')|json_encode|raw }}
+        },
+        errors: {
+            checksum_mismatch: {{ t('agent.error.checksum_mismatch')|json_encode|raw }},
+            identity_mismatch: {{ t('agent.error.identity_mismatch')|json_encode|raw }},
+            download_failed: {{ t('agent.error.download_failed')|json_encode|raw }},
+            handoff_failed: {{ t('agent.error.handoff_failed')|json_encode|raw }},
+            apply_failed: {{ t('agent.error.apply_failed')|json_encode|raw }},
+            target_superseded: {{ t('agent.error.target_superseded')|json_encode|raw }},
+            update_failed: {{ t('agent.error.update_failed')|json_encode|raw }}
+        },
+        manualCompatibility: {{ t('fleet.manual.compatibility')|json_encode|raw }},
+        manualUnsupported: {{ t('fleet.manual.unsupported')|json_encode|raw }},
+        lastContact: {{ t('fleet.last_contact', {seconds: '__SECONDS__'})|json_encode|raw }},
+        runtime: {{ t('fleet.runtime')|json_encode|raw }},
+        warning: {{ t('status.warning')|json_encode|raw }},
+        critical: {{ t('status.critical')|json_encode|raw }},
+        target: {{ t('fleet.target', {version: '__VERSION__'})|json_encode|raw }}
+    };
+
+    function renderSummary(summary) {
+        document.querySelectorAll('[data-fleet-summary]').forEach((node) => {
+            const key = node.dataset.fleetSummary;
+            if (Object.prototype.hasOwnProperty.call(summary, key)) node.textContent = String(summary[key]);
+        });
+    }
+
+    function renderVersions(versions, targetVersion) {
+        const target = document.querySelector('[data-fleet-target-version]');
+        if (target) target.textContent = text.target.replace('__VERSION__', targetVersion || '—');
+        const container = document.querySelector('[data-fleet-versions]');
+        const empty = document.querySelector('[data-fleet-no-versions]');
+        if (!container || !empty) return;
+        const entries = Object.entries(versions || {});
+        container.replaceChildren();
+        entries.forEach(([version, count]) => {
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-light text-dark border';
+            badge.textContent = `${version} · ${count}`;
+            container.appendChild(badge);
+        });
+        container.classList.toggle('d-none', entries.length === 0);
+        empty.classList.toggle('d-none', entries.length !== 0);
+    }
+
+    function renderRow(row, server) {
+        const connection = connectionStyles[server.connection_state] || connectionStyles.never;
+        const connectionBadge = row.querySelector('[data-fleet-connection]');
+        const connectionIcon = row.querySelector('[data-fleet-connection-icon]');
+        const connectionLabel = row.querySelector('[data-fleet-connection-label]');
+        if (connectionBadge) connectionBadge.className = `badge text-bg-${connection[1]}`;
+        if (connectionIcon) connectionIcon.className = `fas ${connection[0]} me-1`;
+        if (connectionLabel) connectionLabel.textContent = text.connections[server.connection_state] || text.connections.never;
+
+        const lastContact = row.querySelector('[data-fleet-last-contact]');
+        if (lastContact) {
+            const hasContact = Number.isFinite(server.seconds_since_update);
+            lastContact.classList.toggle('d-none', !hasContact);
+            lastContact.textContent = hasContact ? text.lastContact.replace('__SECONDS__', String(server.seconds_since_update)) : '';
+        }
+        const runtime = row.querySelector('[data-fleet-runtime]');
+        if (runtime) {
+            const showRuntime = ['warning', 'critical'].includes(server.status);
+            runtime.className = `small${showRuntime ? ` text-${server.status === 'critical' ? 'danger' : 'warning'}` : ' d-none'}`;
+            runtime.textContent = showRuntime ? `${text.runtime}: ${server.status === 'critical' ? text.critical : text.warning}` : '';
+        }
+
+        const update = server.update || {};
+        const installed = row.querySelector('[data-fleet-installed]');
+        if (installed) installed.textContent = update.installed_version || '—';
+        const target = row.querySelector('[data-fleet-update-target]');
+        if (target) {
+            const showTarget = update.is_outdated === true && Boolean(update.available_version);
+            target.classList.toggle('d-none', !showTarget);
+            target.textContent = showTarget ? `→ ${update.available_version}` : '';
+        }
+        const platform = row.querySelector('[data-fleet-platform]');
+        const platformIcon = row.querySelector('[data-fleet-platform-icon]');
+        const platformLabel = row.querySelector('[data-fleet-platform-label]');
+        if (platform) platform.title = server.platform?.tooltip || '';
+        if (platformIcon) platformIcon.className = `${server.platform?.icon_class || 'fas fa-server'} me-1`;
+        if (platformLabel) platformLabel.textContent = server.platform?.tooltip || '';
+        const artifact = row.querySelector('[data-fleet-artifact]');
+        if (artifact) {
+            artifact.classList.toggle('d-none', !update.artifact);
+            artifact.textContent = update.artifact || '';
+        }
+
+        const state = update.state || 'unknown';
+        const updateStyle = updateStyles[state] || updateStyles.unknown;
+        const stateNode = row.querySelector('[data-fleet-update-state]');
+        const stateIcon = row.querySelector('[data-fleet-update-icon]');
+        const stateLabel = row.querySelector('[data-fleet-update-label]');
+        if (stateNode) stateNode.className = `text-${updateStyle[1]}`;
+        if (stateIcon) stateIcon.className = `fas ${updateStyle[0]} me-1`;
+        if (stateLabel) stateLabel.textContent = text.updates[state] || text.updates.unknown;
+        const detail = row.querySelector('[data-fleet-update-detail]');
+        if (detail) {
+            let detailText = '';
+            let detailClass = '';
+            if (state === 'failed' && update.error_code) {
+                detailText = text.errors[update.error_code] || update.error_code;
+                detailClass = 'text-danger';
+            } else if (state === 'manual_required') {
+                detailText = update.requires_compatible_updater ? text.manualCompatibility : text.manualUnsupported;
+                detailClass = 'text-warning';
+            }
+            detail.className = `small mt-1${detailText ? ` ${detailClass}` : ' d-none'}`;
+            detail.textContent = detailText;
+        }
+    }
+
+    async function poll() {
+        try {
+            if (document.visibilityState !== 'hidden') {
+                const url = new URL('/api/agents/fleet-status', window.location.origin);
+                const current = new URL(window.location.href);
+                if (current.searchParams.get('view')) url.searchParams.set('view', current.searchParams.get('view'));
+                if (current.searchParams.get('q')) url.searchParams.set('q', current.searchParams.get('q'));
+                const response = await fetch(url, {headers: {Accept: 'application/json'}, cache: 'no-store'});
+                if (response.ok) {
+                    const snapshot = await response.json();
+                    const incomingIds = (snapshot.servers || []).map((server) => String(server.id)).sort();
+                    const currentIds = Array.from(rowsById.keys()).sort();
+                    if (incomingIds.join(',') !== currentIds.join(',')) {
+                        window.location.reload();
+                        return;
+                    }
+                    renderSummary(snapshot.summary || {});
+                    renderVersions(snapshot.versions || {}, snapshot.target_version || '—');
+                    (snapshot.servers || []).forEach((server) => {
+                        const row = rowsById.get(String(server.id));
+                        if (row) renderRow(row, server);
+                    });
+                }
+            }
+        } catch (error) {
+            console.debug('Fleet status refresh failed', error);
+        }
+        window.setTimeout(poll, 5000);
+    }
+    window.setTimeout(poll, 5000);
+})();
+</script>
+
+{% endblock %}
