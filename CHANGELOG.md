@@ -6,6 +6,8 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.5.4.3
+
 - Keep wheel/pinch zoom in live-follow mode during automatic metric refresh while pan/drag-selected historical ranges stay pinned; live fragments now pause only for focused editable controls instead of any focused element.
 
 ## 0.5.4.2
