@@ -82,6 +82,35 @@ final class AgentCredentialIssuerTest extends TestCase
         $this->issuer->exchange($firstInstaller);
     }
 
+    public function testInstallerIssuanceRequiresRotationAfterRestoreWithDifferentKey(): void
+    {
+        $installer = $this->issuer->issueInstaller($this->serverId);
+        $credential = $this->issuer->exchange($installer);
+        $restoredIssuer = new AgentCredentialIssuer(self::$pdo, str_repeat('b', 32));
+
+        self::assertTrue($this->issuer->canIssueInstaller($this->serverId));
+        self::assertFalse($restoredIssuer->canIssueInstaller($this->serverId));
+        self::assertSame(
+            hash('sha256', $credential->token),
+            self::$pdo?->query(
+                'SELECT token_hash FROM agent_tokens WHERE server_id = ' . $this->serverId
+            )->fetchColumn()
+        );
+
+        try {
+            $restoredIssuer->issueInstaller($this->serverId);
+            self::fail('Restored installation must not issue an unusable installer.');
+        } catch (RuntimeException $exception) {
+            self::assertSame('Agent credential requires explicit rotation.', $exception->getMessage());
+        }
+
+        $restoredIssuer->rotate($this->serverId);
+        self::assertTrue($restoredIssuer->canIssueInstaller($this->serverId));
+        $newInstaller = $restoredIssuer->issueInstaller($this->serverId);
+        $newCredential = $restoredIssuer->exchange($newInstaller);
+        self::assertNotSame($credential->token, $newCredential->token);
+    }
+
     public function testInstallerCredentialCanBeValidatedWithoutConsumption(): void
     {
         $installer = $this->issuer->issueInstaller($this->serverId);
