@@ -176,6 +176,7 @@ return [
     'server.period.start' => 'Start',
     'server.period.end' => 'End',
     'server.period.reset_zoom' => 'Reset zoom',
+    'server.period.pan_hint' => 'Wheel — zoom, middle mouse button — move along the timeline.',
     'server.summary.last_metric' => 'Last metric',
     'server.summary.uptime' => 'Uptime',
     'server.summary.selected_period' => 'Selected period',

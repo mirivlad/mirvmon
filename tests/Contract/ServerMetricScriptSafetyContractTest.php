@@ -45,6 +45,10 @@ final class ServerMetricScriptSafetyContractTest extends TestCase
         self::assertStringContainsString('data-live-fragment="server-metrics"', $metrics);
         self::assertStringContainsString('data-server-metrics-payload', $metrics);
         self::assertStringContainsString('captureMetricViewports()', $script);
+        self::assertStringContainsString('middleMousePan', $script);
+        self::assertStringContainsString('event.button !== 1', $script);
+        self::assertStringContainsString("chart.pan({ x: deltaX }, undefined, 'none')", $script);
+        self::assertStringContainsString('enabled: false', $script);
         self::assertStringContainsString('dataEnd: timestamps[lastIndex]', $script);
         self::assertStringContainsString('shiftedMetricViewport(viewport, timestamps)', $script);
         self::assertStringContainsString('const shift = newDataEnd - oldDataEnd', $script);

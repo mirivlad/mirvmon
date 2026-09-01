@@ -4,6 +4,7 @@
 <script nonce="__MIRVMON_CSP_NONCE__">
 const managedCharts = new Map();
 let pendingMetricViewports = {};
+let middleMousePan = null;
 const detailText = {
     time: {{ t('metric.time')|json_encode|raw }},
     loading: {{ t('metric.loading')|json_encode|raw }},
@@ -34,14 +35,53 @@ function readMetricsPayload() {
 }
 
 function registerManagedChart(canvasId, chart, timestamps = []) {
+    const normalizedTimestamps = Array.isArray(timestamps) ? timestamps : [];
     managedCharts.set(canvasId, {
         chart,
-        timestamps: Array.isArray(timestamps) ? timestamps : []
+        timestamps: normalizedTimestamps
     });
+    if (normalizedTimestamps.length > 1) enableMiddleMousePan(chart);
     return chart;
 }
 
+function enableMiddleMousePan(chart) {
+    const canvas = chart && chart.canvas;
+    if (!(canvas instanceof HTMLCanvasElement) || typeof chart.pan !== 'function') return;
+    canvas.style.cursor = 'grab';
+    canvas.addEventListener('mousedown', function(event) {
+        if (event.button !== 1) return;
+        event.preventDefault();
+        middleMousePan = { chart, canvas, lastX: event.clientX };
+        canvas.style.cursor = 'grabbing';
+    });
+    canvas.addEventListener('auxclick', function(event) {
+        if (event.button === 1) event.preventDefault();
+    });
+}
+
+function finishMiddleMousePan() {
+    if (!middleMousePan) return;
+    const { canvas } = middleMousePan;
+    if (canvas instanceof HTMLCanvasElement && canvas.isConnected) canvas.style.cursor = 'grab';
+    middleMousePan = null;
+}
+
+document.addEventListener('mousemove', function(event) {
+    if (!middleMousePan) return;
+    event.preventDefault();
+    const deltaX = event.clientX - middleMousePan.lastX;
+    middleMousePan.lastX = event.clientX;
+    if (deltaX !== 0) middleMousePan.chart.pan({ x: deltaX }, undefined, 'none');
+});
+
+document.addEventListener('mouseup', function(event) {
+    if (event.button === 1) finishMiddleMousePan();
+});
+window.addEventListener('blur', finishMiddleMousePan);
+
+
 function destroyManagedCharts() {
+    finishMiddleMousePan();
     managedCharts.forEach(({ chart }) => {
         if (chart && typeof chart.destroy === 'function') chart.destroy();
     });
@@ -114,7 +154,7 @@ function metricZoomOptions() {
             mode: 'x'
         },
         pan: {
-            enabled: true,
+            enabled: false,
             mode: 'x'
         }
     };
@@ -171,6 +211,7 @@ function restoreMetricViewport(canvasId, timestamps, viewports) {
 }
 
 function metricInteractionActive() {
+    if (middleMousePan) return true;
     for (const { chart } of managedCharts.values()) {
         if (chart && typeof chart.isZoomingOrPanning === 'function' && chart.isZoomingOrPanning()) return true;
     }

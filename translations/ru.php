@@ -176,6 +176,7 @@ return [
     'server.period.start' => 'Начало',
     'server.period.end' => 'Конец',
     'server.period.reset_zoom' => 'Сбросить зум',
+    'server.period.pan_hint' => 'Колесо — масштаб, средняя кнопка — перемещение по времени.',
     'server.summary.last_metric' => 'Последняя метрика',
     'server.summary.uptime' => 'Аптайм',
     'server.summary.selected_period' => 'Выбранный период',
