@@ -77,7 +77,7 @@ notifications. Запоздалый допустимый sample записыва
   режимом `0600` и переживает restart;
 - Linux installer поддерживает systemd x64 Debian 11+, Ubuntu 20.04+,
   CentOS/RHEL/Oracle Linux 7+, AlmaLinux/Rocky Linux 8+ и NethServer 7;
-- Windows 10/11 и Server 2016/2019/2022/2025 используют Go 1.26.5; Windows 7
+- Windows 10/11 и Server 2016/2019/2022/2025 используют Go 1.26.6; Windows 7
   SP1/8/8.1 и Server 2008 R2 SP1/2012/2012 R2 — Go 1.20.14; Windows Server
   2008 без R2 и x86 системы исключены;
 - единый неподписанный Windows EXE собирается NSIS на сервере и содержит обе
@@ -240,7 +240,7 @@ Release tags `vX.Y.Z` публикуют multi-arch image в GHCR с SBOM и pro
 Prerelease tags не обновляют `latest`.
 
 Schema integration tests выполняются на чистой TimescaleDB и повторно после
-всех миграций. Agent tests выполняются Go 1.26.5 и Go 1.20.14.
+всех миграций. Agent tests выполняются Go 1.26.6 и Go 1.20.14.
 Dashboard проверяется browser tests на desktop и mobile viewport.
 
 ## Критерии приёмки

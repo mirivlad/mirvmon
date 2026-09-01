@@ -21,6 +21,10 @@ updates:
       interval: weekly
     target-branch: master
     open-pull-requests-limit: 5
+    # `docker/Dockerfile` contains modern and legacy Go stages with different OS support contracts.
+    # Dependabot treats both `golang` images as one dependency and must not collapse the legacy 1.20 pin.
+    ignore:
+      - dependency-name: golang
 
   - package-ecosystem: github-actions
     directory: /
