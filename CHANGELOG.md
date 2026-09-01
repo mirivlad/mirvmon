@@ -6,6 +6,8 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+- Added middle-mouse drag panning for server metric charts without changing live-scroll behavior.
+
 ## 0.5.4.4
 
 - Changed live server-metric viewport handling so any zoom/pan keeps its scale but shifts by the same newest-sample time delta as the underlying live series on every refresh.
