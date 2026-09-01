@@ -160,6 +160,12 @@ final class AppFactory
             $group->post('/language', self::controller($container, LanguageController::class, 'save'));
             $group->get('/system', self::controller($container, SystemController::class, 'index'));
             $group->post('/system/host', self::controller($container, SystemController::class, 'saveHost'));
+            $group->get('/system/backup', self::controller($container, SystemController::class, 'backup'));
+            $group->post('/system/backup/create', self::controller($container, SystemController::class, 'createBackup'));
+            $group->post('/system/restore/upload/start', self::controller($container, SystemController::class, 'beginRestoreUpload'));
+            $group->post('/system/restore/upload/chunk', self::controller($container, SystemController::class, 'appendRestoreChunk'));
+            $group->post('/system/restore/preflight', self::controller($container, SystemController::class, 'preflightRestore'));
+            $group->post('/system/restore/execute', self::controller($container, SystemController::class, 'executeRestore'));
             $group->get('/audit', self::controller($container, AuditController::class, 'index'));
             $group->post('/audit/retention', self::controller($container, AuditController::class, 'saveRetention'));
         });
