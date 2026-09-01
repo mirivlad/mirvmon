@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "**"
+      - "!stable"
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
       - "v[0-9]+.[0-9]+.[0-9]+.[0-9]+"
@@ -386,3 +387,10 @@ jobs:
           fi
 
           gh release create "$tag" "${args[@]}"
+
+      - name: Advance stable branch
+        if: ${{ !contains(github.ref_name, '-') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin "$GITHUB_SHA:refs/heads/stable"
