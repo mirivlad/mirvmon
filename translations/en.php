@@ -9,6 +9,7 @@ return [
     'nav.dashboard' => 'Overview',
     'nav.groups' => 'Groups',
     'nav.servers' => 'Servers',
+    'nav.agents' => 'Agents',
     'nav.alerts' => 'Alerts',
     'nav.settings' => 'Settings',
     'nav.users' => 'Users',

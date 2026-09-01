@@ -2,7 +2,7 @@
 {% set page_title = t('server.page_title', {name: server.name}) %}
 
 {% block content %}
-<div class="card mb-3">
+<div class="card mb-3" data-live-fragment="server-header" data-live-url="/servers/{{ server.id }}?tab=agent" data-live-interval-ms="15000">
     <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-3">
         <div>
             <h1 class="h3 mb-1 server-status-{{ server.status }}">
@@ -32,6 +32,7 @@
     </div>
 </div>
 
+<div data-live-fragment="server-maintenance" data-live-url="/servers/{{ server.id }}?tab=agent" data-live-interval-ms="15000">
 {% if maintenance %}
 <div class="alert alert-warning d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
     <div>
@@ -49,6 +50,7 @@
     </form>
 </div>
 {% endif %}
+</div>
 
 <ul class="nav nav-tabs mb-3" aria-label="{{ t('server18.tabs.label') }}">
     {% set tabs = {
@@ -62,25 +64,24 @@
     <li class="nav-item">
         <a href="/servers/{{ server.id }}?tab={{ tab }}" class="nav-link {{ active_tab == tab ? 'active fw-semibold' : '' }}" {% if active_tab == tab %}aria-current="page"{% endif %}>
             <i class="fas {{ meta[0] }} me-1" aria-hidden="true"></i>{{ meta[1] }}
-            {% if tab == 'events' and active_problem_count > 0 %}<span class="badge text-bg-danger ms-1">{{ active_problem_count }}</span>{% endif %}
+            {% if tab == 'events' %}<span class="badge text-bg-danger ms-1{{ active_problem_count > 0 ? '' : ' d-none' }}" data-live-fragment="server-problem-count" data-live-url="/servers/{{ server.id }}?tab=agent" data-live-interval-ms="15000">{{ active_problem_count }}</span>{% endif %}
         </a>
     </li>
     {% endfor %}
 </ul>
 
 {% if active_tab == 'overview' %}
-    {% include "servers/partials/detail-overview.twig" %}
+    <div data-live-fragment="server-overview" data-live-interval-ms="30000">{% include "servers/partials/detail-overview.twig" %}</div>
 {% elseif active_tab == 'metrics' %}
     {% include "servers/partials/detail-metrics.twig" %}
 {% elseif active_tab == 'services' %}
     {% include "servers/partials/detail-services.twig" %}
 {% elseif active_tab == 'events' %}
-    {% include "servers/partials/detail-events.twig" %}
+    <div data-live-fragment="server-events" data-live-interval-ms="10000">{% include "servers/partials/detail-events.twig" %}</div>
 {% elseif active_tab == 'agent' %}
-    {% include "servers/partials/agent-management.twig" %}
+    <div data-live-fragment="server-agent" data-live-interval-ms="5000">{% include "servers/partials/agent-management.twig" %}</div>
 {% endif %}
 
-{% if not maintenance %}
 <div class="modal fade" id="maintenanceModal" tabindex="-1" aria-labelledby="maintenanceModalTitle" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -114,7 +115,6 @@
         </div>
     </div>
 </div>
-{% endif %}
 
 {% if active_tab == 'metrics' %}
     {% include "servers/partials/detail-scripts.twig" %}

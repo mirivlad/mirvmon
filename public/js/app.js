@@ -50,7 +50,20 @@
         return trimNumber(scaled) + ' ' + RATE_UNITS[index];
     };
 
-    window.MirvMon = Object.assign(window.MirvMon || {}, { formatMetricValue, formatDuration });
+    const initTooltips = (root = document) => {
+        if (root instanceof Element && root.matches('[data-bs-toggle="tooltip"]')) {
+            bootstrap.Tooltip.getOrCreateInstance(root);
+        }
+        root.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((element) => {
+            bootstrap.Tooltip.getOrCreateInstance(element);
+        });
+    };
+
+    window.MirvMon = Object.assign(window.MirvMon || {}, {
+        formatMetricValue,
+        formatDuration,
+        initTooltips
+    });
 
     document.addEventListener('submit', (event) => {
         const submitter = event.submitter;
@@ -63,9 +76,7 @@
         }
     });
 
-    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((element) => {
-        bootstrap.Tooltip.getOrCreateInstance(element);
-    });
+    initTooltips();
 
     document.querySelectorAll('[data-server-filter-form]').forEach((form) => {
         let timeoutId;
@@ -78,4 +89,84 @@
             });
         });
     });
+
+
+    const liveFragments = Array.from(document.querySelectorAll('[data-live-fragment]'))
+        .map((element) => ({
+            key: element.dataset.liveFragment || '',
+            url: element.dataset.liveUrl || window.location.href,
+            interval: Math.min(300000, Math.max(5000, Number.parseInt(element.dataset.liveIntervalMs || '30000', 10) || 30000))
+        }))
+        .filter((item) => item.key !== '');
+
+    const liveGroups = new Map();
+    liveFragments.forEach((item) => {
+        const url = new URL(item.url, window.location.href).toString();
+        const groupKey = `${url}\n${item.interval}`;
+        if (!liveGroups.has(groupKey)) {
+            liveGroups.set(groupKey, { url, interval: item.interval, keys: [] });
+        }
+        const group = liveGroups.get(groupKey);
+        if (!group.keys.includes(item.key)) group.keys.push(item.key);
+    });
+
+    const findLiveFragment = (root, key) => Array.from(root.querySelectorAll('[data-live-fragment]'))
+        .find((element) => element.dataset.liveFragment === key) || null;
+
+    liveGroups.forEach((group) => {
+        let timer = null;
+        let inFlight = false;
+        const schedule = (delay = group.interval) => {
+            window.clearTimeout(timer);
+            timer = window.setTimeout(refresh, delay);
+        };
+        const refresh = async () => {
+            if (inFlight || document.visibilityState !== 'visible') {
+                schedule();
+                return;
+            }
+            inFlight = true;
+            try {
+                const response = await fetch(group.url, {
+                    headers: {
+                        Accept: 'text/html',
+                        'X-MirvMon-Live-Fragment': '1'
+                    },
+                    credentials: 'same-origin',
+                    cache: 'no-store'
+                });
+                if (!response.ok) throw new Error('Live fragment refresh failed.');
+                const freshDocument = new DOMParser().parseFromString(await response.text(), 'text/html');
+                group.keys.forEach((key) => {
+                    const current = findLiveFragment(document, key);
+                    const fresh = findLiveFragment(freshDocument, key);
+                    if (!current || !fresh || current.isEqualNode(fresh)) return;
+                    if (document.activeElement instanceof Element && current.contains(document.activeElement)) return;
+                    const beforeUpdate = new CustomEvent('mirvmon:live-fragment-before-update', {
+                        bubbles: true,
+                        cancelable: true,
+                        detail: { key }
+                    });
+                    if (!current.dispatchEvent(beforeUpdate)) return;
+                    const replacement = document.importNode(fresh, true);
+                    current.replaceWith(replacement);
+                    initTooltips(replacement);
+                    replacement.dispatchEvent(new CustomEvent('mirvmon:live-fragment-updated', {
+                        bubbles: true,
+                        detail: { key }
+                    }));
+                });
+            } catch {
+                // Keep the last known state. The next scheduled refresh retries.
+            } finally {
+                inFlight = false;
+                schedule();
+            }
+        };
+        schedule();
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') schedule(250);
+        });
+    });
+
 })();

@@ -29,7 +29,11 @@ final class SessionMiddleware
             'flash_type' => $_SESSION['flash_type'] ?? null
         ];
 
-        unset($_SESSION['flash_message'], $_SESSION['flash_type']);
+        $liveFragmentRead = $request->getMethod() === 'GET'
+            && $request->getHeaderLine('X-MirvMon-Live-Fragment') === '1';
+        if (!$liveFragmentRead) {
+            unset($_SESSION['flash_message'], $_SESSION['flash_type']);
+        }
         $this->twig->getEnvironment()->addGlobal('session', $sessionData);
 
         return $handler->handle($request);

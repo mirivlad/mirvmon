@@ -39,6 +39,7 @@
     </div>
 </form>
 
+<div data-live-fragment="website-list" data-live-interval-ms="15000">
 {% for group in groups %}
 <section class="mb-4" aria-labelledby="website-group-{{ group.id|default('none') }}">
     <h2 class="h5 mb-3" id="website-group-{{ group.id|default('none') }}">{{ group.name|default(t('websites.no_group')) }}</h2>
@@ -83,4 +84,5 @@
 {% else %}
 <div class="alert alert-secondary">{{ t('websites.empty') }}</div>
 {% endfor %}
+</div>
 {% endblock %}

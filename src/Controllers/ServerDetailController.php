@@ -94,51 +94,69 @@ final class ServerDetailController
         );
 
         $displayMetrics = $server['display_metrics'] === [] ? null : $server['display_metrics'];
-        $queryMetricNames = $displayMetrics === null ? [] : $this->expandDisplayMetrics($displayMetrics);
-        $series = $queryMetricNames === []
-            ? [
-                'source' => $this->metrics->sourceForRange($startDate, $endDate),
-                'bucket_seconds' => 0,
-                'points' => [],
-            ]
-            : $this->metrics->series($serverId, $startDate, $endDate, $queryMetricNames);
-        $grouped = $this->metricView->group($series['points']);
-        $current = $queryMetricNames === []
-            ? []
-            : $this->metrics->latestValues($serverId, $queryMetricNames);
-        $existingThresholds = $this->servers->thresholds($serverId);
-        $metricView = $this->metricView->build(
-            $grouped,
-            $displayMetrics,
-            $existingThresholds,
-            $current
-        );
+        $emptyMetricView = [
+            'simple' => [],
+            'network' => [],
+            'disk_io' => [],
+            'temperature' => ['datasets' => []],
+            'disks' => [],
+            'uptime' => [],
+            'summary' => [],
+        ];
+        $metricView = $emptyMetricView;
+        $series = [
+            'source' => $this->metrics->sourceForRange($startDate, $endDate),
+            'bucket_seconds' => 0,
+            'points' => [],
+        ];
+        $availabilityChart = ['known' => false, 'labels' => [], 'timestamps' => [], 'values' => []];
+        $summaryCards = [];
 
-        $availabilityChart = [];
-        if ($this->metricSelected('availability', $displayMetrics)) {
-            $availabilityChart = $this->metricView->availabilityChart(
-                (new AvailabilityRepository($this->pdo))->timeline(
-                    $serverId,
-                    $startDate,
-                    $endDate
-                )
+        if (in_array($activeTab, ['overview', 'metrics'], true)) {
+            $queryMetricNames = $displayMetrics === null ? [] : $this->expandDisplayMetrics($displayMetrics);
+            $series = $queryMetricNames === []
+                ? $series
+                : $this->metrics->series($serverId, $startDate, $endDate, $queryMetricNames);
+            $grouped = $this->metricView->group($series['points']);
+            $current = $queryMetricNames === []
+                ? []
+                : $this->metrics->latestValues($serverId, $queryMetricNames);
+            $metricView = $this->metricView->build(
+                $grouped,
+                $displayMetrics,
+                $this->servers->thresholds($serverId),
+                $current
             );
-        }
-        $summaryCards = $metricView['summary'];
-        if (($availabilityChart['known'] ?? false) === true) {
-            $summaryCards[] = [
-                'title' => $this->translator->trans('metric.availability_period'),
-                'value' => $availabilityChart['availabilityPercent'] . '%',
-                'subtitle' => $this->translator->trans('metric.downtime_outages', [
-                    'downtime' => $availabilityChart['downtimeText'],
-                    'outages' => $availabilityChart['outages'],
-                ]),
-            ];
+
+            if ($this->metricSelected('availability', $displayMetrics)) {
+                $availabilityChart = $this->metricView->availabilityChart(
+                    (new AvailabilityRepository($this->pdo))->timeline(
+                        $serverId,
+                        $startDate,
+                        $endDate
+                    )
+                );
+            }
+            $summaryCards = $metricView['summary'];
+            if (($availabilityChart['known'] ?? false) === true) {
+                $summaryCards[] = [
+                    'title' => $this->translator->trans('metric.availability_period'),
+                    'value' => $availabilityChart['availabilityPercent'] . '%',
+                    'subtitle' => $this->translator->trans('metric.downtime_outages', [
+                        'downtime' => $availabilityChart['downtimeText'],
+                        'outages' => $availabilityChart['outages'],
+                    ]),
+                ];
+            }
         }
 
-        $latestUptime = $this->metrics->latestUptime($serverId);
         $activeIncidents = $this->incidents->active(['server_id' => $serverId]);
-        $incidentHistory = $this->incidents->history(['server_id' => $serverId]);
+        $incidentHistory = $activeTab === 'events'
+            ? $this->incidents->history(['server_id' => $serverId])
+            : [];
+        $latestUptime = $activeTab === 'overview' ? $this->metrics->latestUptime($serverId) : null;
+        $allServices = $activeTab === 'services' ? $this->servers->services($serverId) : [];
+        $monitorServices = $activeTab === 'services' ? $this->servers->monitoredServices($serverId) : [];
 
         return $this->twig->render($response, 'servers/detail.twig', [
             'title' => $this->translator->trans('server.page_title', ['name' => $server['name']]),
@@ -164,8 +182,8 @@ final class ServerDetailController
             'uptimeChart' => $metricView['uptime'],
             'availabilityChart' => $availabilityChart,
             'summaryCards' => $summaryCards,
-            'allServices' => $this->servers->services($serverId),
-            'monitorServices' => $this->servers->monitoredServices($serverId),
+            'allServices' => $allServices,
+            'monitorServices' => $monitorServices,
             'maintenance' => $this->maintenance->active($serverId),
             'latestUptime' => $latestUptime,
             'uptimeText' => $this->metricView->formatUptime($latestUptime['value'] ?? null),

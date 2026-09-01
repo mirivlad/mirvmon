@@ -140,7 +140,17 @@
         });
     };
 
+    let refreshTimer = null;
+    const scheduleRefresh = () => {
+        window.clearTimeout(refreshTimer);
+        refreshTimer = window.setTimeout(() => {
+            if (document.visibilityState === 'visible') load();
+            else scheduleRefresh();
+        }, 30000);
+    };
+
     const load = () => {
+        window.clearTimeout(refreshTimer);
         const query = new URLSearchParams({ period: period ? period.value : '24h' });
         if (endpoint && endpoint.value) query.set('endpoint_id', endpoint.value);
         if (state) state.textContent = root.dataset.loadingText || '';
@@ -153,10 +163,14 @@
                 renderKpis(null);
                 if (state) state.textContent = root.dataset.errorText || '';
                 if (incidents) incidents.textContent = '';
-            });
+            })
+            .finally(scheduleRefresh);
     };
 
     if (endpoint) endpoint.addEventListener('change', load);
     if (period) period.addEventListener('change', load);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') load();
+    });
     load();
 }());

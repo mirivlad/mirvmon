@@ -66,6 +66,8 @@ final class RouteSecurityContractTest extends TestCase
         self::assertContains('POST', $routes['/sites/{id}'] ?? []);
         self::assertSame(['GET'], $routes['/api/sites/{id}/metrics'] ?? null);
         self::assertSame(['GET'], $routes['/api/sites/{id}/status'] ?? null);
+        self::assertSame(['GET'], $routes['/agents'] ?? null);
+        self::assertSame(['GET'], $routes['/api/agents/fleet-status'] ?? null);
 
         self::assertContains('GET', $routes['/sites'] ?? []);
         self::assertContains('POST', $routes['/sites'] ?? []);

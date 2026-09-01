@@ -102,15 +102,17 @@ final class ServerMetricViewBuilder
     public function availabilityChart(array $availability): array
     {
         if (($availability['known'] ?? false) !== true) {
-            return ['known' => false, 'labels' => [], 'values' => []];
+            return ['known' => false, 'labels' => [], 'timestamps' => [], 'values' => []];
         }
 
         $labels = [];
+        $timestamps = [];
         $values = [];
         foreach ($availability['points'] ?? [] as $point) {
             if (!is_array($point) || !isset($point['time'])) {
                 continue;
             }
+            $timestamps[] = (string) $point['time'];
             $labels[] = (new DateTimeImmutable((string) $point['time']))->format('d.m H:i');
             $values[] = (int) ($point['value'] ?? 0);
         }
@@ -118,6 +120,7 @@ final class ServerMetricViewBuilder
         return [
             'known' => true,
             'labels' => $labels,
+            'timestamps' => $timestamps,
             'values' => $values,
             'availabilityPercent' => (float) ($availability['availability_percent'] ?? 0),
             'downtimeText' => $this->formatUptime($availability['downtime_seconds'] ?? 0)
