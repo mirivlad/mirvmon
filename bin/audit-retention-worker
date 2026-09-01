@@ -3,6 +3,7 @@
 
 declare(strict_types=1);
 
+use App\Backup\DrMaintenanceLock;
 use App\Database\ConnectionFactory;
 use App\Repositories\AppSettingsRepository;
 use App\Services\AuditRetentionService;
@@ -32,23 +33,31 @@ if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
 }
 
 $service = null;
+$maintenance = new DrMaintenanceLock(dirname(__DIR__) . '/var/dr');
 do {
-    try {
-        if ($service === null) {
-            $pdo = ConnectionFactory::fromEnvironment();
-            $service = new AuditRetentionService($pdo, new AppSettingsRepository($pdo));
-        }
-        $service->pruneExpired();
-    } catch (PDOException) {
-        fwrite(STDERR, "audit_retention_database_unavailable\n");
-        $service = null;
-        if ($once) {
-            exit(1);
-        }
-    } catch (Throwable $exception) {
-        fwrite(STDERR, 'audit_retention_failed:' . $exception::class . PHP_EOL);
-        if ($once) {
-            exit(1);
+    $lease = $maintenance->acquireShared();
+    if ($lease !== null) {
+        try {
+            if ($service === null) {
+                $pdo = ConnectionFactory::fromEnvironment();
+                $service = new AuditRetentionService($pdo, new AppSettingsRepository($pdo));
+            }
+            $service->pruneExpired();
+        } catch (PDOException) {
+            fwrite(STDERR, "audit_retention_database_unavailable\n");
+            $service = null;
+            if ($once) {
+                $lease->release();
+                exit(1);
+            }
+        } catch (Throwable $exception) {
+            fwrite(STDERR, 'audit_retention_failed:' . $exception::class . PHP_EOL);
+            if ($once) {
+                $lease->release();
+                exit(1);
+            }
+        } finally {
+            $lease->release();
         }
     }
 
