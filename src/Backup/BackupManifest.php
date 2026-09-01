@@ -24,7 +24,7 @@ final class BackupManifest
     }
 
     /**
-     * @param array{database.pgdump:string,secrets.json:string} $recordPaths
+     * @param array{'database.pgdump': string, 'secrets.json': string} $recordPaths
      * @return array<string, mixed>
      */
     public function build(
