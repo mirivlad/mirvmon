@@ -3,6 +3,7 @@
 
 declare(strict_types=1);
 
+use App\Backup\DrMaintenanceLock;
 use App\Database\ConnectionFactory;
 use App\Repositories\DomainRegistrationRepository;
 use App\Repositories\NotificationOutboxRepository;
@@ -53,20 +54,28 @@ if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
 
 $runtime = null;
 $leaseOwner = gethostname() . ':' . getmypid();
+$maintenance = new DrMaintenanceLock(dirname(__DIR__) . '/var/dr');
 do {
-    try {
-        $runtime ??= createWebsiteRuntime($key, $leaseOwner, $concurrency);
-        $runtime['worker']->runOnce();
-        $runtime['heartbeat']->record(WorkerHeartbeatRepository::WEBSITE_CHECK_WORKER);
-    } catch (PDOException) {
-        fwrite(STDERR, "website_check_worker_database_unavailable\n");
-        $runtime = null;
-        if ($once) {
+    $lease = $maintenance->acquireShared();
+    if ($lease !== null) {
+        try {
+            $runtime ??= createWebsiteRuntime($key, $leaseOwner, $concurrency);
+            $runtime['worker']->runOnce();
+            $runtime['heartbeat']->record(WorkerHeartbeatRepository::WEBSITE_CHECK_WORKER);
+        } catch (PDOException) {
+            fwrite(STDERR, "website_check_worker_database_unavailable\n");
+            $runtime = null;
+            if ($once) {
+                $lease->release();
+                exit(1);
+            }
+        } catch (Throwable $exception) {
+            fwrite(STDERR, "website_check_worker_failed\n");
+            $lease->release();
             exit(1);
+        } finally {
+            $lease->release();
         }
-    } catch (Throwable $exception) {
-        fwrite(STDERR, "website_check_worker_failed\n");
-        exit(1);
     }
     if ($once) {
         break;
