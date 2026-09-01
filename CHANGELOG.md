@@ -6,6 +6,8 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.5.4.5
+
 - Added middle-mouse drag panning for server metric charts without changing live-scroll behavior.
 
 ## 0.5.4.4
