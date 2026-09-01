@@ -6,6 +6,8 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.5.3.1
+
 - Fixed bulk agent-update feedback so it follows the live polled agent states instead of remaining a stale snapshot from the moment the action was submitted.
 
 ## 0.5.3
