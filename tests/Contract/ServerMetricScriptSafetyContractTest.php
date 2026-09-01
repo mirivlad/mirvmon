@@ -49,6 +49,11 @@ final class ServerMetricScriptSafetyContractTest extends TestCase
         self::assertStringContainsString('onZoomComplete', $script);
         self::assertStringContainsString('onPanComplete', $script);
         self::assertStringContainsString('rememberMetricViewport', $script);
+        self::assertStringContainsString("metricZoomTriggers[canvasId] = trigger || 'zoom'", $script);
+        self::assertStringContainsString("trigger === 'drag'", $script);
+        self::assertStringContainsString("'fixed', true", $script);
+        self::assertStringContainsString("viewport.mode === 'live'", $script);
+        self::assertStringContainsString('lastIndex - Math.max(0, Math.round(viewport.minOffset))', $script);
         self::assertStringContainsString('timestamps[minIndex]', $script);
         self::assertStringContainsString("chart.zoomScale('x', { min, max }, 'none')", $script);
         self::assertStringContainsString("chart.update('none')", $script);

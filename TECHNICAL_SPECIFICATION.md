@@ -158,20 +158,23 @@ Operational UI live refresh:
 - live GET отправляет `X-MirvMon-Live-Fragment: 1`; `SessionMiddleware` не
   потребляет flash message на таком GET, но POST с тем же header сохраняет
   обычную семантику session flash;
-- polling приостанавливается в скрытой вкладке, не заменяет фрагмент с текущим
-  keyboard focus и при ошибке оставляет последнее известное состояние;
+- polling приостанавливается в скрытой вкладке; фрагмент с focused
+  `input/select/textarea/contenteditable` не заменяется, чтобы не потерять ввод,
+  но обычный focus кнопки, ссылки или canvas не блокирует refresh; при ошибке
+  остаётся последнее известное состояние;
 - live fragments применяются к dashboard attention/system health, server health
   list/detail overview/events/agent, group summaries, website list/overview/events,
   active incidents, notification queue и system diagnostics;
 - website metrics обновляют данные раз в 30 секунд, сохраняя выбранный endpoint и
   период; server metrics используют тот же 30-секундный live refresh текущего
   server-rendered metrics fragment;
-- перед заменой server metrics fragment browser сохраняет zoom/pan границы каждого
-  Chart.js-графика по исходным timestamps, после получения свежих series пересоздаёт
-  charts и восстанавливает соответствующий временной viewport; незумированный график
-  остаётся в live-режиме и двигается вместе со свежим period window;
+- перед заменой server metrics fragment browser сохраняет viewport каждого Chart.js-графика;
+  wheel/pinch zoom остаётся в live-follow режиме: сохраняются масштаб и смещение
+  относительно правого края series, поэтому новые samples продолжают появляться в
+  выбранном окне; pan и drag-zoom фиксируют абсолютный исторический диапазон по
+  timestamps до `Reset zoom`; незумированный график двигается вместе со свежим period window;
 - replacement можно отменить через `mirvmon:live-fragment-before-update`; metrics UI
-  использует это, чтобы не заменять canvas во время активного zoom/pan gesture;
+  использует это только чтобы не заменять canvas во время реально активного zoom/pan gesture;
 - audit/history, settings/forms и server services не перерисовываются автоматически:
   эти экраны либо исторические, либо содержат активное пользовательское состояние.
 

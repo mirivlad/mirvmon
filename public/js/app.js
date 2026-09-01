@@ -113,6 +113,12 @@
     const findLiveFragment = (root, key) => Array.from(root.querySelectorAll('[data-live-fragment]'))
         .find((element) => element.dataset.liveFragment === key) || null;
 
+    const liveFragmentHasEditableFocus = (fragment) => {
+        const active = document.activeElement;
+        if (!(active instanceof Element) || !fragment.contains(active)) return false;
+        return active.matches('input, select, textarea, [contenteditable="true"], [contenteditable=""]');
+    };
+
     liveGroups.forEach((group) => {
         let timer = null;
         let inFlight = false;
@@ -141,7 +147,7 @@
                     const current = findLiveFragment(document, key);
                     const fresh = findLiveFragment(freshDocument, key);
                     if (!current || !fresh || current.isEqualNode(fresh)) return;
-                    if (document.activeElement instanceof Element && current.contains(document.activeElement)) return;
+                    if (liveFragmentHasEditableFocus(current)) return;
                     const beforeUpdate = new CustomEvent('mirvmon:live-fragment-before-update', {
                         bubbles: true,
                         cancelable: true,
