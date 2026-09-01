@@ -14,7 +14,7 @@ MirvMon принимает push-метрики серверов, отображ�
 | Runtime | PHP 8.5, Slim 4, Twig 3 |
 | Primary HTTP adapter | FrankenPHP 1.12 classic mode |
 | Database | PostgreSQL 17 + TimescaleDB 2.28 |
-| Agent | native Go: 1.26.5 для modern x64; 1.20.14 для Windows 7/8/8.1 и Server 2008 R2/2012/2012 R2 x64 |
+| Agent | native Go: 1.26.6 для modern x64; 1.20.14 для Windows 7/8/8.1 и Server 2008 R2/2012/2012 R2 x64 |
 | UI | Bootstrap 5, Chart.js 4, локально закреплённые assets |
 | Deployment | два контейнера: `app`, `db` |
 | TLS | внешний nginx reverse proxy |
