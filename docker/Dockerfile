@@ -115,6 +115,7 @@ RUN apt-get update \
         curl \
         fonts-dejavu-core \
         nsis \
+        postgresql-client \
         supervisor \
         tini \
     && install-php-extensions \
