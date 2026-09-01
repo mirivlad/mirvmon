@@ -150,10 +150,12 @@ final class DisasterRecoveryRestorer
         array $manifest,
         array $expectedSecrets
     ): void {
+        $currentDisabled = false;
         $renamedCurrent = false;
         $renamedStaging = false;
         try {
             $this->setAllowsConnections($admin, $currentDatabase, false);
+            $currentDisabled = true;
             $this->terminateDatabaseConnections($admin, $currentDatabase);
             $admin->exec(sprintf(
                 'ALTER DATABASE %s RENAME TO %s',
@@ -161,6 +163,7 @@ final class DisasterRecoveryRestorer
                 $this->identifier($previousDatabase)
             ));
             $renamedCurrent = true;
+            $currentDisabled = false;
 
             $admin->exec(sprintf(
                 'ALTER DATABASE %s RENAME TO %s',
@@ -198,6 +201,8 @@ final class DisasterRecoveryRestorer
                         $this->identifier($previousDatabase),
                         $this->identifier($currentDatabase)
                     ));
+                    $this->setAllowsConnections($admin, $currentDatabase, true);
+                } elseif ($currentDisabled) {
                     $this->setAllowsConnections($admin, $currentDatabase, true);
                 }
                 if ($renamedStaging) {
