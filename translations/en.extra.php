@@ -55,7 +55,7 @@ return [
     'agent.update_all_error' => 'Could not schedule bulk agent updates.',
 
     'fleet.title' => 'Agents',
-    'fleet.subtitle' => 'Fleet-wide agent health, versions and update state in one operational view.',
+    'fleet.subtitle' => 'Health, versions and updates across the agent fleet',
     'fleet.summary' => 'Agent fleet summary',
     'fleet.card.total' => 'Total servers',
     'fleet.card.current' => 'Current',
@@ -86,7 +86,6 @@ return [
     'fleet.open_updates' => 'Manage updates',
     'fleet.manual.compatibility' => 'A compatible agent version must be installed manually first.',
     'fleet.manual.unsupported' => 'This agent cannot be updated automatically.',
-    'fleet.queue_note' => 'The agent retry queue is not shown yet: the current protocol does not report queue depth. MirvMon does not replace missing telemetry with an estimate.',
 
     'platform.windows_unknown' => 'Windows · exact version not reported',
     'platform.linux_unknown' => 'Linux · exact version not reported',

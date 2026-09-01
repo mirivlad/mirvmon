@@ -5,7 +5,7 @@ declare(strict_types=1);
 return [
     'nav.incidents' => 'Инциденты',
     'incidents.title' => 'Инциденты',
-    'incidents.subtitle' => 'Активные проблемы и история событий мониторинга.',
+    'incidents.subtitle' => 'Активные и завершенные события.',
     'incidents.tab.active' => 'Активные',
     'incidents.tab.history' => 'История событий',
     'incidents.filter.title' => 'Фильтры',

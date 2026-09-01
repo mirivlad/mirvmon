@@ -86,8 +86,7 @@ return [
     'auth.setup.submit' => 'Создать администратора',
 
     'dashboard.title' => 'Состояние систем',
-    'dashboard.eyebrow' => 'Обзор инфраструктуры',
-    'dashboard.subtitle' => 'Актуальные метрики, доступность и активные алерты в одном представлении.',
+    'dashboard.subtitle' => 'Актуальные метрики, доступность и активные алерты',
     'dashboard.add_server' => 'Добавить сервер',
     'dashboard.summary.total' => 'Всего серверов',
     'dashboard.summary.online' => 'В норме',
@@ -248,7 +247,6 @@ return [
     'alerts.empty.text' => 'Все серверы работают в штатном режиме',
 
     'settings.title' => 'Параметры',
-    'settings.eyebrow' => 'Настройки',
     'settings.subtitle' => 'Общие параметры интерфейса и значения по умолчанию.',
     'settings.language.title' => 'Язык интерфейса',
     'settings.language.label' => 'Язык',
@@ -282,7 +280,7 @@ return [
     'admin.defaults.validation.expiry_order' => 'Критический срок должен быть не больше срока предупреждения',
 
     'notifications.title' => 'Настройки уведомлений',
-    'notifications.subtitle' => 'Доставка выполняется фоновым worker. Секреты хранятся в зашифрованном виде и никогда не выводятся обратно в браузер.',
+    'notifications.subtitle' => 'Настройка SMTP и Telegram Bot для доставки уведомлений.',
     'notifications.email.title' => 'Email (SMTP)',
     'notifications.email.enable' => 'Включить Email-уведомления',
     'notifications.smtp.host' => 'SMTP-сервер',
@@ -318,7 +316,6 @@ return [
     'notifications.cooldown_help' => 'Не чаще одного сообщения об одном и том же событии по одной метрике одного сервера. Восстановления — отдельное событие. Ноль отключает ограничение.',
     'notifications.save' => 'Сохранить настройки',
     'notifications.save_test' => 'Сохранить и отправить тест',
-    'notifications.queue_hint' => 'Состояние доставки, ошибки и повторная отправка находятся в отдельной очереди.',
     'notifications.open_queue' => 'Открыть очередь уведомлений',
 
     'queue.title' => 'Очередь уведомлений',

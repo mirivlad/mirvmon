@@ -3,8 +3,7 @@
 return [
     'nav.websites' => 'Websites',
     'websites.title' => 'Website monitoring',
-    'websites.eyebrow' => 'Website monitoring',
-    'websites.subtitle' => 'Check availability, content, speed, and certificate expiry.',
+    'websites.subtitle' => 'Check availability, content, response speed, domain registration expiry and certificate expiry.',
     'websites.create' => 'Add website',
     'websites.edit' => 'Website settings',
     'websites.check' => 'Check now',

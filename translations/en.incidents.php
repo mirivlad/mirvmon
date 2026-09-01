@@ -5,7 +5,7 @@ declare(strict_types=1);
 return [
     'nav.incidents' => 'Incidents',
     'incidents.title' => 'Incidents',
-    'incidents.subtitle' => 'Active problems and monitoring event history.',
+    'incidents.subtitle' => 'Active and resolved events.',
     'incidents.tab.active' => 'Active',
     'incidents.tab.history' => 'Event history',
     'incidents.filter.title' => 'Filters',

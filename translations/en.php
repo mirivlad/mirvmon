@@ -86,8 +86,7 @@ return [
     'auth.setup.submit' => 'Create administrator',
 
     'dashboard.title' => 'System status',
-    'dashboard.eyebrow' => 'Infrastructure overview',
-    'dashboard.subtitle' => 'Current metrics, availability and active alerts in one view.',
+    'dashboard.subtitle' => 'Current metrics, availability and active alerts',
     'dashboard.add_server' => 'Add server',
     'dashboard.summary.total' => 'Total servers',
     'dashboard.summary.online' => 'Healthy',
@@ -248,7 +247,6 @@ return [
     'alerts.empty.text' => 'All servers are operating normally',
 
     'settings.title' => 'Parameters',
-    'settings.eyebrow' => 'Settings',
     'settings.subtitle' => 'General interface settings and default values.',
     'settings.language.title' => 'Interface language',
     'settings.language.label' => 'Language',
@@ -282,7 +280,7 @@ return [
     'admin.defaults.validation.expiry_order' => 'Critical expiry days must not exceed warning days',
 
     'notifications.title' => 'Notification settings',
-    'notifications.subtitle' => 'Delivery is handled by a background worker. Secrets are stored encrypted and are never displayed back in the browser.',
+    'notifications.subtitle' => 'Configure SMTP and Telegram Bot notification delivery.',
     'notifications.email.title' => 'Email (SMTP)',
     'notifications.email.enable' => 'Enable email notifications',
     'notifications.smtp.host' => 'SMTP server',
@@ -318,7 +316,6 @@ return [
     'notifications.cooldown_help' => 'At most one message for the same event on the same metric and server during the interval. Recoveries are separate events. Zero disables the cooldown.',
     'notifications.save' => 'Save settings',
     'notifications.save_test' => 'Save and send test',
-    'notifications.queue_hint' => 'Delivery state, errors and retries are available in a separate queue.',
     'notifications.open_queue' => 'Open notification queue',
 
     'queue.title' => 'Notification queue',

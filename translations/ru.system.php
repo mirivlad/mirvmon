@@ -12,7 +12,7 @@ return [
     'dashboard.system_health.details' => 'Диагностика',
 
     'system.title' => 'Система / MirvMon',
-    'system.subtitle' => 'Состояние самого MirvMon, базы данных, фоновых обработчиков, очереди уведомлений и хоста мониторинга.',
+    'system.subtitle' => 'Состояние MirvMon, базы данных, фоновых обработчиков, очереди уведомлений и хоста мониторинга.',
     'system.status.ok' => 'В норме',
     'system.status.warning' => 'Внимание',
     'system.status.critical' => 'Критично',

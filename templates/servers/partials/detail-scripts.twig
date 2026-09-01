@@ -4,6 +4,7 @@
 <script nonce="__MIRVMON_CSP_NONCE__">
 const managedCharts = new Map();
 let pendingMetricViewports = {};
+let metricViewportState = {};
 const detailText = {
     time: {{ t('metric.time')|json_encode|raw }},
     loading: {{ t('metric.loading')|json_encode|raw }},
@@ -82,24 +83,58 @@ function scaleBoundIndex(scale, value) {
     return null;
 }
 
+function metricViewportFromChart(chart, timestamps) {
+    if (!chart || !chart.scales || !chart.scales.x || !Array.isArray(timestamps) || timestamps.length === 0) return null;
+    const zoomedBounds = typeof chart.getZoomedScaleBounds === 'function'
+        ? chart.getZoomedScaleBounds()
+        : null;
+    let bounds = zoomedBounds && zoomedBounds.x ? zoomedBounds.x : null;
+    if (!bounds) {
+        if (typeof chart.isZoomedOrPanned === 'function' && !chart.isZoomedOrPanned()) return null;
+        bounds = chart.scales.x;
+    }
+    const rawMin = scaleBoundIndex(chart.scales.x, bounds.min);
+    const rawMax = scaleBoundIndex(chart.scales.x, bounds.max);
+    if (rawMin === null || rawMax === null) return null;
+    const minIndex = Math.max(0, Math.min(timestamps.length - 1, Math.floor(rawMin)));
+    const maxIndex = Math.max(0, Math.min(timestamps.length - 1, Math.ceil(rawMax)));
+    return {
+        start: timestamps[minIndex],
+        end: timestamps[maxIndex]
+    };
+}
+
+function rememberMetricViewport(canvasId, chart, timestamps) {
+    const viewport = metricViewportFromChart(chart, timestamps);
+    if (viewport) {
+        metricViewportState[canvasId] = viewport;
+    } else {
+        delete metricViewportState[canvasId];
+    }
+}
+
+function metricZoomOptions(canvasId, timestamps) {
+    return {
+        zoom: {
+            wheel: { enabled: true },
+            pinch: { enabled: true },
+            drag: { enabled: true },
+            mode: 'x',
+            onZoomComplete: ({ chart }) => rememberMetricViewport(canvasId, chart, timestamps)
+        },
+        pan: {
+            enabled: true,
+            mode: 'x',
+            onPanComplete: ({ chart }) => rememberMetricViewport(canvasId, chart, timestamps)
+        }
+    };
+}
+
 function captureMetricViewports() {
     const viewports = {};
     managedCharts.forEach(({ chart, timestamps }, canvasId) => {
-        if (!chart || !chart.scales || !chart.scales.x || timestamps.length === 0) return;
-        if (typeof chart.isZoomedOrPanned === 'function' && !chart.isZoomedOrPanned()) return;
-        const zoomedBounds = typeof chart.getZoomedScaleBounds === 'function'
-            ? chart.getZoomedScaleBounds()
-            : null;
-        const bounds = zoomedBounds && zoomedBounds.x ? zoomedBounds.x : chart.scales.x;
-        const rawMin = scaleBoundIndex(chart.scales.x, bounds.min);
-        const rawMax = scaleBoundIndex(chart.scales.x, bounds.max);
-        if (rawMin === null || rawMax === null) return;
-        const minIndex = Math.max(0, Math.min(timestamps.length - 1, Math.floor(rawMin)));
-        const maxIndex = Math.max(0, Math.min(timestamps.length - 1, Math.ceil(rawMax)));
-        viewports[canvasId] = {
-            start: timestamps[minIndex],
-            end: timestamps[maxIndex]
-        };
+        const viewport = metricViewportFromChart(chart, timestamps);
+        if (viewport) viewports[canvasId] = viewport;
     });
     return viewports;
 }
@@ -234,10 +269,7 @@ function createLineChart(canvasId, labels, datasets, unit, chartMeta, timestamps
                         }
                     }
                 },
-                zoom: {
-                    zoom: { wheel: { enabled: true }, pinch: { enabled: true }, drag: { enabled: true }, mode: 'x' },
-                    pan: { enabled: true, mode: 'x' }
-                }
+                zoom: metricZoomOptions(canvasId, timestamps)
             },
             scales: {
                 y: {
@@ -268,6 +300,7 @@ function createUptimeChart(chartData, viewports) {
     const canvasId = 'chart-uptime';
     const canvas = document.getElementById(canvasId);
     if (!canvas || !Array.isArray(chartData.values)) return;
+    const timestamps = Array.isArray(chartData.timestamps) ? chartData.timestamps : [];
     const chart = new Chart(canvas.getContext('2d'), {
         type: 'line',
         data: {
@@ -281,15 +314,11 @@ function createUptimeChart(chartData, viewports) {
             plugins: {
                 legend: { display: false },
                 tooltip: { callbacks: { label: function(context) { return formatUptimeSeconds(context.parsed.y); } } },
-                zoom: {
-                    zoom: { wheel: { enabled: true }, pinch: { enabled: true }, drag: { enabled: true }, mode: 'x' },
-                    pan: { enabled: true, mode: 'x' }
-                }
+                zoom: metricZoomOptions(canvasId, timestamps)
             },
             scales: { y: { ticks: { callback: formatUptimeSeconds } } }
         }
     });
-    const timestamps = Array.isArray(chartData.timestamps) ? chartData.timestamps : [];
     registerManagedChart(canvasId, chart, timestamps);
     restoreMetricViewport(canvasId, timestamps, viewports);
 }
@@ -298,6 +327,7 @@ function createAvailabilityChart(chartData, viewports) {
     const canvasId = 'chart-availability';
     const canvas = document.getElementById(canvasId);
     if (!canvas || !Array.isArray(chartData.values)) return;
+    const timestamps = Array.isArray(chartData.timestamps) ? chartData.timestamps : [];
     const chart = new Chart(canvas.getContext('2d'), {
         type: 'line',
         data: {
@@ -310,10 +340,7 @@ function createAvailabilityChart(chartData, viewports) {
             plugins: {
                 legend: { display: false },
                 tooltip: { callbacks: { label: function(context) { return context.parsed.y >= 0.5 ? detailText.online : detailText.offline; } } },
-                zoom: {
-                    zoom: { wheel: { enabled: true }, pinch: { enabled: true }, drag: { enabled: true }, mode: 'x' },
-                    pan: { enabled: true, mode: 'x' }
-                }
+                zoom: metricZoomOptions(canvasId, timestamps)
             },
             scales: {
                 y: {
@@ -324,7 +351,6 @@ function createAvailabilityChart(chartData, viewports) {
             }
         }
     });
-    const timestamps = Array.isArray(chartData.timestamps) ? chartData.timestamps : [];
     registerManagedChart(canvasId, chart, timestamps);
     restoreMetricViewport(canvasId, timestamps, viewports);
 }
@@ -416,6 +442,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 document.addEventListener('click', function(event) {
     if (!(event.target instanceof Element) || !event.target.closest('#reset-all-zoom')) return;
+    metricViewportState = {};
+    pendingMetricViewports = {};
     managedCharts.forEach(({ chart }) => {
         if (chart && typeof chart.resetZoom === 'function') chart.resetZoom('none');
     });
@@ -428,12 +456,13 @@ document.addEventListener('mirvmon:live-fragment-before-update', function(event)
         return;
     }
     pendingMetricViewports = captureMetricViewports();
+    metricViewportState = { ...metricViewportState, ...pendingMetricViewports };
 });
 
 document.addEventListener('mirvmon:live-fragment-updated', function(event) {
     if (!event.detail || event.detail.key !== 'server-metrics') return;
-    const viewports = pendingMetricViewports;
+    metricViewportState = { ...metricViewportState, ...pendingMetricViewports };
     pendingMetricViewports = {};
-    renderMetrics(readMetricsPayload(), viewports);
+    renderMetrics(readMetricsPayload(), metricViewportState);
 });
 </script>

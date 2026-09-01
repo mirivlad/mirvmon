@@ -14,7 +14,6 @@
 {% block content %}
 <header class="app-page-header">
     <div class="app-page-header-main">
-        <p class="page-eyebrow">MirvMon</p>
         <h1><i class="fas fa-microchip" aria-hidden="true"></i> {{ t('fleet.title') }}</h1>
         <p class="page-subtitle">{{ t('fleet.subtitle') }}</p>
     </div>
@@ -73,7 +72,7 @@
 </div>
 
 <section class="app-panel">
-    <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
+    <div class="app-panel-header">
         <h2 class="h5 mb-0">{{ t('fleet.list') }}</h2>
         <span class="text-muted small">{{ t('fleet.results', {count: servers|length}) }}</span>
     </div>
@@ -114,7 +113,7 @@
                         <span class="text-{{ update_indicator[1] }}" data-fleet-update-state><i class="fas {{ update_indicator[0] }} me-1" data-fleet-update-icon></i><span data-fleet-update-label>{{ t('agent.state.' ~ update_state) }}</span></span>
                         <div class="small mt-1{% if update_state not in ['failed', 'manual_required'] %} d-none{% elseif update_state == 'failed' %} text-danger{% else %} text-warning{% endif %}" data-fleet-update-detail>{% if update_state == 'failed' and update.command.error_code %}{{ t('agent.error.' ~ update.command.error_code) }}{% elseif update_state == 'manual_required' %}{{ update.requires_compatible_updater ? t('fleet.manual.compatibility') : t('fleet.manual.unsupported') }}{% endif %}</div>
                     </td>
-                    <td data-label="{{ t('common.actions') }}"><a class="btn btn-sm btn-outline-primary" href="/servers/{{ server.id }}?tab=agent"><i class="fas fa-arrow-right" aria-hidden="true"></i> {{ t('fleet.open_agent') }}</a></td>
+                    <td data-label="{{ t('common.actions') }}"><a class="btn btn-sm btn-outline-primary text-nowrap" href="/servers/{{ server.id }}?tab=agent"><i class="fas fa-arrow-right" aria-hidden="true"></i> {{ t('fleet.open_agent') }}</a></td>
                 </tr>
             {% endfor %}
             </tbody>
@@ -123,7 +122,6 @@
     {% endif %}
 </section>
 
-<div class="alert alert-light border mt-3 mb-0 small text-muted"><i class="fas fa-circle-info me-2" aria-hidden="true"></i>{{ t('fleet.queue_note') }}</div>
 <script nonce="__MIRVMON_CSP_NONCE__">
 (() => {
     const rows = Array.from(document.querySelectorAll('[data-fleet-agent-row]'));

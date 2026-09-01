@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 return [
-    'ui19.servers.subtitle' => 'Fast search and operational filters without a table full of per-column search fields.',
+    'ui19.servers.subtitle' => 'All servers in the system.',
     'ui19.servers.search' => 'Search servers',
     'ui19.servers.search_placeholder' => 'Name, address, description, or group',
     'ui19.servers.group' => 'Group',
@@ -20,7 +20,7 @@ return [
     'ui19.servers.no_matches' => 'No servers match the selected filters.',
     'ui19.servers.last_sample' => 'Last sample: {time}',
     'ui19.servers.no_sample' => 'No sample received yet',
-    'ui19.groups.subtitle' => 'Groups as operational mini-dashboards: server health and active problems at a glance.',
+    'ui19.groups.subtitle' => 'Server health by group.',
     'ui19.groups.open' => 'Open group',
     'ui19.groups.total' => 'Servers',
     'ui19.groups.websites' => 'Websites',
