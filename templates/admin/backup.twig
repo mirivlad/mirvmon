@@ -1,0 +1,240 @@
+{% extends "layout.twig" %}
+{% set page_title = t('backup.title') %}
+
+{% block content %}
+<header class="dashboard-heading mb-4">
+    <div>
+        <h1><i class="fas fa-box-archive" aria-hidden="true"></i> {{ t('backup.title') }}</h1>
+        <p class="page-subtitle">{{ t('backup.subtitle') }}</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="/admin/system">
+        <i class="fas fa-arrow-left me-1" aria-hidden="true"></i>{{ t('backup.back_to_system') }}
+    </a>
+</header>
+
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <section class="card h-100">
+            <div class="card-header">
+                <h2 class="h5 mb-0"><i class="fas fa-download me-2" aria-hidden="true"></i>{{ t('backup.create.title') }}</h2>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">{{ t('backup.create.description') }}</p>
+                <form method="post" action="/admin/system/backup/create" autocomplete="off">
+                    {% include "partials/csrf.twig" %}
+                    <div class="mb-3">
+                        <label class="form-label" for="backup-password">{{ t('backup.create.password') }}</label>
+                        <input class="form-control" id="backup-password" type="password" name="password" minlength="8" maxlength="1024" required autocomplete="new-password">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="backup-password-confirm">{{ t('backup.create.password_confirm') }}</label>
+                        <input class="form-control" id="backup-password-confirm" type="password" name="password_confirm" minlength="8" maxlength="1024" required autocomplete="new-password">
+                        <div class="form-text">{{ t('backup.create.password_hint') }}</div>
+                    </div>
+                    <button class="btn btn-primary" type="submit">
+                        <i class="fas fa-box-archive me-1" aria-hidden="true"></i>{{ t('backup.create.action') }}
+                    </button>
+                </form>
+            </div>
+        </section>
+    </div>
+
+    <div class="col-lg-6">
+        <section class="card h-100">
+            <div class="card-header">
+                <h2 class="h5 mb-0"><i class="fas fa-upload me-2" aria-hidden="true"></i>{{ t('backup.restore.title') }}</h2>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">{{ t('backup.restore.description') }}</p>
+                <div class="alert alert-warning">
+                    <div class="mb-2"><strong>{{ t('backup.restore.endpoint_warning') }}</strong></div>
+                    <div>{{ t('backup.restore.installer_warning') }}</div>
+                </div>
+
+                <form id="restore-upload-form" autocomplete="off"
+                      data-max-bytes="{{ restore_max_bytes }}"
+                      data-uploading="{{ t('backup.restore.uploading')|e('html_attr') }}"
+                      data-checking="{{ t('backup.restore.checking')|e('html_attr') }}"
+                      data-failed="{{ t('backup.restore.failed_upload')|e('html_attr') }}"
+                      data-too-large="{{ t('backup.restore.too_large')|e('html_attr') }}">
+                    {% include "partials/csrf.twig" %}
+                    <div class="mb-3">
+                        <label class="form-label" for="restore-file">{{ t('backup.restore.file') }}</label>
+                        <input class="form-control" id="restore-file" type="file" accept=".mmbak,application/octet-stream" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="restore-password">{{ t('backup.restore.password') }}</label>
+                        <input class="form-control" id="restore-password" type="password" minlength="8" maxlength="1024" required autocomplete="current-password">
+                    </div>
+                    <div id="restore-progress-wrap" class="mb-3 d-none" aria-live="polite">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span id="restore-progress-label"></span>
+                            <span id="restore-progress-percent">0%</span>
+                        </div>
+                        <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                            <div id="restore-progress-bar" class="progress-bar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div id="restore-upload-error" class="alert alert-danger d-none" role="alert"></div>
+                    <button id="restore-upload-submit" class="btn btn-outline-primary" type="submit">
+                        <i class="fas fa-shield-halved me-1" aria-hidden="true"></i>{{ t('backup.restore.preflight') }}
+                    </button>
+                </form>
+            </div>
+        </section>
+    </div>
+</div>
+
+{% if restore_operation %}
+    {% set manifest = restore_operation.manifest %}
+    {% set source = manifest.source %}
+    {% set stats = manifest.stats %}
+    <section class="card border-success mb-4">
+        <div class="card-header bg-success-subtle">
+            <h2 class="h5 mb-0"><i class="fas fa-circle-check me-2" aria-hidden="true"></i>{{ t('backup.restore.preflight_title') }}</h2>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-success">{{ t('backup.restore.preflight_ok') }}</div>
+            <div class="row g-3 mb-4">
+                <div class="col-sm-6 col-xl-3"><div class="border rounded p-3 h-100"><div class="text-muted small">{{ t('backup.restore.created_at') }}</div><div class="fw-semibold">{{ manifest.created_at }}</div></div></div>
+                <div class="col-sm-6 col-xl-3"><div class="border rounded p-3 h-100"><div class="text-muted small">{{ t('backup.restore.source_version') }}</div><div class="fw-semibold"><code>{{ source.mirvmon_version }}</code></div></div></div>
+                <div class="col-sm-6 col-xl-3"><div class="border rounded p-3 h-100"><div class="text-muted small">{{ t('backup.restore.postgres') }}</div><div class="fw-semibold">{{ source.postgres_version }}</div></div></div>
+                <div class="col-sm-6 col-xl-3"><div class="border rounded p-3 h-100"><div class="text-muted small">{{ t('backup.restore.timescale') }}</div><div class="fw-semibold">{{ source.timescale_version }}</div></div></div>
+            </div>
+            <div class="row g-3 mb-4">
+                <div class="col-sm-4"><div class="border rounded p-3"><div class="text-muted small">{{ t('backup.restore.users') }}</div><div class="fs-5 fw-semibold">{{ stats.users }}</div></div></div>
+                <div class="col-sm-4"><div class="border rounded p-3"><div class="text-muted small">{{ t('backup.restore.servers') }}</div><div class="fs-5 fw-semibold">{{ stats.servers }}</div></div></div>
+                <div class="col-sm-4"><div class="border rounded p-3"><div class="text-muted small">{{ t('backup.restore.websites') }}</div><div class="fs-5 fw-semibold">{{ stats.websites }}</div></div></div>
+            </div>
+
+            {% if restore_operation.warnings is not empty %}
+                <div class="alert alert-warning">
+                    <strong>{{ t('backup.restore.warnings') }}</strong>
+                    <ul class="mb-2 mt-2">
+                        {% for warning in restore_operation.warnings %}
+                            <li>{{ warning }}</li>
+                        {% endfor %}
+                    </ul>
+                    <div>{{ t('backup.restore.cross_version_note') }}</div>
+                </div>
+            {% endif %}
+
+            <div class="border border-danger rounded p-3">
+                <h3 class="h5 text-danger"><i class="fas fa-triangle-exclamation me-2" aria-hidden="true"></i>{{ t('backup.restore.danger_title') }}</h3>
+                <p>{{ t('backup.restore.danger_text') }}</p>
+                <form method="post" action="/admin/system/restore/execute">
+                    {% include "partials/csrf.twig" %}
+                    <input type="hidden" name="operation_id" value="{{ restore_operation.id }}">
+                    <input type="hidden" name="confirm_restore" value="1">
+                    <button class="btn btn-danger" type="submit">
+                        <i class="fas fa-rotate-left me-1" aria-hidden="true"></i>{{ t('backup.restore.action') }}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </section>
+{% endif %}
+
+<script>
+(() => {
+    const form = document.getElementById('restore-upload-form');
+    if (!form) return;
+
+    const fileInput = document.getElementById('restore-file');
+    const passwordInput = document.getElementById('restore-password');
+    const submit = document.getElementById('restore-upload-submit');
+    const progressWrap = document.getElementById('restore-progress-wrap');
+    const progressBar = document.getElementById('restore-progress-bar');
+    const progress = progressWrap.querySelector('.progress');
+    const progressLabel = document.getElementById('restore-progress-label');
+    const progressPercent = document.getElementById('restore-progress-percent');
+    const errorBox = document.getElementById('restore-upload-error');
+    const chunkBytes = 512 * 1024;
+
+    const addCsrf = (data) => {
+        form.querySelectorAll('input[type="hidden"]').forEach((input) => {
+            if (input.name) data.append(input.name, input.value);
+        });
+    };
+
+    const post = async (url, data) => {
+        const response = await fetch(url, {
+            method: 'POST',
+            body: data,
+            credentials: 'same-origin',
+            headers: {'X-Requested-With': 'XMLHttpRequest'}
+        });
+        let payload = null;
+        try { payload = await response.json(); } catch (_) {}
+        if (!response.ok || !payload) throw new Error('request_failed');
+        return payload;
+    };
+
+    const setProgress = (percent, label) => {
+        const bounded = Math.max(0, Math.min(100, Math.round(percent)));
+        progressWrap.classList.remove('d-none');
+        progressBar.style.width = bounded + '%';
+        progress.setAttribute('aria-valuenow', String(bounded));
+        progressPercent.textContent = bounded + '%';
+        progressLabel.textContent = label;
+    };
+
+    const fail = (message) => {
+        errorBox.textContent = message;
+        errorBox.classList.remove('d-none');
+        submit.disabled = false;
+    };
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        errorBox.classList.add('d-none');
+        const file = fileInput.files && fileInput.files[0];
+        if (!file || !passwordInput.value) return;
+        const maximum = Number(form.dataset.maxBytes || '0');
+        if (maximum > 0 && file.size > maximum) {
+            fail(form.dataset.tooLarge);
+            return;
+        }
+        submit.disabled = true;
+
+        try {
+            const startData = new FormData();
+            addCsrf(startData);
+            startData.append('filename', file.name);
+            startData.append('total_bytes', String(file.size));
+            const started = await post('/admin/system/restore/upload/start', startData);
+            const uploadId = started.id;
+            if (!uploadId) throw new Error('missing_upload_id');
+
+            let offset = 0;
+            let index = 0;
+            while (offset < file.size) {
+                const end = Math.min(file.size, offset + chunkBytes);
+                const data = new FormData();
+                addCsrf(data);
+                data.append('upload_id', uploadId);
+                data.append('index', String(index));
+                data.append('chunk', file.slice(offset, end), 'chunk.bin');
+                const result = await post('/admin/system/restore/upload/chunk', data);
+                offset = end;
+                index += 1;
+                setProgress((offset / file.size) * 90, form.dataset.uploading);
+                if (result.received_bytes !== offset) throw new Error('upload_mismatch');
+            }
+
+            setProgress(95, form.dataset.checking);
+            const preflightData = new FormData();
+            addCsrf(preflightData);
+            preflightData.append('upload_id', uploadId);
+            preflightData.append('password', passwordInput.value);
+            const checked = await post('/admin/system/restore/preflight', preflightData);
+            if (!checked.redirect) throw new Error('missing_redirect');
+            setProgress(100, form.dataset.checking);
+            window.location.assign(checked.redirect);
+        } catch (_) {
+            fail(form.dataset.failed);
+        }
+    });
+})();
+</script>
+{% endblock %}
