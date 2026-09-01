@@ -244,10 +244,19 @@ Restore is explicitly two-stage:
 1. upload backup + password and run preflight;
 2. show source versions/summary/warnings and require an explicit destructive Restore confirmation.
 
-Long-running backup/restore operations use filesystem-backed operation state under `/app/var/dr`
-and a dedicated DR worker so PHP request lifetime limits do not define backup size or restore
-reliability. Backup upload limits are route-specific; the normal small API request limit remains in
-place.
+Long-running restore operations use filesystem-backed operation state under `/app/var/dr` and a
+dedicated supervised `dr-worker`, so the browser request that confirms restore only queues work.
+The worker owns staging restore and database cutover. A durable `/app/var/dr/cutover.json` journal
+is written before the first destructive database rename. If the worker/container dies mid-cutover,
+the next worker instance inspects both the journal and the actual PostgreSQL database names: before
+post-cutover verification it conservatively rolls back to B; after verification it completes the
+cutover. A rolled-back interrupted operation is marked failed rather than retried destructively in
+a loop. Completed recovery also invalidates B's filesystem sessions before maintenance is released.
+
+Backup upload limits are route-specific; the normal small API request limit remains in place.
+Backup creation currently streams from a consistent exported PostgreSQL snapshot in the requesting
+process; moving creation itself to the DR worker is tracked as the remaining long-request cleanup
+before v0.6.0 acceptance.
 
 ## Acceptance test
 

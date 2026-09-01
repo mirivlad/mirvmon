@@ -19,6 +19,7 @@ final class DisasterRecoveryRestorer
         private readonly array $databaseEnvironment,
         private readonly PostgresBackupTool $postgres,
         private readonly DrMaintenanceLock $maintenance,
+        private readonly DrCutoverJournal $journal,
         private readonly string $migrationDirectory,
         private readonly string $applicationKey,
         private readonly string $sessionDirectory
@@ -35,13 +36,14 @@ final class DisasterRecoveryRestorer
 
     /**
      * Restores an already preflighted workspace while holding the global DR exclusive lock.
-     * The preflight workspace is always removed because it contains plaintext secret material.
+     * Workspace cleanup belongs to RestoreOperationStore so worker crashes remain recoverable.
      *
      * @param array<string, mixed> $manifest
      * @return array{database:string,backup_id:string,migrations_applied:list<string>}
      */
-    public function restore(string $workspace, array $manifest): array
+    public function restore(string $operationId, string $workspace, array $manifest): array
     {
+        $this->assertOperationId($operationId);
         $backupId = $manifest['backup_id'] ?? null;
         if (!is_string($backupId) || preg_match('/^[a-f0-9-]{36}$/', $backupId) !== 1) {
             throw new RuntimeException('Invalid backup ID for disaster recovery.');
@@ -59,16 +61,26 @@ final class DisasterRecoveryRestorer
         $previousDatabase = $this->derivedDatabaseName($currentDatabase, 'pre_restore', $backupId);
         $lease = $this->maintenance->beginExclusive([
             'operation' => 'restore',
+            'operation_id' => $operationId,
             'backup_id' => $backupId,
         ]);
         $admin = null;
         $stagingExists = false;
+        $journalStarted = false;
         $cutoverComplete = false;
 
         try {
+            if ($this->journal->read() !== null) {
+                throw new RuntimeException('An interrupted disaster-recovery cutover must be recovered first.');
+            }
+
             $admin = $this->connectDatabase('postgres');
+            if ($this->databaseExists($admin, $previousDatabase)) {
+                throw new RuntimeException(
+                    'A previous disaster-recovery database exists without a cutover journal; manual recovery is required.'
+                );
+            }
             $this->dropDatabaseIfExists($admin, $stagingDatabase);
-            $this->dropDatabaseIfExists($admin, $previousDatabase);
             $this->createDatabase($admin, $stagingDatabase);
             $stagingExists = true;
 
@@ -104,35 +116,91 @@ final class DisasterRecoveryRestorer
             $staging->exec('ANALYZE');
             $staging = null;
 
-            $this->cutOver(
-                $admin,
-                $currentDatabase,
-                $stagingDatabase,
-                $previousDatabase,
-                $manifest,
-                $expectedSecrets
-            );
-            $stagingExists = false;
-            $cutoverComplete = true;
-            $this->invalidateSessions();
-
-            return [
+            $result = [
                 'database' => $currentDatabase,
                 'backup_id' => $backupId,
                 'migrations_applied' => $migrationsApplied,
             ];
+            $this->journal->begin(
+                $operationId,
+                $backupId,
+                $currentDatabase,
+                $stagingDatabase,
+                $previousDatabase,
+                $result
+            );
+            $journalStarted = true;
+            $this->cutOver($admin, $manifest, $expectedSecrets);
+            $stagingExists = false;
+            $cutoverComplete = true;
+            $this->invalidateSessions();
+
+            return $result;
         } finally {
-            if (!$cutoverComplete && $stagingExists && $admin instanceof PDO) {
+            if (!$cutoverComplete
+                && !$journalStarted
+                && $stagingExists
+                && $admin instanceof PDO) {
                 try {
                     $this->dropDatabaseIfExists($admin, $stagingDatabase);
                 } catch (Throwable) {
-                    // Keep the original restore failure. A later restore with the same backup ID
-                    // force-drops this staging name before retrying.
+                    // Preserve the original failure; a later retry force-drops this staging name.
                 }
             }
-            $this->removeTree($workspace);
             $lease->release();
         }
+    }
+
+    /**
+     * Resolves a journal left by a killed DR worker. Before verification the conservative action
+     * is rollback to B; after verification the conservative action is completion of the cutover.
+     *
+     * @return array{outcome:'completed'|'rolled_back',operation_id:string,result:array<string,mixed>}|null
+     */
+    public function recoverInterruptedCutover(): ?array
+    {
+        $journal = $this->journal->read();
+        if ($journal === null) {
+            return null;
+        }
+        $lease = $this->maintenance->beginExclusive([
+            'operation' => 'cutover_recovery',
+            'operation_id' => $journal['operation_id'],
+            'backup_id' => $journal['backup_id'],
+        ]);
+        try {
+            $admin = $this->connectDatabase('postgres');
+            $recovered = $this->recoverJournalState($admin, $journal);
+            if ($recovered['outcome'] === 'completed') {
+                $this->invalidateSessions();
+            }
+            return $recovered;
+        } finally {
+            $lease->release();
+        }
+    }
+
+    public function acknowledgeCompletedCutover(string $operationId): void
+    {
+        $this->assertOperationId($operationId);
+        $journal = $this->journal->read();
+        if ($journal === null) {
+            return;
+        }
+        if ($journal['operation_id'] !== $operationId || $journal['phase'] !== 'committed') {
+            throw new RuntimeException('Cannot acknowledge an incomplete disaster-recovery cutover.');
+        }
+
+        $admin = $this->connectDatabase('postgres');
+        $current = $journal['current_database'];
+        $staging = $journal['staging_database'];
+        $previous = $journal['previous_database'];
+        if (!$this->databaseExists($admin, $current)
+            || $this->databaseExists($admin, $staging)
+            || $this->databaseExists($admin, $previous)) {
+            throw new RuntimeException('Cannot acknowledge disaster recovery while cutover databases are unresolved.');
+        }
+        $this->journal->clear();
     }
 
     /**
@@ -142,35 +210,32 @@ final class DisasterRecoveryRestorer
      *   website_endpoints:list<array{id:int,auth:?string,headers:?string}>
      * } $expectedSecrets
      */
-    private function cutOver(
-        PDO $admin,
-        string $currentDatabase,
-        string $stagingDatabase,
-        string $previousDatabase,
-        array $manifest,
-        array $expectedSecrets
-    ): void {
-        $currentDisabled = false;
-        $renamedCurrent = false;
-        $renamedStaging = false;
+    private function cutOver(PDO $admin, array $manifest, array $expectedSecrets): void
+    {
+        $journal = $this->journal->read();
+        if ($journal === null) {
+            throw new RuntimeException('Disaster-recovery cutover journal is missing.');
+        }
+        $currentDatabase = $journal['current_database'];
+        $stagingDatabase = $journal['staging_database'];
+        $previousDatabase = $journal['previous_database'];
+
         try {
             $this->setAllowsConnections($admin, $currentDatabase, false);
-            $currentDisabled = true;
             $this->terminateDatabaseConnections($admin, $currentDatabase);
             $admin->exec(sprintf(
                 'ALTER DATABASE %s RENAME TO %s',
                 $this->identifier($currentDatabase),
                 $this->identifier($previousDatabase)
             ));
-            $renamedCurrent = true;
-            $currentDisabled = false;
+            $this->journal->advance('current_renamed');
 
             $admin->exec(sprintf(
                 'ALTER DATABASE %s RENAME TO %s',
                 $this->identifier($stagingDatabase),
                 $this->identifier($currentDatabase)
             ));
-            $renamedStaging = true;
+            $this->journal->advance('staging_renamed');
             $this->setAllowsConnections($admin, $currentDatabase, true);
 
             $restored = $this->connectDatabase($currentDatabase);
@@ -183,41 +248,130 @@ final class DisasterRecoveryRestorer
             $restored->query('SELECT 1')?->fetchColumn();
             $restored = null;
 
+            $this->journal->advance('verified');
             $this->dropDatabaseIfExists($admin, $previousDatabase);
+            $this->journal->advance('committed');
         } catch (Throwable $exception) {
             try {
-                if ($renamedStaging) {
-                    $this->setAllowsConnections($admin, $currentDatabase, false);
-                    $this->terminateDatabaseConnections($admin, $currentDatabase);
-                    $admin->exec(sprintf(
-                        'ALTER DATABASE %s RENAME TO %s',
-                        $this->identifier($currentDatabase),
-                        $this->identifier($stagingDatabase)
-                    ));
+                $latest = $this->journal->read();
+                if ($latest !== null) {
+                    $recovery = $this->recoverJournalState($admin, $latest);
+                    if ($recovery['outcome'] === 'completed') {
+                        return;
+                    }
                 }
-                if ($renamedCurrent) {
-                    $admin->exec(sprintf(
-                        'ALTER DATABASE %s RENAME TO %s',
-                        $this->identifier($previousDatabase),
-                        $this->identifier($currentDatabase)
-                    ));
-                    $this->setAllowsConnections($admin, $currentDatabase, true);
-                } elseif ($currentDisabled) {
-                    $this->setAllowsConnections($admin, $currentDatabase, true);
-                }
-                if ($renamedStaging) {
-                    $this->dropDatabaseIfExists($admin, $stagingDatabase);
-                }
-            } catch (Throwable $rollbackException) {
+            } catch (Throwable $recoveryException) {
                 throw new RuntimeException(
-                    'Disaster recovery cutover failed and automatic database rollback also failed: '
-                    . $rollbackException->getMessage(),
+                    'Disaster recovery cutover failed and automatic recovery also failed: '
+                    . $recoveryException->getMessage(),
                     0,
                     $exception
                 );
             }
             throw $exception;
         }
+    }
+
+    /**
+     * @param array{version:int,operation_id:string,backup_id:string,phase:string,current_database:string,staging_database:string,previous_database:string,result:array<string,mixed>,updated_at:string} $journal
+     * @return array{outcome:'completed'|'rolled_back',operation_id:string,result:array<string,mixed>}
+     */
+    private function recoverJournalState(PDO $admin, array $journal): array
+    {
+        $current = $journal['current_database'];
+        $staging = $journal['staging_database'];
+        $previous = $journal['previous_database'];
+        $phase = $journal['phase'];
+
+        $currentExists = $this->databaseExists($admin, $current);
+        $stagingExists = $this->databaseExists($admin, $staging);
+        $previousExists = $this->databaseExists($admin, $previous);
+
+        if (!$currentExists && !$previousExists) {
+            throw new RuntimeException(
+                'Interrupted disaster recovery has neither the primary nor rollback database; manual recovery is required.'
+            );
+        }
+        if ($currentExists && $previousExists && $stagingExists) {
+            throw new RuntimeException(
+                'Interrupted disaster recovery has an ambiguous three-database cutover state; manual recovery is required.'
+            );
+        }
+
+        $verified = in_array($phase, ['verified', 'committed'], true);
+        if ($verified && $currentExists) {
+            $this->setAllowsConnections($admin, $current, true);
+            if ($previousExists) {
+                $this->dropDatabaseIfExists($admin, $previous);
+            }
+            if ($stagingExists) {
+                $this->dropDatabaseIfExists($admin, $staging);
+            }
+            $this->journal->advance('committed');
+
+            return [
+                'outcome' => 'completed',
+                'operation_id' => $journal['operation_id'],
+                'result' => $journal['result'],
+            ];
+        }
+
+        if (!$currentExists && $previousExists) {
+            $admin->exec(sprintf(
+                'ALTER DATABASE %s RENAME TO %s',
+                $this->identifier($previous),
+                $this->identifier($current)
+            ));
+            $this->setAllowsConnections($admin, $current, true);
+            if ($stagingExists) {
+                $this->dropDatabaseIfExists($admin, $staging);
+            }
+            $this->journal->clear();
+
+            return [
+                'outcome' => 'rolled_back',
+                'operation_id' => $journal['operation_id'],
+                'result' => $journal['result'],
+            ];
+        }
+
+        if ($previousExists) {
+            $this->setAllowsConnections($admin, $current, false);
+            $this->terminateDatabaseConnections($admin, $current);
+            $admin->exec(sprintf(
+                'ALTER DATABASE %s RENAME TO %s',
+                $this->identifier($current),
+                $this->identifier($staging)
+            ));
+            $admin->exec(sprintf(
+                'ALTER DATABASE %s RENAME TO %s',
+                $this->identifier($previous),
+                $this->identifier($current)
+            ));
+            $this->setAllowsConnections($admin, $current, true);
+            $this->dropDatabaseIfExists($admin, $staging);
+            $this->journal->clear();
+
+            return [
+                'outcome' => 'rolled_back',
+                'operation_id' => $journal['operation_id'],
+                'result' => $journal['result'],
+            ];
+        }
+
+        // The primary exists and the rollback name no longer does. Before verification this is
+        // either the untouched B database or a rollback that completed before journal cleanup.
+        $this->setAllowsConnections($admin, $current, true);
+        if ($stagingExists) {
+            $this->dropDatabaseIfExists($admin, $staging);
+        }
+        $this->journal->clear();
+
+        return [
+            'outcome' => 'rolled_back',
+            'operation_id' => $journal['operation_id'],
+            'result' => $journal['result'],
+        ];
     }
 
     /** @param array<string, mixed> $manifest */
@@ -271,8 +425,19 @@ final class DisasterRecoveryRestorer
         $admin->exec('DROP DATABASE IF EXISTS ' . $this->identifier($database) . ' WITH (FORCE)');
     }
 
+    private function databaseExists(PDO $admin, string $database): bool
+    {
+        $statement = $admin->prepare('SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = :database)');
+        $statement->execute(['database' => $database]);
+        $value = $statement->fetchColumn();
+        return $value === true || $value === 1 || in_array($value, ['1', 't', 'true'], true);
+    }
+
     private function setAllowsConnections(PDO $admin, string $database, bool $allowed): void
     {
+        if (!$this->databaseExists($admin, $database)) {
+            return;
+        }
         $admin->exec(sprintf(
             'ALTER DATABASE %s WITH ALLOW_CONNECTIONS %s',
             $this->identifier($database),
@@ -340,22 +505,10 @@ final class DisasterRecoveryRestorer
         }
     }
 
-    private function removeTree(string $path): void
+    private function assertOperationId(string $operationId): void
     {
-        if (!is_dir($path)) {
-            return;
+        if (preg_match('/^[a-f0-9]{32}$/', $operationId) !== 1) {
+            throw new RuntimeException('Invalid restore operation ID.');
         }
-        foreach (scandir($path) ?: [] as $entry) {
-            if ($entry === '.' || $entry === '..') {
-                continue;
-            }
-            $child = $path . DIRECTORY_SEPARATOR . $entry;
-            if (is_dir($child) && !is_link($child)) {
-                $this->removeTree($child);
-            } else {
-                @unlink($child);
-            }
-        }
-        @rmdir($path);
     }
 }

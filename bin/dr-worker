@@ -1,0 +1,137 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use App\Backup\DisasterRecoveryRestorer;
+use App\Backup\DrCutoverJournal;
+use App\Backup\DrMaintenanceLock;
+use App\Backup\PostgresBackupTool;
+use App\Backup\RestoreOperationStore;
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+$interval = filter_var(
+    getenv('DR_WORKER_INTERVAL') ?: 2,
+    FILTER_VALIDATE_INT,
+    ['options' => ['min_range' => 1, 'max_range' => 30]]
+);
+if ($interval === false) {
+    fwrite(STDERR, "DR_WORKER_INTERVAL must be between 1 and 30 seconds.\n");
+    exit(1);
+}
+
+$applicationKey = base64_decode((string) getenv('APP_KEY'), true);
+if ($applicationKey === false || strlen($applicationKey) !== SODIUM_CRYPTO_SECRETBOX_KEYBYTES) {
+    fwrite(STDERR, "APP_KEY must be a base64-encoded 32-byte key.\n");
+    exit(1);
+}
+
+$database = databaseEnvironment();
+$root = dirname(__DIR__) . '/var/dr';
+$journal = new DrCutoverJournal($root);
+$store = new RestoreOperationStore($root . '/operations', restoreMaximumBytes());
+$restorer = new DisasterRecoveryRestorer(
+    $database,
+    new PostgresBackupTool($database),
+    new DrMaintenanceLock($root),
+    $journal,
+    dirname(__DIR__) . '/migrations',
+    $applicationKey,
+    dirname(__DIR__) . '/var/sessions'
+);
+$workerId = (gethostname() ?: 'mirvmon') . ':' . getmypid();
+$running = true;
+if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
+    pcntl_async_signals(true);
+    pcntl_signal(SIGTERM, static function () use (&$running): void { $running = false; });
+    pcntl_signal(SIGINT, static function () use (&$running): void { $running = false; });
+}
+
+$needsStartupRecovery = true;
+do {
+    try {
+        if ($journal->read() !== null) {
+            $recovered = $restorer->recoverInterruptedCutover();
+            if ($recovered !== null) {
+                if ($recovered['outcome'] === 'completed') {
+                    $store->markSucceeded($recovered['operation_id'], $recovered['result']);
+                    $restorer->acknowledgeCompletedCutover($recovered['operation_id']);
+                } else {
+                    $store->markFailed($recovered['operation_id'], 'interrupted_restore_rolled_back');
+                }
+            }
+            $needsStartupRecovery = true;
+        }
+
+        if ($needsStartupRecovery) {
+            $store->requeueInterrupted();
+            $store->purgeExpired();
+            $needsStartupRecovery = false;
+        }
+
+        $operation = $store->claimNext($workerId);
+        if ($operation === null) {
+            sleepInterruptibly($interval, $running);
+            continue;
+        }
+
+        $id = $operation['id'] ?? null;
+        $workspace = $operation['workspace'] ?? null;
+        $manifest = $operation['manifest'] ?? null;
+        if (!is_string($id) || !is_string($workspace) || !is_array($manifest)) {
+            throw new RuntimeException('Claimed restore operation is incomplete.');
+        }
+
+        try {
+            $result = $restorer->restore($id, $workspace, $manifest);
+            $store->markSucceeded($id, $result);
+            $restorer->acknowledgeCompletedCutover($id);
+        } catch (Throwable $exception) {
+            error_log('[mirvmon][dr-worker][restore] ' . $exception->getMessage());
+            if ($journal->read() === null) {
+                $store->markFailed($id, 'restore_failed');
+            } else {
+                // Preserve the workspace and running state. The next loop recovers the database
+                // shape from the cutover journal before deciding whether to retry or complete.
+                $needsStartupRecovery = true;
+            }
+        }
+    } catch (Throwable $exception) {
+        error_log('[mirvmon][dr-worker] ' . $exception->getMessage());
+        $needsStartupRecovery = true;
+        sleepInterruptibly($interval, $running);
+    }
+} while ($running);
+
+/** @return array<string, string> */
+function databaseEnvironment(): array
+{
+    $result = [];
+    foreach (['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USERNAME', 'DB_PASSWORD', 'DB_SSLMODE'] as $name) {
+        $value = getenv($name);
+        if ($value !== false) {
+            $result[$name] = $value;
+        }
+    }
+    return $result;
+}
+
+function restoreMaximumBytes(): int
+{
+    $raw = getenv('BACKUP_MAX_UPLOAD_BYTES');
+    if ($raw === false || $raw === '') {
+        return 8589934592;
+    }
+    $value = filter_var($raw, FILTER_VALIDATE_INT, [
+        'options' => ['min_range' => 1048576, 'max_range' => PHP_INT_MAX],
+    ]);
+    return $value === false ? 8589934592 : $value;
+}
+
+function sleepInterruptibly(int $seconds, bool &$running): void
+{
+    for ($second = 0; $second < $seconds && $running; $second++) {
+        sleep(1);
+    }
+}
