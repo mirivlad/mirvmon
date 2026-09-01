@@ -51,7 +51,7 @@ return [
     'agent.update.not_available' => 'Agent update is not available for this server.',
     'agent.update_all_outdated' => 'Update all outdated',
     'agent.update_all_confirm' => 'Schedule updates for {count} agents to {version}?',
-    'agent.update_all_result' => 'Scheduled: {scheduled}; already updating: {running}; cannot update automatically: {manual}.',
+    'agent.update_all_progress' => 'Agent updates: completed {completed} of {total}; waiting to start: {pending}; updating now: {running}; failed: {failed}; require manual update: {manual}.',
     'agent.update_all_error' => 'Could not schedule bulk agent updates.',
 
     'platform.windows_unknown' => 'Windows · exact version not reported',

@@ -51,7 +51,7 @@ return [
     'agent.update.not_available' => 'Обновление агента недоступно для этого сервера.',
     'agent.update_all_outdated' => 'Обновить все устаревшие',
     'agent.update_all_confirm' => 'Запланировать обновление {count} агентов до {version}?',
-    'agent.update_all_result' => 'Запланировано: {scheduled}; уже обновляются: {running}; нельзя обновить автоматически: {manual}.',
+    'agent.update_all_progress' => 'Обновление агентов: завершено {completed} из {total}; ожидают запуска: {pending}; сейчас обновляются: {running}; ошибки: {failed}; требуют ручного обновления: {manual}.',
     'agent.update_all_error' => 'Не удалось запланировать массовое обновление агентов.',
 
     'platform.windows_unknown' => 'Windows · точная версия не сообщена',

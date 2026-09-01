@@ -31,6 +31,9 @@ final class Ui19TemplateContractTest extends TestCase
         self::assertStringContainsString('advanced-server-filters', $template);
         self::assertStringContainsString('data-agent-update-button', $template);
         self::assertStringContainsString('data-agent-bulk-update-button', $template);
+        self::assertStringContainsString('renderBulkProgress()', $template);
+        self::assertStringContainsString('bulkOperationServerIds', $template);
+        self::assertStringContainsString('agent.update_all_progress', $template);
         self::assertStringContainsString('/api/agent-updates/status', $template);
     }
 
