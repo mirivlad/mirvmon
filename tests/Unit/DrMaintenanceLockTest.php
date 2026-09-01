@@ -38,7 +38,9 @@ final class DrMaintenanceLockTest extends TestCase
 
         $exclusive->release();
         self::assertFalse($lock->isActive());
-        self::assertNotNull($lock->acquireShared())?->release();
+        $after = $lock->acquireShared();
+        self::assertNotNull($after);
+        $after->release();
     }
 
     public function testExclusiveReleaseIsIdempotent(): void
