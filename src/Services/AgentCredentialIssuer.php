@@ -27,6 +27,9 @@ final class AgentCredentialIssuer
         }
 
         $this->ensureToken($serverId);
+        if (!$this->canIssueInstaller($serverId)) {
+            throw new RuntimeException('Agent credential requires explicit rotation.');
+        }
         $token = bin2hex(random_bytes(32));
         $expiresAt = (new DateTimeImmutable())
             ->modify('+' . $lifetimeSeconds . ' seconds')
@@ -42,6 +45,31 @@ final class AgentCredentialIssuer
         ]);
 
         return $token;
+    }
+
+    public function canIssueInstaller(int $serverId): bool
+    {
+        if ($serverId < 1) {
+            return false;
+        }
+
+        $statement = $this->pdo->prepare(
+            'SELECT token_hash, token_generation
+             FROM agent_tokens
+             WHERE server_id = :server_id'
+        );
+        $statement->execute(['server_id' => $serverId]);
+        $row = $statement->fetch();
+        if (!is_array($row) || $row['token_generation'] === null) {
+            return false;
+        }
+
+        $expectedHash = hash(
+            'sha256',
+            $this->agentToken($serverId, (int) $row['token_generation'])
+        );
+
+        return hash_equals((string) $row['token_hash'], $expectedHash);
     }
 
     public function exchange(string $installerToken): AgentCredential
