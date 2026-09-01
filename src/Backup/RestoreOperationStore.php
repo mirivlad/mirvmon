@@ -152,7 +152,10 @@ final class RestoreOperationStore
         return $state + ['backup_path' => $this->backupPath($id)];
     }
 
-    /** @param array<string, mixed> $manifest @param list<string> $warnings */
+    /**
+     * @param array<string, mixed> $manifest
+     * @param list<string> $warnings
+     */
     public function markReady(string $id, array $manifest, array $warnings, string $workspace): void
     {
         $this->withLock($id, function () use ($id, $manifest, $warnings, $workspace): void {
