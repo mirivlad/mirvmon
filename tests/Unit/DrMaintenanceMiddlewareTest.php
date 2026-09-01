@@ -35,11 +35,8 @@ final class DrMaintenanceMiddlewareTest extends TestCase
         $lock = new DrMaintenanceLock($this->directory);
         $exclusive = $lock->beginExclusive(['operation_id' => 'restore-test']);
         $middleware = new DrMaintenanceMiddleware(new ResponseFactory(), $lock);
-        $handlerCalled = false;
-        $handler = new class($handlerCalled) implements RequestHandlerInterface {
-            public function __construct(private bool &$called)
-            {
-            }
+        $handler = new class implements RequestHandlerInterface {
+            public bool $called = false;
 
             public function handle(ServerRequestInterface $request): ResponseInterface
             {
@@ -59,7 +56,7 @@ final class DrMaintenanceMiddlewareTest extends TestCase
 
         self::assertSame(503, $response->getStatusCode());
         self::assertSame('5', $response->getHeaderLine('Retry-After'));
-        self::assertFalse($handlerCalled);
+        self::assertFalse($handler->called);
     }
 
     public function testLivezAndRestoreExecutionAreExempt(): void
