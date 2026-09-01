@@ -73,7 +73,10 @@ final class BackupPreflight
         }
     }
 
-    /** @param array<string, mixed> $manifest @return list<string> */
+    /**
+     * @param array<string, mixed> $manifest
+     * @return list<string>
+     */
     private function versionWarnings(array $manifest): array
     {
         $source = $manifest['source'];
