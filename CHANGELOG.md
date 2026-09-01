@@ -6,6 +6,7 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+- Updated the modern native-agent toolchain to Go 1.26.6 while preserving the intentional Go 1.20.14 compatibility build for legacy Windows.
 - Automated GitHub Release publication from validated release notes and the
   existing tag-driven image pipeline.
 

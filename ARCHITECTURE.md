@@ -149,7 +149,7 @@ configuration/runtime categories, чтобы работающий service не �
 `mirvmon-agent`, на Windows code и state разделены между `Program Files` и
 `ProgramData`.
 
-Linux runtime — статический Go 1.26.5 x64 binary. Windows 10/11 и Server 2016+
+Linux runtime — статический Go 1.26.6 x64 binary. Windows 10/11 и Server 2016+
 используют ту же версию Go; Windows 7 SP1/8/8.1 и Server 2008 R2 SP1/2012/2012
 R2 — Go 1.20.14 x64 binary. Сервер динамически собирает неподписанный
 персонализированный NSIS EXE с обеими catalog-verified сборками,
