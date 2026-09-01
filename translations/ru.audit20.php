@@ -52,6 +52,7 @@ return [
     'audit.event.server.services_saved' => 'Изменён список контролируемых сервисов сервера «{name}».',
     'audit.event.server.agent_config_saved' => 'Изменена конфигурация агента сервера «{name}».',
     'audit.event.server.agent_update_requested' => 'Запрошено обновление агента сервера «{name}» до {version}.',
+    'audit.event.server.agent_update_bulk_requested' => 'Запрошено массовое обновление {count} агентов.',
     'audit.event.group.created' => 'Создана группа «{name}».',
     'audit.event.group.updated' => 'Изменена группа «{name}».',
     'audit.event.group.deleted' => 'Удалена группа «{name}».',

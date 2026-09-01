@@ -22,11 +22,28 @@
         <p class="page-subtitle">{{ t('ui19.servers.subtitle') }}</p>
     </div>
     <div class="app-page-actions">
+        {% if session.role == 'admin' and agent_update_summary %}
+        <form method="post" action="/servers/agents/update-outdated"
+              data-agent-bulk-update-form
+              data-target-version="{{ agent_update_summary.target_version }}"
+              data-confirm-template="{{ t('agent.update_all_confirm', {count: '__COUNT__', version: '__VERSION__'}) }}">
+            {% include "partials/csrf.twig" %}
+            <button type="submit" class="btn btn-outline-primary" data-agent-bulk-update-button
+                    {% if agent_update_summary.eligible == 0 %}disabled{% endif %}>
+                <i class="fas fa-arrows-rotate" aria-hidden="true"></i>
+                {{ t('agent.update_all_outdated') }}
+                <span class="badge text-bg-primary ms-1" data-agent-bulk-update-count>{{ agent_update_summary.eligible }}</span>
+            </button>
+        </form>
+        {% endif %}
         <a href="/servers/create" class="btn btn-primary">
             <i class="fas fa-plus" aria-hidden="true"></i> {{ t('servers.add') }}
         </a>
     </div>
 </header>
+{% if session.role == 'admin' %}
+<div class="alert d-none" role="status" data-agent-bulk-feedback></div>
+{% endif %}
 
 <form id="server-filters" method="get" action="/servers" class="app-filter-panel" data-server-filter-form>
     <input type="hidden" name="sort" value="{{ sort }}">
@@ -153,6 +170,7 @@
                     data-server-group="{{ server.group_name|default('') }}"
                     data-server-status="{{ server.status }}"
                     data-agent-outdated="{{ agent_filter_state }}"
+                    data-agent-can-update="{{ server.agent_update and server.agent_update.can_update ? '1' : '0' }}"
                     data-agent-state="{{ server.agent_update.state|default('unknown') }}">
                     <td data-label="{{ t('ui19.servers.server') }}">
                         <div class="server-list-identity server-status-{{ server.status }}">
@@ -266,6 +284,8 @@
         retry: {{ t('agent.retry_update')|json_encode|raw }},
         requesting: {{ t('agent.state.pending')|json_encode|raw }},
         requestError: {{ t('agent.state.failed')|json_encode|raw }},
+        bulkResult: {{ t('agent.update_all_result', {scheduled: '__SCHEDULED__', running: '__RUNNING__', manual: '__MANUAL__'})|json_encode|raw }},
+        bulkError: {{ t('agent.update_all_error')|json_encode|raw }},
         results: {{ t('ui19.servers.results', {count: '__COUNT__'})|json_encode|raw }}
     };
     const rows = Array.from(document.querySelectorAll('[data-agent-row]'));
@@ -279,6 +299,10 @@
     const table = document.querySelector('[data-server-table]');
     const resultCount = document.querySelector('[data-server-result-count]');
     const csrfForm = document.getElementById('agent-update-csrf');
+    const bulkForm = document.querySelector('[data-agent-bulk-update-form]');
+    const bulkButton = document.querySelector('[data-agent-bulk-update-button]');
+    const bulkCount = document.querySelector('[data-agent-bulk-update-count]');
+    const bulkFeedback = document.querySelector('[data-agent-bulk-feedback]');
     let pollTimer = null;
 
     function normalizedAgentFilter(value) {
@@ -380,6 +404,7 @@
         const meta = stateMeta[state];
         row.dataset.agentState = state;
         row.dataset.agentOutdated = status.is_outdated === true ? '1' : (status.is_outdated === false ? '0' : 'unknown');
+        row.dataset.agentCanUpdate = status.can_update === true ? '1' : '0';
         const version = row.querySelector('[data-agent-version]');
         if (version) version.textContent = status.installed_version || '—';
         let control = row.querySelector('[data-agent-state-control]');
@@ -395,7 +420,24 @@
         const actionable = canManageAgents && status.can_update === true && ['update_available', 'failed'].includes(state);
         control.appendChild(actionable ? createUpdateButton(row, status, meta) : createIcon(meta));
         if (activeStates.has(state)) trackedServerIds.add(row.dataset.serverId); else trackedServerIds.delete(row.dataset.serverId);
+        updateBulkControl();
         applyFilters();
+    }
+
+    function updateBulkControl() {
+        if (!(bulkButton instanceof HTMLButtonElement)) return;
+        const eligible = rows.filter((row) =>
+            row.dataset.agentCanUpdate === '1'
+            && ['update_available', 'failed'].includes(row.dataset.agentState || '')
+        ).length;
+        bulkButton.disabled = eligible === 0;
+        if (bulkCount) bulkCount.textContent = String(eligible);
+    }
+
+    function showBulkFeedback(message, type) {
+        if (!(bulkFeedback instanceof HTMLElement)) return;
+        bulkFeedback.className = `alert alert-${type}`;
+        bulkFeedback.textContent = message;
     }
 
     function renderTransient(row, iconClass, label) {
@@ -420,12 +462,15 @@
     }
 
     async function refreshStatuses(serverIds) {
-        const statuses = await fetchStatuses(serverIds);
-        serverIds.forEach((serverId) => {
-            const row = rowsById.get(String(serverId));
-            const status = statuses[String(serverId)] ?? statuses[serverId];
-            if (row && status) renderStatus(row, status);
-        });
+        for (let offset = 0; offset < serverIds.length; offset += 100) {
+            const chunk = serverIds.slice(offset, offset + 100);
+            const statuses = await fetchStatuses(chunk);
+            chunk.forEach((serverId) => {
+                const row = rowsById.get(String(serverId));
+                const status = statuses[String(serverId)] ?? statuses[serverId];
+                if (row && status) renderStatus(row, status);
+            });
+        }
     }
 
     function schedulePoll(delay = 2000) {
@@ -447,6 +492,47 @@
             schedulePoll(5000);
         }
     }
+
+    bulkForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!(bulkForm instanceof HTMLFormElement) || !(bulkButton instanceof HTMLButtonElement)) return;
+        const eligible = Number.parseInt(bulkCount?.textContent || '0', 10);
+        if (!Number.isFinite(eligible) || eligible <= 0) return;
+        const confirmTemplate = bulkForm.dataset.confirmTemplate || '';
+        const targetVersion = bulkForm.dataset.targetVersion || '';
+        const confirmation = confirmTemplate
+            .replace('__COUNT__', String(eligible))
+            .replace('__VERSION__', targetVersion);
+        if (!window.confirm(confirmation)) return;
+
+        bulkButton.disabled = true;
+        try {
+            const response = await fetch(bulkForm.action, {
+                method: 'POST',
+                headers: { Accept: 'application/json' },
+                body: new FormData(bulkForm)
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.result) throw new Error(payload.error || 'Bulk agent update request failed.');
+            const result = payload.result;
+            const scheduledIds = Array.isArray(result.scheduled_server_ids) ? result.scheduled_server_ids : [];
+            await refreshStatuses(scheduledIds);
+            scheduledIds.forEach((serverId) => trackedServerIds.add(String(serverId)));
+            showBulkFeedback(
+                text.bulkResult
+                    .replace('__SCHEDULED__', String(result.scheduled || 0))
+                    .replace('__RUNNING__', String(result.already_running || 0))
+                    .replace('__MANUAL__', String(result.manual_required || 0)),
+                'success'
+            );
+            updateBulkControl();
+            schedulePoll(1000);
+        } catch (error) {
+            console.error(error);
+            showBulkFeedback(text.bulkError, 'danger');
+            updateBulkControl();
+        }
+    });
 
     document.addEventListener('click', async (event) => {
         const target = event.target;
@@ -486,6 +572,7 @@
     [groupFilter, statusFilter, agentFilter].forEach((control) => control?.addEventListener('change', applyFilters));
     search?.addEventListener('input', applyFilters);
     rows.forEach((row) => { if (activeStates.has(row.dataset.agentState)) trackedServerIds.add(row.dataset.serverId); });
+    updateBulkControl();
     applyFilters();
     schedulePoll();
 })();

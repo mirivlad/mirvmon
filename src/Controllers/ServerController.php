@@ -91,6 +91,7 @@ final class ServerController
         );
         $statement->execute($parameters);
         $servers = $this->status->enrich($statement->fetchAll());
+        $agentUpdateSummary = null;
         if ($this->agentUpdates !== null) {
             $statuses = $this->agentUpdates->statusesForServers(array_map(
                 static fn (array $server): int => (int) $server['id'],
@@ -100,6 +101,7 @@ final class ServerController
                 $server['agent_update'] = $statuses[(int) $server['id']] ?? null;
             }
             unset($server);
+            $agentUpdateSummary = $this->agentUpdates->summarizeStatuses($statuses);
         }
         $sortUrls = [];
         foreach (array_keys($sortColumns) as $key) {
@@ -119,6 +121,7 @@ final class ServerController
             'sort' => $sort,
             'direction' => $direction,
             'sort_urls' => $sortUrls,
+            'agent_update_summary' => $agentUpdateSummary,
         ]);
     }
 

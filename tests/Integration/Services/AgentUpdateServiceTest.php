@@ -187,6 +187,41 @@ final class AgentUpdateServiceTest extends TestCase
         self::assertTrue($statuses[$this->serverId]['can_update']);
     }
 
+    public function testBulkRequestSchedulesOnlyActionableOutdatedAgents(): void
+    {
+        $activeId = (int) self::$pdo?->query(
+            "INSERT INTO servers (name, agent_version, agent_artifact, agent_capabilities)
+             VALUES ('bulk-active', 'v0.4.2', 'linux-amd64', '[\"self_update_v1\"]')
+             RETURNING id"
+        )->fetchColumn();
+        $manualId = (int) self::$pdo?->query(
+            "INSERT INTO servers (name, agent_version, agent_artifact, agent_capabilities)
+             VALUES ('bulk-manual', 'v0.4.2', 'linux-amd64', '[]')
+             RETURNING id"
+        )->fetchColumn();
+        self::$pdo?->query(
+            "INSERT INTO servers (name, agent_version, agent_artifact, agent_capabilities)
+             VALUES ('bulk-current', 'v0.4.3', 'linux-amd64', '[\"self_update_v1\"]')"
+        );
+        (new AgentUpdateRepository(self::$pdo))->create(
+            $activeId,
+            'v0.4.3',
+            'linux-amd64',
+            null
+        );
+
+        $result = $this->service->requestAllOutdated(null);
+
+        self::assertSame('v0.4.3', $result['target_version']);
+        self::assertSame(1, $result['scheduled']);
+        self::assertSame(1, $result['already_running']);
+        self::assertSame(1, $result['manual_required']);
+        self::assertSame([$this->serverId], $result['scheduled_server_ids']);
+        self::assertSame('pending', $this->service->statusForServer($this->serverId)['state']);
+        self::assertSame('pending', $this->service->statusForServer($activeId)['state']);
+        self::assertSame('manual_required', $this->service->statusForServer($manualId)['state']);
+    }
+
     public function testOldAgentRequiresManualUpdateAndCannotCreateCommand(): void
     {
         self::$pdo?->prepare(

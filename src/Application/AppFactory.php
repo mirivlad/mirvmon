@@ -107,6 +107,7 @@ final class AppFactory
             $group->post('/servers/{id}', self::controller($container, ServerController::class, 'update'));
             $group->post('/servers/{id}/delete', self::controller($container, ServerController::class, 'delete'));
             $group->post('/servers/{id}/installers', self::controller($container, ServerController::class, 'installers'));
+            $group->post('/servers/agents/update-outdated', self::controller($container, AgentUpdateController::class, 'requestAllOutdated'))->add($admin);
             $group->post('/servers/{id}/agent/update', self::controller($container, AgentUpdateController::class, 'requestUpdate'))->add($admin);
             $group->post('/servers/{id}/regenerate-token', self::controller($container, ServerController::class, 'regenerateToken'))->add($admin);
             $group->post('/servers/{id}/maintenance', self::controller($container, ServerDetailController::class, 'startMaintenance'));

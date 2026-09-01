@@ -49,6 +49,10 @@ return [
     'agent.error.target_superseded' => 'The requested version is obsolete. Clear the agent stale update state and retry.',
     'agent.error.update_failed' => 'The update failed.',
     'agent.update.not_available' => 'Agent update is not available for this server.',
+    'agent.update_all_outdated' => 'Update all outdated',
+    'agent.update_all_confirm' => 'Schedule updates for {count} agents to {version}?',
+    'agent.update_all_result' => 'Scheduled: {scheduled}; already updating: {running}; cannot update automatically: {manual}.',
+    'agent.update_all_error' => 'Could not schedule bulk agent updates.',
 
     'platform.windows_unknown' => 'Windows · exact version not reported',
     'platform.linux_unknown' => 'Linux · exact version not reported',

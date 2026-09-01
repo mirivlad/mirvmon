@@ -119,6 +119,26 @@ final class AgentUpdateControllerTest extends TestCase
         self::assertSame('v0.4.3', $payload['status']['available_version']);
     }
 
+    public function testBulkUpdateRequestReusesIndividualUpdateFlow(): void
+    {
+        $_SESSION['user_id'] = $this->userId;
+        $request = (new ServerRequestFactory())
+            ->createServerRequest('POST', '/')
+            ->withHeader('Accept', 'application/json');
+        $response = $this->controller->requestAllOutdated(
+            $request,
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+
+        self::assertSame(202, $response->getStatusCode());
+        $payload = json_decode((string) $response->getBody(), true);
+        self::assertIsArray($payload);
+        self::assertSame(1, $payload['result']['scheduled']);
+        self::assertSame([$this->serverId], $payload['result']['scheduled_server_ids']);
+        self::assertSame('pending', $this->service->statusForServer($this->serverId)['state']);
+    }
+
     public function testBatchStatusEndpointSupportsServerListPolling(): void
     {
         $request = (new ServerRequestFactory())->createServerRequest(

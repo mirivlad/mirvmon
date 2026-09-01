@@ -111,6 +111,7 @@ final class AuditTrailMiddleware implements MiddlewareInterface
         }
 
         return match ($path) {
+            '/servers/agents/update-outdated' => ['kind' => 'agent_update_bulk', 'id' => null],
             '/servers' => ['kind' => 'server_create', 'id' => null],
             '/groups' => ['kind' => 'group_create', 'id' => null],
             '/admin/users/save' => ['kind' => 'user_save', 'id' => null],
@@ -136,6 +137,7 @@ final class AuditTrailMiddleware implements MiddlewareInterface
             'thresholds_save' => $id === null ? null : $this->thresholdState($id),
             'services_save' => $id === null ? null : $this->serviceState($id),
             'agent_update' => $id === null ? null : $this->agentUpdateState($id),
+            'agent_update_bulk' => $this->bulkAgentUpdateState(),
             'group_create' => $this->groupByName($body['name'] ?? null),
             'group_update', 'group_delete' => $id === null ? null : $this->groupState($id),
             'user_save' => $this->userSaveState($body),
@@ -345,6 +347,23 @@ final class AuditTrailMiddleware implements MiddlewareInterface
                         'command_id' => $after['command_id'],
                         'target_version' => $after['target_version'],
                         'target_artifact' => $after['target_artifact'],
+                    ]
+                );
+
+            case 'agent_update_bulk':
+                if (!is_array($before) || !is_array($after)) {
+                    return null;
+                }
+                $scheduled = (int) $after['command_count'] - (int) $before['command_count'];
+                if ($scheduled <= 0) {
+                    return null;
+                }
+                return $this->eventData(
+                    'server.agent_update.bulk_request', 'server', null, null,
+                    'audit.event.server.agent_update_bulk_requested', [
+                        'count' => $scheduled,
+                    ], [
+                        'scheduled' => $scheduled,
                     ]
                 );
 
@@ -602,6 +621,13 @@ final class AuditTrailMiddleware implements MiddlewareInterface
             'name' => (string) $server['name'],
             'services' => $services,
         ];
+    }
+
+    /** @return array{command_count:int} */
+    private function bulkAgentUpdateState(): array
+    {
+        $count = $this->pdo->query('SELECT COUNT(*) FROM agent_update_commands')->fetchColumn();
+        return ['command_count' => (int) $count];
     }
 
     /** @return array<string, mixed>|null */

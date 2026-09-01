@@ -58,6 +58,26 @@ final class AgentUpdateController
     }
 
     /** @param array<string, string> $args */
+    public function requestAllOutdated(Request $request, Response $response, array $args): Response
+    {
+        $result = $this->updates->requestAllOutdated(
+            isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null
+        );
+
+        if ($this->wantsJson($request)) {
+            return $this->json($response, ['result' => $result], 202);
+        }
+
+        $_SESSION['flash_message'] = $this->translator->trans('agent.update_all_result', [
+            'scheduled' => (int) $result['scheduled'],
+            'running' => (int) $result['already_running'],
+            'manual' => (int) $result['manual_required'],
+        ]);
+        $_SESSION['flash_type'] = 'success';
+        return $response->withHeader('Location', '/servers')->withStatus(303);
+    }
+
+    /** @param array<string, string> $args */
     public function statuses(Request $request, Response $response, array $args): Response
     {
         $rawIds = $request->getQueryParams()['ids'] ?? '';
