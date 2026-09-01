@@ -84,7 +84,7 @@ final class ComposeContractTest extends TestCase
     public function testRuntimeImagesAreCurrentAndReproducible(): void
     {
         self::assertStringContainsString(
-            'dunglas/frankenphp:1.12.7-php8.5-trixie@sha256:4b0713ddad6ca7eb21eb82ac6bdb7cb41de5192a930b615d89af6e15d74e82f8',
+            'dunglas/frankenphp:1.12.7-php8.5-trixie@sha256:ee14233b7866ae5e9838ec3afe07721837c0a74b534fb30d0a7f7b373dd2fd12',
             $this->dockerfile
         );
         self::assertStringContainsString(
@@ -96,7 +96,7 @@ final class ComposeContractTest extends TestCase
     public function testNativeAgentArtifactsAreBuiltFromPinnedGoToolchains(): void
     {
         self::assertStringContainsString(
-            'golang:1.26.5-bookworm@sha256:53eeac89074db483fdf0ab3be1df32bf6e47562263d2d0d6baa7f26acb4957dd',
+            'golang:1.26.6-bookworm@sha256:116d58cbd88c1297624acc6e967a060012422bacf9930927e23fb719189c6f36',
             $this->dockerfile
         );
         self::assertStringContainsString(
