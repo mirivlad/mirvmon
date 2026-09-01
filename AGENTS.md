@@ -18,7 +18,7 @@ MirvMon — self-hosted система push-мониторинга сервер�
 - PostgreSQL 17 + TimescaleDB 2.28;
 - FrankenPHP в classic mode как основной HTTP adapter;
 - внешний nginx завершает TLS;
-- Go 1.26.5 для современного агента и Go 1.20.14 для Windows 7/8/8.1 и
+- Go 1.26.6 для современного агента и Go 1.20.14 для Windows 7/8/8.1 и
   Server 2008 R2/2012/2012 R2;
 - production Compose содержит ровно два сервиса: `app` и `db`.
 
