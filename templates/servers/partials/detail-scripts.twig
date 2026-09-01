@@ -151,6 +151,7 @@ function restoreMetricViewport(canvasId, timestamps, viewports) {
     const chart = entry.chart;
     if (typeof chart.zoomScale === 'function') {
         chart.zoomScale('x', { min, max }, 'none');
+        chart.update('none');
         return;
     }
     chart.options.scales = chart.options.scales || {};
@@ -254,6 +255,7 @@ function createLineChart(canvasId, labels, datasets, unit, chartMeta, timestamps
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            animation: false,
             interaction: { mode: 'index', intersect: false },
             plugins: {
                 legend: { display: datasets.length > 1, position: 'top' },
@@ -310,6 +312,7 @@ function createUptimeChart(chartData, viewports) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            animation: false,
             interaction: { mode: 'index', intersect: false },
             plugins: {
                 legend: { display: false },
@@ -337,6 +340,7 @@ function createAvailabilityChart(chartData, viewports) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            animation: false,
             plugins: {
                 legend: { display: false },
                 tooltip: { callbacks: { label: function(context) { return context.parsed.y >= 0.5 ? detailText.online : detailText.offline; } } },
