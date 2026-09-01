@@ -154,9 +154,15 @@
                             </li>
                             <li><hr class="dropdown-divider"></li>
                             <li>
-                                <a class="dropdown-item" href="/admin/system" data-nav-prefix="/admin/system">
+                                <a class="dropdown-item" href="/admin/system" data-nav-exact="/admin/system">
                                     <i class="fas fa-heart-pulse" aria-hidden="true"></i>
                                     {{ t('nav.system') }}
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/admin/system/backup" data-nav-exact="/admin/system/backup">
+                                    <i class="fas fa-box-archive" aria-hidden="true"></i>
+                                    {{ t('backup.system.open') }}
                                 </a>
                             </li>
                             <li>
