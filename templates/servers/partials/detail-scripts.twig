@@ -4,8 +4,6 @@
 <script nonce="__MIRVMON_CSP_NONCE__">
 const managedCharts = new Map();
 let pendingMetricViewports = {};
-let metricViewportState = {};
-const metricZoomTriggers = {};
 const detailText = {
     time: {{ t('metric.time')|json_encode|raw }},
     loading: {{ t('metric.loading')|json_encode|raw }},
@@ -84,7 +82,7 @@ function scaleBoundIndex(scale, value) {
     return null;
 }
 
-function metricViewportFromChart(chart, timestamps, mode = 'fixed', pinned = false) {
+function metricViewportFromChart(chart, timestamps) {
     if (!chart || !chart.scales || !chart.scales.x || !Array.isArray(timestamps) || timestamps.length === 0) return null;
     const zoomedBounds = typeof chart.getZoomedScaleBounds === 'function'
         ? chart.getZoomedScaleBounds()
@@ -103,42 +101,21 @@ function metricViewportFromChart(chart, timestamps, mode = 'fixed', pinned = fal
     return {
         start: timestamps[minIndex],
         end: timestamps[maxIndex],
-        mode,
-        pinned,
-        minOffset: lastIndex - minIndex,
-        maxOffset: lastIndex - maxIndex
+        dataEnd: timestamps[lastIndex]
     };
 }
 
-function rememberMetricViewport(canvasId, chart, timestamps, mode = 'fixed', pinned = false) {
-    const viewport = metricViewportFromChart(chart, timestamps, mode, pinned);
-    if (viewport) {
-        metricViewportState[canvasId] = viewport;
-    } else {
-        delete metricViewportState[canvasId];
-    }
-}
-
-function metricZoomOptions(canvasId, timestamps) {
+function metricZoomOptions() {
     return {
         zoom: {
             wheel: { enabled: true },
             pinch: { enabled: true },
             drag: { enabled: true },
-            mode: 'x',
-            onZoom: ({ trigger }) => { metricZoomTriggers[canvasId] = trigger || 'zoom'; },
-            onZoomComplete: ({ chart }) => {
-                const trigger = metricZoomTriggers[canvasId] || 'zoom';
-                delete metricZoomTriggers[canvasId];
-                const existing = metricViewportState[canvasId];
-                const pinned = trigger === 'drag' || Boolean(existing && existing.pinned);
-                rememberMetricViewport(canvasId, chart, timestamps, pinned ? 'fixed' : 'live', pinned);
-            }
+            mode: 'x'
         },
         pan: {
             enabled: true,
-            mode: 'x',
-            onPanComplete: ({ chart }) => rememberMetricViewport(canvasId, chart, timestamps, 'fixed', true)
+            mode: 'x'
         }
     };
 }
@@ -146,34 +123,39 @@ function metricZoomOptions(canvasId, timestamps) {
 function captureMetricViewports() {
     const viewports = {};
     managedCharts.forEach(({ chart, timestamps }, canvasId) => {
-        const existing = metricViewportState[canvasId];
-        const viewport = metricViewportFromChart(
-            chart,
-            timestamps,
-            existing && existing.mode ? existing.mode : 'fixed',
-            Boolean(existing && existing.pinned)
-        );
+        const viewport = metricViewportFromChart(chart, timestamps);
         if (viewport) viewports[canvasId] = viewport;
     });
     return viewports;
+}
+
+function shiftedMetricViewport(viewport, timestamps) {
+    if (!viewport || !Array.isArray(timestamps) || timestamps.length === 0) return null;
+    const oldStart = Date.parse(String(viewport.start));
+    const oldEnd = Date.parse(String(viewport.end));
+    const oldDataEnd = Date.parse(String(viewport.dataEnd));
+    const newDataEnd = Date.parse(String(timestamps[timestamps.length - 1]));
+    if (![oldStart, oldEnd, oldDataEnd, newDataEnd].every(Number.isFinite)) {
+        return { start: viewport.start, end: viewport.end };
+    }
+    const shift = newDataEnd - oldDataEnd;
+    return {
+        start: new Date(oldStart + shift).toISOString(),
+        end: new Date(oldEnd + shift).toISOString()
+    };
 }
 
 function restoreMetricViewport(canvasId, timestamps, viewports) {
     const viewport = viewports[canvasId];
     const entry = managedCharts.get(canvasId);
     if (!viewport || !entry || !Array.isArray(timestamps) || timestamps.length < 2) return;
+    const shifted = shiftedMetricViewport(viewport, timestamps);
+    if (!shifted) return;
     const lastIndex = timestamps.length - 1;
-    let min;
-    let max;
-    if (viewport.mode === 'live' && Number.isFinite(viewport.minOffset) && Number.isFinite(viewport.maxOffset)) {
-        min = Math.max(0, lastIndex - Math.max(0, Math.round(viewport.minOffset)));
-        max = Math.max(0, lastIndex - Math.max(0, Math.round(viewport.maxOffset)));
-    } else {
-        min = timestampIndex(timestamps, viewport.start, 0);
-        max = timestampIndex(timestamps, viewport.end, lastIndex);
-    }
+    let min = timestampIndex(timestamps, shifted.start, 0);
+    let max = timestampIndex(timestamps, shifted.end, lastIndex);
     if (max < min) [min, max] = [max, min];
-    if (max === min) max = Math.min(timestamps.length - 1, min + 1);
+    if (max === min) max = Math.min(lastIndex, min + 1);
     if (max === min) min = Math.max(0, max - 1);
     const chart = entry.chart;
     if (typeof chart.zoomScale === 'function') {
@@ -298,7 +280,7 @@ function createLineChart(canvasId, labels, datasets, unit, chartMeta, timestamps
                         }
                     }
                 },
-                zoom: metricZoomOptions(canvasId, timestamps)
+                zoom: metricZoomOptions()
             },
             scales: {
                 y: {
@@ -344,7 +326,7 @@ function createUptimeChart(chartData, viewports) {
             plugins: {
                 legend: { display: false },
                 tooltip: { callbacks: { label: function(context) { return formatUptimeSeconds(context.parsed.y); } } },
-                zoom: metricZoomOptions(canvasId, timestamps)
+                zoom: metricZoomOptions()
             },
             scales: { y: { ticks: { callback: formatUptimeSeconds } } }
         }
@@ -371,7 +353,7 @@ function createAvailabilityChart(chartData, viewports) {
             plugins: {
                 legend: { display: false },
                 tooltip: { callbacks: { label: function(context) { return context.parsed.y >= 0.5 ? detailText.online : detailText.offline; } } },
-                zoom: metricZoomOptions(canvasId, timestamps)
+                zoom: metricZoomOptions()
             },
             scales: {
                 y: {
@@ -473,9 +455,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 document.addEventListener('click', function(event) {
     if (!(event.target instanceof Element) || !event.target.closest('#reset-all-zoom')) return;
-    metricViewportState = {};
     pendingMetricViewports = {};
-    Object.keys(metricZoomTriggers).forEach((key) => delete metricZoomTriggers[key]);
     managedCharts.forEach(({ chart }) => {
         if (chart && typeof chart.resetZoom === 'function') chart.resetZoom('none');
     });
@@ -488,13 +468,12 @@ document.addEventListener('mirvmon:live-fragment-before-update', function(event)
         return;
     }
     pendingMetricViewports = captureMetricViewports();
-    metricViewportState = { ...metricViewportState, ...pendingMetricViewports };
 });
 
 document.addEventListener('mirvmon:live-fragment-updated', function(event) {
     if (!event.detail || event.detail.key !== 'server-metrics') return;
-    metricViewportState = { ...metricViewportState, ...pendingMetricViewports };
+    const viewports = pendingMetricViewports;
     pendingMetricViewports = {};
-    renderMetrics(readMetricsPayload(), metricViewportState);
+    renderMetrics(readMetricsPayload(), viewports);
 });
 </script>
