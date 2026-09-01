@@ -14,6 +14,7 @@ final class DrMaintenanceLock
     {
     }
 
+    /** @phpstan-impure */
     public function isActive(): bool
     {
         return is_file($this->markerPath());
