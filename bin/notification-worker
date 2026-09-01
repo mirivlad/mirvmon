@@ -3,6 +3,7 @@
 
 declare(strict_types=1);
 
+use App\Backup\DrMaintenanceLock;
 use App\Database\ConnectionFactory;
 use App\Notifications\NotificationDeliveryService;
 use App\Notifications\MetricChartRenderer;
@@ -76,32 +77,41 @@ if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
 $worker = null;
 $runtime = null;
 $nextPurge = 0.0;
+$maintenance = new DrMaintenanceLock(dirname(__DIR__) . '/var/dr');
 
 do {
-    try {
-        $runtime ??= createNotificationRuntime($applicationKey);
-        $processed = $runtime['worker']->runOnce($batchSize);
-        $runtime['heartbeat']->record(
-            WorkerHeartbeatRepository::NOTIFICATION_WORKER
-        );
-        if (microtime(true) >= $nextPurge) {
-            $runtime['outbox']->purge($sentRetentionDays, $deadRetentionDays);
-            $nextPurge = microtime(true) + 3600;
-        }
-    } catch (PDOException) {
-        fwrite(STDERR, "notification_worker_database_unavailable\n");
-        $worker = null;
-        $runtime = null;
-        $processed = 0;
-        if ($once) {
+    $processed = 0;
+    $lease = $maintenance->acquireShared();
+    if ($lease !== null) {
+        try {
+            $runtime ??= createNotificationRuntime($applicationKey);
+            $processed = $runtime['worker']->runOnce($batchSize);
+            $runtime['heartbeat']->record(
+                WorkerHeartbeatRepository::NOTIFICATION_WORKER
+            );
+            if (microtime(true) >= $nextPurge) {
+                $runtime['outbox']->purge($sentRetentionDays, $deadRetentionDays);
+                $nextPurge = microtime(true) + 3600;
+            }
+        } catch (PDOException) {
+            fwrite(STDERR, "notification_worker_database_unavailable\n");
+            $worker = null;
+            $runtime = null;
+            $processed = 0;
+            if ($once) {
+                $lease->release();
+                exit(1);
+            }
+        } catch (Throwable $exception) {
+            fwrite(
+                STDERR,
+                'notification_worker_failed:' . $exception::class . PHP_EOL
+            );
+            $lease->release();
             exit(1);
+        } finally {
+            $lease->release();
         }
-    } catch (Throwable $exception) {
-        fwrite(
-            STDERR,
-            'notification_worker_failed:' . $exception::class . PHP_EOL
-        );
-        exit(1);
     }
 
     if ($once) {
