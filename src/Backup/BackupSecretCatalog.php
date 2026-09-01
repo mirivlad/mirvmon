@@ -68,10 +68,76 @@ final class BackupSecretCatalog
         ];
     }
 
+    /**
+     * Validates only payload structure and bounds. It intentionally does not compare endpoint IDs
+     * with the currently running database, so it is safe to call during preflight on a clean B.
+     *
+     * @param array<string, mixed> $payload
+     * @return array{
+     *   notification:array{
+     *     smtp_password:?string,
+     *     telegram_bot_token:?string,
+     *     telegram_proxy_password:?string
+     *   },
+     *   website_endpoints:list<array{id:int,auth:?string,headers:?string}>
+     * }
+     */
+    public function validate(array $payload): array
+    {
+        if (($payload['version'] ?? null) !== self::VERSION) {
+            throw new RuntimeException('Unsupported backup secret payload version.');
+        }
+        $notification = $payload['notification'] ?? null;
+        $endpoints = $payload['website_endpoints'] ?? null;
+        if (!is_array($notification) || !is_array($endpoints) || !array_is_list($endpoints)) {
+            throw new RuntimeException('Invalid backup secret payload.');
+        }
+
+        $notificationKeys = [
+            'smtp_password',
+            'telegram_bot_token',
+            'telegram_proxy_password',
+        ];
+        if (array_keys($notification) !== $notificationKeys) {
+            throw new RuntimeException('Invalid notification secret payload.');
+        }
+        $normalizedNotification = [];
+        foreach ($notificationKeys as $key) {
+            $normalizedNotification[$key] = $this->nullableSecret($notification[$key], $key);
+        }
+
+        $seenIds = [];
+        $normalizedEndpoints = [];
+        $previousId = 0;
+        foreach ($endpoints as $endpoint) {
+            if (!is_array($endpoint) || array_keys($endpoint) !== ['id', 'auth', 'headers']) {
+                throw new RuntimeException('Invalid website endpoint secret payload.');
+            }
+            $id = $endpoint['id'];
+            if (!is_int($id) || $id < 1 || isset($seenIds[$id]) || $id <= $previousId) {
+                throw new RuntimeException('Invalid website endpoint secret identifier.');
+            }
+            $seenIds[$id] = true;
+            $previousId = $id;
+            $normalizedEndpoints[] = [
+                'id' => $id,
+                'auth' => $this->nullableSecret($endpoint['auth'], 'website auth'),
+                'headers' => $this->nullableSecret($endpoint['headers'], 'website headers'),
+            ];
+        }
+
+        return [
+            'notification' => $normalizedNotification,
+            'website_endpoints' => $normalizedEndpoints,
+        ];
+    }
+
     /** @param array<string, mixed> $payload */
     public function apply(array $payload): void
     {
-        $normalized = $this->validatePayload($payload);
+        $normalized = $this->validate($payload);
+        $this->assertRestoredEndpointSet($normalized['website_endpoints']);
+
         $ownsTransaction = !$this->pdo->inTransaction();
         if ($ownsTransaction) {
             $this->pdo->beginTransaction();
@@ -133,71 +199,17 @@ final class BackupSecretCatalog
         }
     }
 
-    /**
-     * @param array<string, mixed> $payload
-     * @return array{
-     *   notification:array{
-     *     smtp_password:?string,
-     *     telegram_bot_token:?string,
-     *     telegram_proxy_password:?string
-     *   },
-     *   website_endpoints:list<array{id:int,auth:?string,headers:?string}>
-     * }
-     */
-    private function validatePayload(array $payload): array
+    /** @param list<array{id:int,auth:?string,headers:?string}> $endpoints */
+    private function assertRestoredEndpointSet(array $endpoints): void
     {
-        if (($payload['version'] ?? null) !== self::VERSION) {
-            throw new RuntimeException('Unsupported backup secret payload version.');
-        }
-        $notification = $payload['notification'] ?? null;
-        $endpoints = $payload['website_endpoints'] ?? null;
-        if (!is_array($notification) || !is_array($endpoints) || !array_is_list($endpoints)) {
-            throw new RuntimeException('Invalid backup secret payload.');
-        }
-
-        $notificationKeys = [
-            'smtp_password',
-            'telegram_bot_token',
-            'telegram_proxy_password',
-        ];
-        if (array_keys($notification) !== $notificationKeys) {
-            throw new RuntimeException('Invalid notification secret payload.');
-        }
-        $normalizedNotification = [];
-        foreach ($notificationKeys as $key) {
-            $normalizedNotification[$key] = $this->nullableSecret($notification[$key], $key);
-        }
-
         $expectedIds = array_map(
             'intval',
             $this->pdo->query('SELECT id FROM website_endpoints ORDER BY id')?->fetchAll(PDO::FETCH_COLUMN) ?? []
         );
-        $seenIds = [];
-        $normalizedEndpoints = [];
-        foreach ($endpoints as $endpoint) {
-            if (!is_array($endpoint) || array_keys($endpoint) !== ['id', 'auth', 'headers']) {
-                throw new RuntimeException('Invalid website endpoint secret payload.');
-            }
-            $id = $endpoint['id'];
-            if (!is_int($id) || $id < 1 || isset($seenIds[$id])) {
-                throw new RuntimeException('Invalid website endpoint secret identifier.');
-            }
-            $seenIds[$id] = true;
-            $normalizedEndpoints[] = [
-                'id' => $id,
-                'auth' => $this->nullableSecret($endpoint['auth'], 'website auth'),
-                'headers' => $this->nullableSecret($endpoint['headers'], 'website headers'),
-            ];
-        }
-        $actualIds = array_map(static fn (array $row): int => $row['id'], $normalizedEndpoints);
+        $actualIds = array_map(static fn (array $row): int => $row['id'], $endpoints);
         if ($actualIds !== $expectedIds) {
             throw new RuntimeException('Backup secret payload does not match restored website endpoints.');
         }
-
-        return [
-            'notification' => $normalizedNotification,
-            'website_endpoints' => $normalizedEndpoints,
-        ];
     }
 
     private function nullableSecret(mixed $value, string $label): ?string
