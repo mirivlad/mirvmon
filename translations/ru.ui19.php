@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 return [
-    'ui19.servers.subtitle' => 'Быстрый поиск и рабочие фильтры без таблицы из отдельных полей поиска.',
+    'ui19.servers.subtitle' => 'Все серверы в системе.',
     'ui19.servers.search' => 'Поиск по серверу',
     'ui19.servers.search_placeholder' => 'Имя, адрес, описание или группа',
     'ui19.servers.group' => 'Группа',
@@ -20,7 +20,7 @@ return [
     'ui19.servers.no_matches' => 'По выбранным фильтрам серверов нет.',
     'ui19.servers.last_sample' => 'Последний sample: {time}',
     'ui19.servers.no_sample' => 'Sample ещё не получен',
-    'ui19.groups.subtitle' => 'Группы как рабочие мини-дашборды: состояние серверов и активные проблемы видны сразу.',
+    'ui19.groups.subtitle' => 'Состояние серверов по группам.',
     'ui19.groups.open' => 'Открыть группу',
     'ui19.groups.total' => 'Серверов',
     'ui19.groups.websites' => 'Сайтов',

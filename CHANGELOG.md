@@ -6,6 +6,9 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+- Fixed live server metric refresh so user zoom/pan is remembered at interaction completion and restored by timestamp after fresh samples arrive.
+- Simplified top-level page headers, aligned their icons with primary navigation, improved the agent-fleet table header spacing and removed operator-only explanatory UI noise.
+
 ## 0.5.4
 
 - Added an agent fleet overview with current/outdated/update/attention/contact summaries, version distribution, operational filtering and direct links to per-server agent management.

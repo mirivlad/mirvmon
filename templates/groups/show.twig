@@ -4,7 +4,6 @@
 {% block content %}
 <header class="app-page-header">
     <div class="app-page-header-main">
-        <p class="page-eyebrow">{{ t('groups.title') }}</p>
         <h1>
             <i class="fas {{ group.icon|default('fa-box') }}" {% if group.color %}style="color: {{ group.color }}"{% endif %} aria-hidden="true"></i>
             {{ group.name }}

@@ -12,7 +12,7 @@ return [
     'dashboard.system_health.details' => 'Diagnostics',
 
     'system.title' => 'System / MirvMon',
-    'system.subtitle' => 'Health of MirvMon itself, its database, background workers, notification queue, and monitoring host.',
+    'system.subtitle' => 'Health of MirvMon, its database, background workers, notification queue, and monitoring host.',
     'system.status.ok' => 'Healthy',
     'system.status.warning' => 'Warning',
     'system.status.critical' => 'Critical',

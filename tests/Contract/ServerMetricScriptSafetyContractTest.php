@@ -45,6 +45,10 @@ final class ServerMetricScriptSafetyContractTest extends TestCase
         self::assertStringContainsString('data-live-fragment="server-metrics"', $metrics);
         self::assertStringContainsString('data-server-metrics-payload', $metrics);
         self::assertStringContainsString('captureMetricViewports()', $script);
+        self::assertStringContainsString('metricViewportState', $script);
+        self::assertStringContainsString('onZoomComplete', $script);
+        self::assertStringContainsString('onPanComplete', $script);
+        self::assertStringContainsString('rememberMetricViewport', $script);
         self::assertStringContainsString('timestamps[minIndex]', $script);
         self::assertStringContainsString("chart.zoomScale('x', { min, max }, 'none')", $script);
         self::assertStringContainsString('metricInteractionActive()', $script);

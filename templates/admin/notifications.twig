@@ -2,10 +2,14 @@
 {% set page_title = t('notifications.title') %}
 
 {% block content %}
-<div class="row mb-4"><div class="col-12">
-    <h2><i class="fas fa-bell"></i> {{ t('notifications.title') }}</h2>
-    <p class="text-muted">{{ t('notifications.subtitle') }}</p>
+<div class="row mb-3"><div class="col-12">
+    <h2><i class="fas fa-paper-plane" aria-hidden="true"></i> {{ t('notifications.title') }}</h2>
+    <p class="text-muted mb-0">{{ t('notifications.subtitle') }}</p>
 </div></div>
+
+<div class="mb-4">
+    <a class="btn btn-outline-primary" href="/admin/notifications/queue"><i class="fas fa-list-check" aria-hidden="true"></i> {{ t('notifications.open_queue') }}</a>
+</div>
 
 <form method="post" action="/admin/notifications/save">
     {% include "partials/csrf.twig" %}
@@ -169,8 +173,4 @@
     </div>
 </form>
 
-<div class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-2">
-    <span>{{ t('notifications.queue_hint') }}</span>
-    <a class="btn btn-sm btn-outline-primary" href="/admin/notifications/queue"><i class="fas fa-list-check"></i> {{ t('notifications.open_queue') }}</a>
-</div>
 {% endblock %}

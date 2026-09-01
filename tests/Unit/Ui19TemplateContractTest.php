@@ -40,10 +40,51 @@ final class Ui19TemplateContractTest extends TestCase
         $fleet = $this->contents('templates/agents/index.twig');
         self::assertStringContainsString('fleet-summary-grid', $fleet);
         self::assertStringContainsString('/servers/{{ server.id }}?tab=agent', $fleet);
-        self::assertStringContainsString('fleet.queue_note', $fleet);
+        self::assertStringNotContainsString('fleet.queue_note', $fleet);
+        self::assertStringContainsString('text-nowrap', $fleet);
         self::assertStringContainsString('/api/agents/fleet-status', $fleet);
         self::assertStringContainsString('data-fleet-agent-row', $fleet);
         self::assertStringContainsString('window.setTimeout(poll, 5000)', $fleet);
+    }
+
+    public function testTopLevelPageHeadersMatchNavigationIconsAndStayConcise(): void
+    {
+        foreach ([
+            'templates/dashboard.twig' => 'fa-table-cells-large',
+            'templates/groups/index.twig' => 'fa-layer-group',
+            'templates/servers/index.twig' => 'fa-server',
+            'templates/agents/index.twig' => 'fa-microchip',
+            'templates/sites/index.twig' => 'fa-globe',
+            'templates/alerts/index.twig' => 'fa-triangle-exclamation',
+            'templates/admin/users.twig' => 'fa-users',
+            'templates/admin/notifications.twig' => 'fa-paper-plane',
+            'templates/admin/notification-queue.twig' => 'fa-list-check',
+            'templates/admin/audit.twig' => 'fa-clock-rotate-left',
+            'templates/admin/system.twig' => 'fa-heart-pulse',
+            'templates/admin/defaults.twig' => 'fa-sliders',
+        ] as $path => $icon) {
+            $template = $this->contents($path);
+            self::assertStringContainsString($icon, $template, $path);
+        }
+
+        foreach ([
+            'templates/dashboard.twig',
+            'templates/groups/index.twig',
+            'templates/servers/index.twig',
+            'templates/agents/index.twig',
+            'templates/sites/index.twig',
+            'templates/admin/system.twig',
+            'templates/admin/defaults.twig',
+        ] as $path) {
+            self::assertStringNotContainsString('page-eyebrow', $this->contents($path), $path);
+        }
+
+        $notifications = $this->contents('templates/admin/notifications.twig');
+        self::assertStringNotContainsString('notifications.queue_hint', $notifications);
+        self::assertLessThan(
+            strpos($notifications, '<form method="post" action="/admin/notifications/save">'),
+            strpos($notifications, 'notifications.open_queue')
+        );
     }
 
     public function testOperationalPagesUseVisibilityAwareLiveFragments(): void
