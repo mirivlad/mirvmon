@@ -29,12 +29,12 @@ final class WindowsReleaseContractTest extends TestCase
         $ci = (string) file_get_contents($root . '/.github/workflows/ci.yml');
 
         self::assertStringContainsString('FROM --platform=$BUILDPLATFORM golang:1.20.14-bookworm@sha256:', $dockerfile);
-        self::assertStringContainsString('FROM --platform=$BUILDPLATFORM golang:1.26.5-bookworm@sha256:', $dockerfile);
+        self::assertStringContainsString('FROM --platform=$BUILDPLATFORM golang:1.26.6-bookworm@sha256:', $dockerfile);
         self::assertMatchesRegularExpression(
             '/FROM --platform=\$BUILDPLATFORM golang:1\.20\.14[\s\S]*?CGO_ENABLED=0 GOOS=windows GOARCH=amd64 GOAMD64=v1[\s\S]*?windows-legacy-amd64/',
             $dockerfile
         );
         self::assertStringContainsString('go: "1.20.14"', $ci);
-        self::assertStringContainsString('go: "1.26.5"', $ci);
+        self::assertStringContainsString('go: "1.26.6"', $ci);
     }
 }
