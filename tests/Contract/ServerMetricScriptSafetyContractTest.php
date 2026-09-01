@@ -51,6 +51,8 @@ final class ServerMetricScriptSafetyContractTest extends TestCase
         self::assertStringContainsString('rememberMetricViewport', $script);
         self::assertStringContainsString('timestamps[minIndex]', $script);
         self::assertStringContainsString("chart.zoomScale('x', { min, max }, 'none')", $script);
+        self::assertStringContainsString("chart.update('none')", $script);
+        self::assertGreaterThanOrEqual(3, substr_count($script, 'animation: false'));
         self::assertStringContainsString('metricInteractionActive()', $script);
         self::assertStringContainsString('mirvmon:live-fragment-before-update', $script);
         self::assertStringContainsString('mirvmon:live-fragment-updated', $script);
