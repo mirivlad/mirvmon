@@ -92,7 +92,8 @@ final class Ui19TemplateContractTest extends TestCase
         $app = $this->contents('public/js/app.js');
         self::assertStringContainsString('X-MirvMon-Live-Fragment', $app);
         self::assertStringContainsString("document.visibilityState !== 'visible'", $app);
-        self::assertStringContainsString('current.contains(document.activeElement)', $app);
+        self::assertStringContainsString('liveFragmentHasEditableFocus(current)', $app);
+        self::assertStringContainsString("active.matches('input, select, textarea, [contenteditable=\"true\"], [contenteditable=\"\"]')", $app);
         self::assertStringContainsString('mirvmon:live-fragment-before-update', $app);
         self::assertStringContainsString('cancelable: true', $app);
         self::assertStringContainsString('mirvmon:live-fragment-updated', $app);

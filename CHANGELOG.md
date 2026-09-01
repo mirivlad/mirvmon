@@ -6,6 +6,8 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+- Keep wheel/pinch zoom in live-follow mode during automatic metric refresh while pan/drag-selected historical ranges stay pinned; live fragments now pause only for focused editable controls instead of any focused element.
+
 ## 0.5.4.2
 
 - Fixed live server-metric redraw so a preserved zoom/pan viewport is rendered immediately after automatic refresh instead of appearing only after the next pointer interaction.
