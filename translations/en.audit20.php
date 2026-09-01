@@ -52,6 +52,7 @@ return [
     'audit.event.server.services_saved' => 'Monitored services for server “{name}” were changed.',
     'audit.event.server.agent_config_saved' => 'Agent configuration for server “{name}” was changed.',
     'audit.event.server.agent_update_requested' => 'Agent update for server “{name}” to {version} was requested.',
+    'audit.event.server.agent_update_bulk_requested' => 'Bulk update was requested for {count} agents.',
     'audit.event.group.created' => 'Group “{name}” was created.',
     'audit.event.group.updated' => 'Group “{name}” was changed.',
     'audit.event.group.deleted' => 'Group “{name}” was deleted.',

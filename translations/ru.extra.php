@@ -49,6 +49,10 @@ return [
     'agent.error.target_superseded' => 'Запрошенная версия устарела. Очистите stale-состояние агента и повторите обновление.',
     'agent.error.update_failed' => 'Обновление завершилось ошибкой.',
     'agent.update.not_available' => 'Обновление агента недоступно для этого сервера.',
+    'agent.update_all_outdated' => 'Обновить все устаревшие',
+    'agent.update_all_confirm' => 'Запланировать обновление {count} агентов до {version}?',
+    'agent.update_all_result' => 'Запланировано: {scheduled}; уже обновляются: {running}; нельзя обновить автоматически: {manual}.',
+    'agent.update_all_error' => 'Не удалось запланировать массовое обновление агентов.',
 
     'platform.windows_unknown' => 'Windows · точная версия не сообщена',
     'platform.linux_unknown' => 'Linux · точная версия не сообщена',

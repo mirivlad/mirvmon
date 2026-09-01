@@ -88,6 +88,7 @@ final class Audit20ContractTest extends TestCase
             'server.thresholds.save',
             'server.services.save',
             'server.agent_update.request',
+            'server.agent_update.bulk_request',
             'group.create',
             'group.update',
             'group.delete',

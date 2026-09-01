@@ -12,6 +12,15 @@ use RuntimeException;
 
 final class AgentUpdateService
 {
+    /** @var list<string> */
+    private const ACTIVE_STATES = [
+        'pending',
+        'accepted',
+        'downloading',
+        'installing',
+        'awaiting_restart',
+    ];
+
     public function __construct(
         private readonly PDO $pdo,
         private readonly AgentUpdateRepository $commands,
@@ -80,6 +89,80 @@ final class AgentUpdateService
         }
 
         return $statuses;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $statuses
+     * @return array<string, int|string>
+     */
+    public function summarizeStatuses(array $statuses): array
+    {
+        $summary = [
+            'target_version' => $this->artifacts->version(),
+            'eligible' => 0,
+            'already_running' => 0,
+            'manual_required' => 0,
+        ];
+        foreach ($statuses as $status) {
+            $state = is_string($status['state'] ?? null) ? $status['state'] : 'unknown';
+            if (in_array($state, self::ACTIVE_STATES, true)) {
+                $summary['already_running']++;
+                continue;
+            }
+            if ($this->isBulkActionable($status)) {
+                $summary['eligible']++;
+                continue;
+            }
+            if (($status['is_outdated'] ?? null) === true) {
+                $summary['manual_required']++;
+            }
+        }
+
+        return $summary;
+    }
+
+    /** @return array<string, mixed> */
+    public function requestAllOutdated(?int $requestedBy): array
+    {
+        $serverIds = $this->allServerIds();
+        $statuses = $this->statusesForServers($serverIds);
+        $result = [
+            'target_version' => $this->artifacts->version(),
+            'scheduled' => 0,
+            'already_running' => 0,
+            'manual_required' => 0,
+            'scheduled_server_ids' => [],
+        ];
+
+        foreach ($statuses as $serverId => $status) {
+            $state = is_string($status['state'] ?? null) ? $status['state'] : 'unknown';
+            if (in_array($state, self::ACTIVE_STATES, true)) {
+                $result['already_running']++;
+                continue;
+            }
+            if (!$this->isBulkActionable($status)) {
+                if (($status['is_outdated'] ?? null) === true) {
+                    $result['manual_required']++;
+                }
+                continue;
+            }
+
+            try {
+                $this->request((int) $serverId, $requestedBy);
+                $result['scheduled']++;
+                $result['scheduled_server_ids'][] = (int) $serverId;
+            } catch (InvalidArgumentException) {
+                $fresh = $this->statusForServer((int) $serverId);
+                $freshState = is_string($fresh['state'] ?? null) ? $fresh['state'] : 'unknown';
+                if (in_array($freshState, self::ACTIVE_STATES, true)) {
+                    $result['already_running']++;
+                } elseif (($fresh['is_outdated'] ?? null) === true) {
+                    $result['manual_required']++;
+                }
+            }
+        }
+
+        return $result;
     }
 
     /**
@@ -207,6 +290,24 @@ final class AgentUpdateService
         }
 
         return $this->commands->advance($commandId, (int) $serverId, $state);
+    }
+
+    /** @return list<int> */
+    private function allServerIds(): array
+    {
+        $statement = $this->pdo->query('SELECT id FROM servers ORDER BY id');
+        if ($statement === false) {
+            return [];
+        }
+
+        return array_map('intval', $statement->fetchAll(PDO::FETCH_COLUMN));
+    }
+
+    /** @param array<string, mixed> $status */
+    private function isBulkActionable(array $status): bool
+    {
+        return ($status['can_update'] ?? false) === true
+            && in_array($status['state'] ?? null, ['update_available', 'failed'], true);
     }
 
     private function artifactExists(string $key): bool

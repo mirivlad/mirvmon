@@ -107,8 +107,11 @@ notifications. Запоздалый допустимый sample записыва
 
 - первый capable release — `v0.4.3`; старые версии требуют одно ручное
   обновление установщиком;
-- admin создаёт команду через CSRF-protected
+- admin создаёт одиночную команду через CSRF-protected
   `POST /servers/{id}/agent/update`;
+- массовое действие `POST /servers/agents/update-outdated` не вводит отдельный
+  rollout: оно повторяет тот же request flow только для устаревших compatible
+  `self_update_v1` agents, пропуская active/current/manual-only состояния;
 - агент получает её только через outbound authenticated config poll и сообщает
   прогресс в `POST /api/v1/agent/update/{command}/status`;
 - command schema не допускает arbitrary URL, path или executable text;

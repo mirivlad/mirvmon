@@ -6,6 +6,7 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+- Added administrator bulk action **Update all outdated** that reuses the existing per-agent self-update flow, skips active/current/manual-only agents, reports scheduled/running/manual counts and keeps the existing outbound polling protocol unchanged.
 - Updated the modern native-agent toolchain to Go 1.26.6 while preserving the intentional Go 1.20.14 compatibility build for legacy Windows.
 - Automated GitHub Release publication from validated release notes and the
   existing tag-driven image pipeline.

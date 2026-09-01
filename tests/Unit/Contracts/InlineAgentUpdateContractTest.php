@@ -24,6 +24,8 @@ final class InlineAgentUpdateContractTest extends TestCase
         self::assertStringContainsString('value="outdated"', $template);
         self::assertStringContainsString("t('servers.filter.agent.outdated')", $template);
         self::assertStringContainsString('data-agent-update-button', $template);
+        self::assertStringContainsString('data-agent-bulk-update-form', $template);
+        self::assertStringContainsString('/servers/agents/update-outdated', $template);
         self::assertStringContainsString('/api/agent-updates/status?ids=', $template);
         self::assertStringContainsString('trackedServerIds', $template);
         self::assertStringContainsString('data-server-search', $template);
@@ -31,6 +33,9 @@ final class InlineAgentUpdateContractTest extends TestCase
         self::assertStringContainsString('data-server-status-filter', $template);
         self::assertStringContainsString('applyFilters();', $template);
         self::assertStringContainsString("'/api/agent-updates/status'", $factory);
+        self::assertStringContainsString("'/servers/agents/update-outdated'", $factory);
+        self::assertStringContainsString('function requestAllOutdated(', $controller);
+        self::assertStringContainsString('function requestAllOutdated(', $service);
         self::assertStringContainsString('function statuses(', $controller);
         self::assertStringContainsString("'is_outdated' =>", $service);
     }
