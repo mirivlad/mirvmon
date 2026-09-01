@@ -168,11 +168,11 @@ Operational UI live refresh:
 - website metrics обновляют данные раз в 30 секунд, сохраняя выбранный endpoint и
   период; server metrics используют тот же 30-секундный live refresh текущего
   server-rendered metrics fragment;
-- перед заменой server metrics fragment browser сохраняет viewport каждого Chart.js-графика;
-  wheel/pinch zoom остаётся в live-follow режиме: сохраняются масштаб и смещение
-  относительно правого края series, поэтому новые samples продолжают появляться в
-  выбранном окне; pan и drag-zoom фиксируют абсолютный исторический диапазон по
-  timestamps до `Reset zoom`; незумированный график двигается вместе со свежим period window;
+- перед заменой server metrics fragment browser сохраняет viewport каждого Chart.js-графика
+  и timestamp правого края текущей series; после получения свежих данных вычисляется
+  сдвиг правого края series, и zoom/pan viewport переносится на тот же временной delta
+  без изменения своей ширины. Поэтому любой масштаб остаётся live: график продолжает
+  двигаться вместе со свежим period window, пока `Reset zoom` только снимает масштаб;
 - replacement можно отменить через `mirvmon:live-fragment-before-update`; metrics UI
   использует это только чтобы не заменять canvas во время реально активного zoom/pan gesture;
 - audit/history, settings/forms и server services не перерисовываются автоматически:
