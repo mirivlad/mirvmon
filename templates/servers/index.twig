@@ -284,7 +284,7 @@
         retry: {{ t('agent.retry_update')|json_encode|raw }},
         requesting: {{ t('agent.state.pending')|json_encode|raw }},
         requestError: {{ t('agent.state.failed')|json_encode|raw }},
-        bulkResult: {{ t('agent.update_all_result', {scheduled: '__SCHEDULED__', running: '__RUNNING__', manual: '__MANUAL__'})|json_encode|raw }},
+        bulkProgress: {{ t('agent.update_all_progress', {completed: '__COMPLETED__', total: '__TOTAL__', pending: '__PENDING__', running: '__RUNNING__', failed: '__FAILED__', manual: '__MANUAL__'})|json_encode|raw }},
         bulkError: {{ t('agent.update_all_error')|json_encode|raw }},
         results: {{ t('ui19.servers.results', {count: '__COUNT__'})|json_encode|raw }}
     };
@@ -304,6 +304,8 @@
     const bulkCount = document.querySelector('[data-agent-bulk-update-count]');
     const bulkFeedback = document.querySelector('[data-agent-bulk-feedback]');
     let pollTimer = null;
+    let bulkOperationServerIds = new Set();
+    let bulkManualRequired = 0;
 
     function normalizedAgentFilter(value) {
         return ['current', 'outdated'].includes(value) ? value : 'all';
@@ -421,6 +423,7 @@
         control.appendChild(actionable ? createUpdateButton(row, status, meta) : createIcon(meta));
         if (activeStates.has(state)) trackedServerIds.add(row.dataset.serverId); else trackedServerIds.delete(row.dataset.serverId);
         updateBulkControl();
+        renderBulkProgress();
         applyFilters();
     }
 
@@ -438,6 +441,43 @@
         if (!(bulkFeedback instanceof HTMLElement)) return;
         bulkFeedback.className = `alert alert-${type}`;
         bulkFeedback.textContent = message;
+    }
+
+    function renderBulkProgress() {
+        if (bulkOperationServerIds.size === 0) return;
+        let completed = 0;
+        let pending = 0;
+        let running = 0;
+        let failed = 0;
+        bulkOperationServerIds.forEach((serverId) => {
+            const row = rowsById.get(String(serverId));
+            const state = row?.dataset.agentState || 'unknown';
+            if (state === 'current') {
+                completed += 1;
+            } else if (state === 'failed') {
+                failed += 1;
+            } else if (state === 'pending') {
+                pending += 1;
+            } else if (activeStates.has(state)) {
+                running += 1;
+            } else {
+                pending += 1;
+            }
+        });
+        const total = bulkOperationServerIds.size;
+        const type = failed > 0
+            ? 'danger'
+            : (pending > 0 || running > 0 ? 'info' : (bulkManualRequired > 0 ? 'warning' : 'success'));
+        showBulkFeedback(
+            text.bulkProgress
+                .replace('__COMPLETED__', String(completed))
+                .replace('__TOTAL__', String(total))
+                .replace('__PENDING__', String(pending))
+                .replace('__RUNNING__', String(running))
+                .replace('__FAILED__', String(failed))
+                .replace('__MANUAL__', String(bulkManualRequired)),
+            type
+        );
     }
 
     function renderTransient(row, iconClass, label) {
@@ -505,6 +545,9 @@
             .replace('__VERSION__', targetVersion);
         if (!window.confirm(confirmation)) return;
 
+        const activeBeforeRequest = rows
+            .filter((row) => activeStates.has(row.dataset.agentState || ''))
+            .map((row) => row.dataset.serverId);
         bulkButton.disabled = true;
         try {
             const response = await fetch(bulkForm.action, {
@@ -516,15 +559,14 @@
             if (!response.ok || !payload.result) throw new Error(payload.error || 'Bulk agent update request failed.');
             const result = payload.result;
             const scheduledIds = Array.isArray(result.scheduled_server_ids) ? result.scheduled_server_ids : [];
+            bulkOperationServerIds = new Set([
+                ...activeBeforeRequest.map(String),
+                ...scheduledIds.map(String)
+            ]);
+            bulkManualRequired = Number(result.manual_required || 0);
             await refreshStatuses(scheduledIds);
             scheduledIds.forEach((serverId) => trackedServerIds.add(String(serverId)));
-            showBulkFeedback(
-                text.bulkResult
-                    .replace('__SCHEDULED__', String(result.scheduled || 0))
-                    .replace('__RUNNING__', String(result.already_running || 0))
-                    .replace('__MANUAL__', String(result.manual_required || 0)),
-                'success'
-            );
+            renderBulkProgress();
             updateBulkControl();
             schedulePoll(1000);
         } catch (error) {

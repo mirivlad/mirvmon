@@ -6,6 +6,8 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+- Fixed bulk agent-update feedback so it follows the live polled agent states instead of remaining a stale snapshot from the moment the action was submitted.
+
 ## 0.5.3
 
 - Added administrator bulk action **Update all outdated** that reuses the existing per-agent self-update flow, skips active/current/manual-only agents, reports scheduled/running/manual counts and keeps the existing outbound polling protocol unchanged.
