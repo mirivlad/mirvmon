@@ -6,6 +6,10 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.5.4.2
+
+- Fixed live server-metric redraw so a preserved zoom/pan viewport is rendered immediately after automatic refresh instead of appearing only after the next pointer interaction.
+
 ## 0.5.4.1
 
 - Fixed live server metric refresh so user zoom/pan is remembered at interaction completion and restored by timestamp after fresh samples arrive.
