@@ -6,9 +6,19 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
-- Classify native-agent failures into operator-facing authentication, DNS, network timeout, network, TLS, server, configuration and runtime states instead of labeling every remote-config failure as an authentication error.
-- Preserve retry diagnostics for unexpected metrics HTTP responses and show classified, credential-sanitized details from `check`/`once` CLI failures.
-- Reorganized public documentation around an agent operator guide, troubleshooting, FAQ, use cases and a documentation index; historical redesign plans are no longer linked as current user documentation.
+- Automated GitHub Release publication from validated release notes and the
+  existing tag-driven image pipeline.
+
+## 0.5.2
+
+- Fixed website alert context so notifications contain the real website name.
+- Added availability charts for server offline events and suitable HTTP, assertion
+  and performance website incidents; notifications remain text-only when there is
+  not enough history to build a chart.
+- Kept threshold charts for numeric server metrics and improved alert chart
+  selection without coupling it only to `metric_*` alerts.
+- Refocused the public README and replaced legacy composite screenshots with the
+  current dashboard, server-metrics and website-metrics views.
 
 ## 0.5.1
 
@@ -17,6 +27,21 @@ Git history. Until a release tag is created, current work stays under
 - Expanded website cards with 24-hour availability, latest response time, last check time and TLS/domain expiry information when available.
 - Restored and expanded website metrics UI with Chart.js, endpoint/period selection, KPI summaries and graphs for transport availability, assertion success, TTFB and total response time.
 - Fixed multi-endpoint metrics rendering, weighted metric summaries, closed downtime interval reporting, existing credential preservation and edit-form normalization for status ranges and redirect origins.
+
+## 0.5.0
+
+- Added centralized HTTP(S) website monitoring inside the existing `app` container
+  without changing the native-agent protocol or adding another Compose service.
+- Added multiple endpoints per website with expected status ranges, redirects,
+  text assertions, headers/auth, TLS checks and response-time thresholds.
+- Added TLS certificate and domain-registration expiry checks using RDAP with a
+  bounded WHOIS fallback.
+- Added website state/read models, TimescaleDB history, incidents, maintenance
+  integration and notification delivery through the existing outbox.
+- Added website list/detail UI, overview/metrics/events/settings tabs and the
+  website metrics API.
+- Added the supervised `website-check-worker` with leased jobs and network work
+  outside long database transactions.
 
 ## 0.4.21
 

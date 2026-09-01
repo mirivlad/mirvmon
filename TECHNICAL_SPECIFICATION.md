@@ -127,6 +127,29 @@ notifications. Запоздалый допустимый sample записыва
   cleanup требуется явный retry администратора, а состояния `accepted` и далее
   автоматически не меняются.
 
+### Мониторинг сайтов
+
+- website checks выполняются централизованно внутри `app`; native agent не
+  выполняет HTTP(S)-probes;
+- production Compose не получает дополнительный service или входящий порт;
+- один сайт может содержать несколько HTTP(S) endpoints;
+- endpoint поддерживает expected status ranges, redirect policy, text assertion,
+  дополнительные headers, explicit auth, timeout и пороги TTFB/total response;
+- TLS check проверяет hostname, issuer и срок действия сертификата; self-signed
+  сертификат разрешается только явной настройкой и остаётся operator-visible;
+- domain expiry определяется через RDAP с ограниченным WHOIS fallback;
+- internal/private targets допускаются только в trusted-admin модели и проходят
+  проверки SSRF и redirect destinations;
+- response bodies и credentials не сохраняются в history;
+- current state хранится отдельно от raw history, чтобы dashboard/list views не
+  сканировали hypertable;
+- HTTP transport, assertions, performance, TLS и domain problems создают обычные
+  incidents и используют существующие maintenance/notification semantics;
+- maintenance подавляет delivery, но не скрывает факт события;
+- detail page разделяет overview, metrics, events и settings;
+- metrics включают transport availability, assertion success, TTFB и total
+  response time с периодами от часа до года.
+
 ### Алерты и уведомления
 
 - состояния `ok`, `warning`, `critical`, `offline` меняются только по явным
@@ -165,6 +188,9 @@ notifications. Запоздалый допустимый sample записыва
 ## Хранение данных
 
 - `metric_samples` и `process_snapshots` — Timescale hypertables;
+- `website_check_samples` хранит raw историю HTTP(S)-проверок;
+- `website_state` и `website_endpoint_state` являются компактными current read models;
+- website raw history хранится 30 дней, агрегированная история — не менее 365 дней;
 - `current_metric_values` — компактная последняя точка каждой server/metric
   пары для dashboard и detail summary;
 - raw/process retention — 60 дней;
@@ -223,6 +249,9 @@ Dashboard проверяется browser tests на desktop и mobile viewport.
 - первый admin создаётся только с setup token;
 - агент за NAT отправляет метрики через внешний HTTPS endpoint;
 - duplicate envelope идемпотентен;
+- website monitoring работает без отдельного Compose service и без изменения
+  agent protocol;
+- HTTP(S) endpoint failure создаёт incident и recovery через общий pipeline;
 - недоступный Telegram не увеличивает latency ingestion;
 - current status согласован на summary, cards и details;
 - proxy credentials и application secrets отсутствуют в HTTP responses/logs;
