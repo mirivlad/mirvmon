@@ -230,6 +230,12 @@ final class DisasterRecoveryRestorer
             ));
             $this->journal->advance('current_renamed');
 
+            // TimescaleDB may start a background scheduler against the restored staging
+            // database immediately after timescaledb_post_restore(). PostgreSQL refuses to
+            // rename a database while any session is attached, so quiesce staging explicitly
+            // just before the atomic name switch.
+            $this->setAllowsConnections($admin, $stagingDatabase, false);
+            $this->terminateDatabaseConnections($admin, $stagingDatabase);
             $admin->exec(sprintf(
                 'ALTER DATABASE %s RENAME TO %s',
                 $this->identifier($stagingDatabase),

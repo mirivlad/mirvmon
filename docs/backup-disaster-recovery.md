@@ -255,12 +255,14 @@ a loop. Completed recovery also invalidates B's filesystem sessions before maint
 
 Backup upload limits are route-specific; the normal small API request limit remains in place.
 Backup creation currently streams from a consistent exported PostgreSQL snapshot in the requesting
-process; moving creation itself to the DR worker is tracked as the remaining long-request cleanup
-before v0.6.0 acceptance.
+process. Restore no longer depends on the browser request, but moving backup creation itself to the
+DR worker remains the final long-request cleanup before v0.6.0 release readiness.
 
 ## Acceptance test
 
-`v0.6.0` is not complete until CI contains a real disaster-recovery integration scenario:
+CI runs `tests/Acceptance/run-backup-dr.sh` against the freshly built amd64 production image.
+It creates two real TimescaleDB databases behind one stable HTTP endpoint and uses the production
+Linux Go-agent binary, not a mocked transport. The scenario is:
 
 1. start installation A with `APP_KEY=A`;
 2. create admin/server/configuration and enroll a real native Go agent;
@@ -274,5 +276,6 @@ before v0.6.0 acceptance.
 10. point the same public test endpoint from A to B without changing the agent config/token;
 11. assert the existing agent posts a new metric successfully to the restored server identity.
 
-Negative coverage includes wrong password, corrupted backup and maintenance `503` with successful
-agent queue retry after restore.
+The same acceptance run verifies wrong-password and corrupted-backup preflight leave B unchanged,
+and forces a maintenance `503` on a real post-restore agent submission. The native agent must retain
+the envelope in its durable queue and successfully flush it after maintenance is removed.

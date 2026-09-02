@@ -144,7 +144,7 @@ jobs:
 
       - name: Validate shell and Compose
         run: |
-          shellcheck docker/*.sh
+          shellcheck docker/*.sh tests/Acceptance/*.sh
           docker compose -f docker/docker-compose.yml config --quiet
           docker compose \
             -f docker/docker-compose.yml \
@@ -166,6 +166,9 @@ jobs:
           tags: mirvmon:test
           cache-from: type=gha,scope=release-linux-amd64
           cache-to: type=gha,mode=max,scope=release-linux-amd64
+
+      - name: Full backup and disaster recovery acceptance
+        run: tests/Acceptance/run-backup-dr.sh
 
   container-arm64:
     name: Container / arm64
