@@ -184,6 +184,47 @@ final class SystemControllerTest extends TestCase
         self::assertArrayNotHasKey('password_handoff', $operation);
     }
 
+    public function testBackupPageShowsCompletedOperationAgainWithoutQueryIdentifier(): void
+    {
+        $store = $this->backupStore();
+        $created = $store->begin('history-page-password', 'mirvmon-full-history-page.mmbak');
+        self::assertIsArray($store->claimNext('controller-history-worker'));
+        file_put_contents($store->outputPath($created['id']), 'encrypted-history-page-backup');
+        $store->markSucceeded($created['id'], ['backup_id' => '33333333-3333-4333-8333-333333333333']);
+
+        $response = $this->controller->backup(
+            (new ServerRequestFactory())->createServerRequest('GET', 'https://monitor.example/admin/system/backup'),
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+        $html = (string) $response->getBody();
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertStringContainsString('Последние backup', $html);
+        self::assertStringContainsString('mirvmon-full-history-page.mmbak', $html);
+        self::assertStringContainsString('Готов', $html);
+        self::assertStringContainsString('Автоудаление', $html);
+        self::assertStringContainsString('/admin/system/backup/' . $created['id'] . '/download', $html);
+    }
+
+    public function testBackupPageKeepsRefreshingWhenPersistedHistoryContainsActiveJob(): void
+    {
+        $created = $this->backupStore()->begin('active-history-password', 'mirvmon-full-active-history.mmbak');
+
+        $response = $this->controller->backup(
+            (new ServerRequestFactory())->createServerRequest('GET', 'https://monitor.example/admin/system/backup'),
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+        $html = (string) $response->getBody();
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertStringContainsString('mirvmon-full-active-history.mmbak', $html);
+        self::assertStringContainsString('В очереди', $html);
+        self::assertStringContainsString('data-backup-auto-refresh="1"', $html);
+        self::assertStringContainsString('/admin/system/backup?backup=' . $created['id'], $html);
+    }
+
     public function testCompletedAsyncBackupCanBeDownloaded(): void
     {
         $store = $this->backupStore();

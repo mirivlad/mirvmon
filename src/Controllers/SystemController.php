@@ -94,10 +94,21 @@ final class SystemController
             }
         }
 
+        $backupOperations = $this->backupStore()->recent(10);
+        $backupOperationsActive = false;
+        foreach ($backupOperations as $operation) {
+            if (in_array($operation['status'] ?? null, ['queued', 'running'], true)) {
+                $backupOperationsActive = true;
+                break;
+            }
+        }
+
         return $this->twig->render($response, 'admin/backup.twig', [
             'title' => $this->translator->trans('backup.title'),
             'restore_operation' => $restoreOperation,
             'backup_operation' => $backupOperation,
+            'backup_operations' => $backupOperations,
+            'backup_operations_active' => $backupOperationsActive,
             'restore_max_bytes' => $this->restoreMaximumBytes(),
         ]);
     }
