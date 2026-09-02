@@ -115,7 +115,8 @@
                 <p>{{ t('backup.create.completed_text') }}</p>
                 <div class="small text-muted mb-3">
                     <code>{{ backup_operation.filename }}</code>
-                    {% if backup_operation.size is defined %} · {{ backup_operation.size }} {{ t('backup.create.bytes') }}{% endif %}
+                    {% if backup_operation.size is defined %} · {{ (backup_operation.size / 1048576)|number_format(1, '.', ' ') }} MiB{% endif %}
+                    {% if backup_operation.expires_at is defined %}<br>{{ t('backup.history.expires') }}: {{ backup_operation.expires_at|date('d.m.Y H:i:s') }}{% endif %}
                 </div>
                 <a class="btn btn-success" href="/admin/system/backup/{{ backup_operation.id }}/download">
                     <i class="fas fa-download me-1" aria-hidden="true"></i>{{ t('backup.create.download') }}
@@ -123,6 +124,56 @@
             </div>
         </section>
     {% endif %}
+{% endif %}
+
+{% if backup_operations is not empty %}
+<section class="card mb-4"{% if backup_operations_active %} data-backup-auto-refresh="1"{% endif %}>
+    <div class="card-header">
+        <h2 class="h5 mb-0"><i class="fas fa-clock-rotate-left me-2" aria-hidden="true"></i>{{ t('backup.history.title') }}</h2>
+    </div>
+    <div class="card-body">
+        <p class="text-muted">{{ t('backup.history.description') }}</p>
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead><tr>
+                    <th>{{ t('backup.history.created') }}</th>
+                    <th>{{ t('backup.history.file') }}</th>
+                    <th>{{ t('backup.history.status') }}</th>
+                    <th>{{ t('backup.history.finished') }}</th>
+                    <th>{{ t('backup.history.size') }}</th>
+                    <th>{{ t('backup.history.expires') }}</th>
+                    <th class="text-end">{{ t('backup.history.action') }}</th>
+                </tr></thead>
+                <tbody>
+                {% for operation in backup_operations %}
+                    {% set operation_status = operation.status|default('unknown') %}
+                    <tr>
+                        <td class="text-nowrap">{{ operation.created_at|date('d.m.Y H:i:s') }}</td>
+                        <td><code>{{ operation.filename }}</code></td>
+                        <td>
+                            {% if operation_status == 'succeeded' %}<span class="badge text-bg-success">{{ t('backup.history.status_succeeded') }}</span>
+                            {% elseif operation_status == 'running' %}<span class="badge text-bg-primary">{{ t('backup.history.status_running') }}</span>
+                            {% elseif operation_status == 'queued' %}<span class="badge text-bg-secondary">{{ t('backup.history.status_queued') }}</span>
+                            {% elseif operation_status == 'failed' %}<span class="badge text-bg-danger">{{ t('backup.history.status_failed') }}</span>
+                            {% else %}<span class="badge text-bg-secondary">{{ operation_status }}</span>{% endif %}
+                        </td>
+                        <td class="text-nowrap">{% if operation.finished_at is defined %}{{ operation.finished_at|date('d.m.Y H:i:s') }}{% else %}—{% endif %}</td>
+                        <td class="text-nowrap">{% if operation.size is defined %}{{ (operation.size / 1048576)|number_format(1, '.', ' ') }} MiB{% else %}—{% endif %}</td>
+                        <td class="text-nowrap">{% if operation.expires_at is defined %}{{ operation.expires_at|date('d.m.Y H:i:s') }}{% else %}—{% endif %}</td>
+                        <td class="text-end text-nowrap">
+                            {% if operation_status == 'succeeded' %}
+                                <a class="btn btn-sm btn-success" href="/admin/system/backup/{{ operation.id }}/download"><i class="fas fa-download me-1" aria-hidden="true"></i>{{ t('backup.create.download') }}</a>
+                            {% else %}
+                                <a class="btn btn-sm btn-outline-secondary" href="/admin/system/backup?backup={{ operation.id }}">{{ t('backup.history.open') }}</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
 {% endif %}
 
 {% if restore_operation %}

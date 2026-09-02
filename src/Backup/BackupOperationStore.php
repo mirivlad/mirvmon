@@ -60,6 +60,29 @@ final class BackupOperationStore
         return $this->sanitize($this->readState($id));
     }
 
+    /** @return list<array<string,mixed>> */
+    public function recent(int $limit = 10): array
+    {
+        if ($limit < 1 || $limit > 50) {
+            throw new RuntimeException('Backup operation list limit is invalid.');
+        }
+        $this->ensureRoot();
+        $this->purgeExpired();
+        $operations = [];
+        foreach ($this->operationIds() as $id) {
+            try {
+                $operations[] = $this->sanitize($this->readState($id));
+            } catch (Throwable) {
+                continue;
+            }
+        }
+        usort($operations, static function (array $left, array $right): int {
+            $created = ($right['created_at'] ?? 0) <=> ($left['created_at'] ?? 0);
+            return $created !== 0 ? $created : strcmp((string) ($right['id'] ?? ''), (string) ($left['id'] ?? ''));
+        });
+        return array_slice($operations, 0, $limit);
+    }
+
     /** @return array<string,mixed>|null */
     public function claimNext(string $workerId): ?array
     {
@@ -252,6 +275,12 @@ final class BackupOperationStore
     private function sanitize(array $state): array
     {
         unset($state['password_handoff'], $state['worker_id']);
+        if (in_array($state['status'] ?? null, ['succeeded', 'failed'], true)) {
+            $updated = $state['updated_at'] ?? null;
+            if (is_int($updated)) {
+                $state['expires_at'] = $updated + self::TERMINAL_MAX_AGE_SECONDS;
+            }
+        }
         return $state;
     }
 

@@ -6,6 +6,12 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.6.1
+
+- Fixed Backup & Disaster Recovery UI so persistent backup jobs remain visible after leaving and reopening the page instead of being discoverable only through the original `?backup=<id>` URL.
+- Added a recent-backup history with queued/running/ready/failed status, file name, created/finished timestamps, archive size, exact automatic-deletion time and download links for completed archives.
+- Kept active backup history auto-refreshing after returning to the page and exposed the existing 24-hour completed-backup retention directly in the UI.
+
 ## 0.6.0
 
 - Added encrypted full Backup & Disaster Recovery through the administrator UI, including the complete PostgreSQL/TimescaleDB database and historical monitoring data.

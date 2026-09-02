@@ -80,6 +80,23 @@ final class BackupOperationStoreTest extends TestCase
         self::assertStringNotContainsString('password_handoff', $raw);
     }
 
+    public function testRecentBackupsExposePersistentCompletedStateAndExpiration(): void
+    {
+        $created = $this->store->begin('history-password', 'mirvmon-full-history.mmbak');
+        self::assertIsArray($this->store->claimNext('worker:history'));
+        file_put_contents($this->store->outputPath($created['id']), 'encrypted-history-backup');
+        $this->store->markSucceeded($created['id'], ['backup_id' => '22222222-2222-4222-8222-222222222222']);
+
+        $recent = $this->store->recent(10);
+        self::assertCount(1, $recent);
+        self::assertSame($created['id'], $recent[0]['id']);
+        self::assertSame('succeeded', $recent[0]['status']);
+        self::assertArrayNotHasKey('password_handoff', $recent[0]);
+        self::assertIsInt($recent[0]['updated_at']);
+        self::assertSame($recent[0]['updated_at'] + 86400, $recent[0]['expires_at']);
+        self::assertSame(strlen('encrypted-history-backup'), $recent[0]['size']);
+    }
+
     public function testFailedBackupDeletesOutputAndPasswordHandoff(): void
     {
         $created = $this->store->begin('failure-password', 'mirvmon-full-test.mmbak');
