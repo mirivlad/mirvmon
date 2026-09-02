@@ -134,7 +134,47 @@ final class ServerControllerTest extends TestCase
             '0',
             (string) self::$pdo?->query('SELECT count(*) FROM installer_tokens')->fetchColumn()
         );
-        self::assertSame('Для этого агента требуется явный отзыв ключа.', $_SESSION['flash_message']);
+        self::assertSame('Новый installer нельзя выдать с текущим APP_KEY. Уже установленный агент продолжит работать; для переустановки сначала явно регенерируйте токен.', $_SESSION['flash_message']);
+        self::assertSame('warning', $_SESSION['flash_type']);
+    }
+
+    public function testRestoredAgentTokenRequiresExplicitRotationBeforeDownloadingInstallers(): void
+    {
+        $serverId = (int) self::$pdo?->query(
+            "INSERT INTO servers (name) VALUES ('restored-installer-server') RETURNING id"
+        )->fetchColumn();
+        $sourceIssuer = new AgentCredentialIssuer(self::$pdo, str_repeat('a', 32));
+        $installer = $sourceIssuer->issueInstaller($serverId);
+        $credential = $sourceIssuer->exchange($installer);
+        $originalHash = hash('sha256', $credential->token);
+
+        $response = $this->controller->installers(
+            (new ServerRequestFactory())->createServerRequest(
+                'POST',
+                'https://monitor.example/servers/' . $serverId . '/installers'
+            ),
+            (new ResponseFactory())->createResponse(),
+            ['id' => (string) $serverId]
+        );
+
+        self::assertSame(302, $response->getStatusCode());
+        self::assertSame('/servers/' . $serverId, $response->getHeaderLine('Location'));
+        self::assertSame(
+            $originalHash,
+            self::$pdo?->query(
+                'SELECT token_hash FROM agent_tokens WHERE server_id = ' . $serverId
+            )->fetchColumn()
+        );
+        self::assertSame(
+            '1',
+            (string) self::$pdo?->query(
+                'SELECT count(*) FROM installer_tokens WHERE server_id = ' . $serverId
+            )->fetchColumn()
+        );
+        self::assertSame(
+            'Новый installer нельзя выдать с текущим APP_KEY. Уже установленный агент продолжит работать; для переустановки сначала явно регенерируйте токен.',
+            $_SESSION['flash_message']
+        );
         self::assertSame('warning', $_SESSION['flash_type']);
     }
 
