@@ -44,4 +44,19 @@ final class BackupDrRuntimeContractTest extends TestCase
         self::assertStringContainsString('new DisasterRecoveryRestorer(', $worker);
         self::assertStringContainsString('recoverInterruptedCutover()', $worker);
     }
+
+    public function testBackupCreationQueuesWorkerJobAndDownloadsOnlyCompletedArchive(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $controller = (string) file_get_contents($root . '/src/Controllers/SystemController.php');
+        $worker = (string) file_get_contents($root . '/bin/dr-worker');
+        $factory = (string) file_get_contents($root . '/src/Application/AppFactory.php');
+
+        self::assertStringContainsString('$this->backupStore()->begin($password, $filename)', $controller);
+        self::assertStringNotContainsString('new FullBackupCreator(', $controller);
+        self::assertStringContainsString('new FullBackupCreator(', $worker);
+        self::assertStringContainsString('$backupStore->claimNext($workerId)', $worker);
+        self::assertStringContainsString("'/system/backup/{id}/download'", $factory);
+        self::assertStringContainsString('$this->backupStore()->download($id)', $controller);
+    }
 }

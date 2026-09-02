@@ -244,9 +244,16 @@ Restore is explicitly two-stage:
 1. upload backup + password and run preflight;
 2. show source versions/summary/warnings and require an explicit destructive Restore confirmation.
 
-Long-running restore operations use filesystem-backed operation state under `/app/var/dr` and a
-dedicated supervised `dr-worker`, so the browser request that confirms restore only queues work.
-The worker owns staging restore and database cutover. A durable `/app/var/dr/cutover.json` journal
+Long-running backup creation and restore operations use filesystem-backed operation state under
+`/app/var/dr` and a dedicated supervised `dr-worker`. Browser requests only queue work and render
+status; completed encrypted backup archives are downloaded through a separate authenticated GET.
+The temporary backup-password handoff stored in job state is itself encrypted with the current
+installation `APP_KEY` and is removed as soon as the job succeeds or fails. This handoff is only a
+local worker-queue mechanism: the resulting `.mmbak` remains independently password-encrypted and
+contains no `APP_KEY`.
+
+The worker gives restore jobs priority and owns staging restore and database cutover. A durable
+`/app/var/dr/cutover.json` journal
 is written before the first destructive database rename. If the worker/container dies mid-cutover,
 the next worker instance inspects both the journal and the actual PostgreSQL database names: before
 post-cutover verification it conservatively rolls back to B; after verification it completes the
@@ -254,9 +261,11 @@ cutover. A rolled-back interrupted operation is marked failed rather than retrie
 a loop. Completed recovery also invalidates B's filesystem sessions before maintenance is released.
 
 Backup upload limits are route-specific; the normal small API request limit remains in place.
-Backup creation currently streams from a consistent exported PostgreSQL snapshot in the requesting
-process. Restore no longer depends on the browser request, but moving backup creation itself to the
-DR worker remains the final long-request cleanup before v0.6.0 release readiness.
+Backup creation uses a consistent exported PostgreSQL snapshot inside the DR worker and does not
+hold an HTTP request open while `pg_dump` or archive encryption runs. A worker restart requeues an
+interrupted backup using the encrypted password handoff and discards any incomplete output before
+starting a fresh consistent snapshot. Completed archives and terminal job status expire from the
+filesystem after a bounded retention period.
 
 ## Acceptance test
 

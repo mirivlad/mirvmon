@@ -5,12 +5,12 @@ declare(strict_types=1);
 
 use App\Backup\BackupContainer;
 use App\Backup\BackupManifest;
+use App\Backup\BackupOperationStore;
 use App\Backup\BackupPreflight;
 use App\Backup\BackupSecretCatalog;
 use App\Backup\DisasterRecoveryRestorer;
 use App\Backup\DrCutoverJournal;
 use App\Backup\DrMaintenanceLock;
-use App\Backup\FullBackupCreator;
 use App\Backup\PostgresBackupTool;
 use App\Database\ConnectionFactory;
 use App\Database\Migrator;
@@ -147,18 +147,21 @@ try {
     $sourceToken = tokenRow($pdoA, $serverId);
 
     $envA = databaseEnvironment($dbA, $dbHost, $dbPort, $dbUser, $dbPassword);
-    $backupPath = $root . '/full.mmbak';
-    echo "[dr-acceptance] create full encrypted backup from A\n";
-    $creator = new FullBackupCreator(
-        $pdoA,
-        new BackupSecretCatalog($pdoA, $cipherA),
-        new BackupManifest($pdoA, $migrations, 'acceptance-a', 'acceptance-a-commit'),
-        new PostgresBackupTool($envA),
-        new BackupContainer(),
-        $root . '/backup-work'
+    echo "[dr-acceptance] queue full encrypted backup on DR worker\n";
+    $backupStore = new BackupOperationStore(
+        $appRoot . '/var/dr/backup-operations',
+        new SecretCipher($keyABytes)
     );
-    $manifest = $creator->create($backupPath, $password);
-    assertTrue(is_file($backupPath) && filesize($backupPath) > 0, 'Encrypted full backup was not created.');
+    $backupOperation = $backupStore->begin($password, 'acceptance-full.mmbak');
+    $backupOperationId = $backupOperation['id'];
+    runDrWorkerOnce($appRoot, $envA, $keyA);
+    $completedBackup = $backupStore->operation($backupOperationId);
+    assertSame('succeeded', $completedBackup['status'] ?? null, 'DR worker did not complete queued backup.');
+    $download = $backupStore->download($backupOperationId);
+    $backupPath = $download['path'] ?? null;
+    $manifest = $download['manifest'] ?? null;
+    assertTrue(is_string($backupPath) && is_file($backupPath) && filesize($backupPath) > 0, 'Encrypted full backup was not created.');
+    assertTrue(is_array($manifest), 'Completed async backup is missing its manifest.');
 
     $envB = databaseEnvironment($dbB, $dbHost, $dbPort, $dbUser, $dbPassword);
     $preflight = new BackupPreflight(
@@ -286,6 +289,39 @@ try {
 }
 
 exit($exitCode);
+
+/** @param array<string,string> $database */
+function runDrWorkerOnce(string $appRoot, array $database, string $appKey): void
+{
+    $environment = array_merge($_ENV, $database, [
+        'APP_KEY' => $appKey,
+        'APP_VERSION' => 'acceptance-a',
+        'DR_WORKER_ONCE' => '1',
+        'DR_WORKER_INTERVAL' => '1',
+    ]);
+    $descriptors = [
+        0 => ['pipe', 'r'],
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w'],
+    ];
+    $process = proc_open([$appRoot . '/bin/dr-worker'], $descriptors, $pipes, $appRoot, $environment, [
+        'bypass_shell' => true,
+    ]);
+    if (!is_resource($process)) {
+        throw new RuntimeException('Cannot start one-shot DR worker.');
+    }
+    fclose($pipes[0]);
+    $stdout = stream_get_contents($pipes[1]);
+    $stderr = stream_get_contents($pipes[2]);
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+    $code = proc_close($process);
+    if ($code !== 0) {
+        throw new RuntimeException(
+            'One-shot DR worker failed with exit ' . $code . ': ' . trim((string) $stderr . "\n" . (string) $stdout)
+        );
+    }
+}
 
 function requiredEnvironment(string $name): string
 {

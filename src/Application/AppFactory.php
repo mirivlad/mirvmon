@@ -164,6 +164,7 @@ final class AppFactory
             $group->post('/system/host', self::controller($container, SystemController::class, 'saveHost'));
             $group->get('/system/backup', self::controller($container, SystemController::class, 'backup'));
             $group->post('/system/backup/create', self::controller($container, SystemController::class, 'createBackup'));
+            $group->get('/system/backup/{id}/download', self::controller($container, SystemController::class, 'downloadBackup'));
             $group->post('/system/restore/upload/start', self::controller($container, SystemController::class, 'beginRestoreUpload'));
             $group->post('/system/restore/upload/chunk', self::controller($container, SystemController::class, 'appendRestoreChunk'));
             $group->post('/system/restore/preflight', self::controller($container, SystemController::class, 'preflightRestore'));

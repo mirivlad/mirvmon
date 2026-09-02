@@ -3,11 +3,18 @@
 
 declare(strict_types=1);
 
+use App\Backup\BackupContainer;
+use App\Backup\BackupManifest;
+use App\Backup\BackupOperationStore;
+use App\Backup\BackupSecretCatalog;
 use App\Backup\DisasterRecoveryRestorer;
 use App\Backup\DrCutoverJournal;
 use App\Backup\DrMaintenanceLock;
+use App\Backup\FullBackupCreator;
 use App\Backup\PostgresBackupTool;
 use App\Backup\RestoreOperationStore;
+use App\Database\ConnectionFactory;
+use App\Security\SecretCipher;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
@@ -29,18 +36,24 @@ if ($applicationKey === false || strlen($applicationKey) !== SODIUM_CRYPTO_SECRE
 
 $database = databaseEnvironment();
 $root = dirname(__DIR__) . '/var/dr';
+$migrations = dirname(__DIR__) . '/migrations';
 $journal = new DrCutoverJournal($root);
-$store = new RestoreOperationStore($root . '/operations', restoreMaximumBytes());
+$restoreStore = new RestoreOperationStore($root . '/operations', restoreMaximumBytes());
+$backupStore = new BackupOperationStore(
+    $root . '/backup-operations',
+    new SecretCipher($applicationKey)
+);
 $restorer = new DisasterRecoveryRestorer(
     $database,
     new PostgresBackupTool($database),
     new DrMaintenanceLock($root),
     $journal,
-    dirname(__DIR__) . '/migrations',
+    $migrations,
     $applicationKey,
     dirname(__DIR__) . '/var/sessions'
 );
 $workerId = (gethostname() ?: 'mirvmon') . ':' . getmypid();
+$runOnce = getenv('DR_WORKER_ONCE') === '1';
 $running = true;
 if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
     pcntl_async_signals(true);
@@ -55,48 +68,63 @@ do {
             $recovered = $restorer->recoverInterruptedCutover();
             if ($recovered !== null) {
                 if ($recovered['outcome'] === 'completed') {
-                    $store->markSucceeded($recovered['operation_id'], $recovered['result']);
+                    $restoreStore->markSucceeded($recovered['operation_id'], $recovered['result']);
                     $restorer->acknowledgeCompletedCutover($recovered['operation_id']);
                 } else {
-                    $store->markFailed($recovered['operation_id'], 'interrupted_restore_rolled_back');
+                    $restoreStore->markFailed(
+                        $recovered['operation_id'],
+                        'interrupted_restore_rolled_back'
+                    );
                 }
             }
             $needsStartupRecovery = true;
         }
 
         if ($needsStartupRecovery) {
-            $store->requeueInterrupted();
-            $store->purgeExpired();
+            $restoreStore->requeueInterrupted();
+            $restoreStore->purgeExpired();
+            $backupStore->requeueInterrupted();
+            $backupStore->purgeExpired();
             $needsStartupRecovery = false;
         }
 
-        $operation = $store->claimNext($workerId);
-        if ($operation === null) {
-            sleepInterruptibly($interval, $running);
+        // Disaster recovery always has priority over creating a new backup.
+        $restore = $restoreStore->claimNext($workerId);
+        if (is_array($restore)) {
+            runRestore(
+                $restore,
+                $restorer,
+                $restoreStore,
+                $journal,
+                $needsStartupRecovery
+            );
+            if ($runOnce) {
+                $running = false;
+            }
             continue;
         }
 
-        $id = $operation['id'] ?? null;
-        $workspace = $operation['workspace'] ?? null;
-        $manifest = $operation['manifest'] ?? null;
-        if (!is_string($id) || !is_string($workspace) || !is_array($manifest)) {
-            throw new RuntimeException('Claimed restore operation is incomplete.');
+        $backup = $backupStore->claimNext($workerId);
+        if (is_array($backup)) {
+            runBackup(
+                $backup,
+                $backupStore,
+                $database,
+                $migrations,
+                $applicationKey,
+                $root
+            );
+            if ($runOnce) {
+                $running = false;
+            }
+            continue;
         }
 
-        try {
-            $result = $restorer->restore($id, $workspace, $manifest);
-            $store->markSucceeded($id, $result);
-            $restorer->acknowledgeCompletedCutover($id);
-        } catch (Throwable $exception) {
-            error_log('[mirvmon][dr-worker][restore] ' . $exception->getMessage());
-            if ($journal->read() === null) {
-                $store->markFailed($id, 'restore_failed');
-            } else {
-                // Preserve the workspace and running state. The next loop recovers the database
-                // shape from the cutover journal before deciding whether to retry or complete.
-                $needsStartupRecovery = true;
-            }
+        if ($runOnce) {
+            $running = false;
+            continue;
         }
+        sleepInterruptibly($interval, $running);
     } catch (Throwable $exception) {
         error_log('[mirvmon][dr-worker] ' . $exception->getMessage());
         $needsStartupRecovery = true;
@@ -104,7 +132,87 @@ do {
     }
 } while ($running);
 
-/** @return array<string, string> */
+/**
+ * @param array<string,mixed> $operation
+ */
+function runRestore(
+    array $operation,
+    DisasterRecoveryRestorer $restorer,
+    RestoreOperationStore $store,
+    DrCutoverJournal $journal,
+    bool &$needsStartupRecovery
+): void {
+    $id = $operation['id'] ?? null;
+    $workspace = $operation['workspace'] ?? null;
+    $manifest = $operation['manifest'] ?? null;
+    if (!is_string($id) || !is_string($workspace) || !is_array($manifest)) {
+        throw new RuntimeException('Claimed restore operation is incomplete.');
+    }
+
+    try {
+        $result = $restorer->restore($id, $workspace, $manifest);
+        $store->markSucceeded($id, $result);
+        $restorer->acknowledgeCompletedCutover($id);
+    } catch (Throwable $exception) {
+        error_log('[mirvmon][dr-worker][restore] ' . $exception->getMessage());
+        if ($journal->read() === null) {
+            $store->markFailed($id, 'restore_failed');
+        } else {
+            // Preserve the workspace and running state. The next loop recovers the database
+            // shape from the cutover journal before deciding whether to retry or complete.
+            $needsStartupRecovery = true;
+        }
+    }
+}
+
+/**
+ * @param array<string,mixed> $operation
+ * @param array<string,string> $database
+ */
+function runBackup(
+    array $operation,
+    BackupOperationStore $store,
+    array $database,
+    string $migrations,
+    string $applicationKey,
+    string $root
+): void {
+    $id = $operation['id'] ?? null;
+    if (!is_string($id)) {
+        throw new RuntimeException('Claimed backup operation is incomplete.');
+    }
+
+    $password = '';
+    try {
+        $password = $store->passwordForClaim($operation);
+        // Always build the object graph from a fresh connection. A prior restore may have
+        // swapped the database underneath a long-lived worker process.
+        $pdo = ConnectionFactory::connect($database);
+        $creator = new FullBackupCreator(
+            $pdo,
+            new BackupSecretCatalog($pdo, new SecretCipher($applicationKey)),
+            new BackupManifest($pdo, $migrations, applicationVersion()),
+            new PostgresBackupTool($database),
+            new BackupContainer(),
+            $store->workspaceRoot($id)
+        );
+        $manifest = $creator->create($store->outputPath($id), $password);
+        $store->markSucceeded($id, $manifest);
+    } catch (Throwable $exception) {
+        error_log('[mirvmon][dr-worker][backup] ' . $exception->getMessage());
+        try {
+            $store->markFailed($id, 'backup_failed');
+        } catch (Throwable $stateException) {
+            error_log('[mirvmon][dr-worker][backup-state] ' . $stateException->getMessage());
+        }
+    } finally {
+        if ($password !== '') {
+            sodium_memzero($password);
+        }
+    }
+}
+
+/** @return array<string,string> */
 function databaseEnvironment(): array
 {
     $result = [];
@@ -115,6 +223,12 @@ function databaseEnvironment(): array
         }
     }
     return $result;
+}
+
+function applicationVersion(): string
+{
+    $version = trim((string) (getenv('APP_VERSION') ?: 'development'));
+    return $version === '' ? 'development' : $version;
 }
 
 function restoreMaximumBytes(): int
