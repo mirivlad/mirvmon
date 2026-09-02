@@ -93,6 +93,15 @@ final class ComposeContractTest extends TestCase
         );
     }
 
+    public function testNonReleaseContainerVersionsStillMatchAgentManifestContract(): void
+    {
+        $workflow = (string) file_get_contents(dirname(__DIR__, 2) . '/.github/workflows/ci.yml');
+
+        self::assertStringContainsString('ARG APP_VERSION=v0.0.0-development', $this->dockerfile);
+        self::assertStringContainsString("|| 'v0.0.0-ci'", $workflow);
+        self::assertStringNotContainsString("|| 'ci'", $workflow);
+    }
+
     public function testNativeAgentArtifactsAreBuiltFromPinnedGoToolchains(): void
     {
         self::assertStringContainsString(

@@ -161,7 +161,7 @@ jobs:
           file: docker/Dockerfile
           platforms: linux/amd64
           build-args: |
-            APP_VERSION=${{ github.ref_type == 'tag' && github.ref_name || 'ci' }}
+            APP_VERSION=${{ github.ref_type == 'tag' && github.ref_name || 'v0.0.0-ci' }}
           load: true
           tags: mirvmon:test
           cache-from: type=gha,scope=release-linux-amd64
@@ -188,7 +188,7 @@ jobs:
           file: docker/Dockerfile
           platforms: linux/arm64
           build-args: |
-            APP_VERSION=${{ github.ref_type == 'tag' && github.ref_name || 'ci' }}
+            APP_VERSION=${{ github.ref_type == 'tag' && github.ref_name || 'v0.0.0-ci' }}
           load: true
           tags: mirvmon:test-arm64
           cache-from: type=gha,scope=release-linux-arm64
