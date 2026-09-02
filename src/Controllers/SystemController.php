@@ -6,9 +6,9 @@ namespace App\Controllers;
 
 use App\Backup\BackupContainer;
 use App\Backup\BackupManifest;
+use App\Backup\BackupOperationStore;
 use App\Backup\BackupPreflight;
 use App\Backup\BackupSecretCatalog;
-use App\Backup\FullBackupCreator;
 use App\Backup\PostgresBackupTool;
 use App\Backup\RestoreOperationStore;
 use App\I18n\Translator;
@@ -36,7 +36,8 @@ final class SystemController
         private readonly AppSettingsRepository $settings,
         private readonly SystemHealthService $health,
         private readonly Translator $translator = new Translator(),
-        ?AuditLogger $audit = null
+        ?AuditLogger $audit = null,
+        private readonly ?string $drStateRoot = null
     ) {
         $this->audit = $audit ?? new AuditLogger(new AuditLogRepository($pdo));
         TwigTranslation::register($this->twig->getEnvironment(), $this->translator);
@@ -73,19 +74,30 @@ final class SystemController
             return $this->redirect($response, '/');
         }
 
-        $operation = null;
-        $restoreId = $request->getQueryParams()['restore'] ?? null;
+        $restoreOperation = null;
+        $backupOperation = null;
+        $query = $request->getQueryParams();
+        $restoreId = $query['restore'] ?? null;
         if (is_string($restoreId) && preg_match('/^[a-f0-9]{32}$/', $restoreId) === 1) {
             try {
-                $operation = $this->restoreStore()->operation($restoreId);
+                $restoreOperation = $this->restoreStore()->operation($restoreId);
             } catch (Throwable) {
-                $operation = null;
+                $restoreOperation = null;
+            }
+        }
+        $backupId = $query['backup'] ?? null;
+        if (is_string($backupId) && preg_match('/^[a-f0-9]{32}$/', $backupId) === 1) {
+            try {
+                $backupOperation = $this->backupStore()->operation($backupId);
+            } catch (Throwable) {
+                $backupOperation = null;
             }
         }
 
         return $this->twig->render($response, 'admin/backup.twig', [
             'title' => $this->translator->trans('backup.title'),
-            'restore_operation' => $operation,
+            'restore_operation' => $restoreOperation,
+            'backup_operation' => $backupOperation,
             'restore_max_bytes' => $this->restoreMaximumBytes(),
         ]);
     }
@@ -104,63 +116,78 @@ final class SystemController
             ? $body['password_confirm']
             : '';
         if ($password !== $confirmation || strlen($password) < 8 || strlen($password) > 1024) {
+            if ($password !== '') {
+                sodium_memzero($password);
+            }
+            if ($confirmation !== '') {
+                sodium_memzero($confirmation);
+            }
             $this->flash('backup.create.password_invalid', 'error');
             return $this->redirect($response, '/admin/system/backup');
         }
 
-        @set_time_limit(0);
-        $directory = dirname(__DIR__, 2) . '/var/dr/backups';
-        if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) {
-            $this->flash('backup.create.failed', 'error');
-            return $this->redirect($response, '/admin/system/backup');
-        }
-        @chmod($directory, 0700);
-        $destination = $directory . '/backup-' . bin2hex(random_bytes(12)) . '.mmbak';
-
         try {
-            $key = $this->applicationKey();
-            $database = $this->databaseEnvironment();
-            $container = new BackupContainer();
-            $creator = new FullBackupCreator(
-                $this->pdo,
-                new BackupSecretCatalog($this->pdo, new SecretCipher($key)),
-                new BackupManifest(
-                    $this->pdo,
-                    dirname(__DIR__, 2) . '/migrations',
-                    $this->applicationVersion()
-                ),
-                new PostgresBackupTool($database),
-                $container,
-                dirname(__DIR__, 2) . '/var/dr/work'
-            );
-            $manifest = $creator->create($destination, $password);
-            $size = filesize($destination);
-            if ($size === false) {
-                throw new RuntimeException('Cannot determine backup file size.');
-            }
-            $stream = (new StreamFactory())->createStreamFromFile($destination, 'rb');
-            @unlink($destination);
-
             $filename = sprintf(
                 'mirvmon-full-%s-%s.mmbak',
                 $this->safeVersion($this->applicationVersion()),
                 gmdate('Ymd-His')
             );
+            $operation = $this->backupStore()->begin($password, $filename);
+            $id = $operation['id'] ?? null;
+            if (!is_string($id)) {
+                throw new RuntimeException('Backup operation identifier is missing.');
+            }
+            $this->flash('backup.create.queued', 'success');
+            return $this->redirect($response, '/admin/system/backup?backup=' . rawurlencode($id));
+        } catch (Throwable $exception) {
+            error_log('[mirvmon][backup][queue] ' . $exception->getMessage());
+            $this->flash('backup.create.failed', 'error');
+            return $this->redirect($response, '/admin/system/backup');
+        } finally {
+            sodium_memzero($password);
+            sodium_memzero($confirmation);
+        }
+    }
+
+    /** @param array<string, string> $args */
+    public function downloadBackup(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->isAdmin()) {
+            return $this->redirect($response, '/');
+        }
+        $id = $args['id'] ?? '';
+        if (preg_match('/^[a-f0-9]{32}$/', $id) !== 1) {
+            return $this->redirect($response, '/admin/system/backup');
+        }
+
+        try {
+            $download = $this->backupStore()->download($id);
+            $path = $download['path'] ?? null;
+            $filename = $download['filename'] ?? null;
+            $size = $download['size'] ?? null;
+            if (!is_string($path) || !is_string($filename) || !is_int($size)) {
+                throw new RuntimeException('Backup download state is incomplete.');
+            }
+            $safeFilename = preg_replace('/[^A-Za-z0-9._-]+/', '-', $filename);
+            if (!is_string($safeFilename) || $safeFilename === '') {
+                throw new RuntimeException('Backup download filename is invalid.');
+            }
+            $stream = (new StreamFactory())->createStreamFromFile($path, 'rb');
             $response = $response->withBody($stream)
                 ->withHeader('Content-Type', 'application/octet-stream')
-                ->withHeader('Content-Disposition', 'attachment; filename="' . $filename . '"')
+                ->withHeader('Content-Disposition', 'attachment; filename="' . $safeFilename . '"')
                 ->withHeader('Content-Length', (string) $size)
                 ->withHeader('Cache-Control', 'no-store')
                 ->withHeader('X-Content-Type-Options', 'nosniff');
-            if (is_string($manifest['backup_id'] ?? null)) {
+            $manifest = $download['manifest'] ?? null;
+            if (is_array($manifest) && is_string($manifest['backup_id'] ?? null)) {
                 $response = $response->withHeader('X-MirvMon-Backup-ID', $manifest['backup_id']);
             }
             return $response;
         } catch (Throwable $exception) {
-            @unlink($destination);
-            error_log('[mirvmon][backup][create] ' . $exception->getMessage());
-            $this->flash('backup.create.failed', 'error');
-            return $this->redirect($response, '/admin/system/backup');
+            error_log('[mirvmon][backup][download] ' . $exception->getMessage());
+            $this->flash('backup.create.download_unavailable', 'error');
+            return $this->redirect($response, '/admin/system/backup?backup=' . rawurlencode($id));
         }
     }
 
@@ -400,12 +427,26 @@ final class SystemController
         }
     }
 
+    private function backupStore(): BackupOperationStore
+    {
+        return new BackupOperationStore(
+            $this->drRoot() . '/backup-operations',
+            new SecretCipher($this->applicationKey())
+        );
+    }
+
     private function restoreStore(): RestoreOperationStore
     {
         return new RestoreOperationStore(
-            dirname(__DIR__, 2) . '/var/dr/operations',
+            $this->drRoot() . '/operations',
             $this->restoreMaximumBytes()
         );
+    }
+
+    private function drRoot(): string
+    {
+        $root = $this->drStateRoot ?? dirname(__DIR__, 2) . '/var/dr';
+        return rtrim($root, DIRECTORY_SEPARATOR);
     }
 
     private function restoreMaximumBytes(): int

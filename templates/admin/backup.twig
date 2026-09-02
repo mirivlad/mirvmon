@@ -85,6 +85,46 @@
     </div>
 </div>
 
+{% if backup_operation %}
+    {% set backup_status = backup_operation.status|default('unknown') %}
+    {% if backup_status in ['queued', 'running'] %}
+        <section class="card border-primary mb-4" data-backup-auto-refresh="1">
+            <div class="card-header bg-primary-subtle">
+                <h2 class="h5 mb-0"><i class="fas fa-box-archive me-2" aria-hidden="true"></i>{{ t('backup.create.running_title') }}</h2>
+            </div>
+            <div class="card-body">
+                <p class="mb-2">{{ backup_status == 'queued' ? t('backup.create.queued_text') : t('backup.create.running_text') }}</p>
+                <p class="text-muted mb-0">{{ t('backup.create.running_note') }}</p>
+            </div>
+        </section>
+    {% elseif backup_status == 'failed' %}
+        <section class="card border-danger mb-4">
+            <div class="card-header bg-danger-subtle">
+                <h2 class="h5 mb-0"><i class="fas fa-circle-xmark me-2" aria-hidden="true"></i>{{ t('backup.create.failed_title') }}</h2>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-danger mb-0">{{ t('backup.create.failed') }}</div>
+            </div>
+        </section>
+    {% elseif backup_status == 'succeeded' %}
+        <section class="card border-success mb-4">
+            <div class="card-header bg-success-subtle">
+                <h2 class="h5 mb-0"><i class="fas fa-circle-check me-2" aria-hidden="true"></i>{{ t('backup.create.completed_title') }}</h2>
+            </div>
+            <div class="card-body">
+                <p>{{ t('backup.create.completed_text') }}</p>
+                <div class="small text-muted mb-3">
+                    <code>{{ backup_operation.filename }}</code>
+                    {% if backup_operation.size is defined %} · {{ backup_operation.size }} {{ t('backup.create.bytes') }}{% endif %}
+                </div>
+                <a class="btn btn-success" href="/admin/system/backup/{{ backup_operation.id }}/download">
+                    <i class="fas fa-download me-1" aria-hidden="true"></i>{{ t('backup.create.download') }}
+                </a>
+            </div>
+        </section>
+    {% endif %}
+{% endif %}
+
 {% if restore_operation %}
     {% set restore_status = restore_operation.status|default('unknown') %}
     {% set manifest = restore_operation.manifest|default(null) %}
@@ -168,7 +208,7 @@
 
 <script nonce="__MIRVMON_CSP_NONCE__">
 (() => {
-    const autoRefresh = document.querySelector('[data-restore-auto-refresh="1"]');
+    const autoRefresh = document.querySelector('[data-restore-auto-refresh="1"], [data-backup-auto-refresh="1"]');
     if (autoRefresh) {
         window.setTimeout(() => window.location.reload(), 2000);
     }

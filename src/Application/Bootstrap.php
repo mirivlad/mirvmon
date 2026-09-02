@@ -103,6 +103,12 @@ final class Bootstrap
     /** @param array<string, mixed> $settings */
     public static function createContainer(array $settings, ?PDO $pdo = null): Container
     {
+        if (!is_string($settings['dr_root'] ?? null) || trim((string) $settings['dr_root']) === '') {
+            $settings['dr_root'] = ($settings['app_env'] ?? 'production') === 'test'
+                ? sys_get_temp_dir() . '/mirvmon-dr-test-' . getmypid()
+                : dirname(__DIR__, 2) . '/var/dr';
+        }
+
         $container = new Container();
         $pdo ??= ConnectionFactory::fromEnvironment();
         $appSettings = new AppSettingsRepository($pdo);
@@ -445,7 +451,8 @@ final class Bootstrap
                 $container->get(AppSettingsRepository::class),
                 $container->get(SystemHealthService::class),
                 $container->get(Translator::class),
-                $container->get(AuditLogger::class)
+                $container->get(AuditLogger::class),
+                (string) $settings['dr_root']
             )
         );
         $container->set(
