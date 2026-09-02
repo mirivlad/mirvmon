@@ -6,6 +6,15 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.6.0
+
+- Added encrypted full Backup & Disaster Recovery through the administrator UI, including the complete PostgreSQL/TimescaleDB database and historical monitoring data.
+- Added asynchronous backup/restore jobs handled by a supervised DR worker, read-only preflight, staging-database restore, forward migrations, post-restore normalization and crash-recoverable database cutover.
+- Added APP_KEY-independent backup encryption and application-secret re-encryption so a backup from installation A can be restored onto a fresh installation B with a different APP_KEY.
+- Preserved permanent agent credential hashes and server identities across restore so existing agents keep working unchanged; new installer issuance is guarded when the restored credential cannot be reproduced by the current APP_KEY and requires explicit token regeneration.
+- Added maintenance coordination for HTTP ingestion and background workers during cutover, session invalidation, transient-state cleanup and source-version diagnostics for failed restores.
+- Added a production-image A-to-B disaster-recovery acceptance test using a real Go agent, including wrong-password/corruption safety, maintenance queue retry and restoration from one supported schema revision behind current.
+
 ## 0.5.4.5
 
 - Added middle-mouse drag panning for server metric charts without changing live-scroll behavior.

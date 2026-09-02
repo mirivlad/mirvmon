@@ -93,7 +93,12 @@ final class BackupSecretCatalogTest extends TestCase
         self::assertSame('smtp-secret', $payload['notification']['smtp_password']);
         self::assertSame('bot-secret', $payload['notification']['telegram_bot_token']);
         self::assertSame('proxy-secret', $payload['notification']['telegram_proxy_password']);
-        self::assertSame($endpointId, $payload['website_endpoints'][0]['id']);
+        $exportedEndpoint = array_values(array_filter(
+            $payload['website_endpoints'],
+            static fn (array $row): bool => $row['id'] === $endpointId
+        ));
+        self::assertCount(1, $exportedEndpoint);
+        self::assertSame($endpointId, $exportedEndpoint[0]['id']);
 
         (new BackupSecretCatalog(self::$pdo, $cipherB))->apply($payload);
 
