@@ -204,7 +204,7 @@ final class ServerController
             'server' => $server,
             'groups' => $this->groups(),
             'has_agent_token' => $tokenGeneration !== false,
-            'requires_token_rotation' => $tokenGeneration === null,
+            'requires_token_rotation' => $this->requiresTokenRotation($serverId),
             'display_groups' => $display['groups'],
             'selected_widgets' => $display['selected'],
             'server_notification_emails' => $this->decodeStringList($server['notification_emails'] ?? '[]'),
@@ -382,7 +382,19 @@ final class ServerController
     {
         $statement = $this->pdo->prepare('SELECT token_generation FROM agent_tokens WHERE server_id = :server_id');
         $statement->execute(['server_id' => $serverId]);
-        return $statement->fetchColumn() === null;
+        $generation = $statement->fetchColumn();
+        if ($generation === false) {
+            // A server without a token can safely create its first credential on demand.
+            return false;
+        }
+        if ($generation === null) {
+            return true;
+        }
+
+        // A restored token can have a perfectly valid generation while its plaintext value was
+        // derived with the source installation APP_KEY. Existing agents still authenticate by
+        // the restored hash, but this installation must not issue an unusable new installer.
+        return !$this->credentials->canIssueInstaller($serverId);
     }
 
     /** @param array{linux: string, windows: string} $tokens */
