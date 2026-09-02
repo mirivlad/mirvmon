@@ -276,7 +276,8 @@ Linux Go-agent binary, not a mocked transport. The scenario is:
 1. start installation A with `APP_KEY=A`;
 2. create admin/server/configuration and enroll a real native Go agent;
 3. submit metrics and create history/secrets worth checking;
-4. create a password-protected full backup;
+4. move A back by one supported schema revision before creating the password-protected full backup,
+   so restore must apply a real pending forward migration;
 5. start a fresh installation B with `APP_KEY=B`, where `A != B`;
 6. create the temporary B administrator;
 7. upload/preflight/restore the backup;
@@ -286,5 +287,6 @@ Linux Go-agent binary, not a mocked transport. The scenario is:
 11. assert the existing agent posts a new metric successfully to the restored server identity.
 
 The same acceptance run verifies wrong-password and corrupted-backup preflight leave B unchanged,
+asserts the missing source migration is applied by the normal `Migrator` during staging restore,
 and forces a maintenance `503` on a real post-restore agent submission. The native agent must retain
 the envelope in its durable queue and successfully flush it after maintenance is removed.

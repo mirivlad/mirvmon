@@ -146,6 +146,17 @@ try {
     assertSame(1, scalarInt($pdoA, 'SELECT count(*) FROM website_check_samples WHERE website_id = ' . $websiteId), 'A website history is missing.');
     $sourceToken = tokenRow($pdoA, $serverId);
 
+    echo "[dr-acceptance] source backup uses one supported schema revision behind current\n";
+    $pdoA->exec('DROP TABLE website_check_schedule_cursor');
+    $migrationDelete = $pdoA->prepare('DELETE FROM schema_migrations WHERE version = :version');
+    $migrationDelete->execute(['version' => '022_website_schedule_cursor.sql']);
+    assertSame(1, $migrationDelete->rowCount(), 'Could not prepare one-version-old source schema.');
+    assertSame(
+        0,
+        scalarInt($pdoA, "SELECT count(*) FROM schema_migrations WHERE version = '022_website_schedule_cursor.sql'"),
+        'Source schema still reports the newest migration.'
+    );
+
     $envA = databaseEnvironment($dbA, $dbHost, $dbPort, $dbUser, $dbPassword);
     echo "[dr-acceptance] queue full encrypted backup on DR worker\n";
     $backupStore = new BackupOperationStore(
@@ -162,6 +173,13 @@ try {
     $manifest = $download['manifest'] ?? null;
     assertTrue(is_string($backupPath) && is_file($backupPath) && filesize($backupPath) > 0, 'Encrypted full backup was not created.');
     assertTrue(is_array($manifest), 'Completed async backup is missing its manifest.');
+    $manifestMigrations = $manifest['schema_migrations'] ?? null;
+    assertTrue(is_array($manifestMigrations), 'Backup manifest is missing migration metadata.');
+    assertSame(
+        '021_website_timeseries.sql',
+        $manifestMigrations[array_key_last($manifestMigrations)]['version'] ?? null,
+        'Acceptance backup is not actually from the intended older supported schema.'
+    );
 
     $envB = databaseEnvironment($dbB, $dbHost, $dbPort, $dbUser, $dbPassword);
     $preflight = new BackupPreflight(
@@ -231,6 +249,16 @@ try {
     assertSame(1, scalarInt($pdoB, 'SELECT count(*) FROM website_check_samples WHERE website_id = ' . $websiteId), 'Website history was not restored.');
     assertSame($sourceToken, tokenRow($pdoB, $serverId), 'Permanent agent token hash/generation changed during restore.');
     assertSame(0, scalarInt($pdoB, 'SELECT count(*) FROM installer_tokens WHERE consumed_at IS NULL'), 'Unused installer tokens were resurrected after restore.');
+    assertSame(
+        1,
+        scalarInt($pdoB, "SELECT count(*) FROM schema_migrations WHERE version = '022_website_schedule_cursor.sql'"),
+        'Restore did not apply the pending forward migration.'
+    );
+    assertSame(
+        1,
+        scalarInt($pdoB, 'SELECT count(*) FROM website_check_schedule_cursor WHERE id = 1'),
+        'Forward migration did not create and initialize the newest schema object.'
+    );
 
     $cipherB = new SecretCipher($keyBBytes);
     $restoredNotification = $pdoB->query('SELECT smtp_password_encrypted, telegram_bot_token_encrypted FROM notification_settings WHERE id = 1')->fetch();
