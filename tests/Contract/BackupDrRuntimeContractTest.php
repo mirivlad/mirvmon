@@ -45,6 +45,17 @@ final class BackupDrRuntimeContractTest extends TestCase
         self::assertStringContainsString('recoverInterruptedCutover()', $worker);
     }
 
+    public function testFailedRestoreKeepsSourceVersionsVisibleForTroubleshooting(): void
+    {
+        $template = (string) file_get_contents(dirname(__DIR__, 2) . '/templates/admin/backup.twig');
+
+        self::assertStringContainsString("restore_operation.error_code|default('restore_failed')", $template);
+        self::assertStringContainsString('failed_source.mirvmon_version', $template);
+        self::assertStringContainsString('failed_source.postgres_version', $template);
+        self::assertStringContainsString('failed_source.postgres_version_num', $template);
+        self::assertStringContainsString('failed_source.timescale_version', $template);
+    }
+
     public function testBackupCreationQueuesWorkerJobAndDownloadsOnlyCompletedArchive(): void
     {
         $root = dirname(__DIR__, 2);
