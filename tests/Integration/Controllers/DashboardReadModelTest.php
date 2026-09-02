@@ -181,7 +181,7 @@ final class DashboardReadModelTest extends TestCase
         self::assertSame(200, $detail->getStatusCode());
         self::assertStringContainsString('CPU сейчас', $detailHtml);
         self::assertStringContainsString('40%', $detailHtml);
-        self::assertStringNotContainsString('Отозвать ключ', $detailHtml);
+        self::assertStringNotContainsString('Регенерировать токен', $detailHtml);
         self::assertStringContainsString('fab fa-linux', $detailHtml);
         self::assertStringContainsString('title="Debian GNU/Linux 12"', $detailHtml);
         self::assertStringContainsString('server-status-online', $detailHtml);
@@ -199,7 +199,7 @@ final class DashboardReadModelTest extends TestCase
         self::assertSame(200, $metricsDetail->getStatusCode());
         self::assertStringContainsString('id="chart-cpu_load"', $metricsHtml);
         self::assertStringContainsString('40%', $metricsHtml);
-        self::assertStringNotContainsString('Отозвать ключ', $metricsHtml);
+        self::assertStringNotContainsString('Регенерировать токен', $metricsHtml);
 
         $servicesDetail = $detailController->show(
             $requestFactory->createServerRequest(
@@ -238,7 +238,7 @@ final class DashboardReadModelTest extends TestCase
         $agentHtml = (string) $agentDetail->getBody();
 
         self::assertSame(200, $agentDetail->getStatusCode());
-        self::assertStringContainsString('Отозвать ключ', $agentHtml);
+        self::assertStringContainsString('Регенерировать токен', $agentHtml);
         self::assertStringContainsString('?tab=agent', $agentHtml);
         self::assertStringNotContainsString('CPU сейчас', $agentHtml);
     }
