@@ -30,7 +30,36 @@ final class NotificationMessageFormatterTest extends TestCase
         self::assertStringContainsString('edge-1', $message['subject']);
         self::assertStringContainsString('cpu_percent', $message['body']);
         self::assertStringContainsString('91.25', $message['body']);
-        self::assertStringContainsString('2026-07-30T01:02:03+00:00', $message['body']);
+        self::assertStringContainsString('30.07.2026 01:02:03 UTC', $message['body']);
+    }
+
+    public function testTimesAreRenderedConsistentlyInConfiguredTimezone(): void
+    {
+        $message = (new NotificationMessageFormatter('', 'Asia/Irkutsk'))->format([
+            'event_type' => 'offline_triggered',
+            'payload' => [
+                'type' => 'offline',
+                'event' => 'triggered',
+                'server_name' => 'edge-1',
+                'event_time' => '2026-09-02T11:28:29+00:00',
+                'last_contact_at' => '2026-09-02T11:16:07+00:00',
+                'last_metrics_at' => '2026-09-02T19:15:28+08:00',
+            ],
+        ]);
+
+        self::assertStringContainsString(
+            'Время события: 02.09.2026 19:28:29 +08',
+            $message['body']
+        );
+        self::assertStringContainsString(
+            'Последний контакт: 02.09.2026 19:16:07 +08',
+            $message['body']
+        );
+        self::assertStringContainsString(
+            'Последняя метрика: 02.09.2026 19:15:28 +08',
+            $message['body']
+        );
+        self::assertStringNotContainsString('T11:28:29+00:00', $message['body']);
     }
 
     public function testRecoveryAndTestMessagesAreExplicit(): void

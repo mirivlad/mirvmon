@@ -141,7 +141,10 @@ function createNotificationRuntime(string $applicationKey): array
     );
     $delivery = new NotificationDeliveryService(
         $settings,
-        new NotificationMessageFormatter((string) getenv('PUBLIC_BASE_URL')),
+        new NotificationMessageFormatter(
+            (string) getenv('PUBLIC_BASE_URL'),
+            (string) (getenv('APP_TIMEZONE') ?: 'UTC')
+        ),
         new TelegramTransport(),
         new SmtpTransport(),
         new MetricChartRenderer($pdo)

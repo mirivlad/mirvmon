@@ -12,10 +12,17 @@ use Throwable;
 
 final class OfflineStatusWorker
 {
+    private ?DateTimeImmutable $observationResumedAt = null;
+
     public function __construct(
         private readonly PDO $pdo,
         private readonly NotificationOutboxRepository $outbox
     ) {
+    }
+
+    public function beginObservationRecovery(DateTimeImmutable $resumedAt): void
+    {
+        $this->observationResumedAt = $resumedAt;
     }
 
     public function runOnce(?DateTimeImmutable $now = null): int
@@ -32,6 +39,14 @@ final class OfflineStatusWorker
                 $lastContactAt = new DateTimeImmutable((string) $server['last_contact_at']);
                 $offline = $timeout > 0
                     && $lastContactAt <= $now->modify('-' . $timeout . ' seconds');
+                if ($offline && $this->shouldDeferOfflineDecision(
+                    $lastContactAt,
+                    $timeout,
+                    $now
+                )) {
+                    continue;
+                }
+
                 $availability->mark(
                     (int) $server['id'],
                     $offline ? 'offline' : 'online',
@@ -193,6 +208,21 @@ final class OfflineStatusWorker
             'severity' => 'critical',
             'event_time' => $now->format(DATE_ATOM),
         ];
+    }
+
+    private function shouldDeferOfflineDecision(
+        DateTimeImmutable $lastContactAt,
+        int $timeout,
+        DateTimeImmutable $now
+    ): bool {
+        if ($this->observationResumedAt === null || $timeout <= 0) {
+            return false;
+        }
+        if ($lastContactAt >= $this->observationResumedAt) {
+            return false;
+        }
+
+        return $now < $this->observationResumedAt->modify('+' . $timeout . ' seconds');
     }
 
     private function timestamp(DateTimeImmutable $timestamp): string

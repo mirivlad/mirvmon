@@ -41,7 +41,25 @@ do {
     if ($lease !== null) {
         try {
             $runtime ??= createOfflineRuntime();
-            $runtime['worker']->runOnce();
+            $now = new DateTimeImmutable();
+            if (!$runtime['startup_checked']) {
+                $lastTickAt = $runtime['heartbeat']->lastTickAt(
+                    WorkerHeartbeatRepository::OFFLINE_WORKER
+                );
+                $gapThreshold = max(
+                    WorkerHeartbeatRepository::STALE_AFTER_SECONDS,
+                    $interval * 3
+                );
+                if (
+                    $lastTickAt === null
+                    || $now->getTimestamp() - $lastTickAt->getTimestamp() > $gapThreshold
+                ) {
+                    $runtime['worker']->beginObservationRecovery($now);
+                    fwrite(STDERR, "offline_worker_observation_recovery\n");
+                }
+                $runtime['startup_checked'] = true;
+            }
+            $runtime['worker']->runOnce($now);
             $runtime['heartbeat']->record(WorkerHeartbeatRepository::OFFLINE_WORKER);
         } catch (PDOException) {
             fwrite(STDERR, "offline_worker_database_unavailable\n");
@@ -71,7 +89,7 @@ do {
 } while ($running);
 
 /**
- * @return array{worker: OfflineStatusWorker, heartbeat: WorkerHeartbeatRepository}
+ * @return array{worker: OfflineStatusWorker, heartbeat: WorkerHeartbeatRepository, startup_checked: bool}
  */
 function createOfflineRuntime(): array
 {
@@ -83,5 +101,6 @@ function createOfflineRuntime(): array
             new NotificationOutboxRepository($pdo)
         ),
         'heartbeat' => new WorkerHeartbeatRepository($pdo),
+        'startup_checked' => false,
     ];
 }
