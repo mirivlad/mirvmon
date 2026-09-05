@@ -6,6 +6,8 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.6.2
+
 - Added a supervised external-connectivity quorum probe (Cloudflare, Google and Quad9 by default). Centralized website checks pause while the quorum is lost; server offline assertions are suppressed only when the same connectivity loss coincides with a mass loss of previously observable agents. After connectivity returns, agents receive one normal offline timeout to reconnect before MirvMon can declare them offline.
 - Suppress false server offline/recovery notification storms after an offline-worker observation gap: agents that were not observable while MirvMon itself was down now get one normal per-server offline timeout to reconnect before a new offline state can be asserted.
 - Render notification event/contact/metric timestamps consistently in `APP_TIMEZONE` using a readable local date/time format, and show the server-side last agent contact that actually drives offline detection.
