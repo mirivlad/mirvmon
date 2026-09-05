@@ -7,6 +7,7 @@ namespace App\Controllers;
 use App\I18n\Translator;
 use App\I18n\TwigTranslation;
 use App\Repositories\AuditLogRepository;
+use App\Security\RolePolicy;
 use App\Services\AuditLogger;
 use App\Services\AuditRetentionService;
 use JsonException;
@@ -30,7 +31,7 @@ final class AuditController
     /** @param array<string, string> $args */
     public function index(Request $request, Response $response, array $args): Response
     {
-        if (($_SESSION['role'] ?? null) !== 'admin') {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $response->withHeader('Location', '/')->withStatus(302);
         }
 
@@ -74,7 +75,7 @@ final class AuditController
     /** @param array<string, string> $args */
     public function saveRetention(Request $request, Response $response, array $args): Response
     {
-        if (($_SESSION['role'] ?? null) !== 'admin') {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $response->withHeader('Location', '/')->withStatus(302);
         }
 

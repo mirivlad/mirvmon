@@ -37,6 +37,8 @@ Application/domain code должен оставаться переносимым
 - роли имеют явную иерархию: `user` — read-only наблюдатель, `operator` — эксплуатационные
   действия (maintenance, thresholds/services, resolve alerts, agent config), `admin` —
   структурные изменения, users/system/DR и любые agent credentials/update actions;
+- backend-решения `admin`/`operator` используют единый `RolePolicy`; route middleware и
+  defensive controller checks не содержат собственных расходящихся матриц ролей;
 
 ### Серверы и группы
 

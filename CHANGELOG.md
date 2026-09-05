@@ -6,6 +6,12 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.6.9
+
+- Centralized the `user` / `operator` / `admin` authorization semantics in one `RolePolicy` instead of duplicating string comparisons across middleware and administrative controllers.
+- Preserved the existing route matrix and controller-level defense-in-depth checks while making role validation consume the same policy contract.
+- Added focused unit coverage for the role catalog and admin/operator capability matrix.
+
 ## 0.6.8
 
 - Reworked external-connectivity quorum checks from sequential `stream_socket_client` calls into one parallel cURL-multi TCP batch with a shared wall-clock deadline. A configured 10-target/10-second probe now takes at most roughly one timeout window rather than roughly 100 seconds during a full network outage.

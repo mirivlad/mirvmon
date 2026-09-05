@@ -15,6 +15,7 @@ use App\I18n\Translator;
 use App\I18n\TwigTranslation;
 use App\Repositories\AppSettingsRepository;
 use App\Repositories\AuditLogRepository;
+use App\Security\RolePolicy;
 use App\Security\SecretCipher;
 use App\Services\AuditLogger;
 use App\Services\ConnectivitySettingsService;
@@ -47,7 +48,7 @@ final class SystemController
     /** @param array<string, string> $args */
     public function index(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->redirect($response, '/');
         }
 
@@ -60,7 +61,7 @@ final class SystemController
     /** @param array<string, string> $args */
     public function backup(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->redirect($response, '/');
         }
 
@@ -106,7 +107,7 @@ final class SystemController
     /** @param array<string, string> $args */
     public function createBackup(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->redirect($response, '/');
         }
         $body = $request->getParsedBody();
@@ -153,7 +154,7 @@ final class SystemController
     /** @param array<string, string> $args */
     public function downloadBackup(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->redirect($response, '/');
         }
         $id = $args['id'] ?? '';
@@ -195,7 +196,7 @@ final class SystemController
     /** @param array<string, string> $args */
     public function beginRestoreUpload(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->json($response, ['error' => 'forbidden'], 403);
         }
         $body = $request->getParsedBody();
@@ -222,7 +223,7 @@ final class SystemController
     /** @param array<string, string> $args */
     public function appendRestoreChunk(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->json($response, ['error' => 'forbidden'], 403);
         }
         $body = $request->getParsedBody();
@@ -257,7 +258,7 @@ final class SystemController
     /** @param array<string, string> $args */
     public function preflightRestore(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->json($response, ['error' => 'forbidden'], 403);
         }
         $body = $request->getParsedBody();
@@ -308,7 +309,7 @@ final class SystemController
     /** @param array<string, string> $args */
     public function executeRestore(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->redirect($response, '/');
         }
         $body = $request->getParsedBody();
@@ -337,7 +338,7 @@ final class SystemController
     /** @param array<string, string> $args */
     public function saveHost(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->redirect($response, '/');
         }
 
@@ -409,7 +410,7 @@ final class SystemController
     /** @param array<string, string> $args */
     public function saveConnectivity(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->redirect($response, '/');
         }
 
@@ -555,10 +556,6 @@ final class SystemController
             ->withHeader('Cache-Control', 'no-store');
     }
 
-    private function isAdmin(): bool
-    {
-        return ($_SESSION['role'] ?? null) === 'admin';
-    }
 
     private function redirect(Response $response, string $location): Response
     {
