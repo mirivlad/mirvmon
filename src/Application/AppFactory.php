@@ -160,9 +160,12 @@ final class AppFactory
             $group->get('/defaults', self::controller($container, AdminController::class, 'defaultSettings'));
             $group->post('/defaults/save', self::controller($container, AdminController::class, 'saveDefaultSettings'));
             $group->post('/language', self::controller($container, LanguageController::class, 'save'));
-            $group->get('/system', self::controller($container, SystemController::class, 'index'));
+            $group->post('/defaults/host', self::controller($container, SystemController::class, 'saveHost'));
+            $group->post('/defaults/connectivity', self::controller($container, SystemController::class, 'saveConnectivity'));
+            // Compatibility for a settings form left open before upgrading from v0.6.3.
             $group->post('/system/host', self::controller($container, SystemController::class, 'saveHost'));
             $group->post('/system/connectivity', self::controller($container, SystemController::class, 'saveConnectivity'));
+            $group->get('/system', self::controller($container, SystemController::class, 'index'));
             $group->get('/system/backup', self::controller($container, SystemController::class, 'backup'));
             $group->post('/system/backup/create', self::controller($container, SystemController::class, 'createBackup'));
             $group->get('/system/backup/{id}/download', self::controller($container, SystemController::class, 'downloadBackup'));

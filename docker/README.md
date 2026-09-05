@@ -146,7 +146,7 @@ full backup (по умолчанию 8 GiB). `WEBSITE_CHECK_LOOP_INTERVAL` за�
 website worker (1–60 секунд), `NOTIFICATION_POLL_INTERVAL` — паузу notification
 worker при пустой очереди (1–60 секунд), а `NOTIFICATION_BATCH_SIZE` — размер
 одного claim (1–100). Параметры независимой проверки внешней связности
-редактируются в **System / MirvMon**: список `host:port`, quorum, период и timeout.
+редактируются в **Настройки**: список `host:port`, quorum, период и timeout.
 `CONNECTIVITY_PROBE_TARGETS`, `CONNECTIVITY_PROBE_QUORUM`,
 `CONNECTIVITY_PROBE_TIMEOUT` и `CONNECTIVITY_CHECK_INTERVAL` остаются bootstrap
 defaults для новой/ещё не настроенной установки. По умолчанию используются

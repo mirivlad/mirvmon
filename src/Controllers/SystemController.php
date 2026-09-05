@@ -51,21 +51,9 @@ final class SystemController
             return $this->redirect($response, '/');
         }
 
-        $servers = $this->pdo->query(
-            'SELECT id, name, address, is_active FROM servers ORDER BY name, id'
-        )?->fetchAll() ?: [];
-        foreach ($servers as &$server) {
-            $server['id'] = (int) $server['id'];
-            $server['is_active'] = $this->toBool($server['is_active'] ?? false);
-        }
-        unset($server);
-
         return $this->twig->render($response, 'admin/system.twig', [
             'title' => $this->translator->trans('system.title'),
             'system' => $this->health->details(),
-            'servers' => $servers,
-            'selected_host_id' => $this->health->selectedHostId(),
-            'connectivity_settings' => (new ConnectivitySettingsService($this->settings))->current(),
         ]);
     }
 
@@ -372,7 +360,7 @@ final class SystemController
             } catch (Throwable) {
                 $this->flash('system.host.save_failed', 'error');
             }
-            return $this->redirect($response, '/admin/system');
+            return $this->redirect($response, '/admin/defaults');
         }
 
         $serverId = filter_var(
@@ -382,7 +370,7 @@ final class SystemController
         );
         if ($serverId === false) {
             $this->flash('system.host.invalid', 'error');
-            return $this->redirect($response, '/admin/system');
+            return $this->redirect($response, '/admin/defaults');
         }
 
         try {
@@ -393,11 +381,11 @@ final class SystemController
             $server = $statement->fetch();
             if (!is_array($server)) {
                 $this->flash('system.host.not_found', 'error');
-                return $this->redirect($response, '/admin/system');
+                return $this->redirect($response, '/admin/defaults');
             }
             if (!$this->toBool($server['is_active'] ?? false)) {
                 $this->flash('system.host.inactive', 'error');
-                return $this->redirect($response, '/admin/system');
+                return $this->redirect($response, '/admin/defaults');
             }
 
             $this->settings->set(SystemHealthService::HOST_SETTING, $serverId);
@@ -415,7 +403,7 @@ final class SystemController
             $this->flash('system.host.save_failed', 'error');
         }
 
-        return $this->redirect($response, '/admin/system');
+        return $this->redirect($response, '/admin/defaults');
     }
 
     /** @param array<string, string> $args */
@@ -459,7 +447,7 @@ final class SystemController
             $this->flash('system.connectivity.save_failed', 'error');
         }
 
-        return $this->redirect($response, '/admin/system');
+        return $this->redirect($response, '/admin/defaults');
     }
 
     /** @param array<string, mixed> $metadata */

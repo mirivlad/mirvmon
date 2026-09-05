@@ -255,6 +255,8 @@ return [
     'settings.language.save' => 'Save language',
     'settings.language.saved' => 'Interface language changed',
     'settings.language.invalid' => 'Unsupported language selected',
+    'settings.mirvmon.title' => 'MirvMon',
+    'settings.mirvmon.subtitle' => 'Settings for the monitoring server itself and its external connectivity checks.',
     'settings.defaults.title' => 'Default parameters',
     'settings.defaults.subtitle' => 'These values are applied to new servers and unset thresholds.',
     'settings.defaults.offline.title' => 'Agent availability',
