@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Middlewares;
 
+use App\Security\RolePolicy;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -20,7 +21,7 @@ final class OperatorMiddleware implements MiddlewareInterface
         ServerRequestInterface $request,
         RequestHandlerInterface $handler
     ): ResponseInterface {
-        if (in_array($_SESSION['role'] ?? null, ['admin', 'operator'], true)) {
+        if (RolePolicy::canOperate($_SESSION['role'] ?? null)) {
             return $handler->handle($request);
         }
 

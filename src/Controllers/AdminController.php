@@ -10,6 +10,7 @@ use App\Repositories\AppSettingsRepository;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\NotificationSettingsRepository;
 use App\Repositories\WorkerHeartbeatRepository;
+use App\Security\RolePolicy;
 use App\Services\ConnectivitySettingsService;
 use App\Services\SystemHealthService;
 use DateTimeImmutable;
@@ -38,7 +39,7 @@ final class AdminController
     /** @param array<string, string> $args */
     public function usersList(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->redirect($response, '/');
         }
         $users = $this->pdo->query(
@@ -66,7 +67,7 @@ final class AdminController
     /** @param array<string, string> $args */
     public function saveUser(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->redirect($response, '/');
         }
         $body = $request->getParsedBody();
@@ -111,7 +112,7 @@ final class AdminController
     /** @param array<string, string> $args */
     public function deleteUser(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->redirect($response, '/');
         }
         $userId = $this->positiveInteger($args['id'] ?? null);
@@ -133,7 +134,7 @@ final class AdminController
             if (!is_array($user)) {
                 throw new InvalidArgumentException($this->translator->trans('admin.user.not_found'));
             }
-            if ($user['role'] === 'admin' && $this->administratorCount() <= 1) {
+            if ($user['role'] === RolePolicy::ADMIN && $this->administratorCount() <= 1) {
                 throw new InvalidArgumentException($this->translator->trans('admin.user.delete_last_admin'));
             }
             $delete = $this->pdo->prepare('DELETE FROM users WHERE id = :id');
@@ -156,7 +157,7 @@ final class AdminController
     /** @param array<string, string> $args */
     public function notificationSettings(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->redirect($response, '/');
         }
         return $this->twig->render($response, 'admin/notifications.twig', [
@@ -168,7 +169,7 @@ final class AdminController
     /** @param array<string, string> $args */
     public function saveNotificationSettings(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->redirect($response, '/');
         }
         $body = $request->getParsedBody();
@@ -189,7 +190,7 @@ final class AdminController
     /** @param array<string, string> $args */
     public function notificationQueue(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->redirect($response, '/');
         }
         $query = $request->getQueryParams();
@@ -213,7 +214,7 @@ final class AdminController
     /** @param array<string, string> $args */
     public function retryNotificationQueue(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->redirect($response, '/');
         }
         $body = $request->getParsedBody();
@@ -233,7 +234,7 @@ final class AdminController
     /** @param array<string, string> $args */
     public function retryNotificationJob(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->redirect($response, '/');
         }
         $body = $request->getParsedBody();
@@ -258,7 +259,7 @@ final class AdminController
     /** @param array<string, string> $args */
     public function deleteNotificationJob(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->redirect($response, '/');
         }
         $body = $request->getParsedBody();
@@ -283,7 +284,7 @@ final class AdminController
     /** @param array<string, string> $args */
     public function deleteNotificationQueue(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->redirect($response, '/');
         }
         $body = $request->getParsedBody();
@@ -313,7 +314,7 @@ final class AdminController
     /** @param array<string, string> $args */
     public function testNotification(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->redirect($response, '/');
         }
         $body = $request->getParsedBody();
@@ -347,7 +348,7 @@ final class AdminController
     /** @param array<string, string> $args */
     public function defaultSettings(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->redirect($response, '/');
         }
         $statement = $this->pdo->query(
@@ -407,7 +408,7 @@ final class AdminController
     /** @param array<string, string> $args */
     public function saveDefaultSettings(Request $request, Response $response, array $args): Response
     {
-        if (!$this->isAdmin()) {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
             return $this->redirect($response, '/');
         }
         $body = $request->getParsedBody();
@@ -471,7 +472,7 @@ final class AdminController
             throw new InvalidArgumentException($this->translator->trans('admin.user.validation.new_password_short'));
         }
         $role = $body['role'] ?? 'user';
-        if (!is_string($role) || !in_array($role, ['admin', 'operator', 'user'], true)) {
+        if (!RolePolicy::isKnown($role)) {
             throw new InvalidArgumentException($this->translator->trans('admin.user.validation.role'));
         }
         $telegramChatId = $this->optionalString($body['telegram_chat_id'] ?? null, 100);
@@ -516,10 +517,10 @@ final class AdminController
         if ($currentRole === false) {
             throw new InvalidArgumentException($this->translator->trans('admin.user.not_found'));
         }
-        if ($input['user_id'] === (int) ($_SESSION['user_id'] ?? 0) && $input['role'] !== 'admin') {
+        if ($input['user_id'] === (int) ($_SESSION['user_id'] ?? 0) && $input['role'] !== RolePolicy::ADMIN) {
             throw new InvalidArgumentException($this->translator->trans('admin.user.validation.demote_self'));
         }
-        if ($currentRole === 'admin' && $input['role'] !== 'admin' && $this->administratorCount() <= 1) {
+        if ($currentRole === RolePolicy::ADMIN && $input['role'] !== RolePolicy::ADMIN && $this->administratorCount() <= 1) {
             throw new InvalidArgumentException($this->translator->trans('admin.user.validation.demote_last_admin'));
         }
         if ($input['password'] === '') {
@@ -705,10 +706,6 @@ final class AdminController
         return $integer === false ? null : $integer;
     }
 
-    private function isAdmin(): bool
-    {
-        return ($_SESSION['role'] ?? null) === 'admin';
-    }
 
     private function flashKey(string $key, string $type): void
     {
