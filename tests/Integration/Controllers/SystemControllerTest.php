@@ -108,7 +108,7 @@ final class SystemControllerTest extends TestCase
         $this->restoreEnvironment('APP_VERSION', $this->previousAppVersion);
     }
 
-    public function testAdminPageRendersDiagnosticsAndHostSelector(): void
+    public function testAdminPageRendersDiagnosticsWithoutEditableSettings(): void
     {
         $serverId = $this->server('system-page-host');
         $heartbeats = new WorkerHeartbeatRepository(self::$pdo);
@@ -124,12 +124,10 @@ final class SystemControllerTest extends TestCase
 
         self::assertSame(200, $response->getStatusCode());
         self::assertStringContainsString('Система / MirvMon', $html);
-        self::assertStringContainsString('system-page-host', $html);
         self::assertStringContainsString('v0.4.16', $html);
-        self::assertStringContainsString('/admin/system/host', $html);
-        self::assertStringContainsString('/admin/system/connectivity', $html);
-        self::assertStringContainsString('one.one.one.one:443', $html);
-        self::assertStringContainsString((string) $serverId, $html);
+        self::assertStringNotContainsString('/admin/system/host', $html);
+        self::assertStringNotContainsString('/admin/system/connectivity', $html);
+        self::assertStringNotContainsString('data-connectivity-settings', $html);
     }
 
     public function testAdminCanSelectAndClearMirvMonHost(): void
@@ -145,7 +143,7 @@ final class SystemControllerTest extends TestCase
             []
         );
         self::assertSame(302, $saved->getStatusCode());
-        self::assertSame('/admin/system', $saved->getHeaderLine('Location'));
+        self::assertSame('/admin/defaults', $saved->getHeaderLine('Location'));
         self::assertSame($serverId, $this->settings->get(SystemHealthService::HOST_SETTING));
 
         $cleared = $this->controller->saveHost(
@@ -175,7 +173,7 @@ final class SystemControllerTest extends TestCase
         );
 
         self::assertSame(302, $response->getStatusCode());
-        self::assertSame('/admin/system', $response->getHeaderLine('Location'));
+        self::assertSame('/admin/defaults', $response->getHeaderLine('Location'));
         $stored = $this->settings->get(ConnectivitySettingsService::SETTING_KEY);
         self::assertIsArray($stored);
         self::assertSame(['example.net:443', '1.1.1.1:53'], $stored['targets']);

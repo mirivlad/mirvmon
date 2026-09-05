@@ -6,9 +6,12 @@ namespace App\Controllers;
 
 use App\I18n\Translator;
 use App\I18n\TwigTranslation;
+use App\Repositories\AppSettingsRepository;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\NotificationSettingsRepository;
 use App\Repositories\WorkerHeartbeatRepository;
+use App\Services\ConnectivitySettingsService;
+use App\Services\SystemHealthService;
 use DateTimeImmutable;
 use InvalidArgumentException;
 use JsonException;
@@ -381,9 +384,23 @@ final class AdminController
                 continue;
             }
         }
+        $appSettings = new AppSettingsRepository($this->pdo);
+        $servers = $this->pdo->query(
+            'SELECT id, name, address, is_active FROM servers ORDER BY name, id'
+        )?->fetchAll() ?: [];
+        foreach ($servers as &$server) {
+            $server['id'] = (int) $server['id'];
+            $server['is_active'] = filter_var($server['is_active'] ?? false, FILTER_VALIDATE_BOOL);
+        }
+        unset($server);
+        $selectedHostId = $appSettings->get(SystemHealthService::HOST_SETTING);
+
         return $this->twig->render($response, 'admin/defaults.twig', [
             'title' => $this->translator->trans('settings.defaults.title'),
             'settings' => $settings,
+            'servers' => $servers,
+            'selected_host_id' => is_int($selectedHostId) ? $selectedHostId : null,
+            'connectivity_settings' => (new ConnectivitySettingsService($appSettings))->current(),
         ]);
     }
 

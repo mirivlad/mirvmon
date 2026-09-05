@@ -41,6 +41,93 @@
 </section>
 
 <header class="mb-3">
+    <h2 class="h4 mb-1">{{ t('settings.mirvmon.title') }}</h2>
+    <p class="text-muted mb-0">{{ t('settings.mirvmon.subtitle') }}</p>
+</header>
+
+<section class="card mb-4">
+    <div class="card-header">
+        <h2 class="h5 mb-0"><i class="fas fa-server me-2" aria-hidden="true"></i>{{ t('system.host.title') }}</h2>
+    </div>
+    <div class="card-body">
+        <p class="text-muted">{{ t('system.host.subtitle') }}</p>
+        <form method="post" action="/admin/defaults/host" class="row g-3 align-items-end">
+            {% include "partials/csrf.twig" %}
+            <div class="col-lg-8">
+                <label class="form-label" for="mirvmon-host-server">{{ t('system.host.select') }}</label>
+                <select class="form-select" id="mirvmon-host-server" name="server_id">
+                    <option value="">{{ t('common.none') }}</option>
+                    {% for server in servers %}
+                        <option value="{{ server.id }}" {% if selected_host_id == server.id %}selected{% endif %} {% if not server.is_active %}disabled{% endif %}>
+                            {{ server.name }}{% if server.address %} — {{ server.address }}{% endif %}{% if not server.is_active %} ({{ t('common.disabled') }}){% endif %}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-lg-4">
+                <button class="btn btn-primary" type="submit"><i class="fas fa-floppy-disk me-1" aria-hidden="true"></i>{{ t('common.save') }}</button>
+            </div>
+        </form>
+    </div>
+</section>
+
+<section class="card mb-4" data-connectivity-settings>
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <h2 class="h5 mb-0"><i class="fas fa-tower-broadcast me-2" aria-hidden="true"></i>{{ t('system.connectivity.settings_title') }}</h2>
+        <span class="badge bg-secondary">{{ t('system.connectivity.source_' ~ connectivity_settings.source) }}</span>
+    </div>
+    <div class="card-body">
+        <p class="text-muted">{{ t('system.connectivity.settings_help') }}</p>
+        <form method="post" action="/admin/defaults/connectivity">
+            {% include "partials/csrf.twig" %}
+            <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                <label class="form-label mb-0">{{ t('system.connectivity.targets') }}</label>
+                <button class="btn btn-sm btn-outline-primary" type="button" data-connectivity-target-add>
+                    <i class="fas fa-plus me-1" aria-hidden="true"></i>{{ t('system.connectivity.add_target') }}
+                </button>
+            </div>
+            <div class="vstack gap-2 mb-3" data-connectivity-targets>
+                {% for target in connectivity_settings.targets %}
+                    <div class="input-group" data-connectivity-target-row>
+                        <input class="form-control" type="text" name="targets[]" value="{{ target }}" maxlength="270" placeholder="dns.google:443" required>
+                        <button class="btn btn-outline-danger" type="button" data-connectivity-target-remove title="{{ t('system.connectivity.remove_target') }}" aria-label="{{ t('system.connectivity.remove_target') }}">
+                            <i class="fas fa-minus" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                {% endfor %}
+            </div>
+            <template data-connectivity-target-template>
+                <div class="input-group" data-connectivity-target-row>
+                    <input class="form-control" type="text" name="targets[]" value="" maxlength="270" placeholder="example.net:443" required>
+                    <button class="btn btn-outline-danger" type="button" data-connectivity-target-remove title="{{ t('system.connectivity.remove_target') }}" aria-label="{{ t('system.connectivity.remove_target') }}">
+                        <i class="fas fa-minus" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </template>
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label" for="connectivity-quorum">{{ t('system.connectivity.quorum') }}</label>
+                    <input class="form-control" id="connectivity-quorum" type="number" name="quorum" min="1" max="{{ connectivity_settings.targets|length }}" value="{{ connectivity_settings.quorum }}" required>
+                    <div class="form-text">{{ t('system.connectivity.quorum_help') }}</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="connectivity-interval">{{ t('system.connectivity.interval') }}</label>
+                    <input class="form-control" id="connectivity-interval" type="number" name="interval_seconds" min="5" max="300" value="{{ connectivity_settings.interval_seconds }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="connectivity-timeout">{{ t('system.connectivity.timeout') }}</label>
+                    <input class="form-control" id="connectivity-timeout" type="number" name="timeout_seconds" min="0.1" max="10" step="0.1" value="{{ connectivity_settings.timeout_seconds }}" required>
+                </div>
+            </div>
+            <div class="form-text mt-3">{{ t('system.connectivity.target_help') }}</div>
+            <div class="d-flex justify-content-end mt-3">
+                <button class="btn btn-primary" type="submit"><i class="fas fa-floppy-disk me-1" aria-hidden="true"></i>{{ t('common.save') }}</button>
+            </div>
+        </form>
+    </div>
+</section>
+
+<header class="mb-3">
     <h2 class="h4 mb-1">{{ t('settings.defaults.title') }}</h2>
     <p class="text-muted mb-0">{{ t('settings.defaults.subtitle') }}</p>
 </header>
@@ -260,4 +347,5 @@
         <a href="/" class="btn btn-outline-secondary">{{ t('common.cancel') }}</a>
     </div>
 </form>
+<script src="/js/system-connectivity.js" defer></script>
 {% endblock %}

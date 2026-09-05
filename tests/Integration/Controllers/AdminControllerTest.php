@@ -212,6 +212,10 @@ final class AdminControllerTest extends TestCase
         self::assertStringContainsString('value="120"', $html);
         self::assertStringContainsString('value="90"', $html);
         self::assertStringContainsString('value="12"', $html);
+        self::assertStringContainsString('/admin/defaults/host', $html);
+        self::assertStringContainsString('/admin/defaults/connectivity', $html);
+        self::assertStringContainsString('one.one.one.one:443', $html);
+        self::assertStringContainsString('Настройка контроля сетевой связности', $html);
         self::assertStringNotContainsString('CRON', $html);
     }
 

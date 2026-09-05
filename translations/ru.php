@@ -255,6 +255,8 @@ return [
     'settings.language.save' => 'Сохранить язык',
     'settings.language.saved' => 'Язык интерфейса изменён',
     'settings.language.invalid' => 'Выбран неподдерживаемый язык',
+    'settings.mirvmon.title' => 'MirvMon',
+    'settings.mirvmon.subtitle' => 'Параметры самого сервера мониторинга и контроля его сетевой связности.',
     'settings.defaults.title' => 'Параметры по умолчанию',
     'settings.defaults.subtitle' => 'Эти значения применяются к новым серверам и незаполненным порогам.',
     'settings.defaults.offline.title' => 'Недоступность агента',
