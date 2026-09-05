@@ -86,9 +86,15 @@ final class ServerControllerTest extends TestCase
 
         self::assertSame(200, $response->getStatusCode());
         self::assertSame(
-            '2',
+            '1',
             (string) self::$pdo?->query(
                 'SELECT count(*) FROM installer_tokens'
+            )->fetchColumn()
+        );
+        self::assertSame(
+            '1',
+            (string) self::$pdo?->query(
+                'SELECT count(*) FROM windows_installer_download_tokens'
             )->fetchColumn()
         );
         self::assertSame(
@@ -133,6 +139,10 @@ final class ServerControllerTest extends TestCase
         self::assertSame(
             '0',
             (string) self::$pdo?->query('SELECT count(*) FROM installer_tokens')->fetchColumn()
+        );
+        self::assertSame(
+            '0',
+            (string) self::$pdo?->query('SELECT count(*) FROM windows_installer_download_tokens')->fetchColumn()
         );
         self::assertSame('Новый installer нельзя выдать с текущим APP_KEY. Уже установленный агент продолжит работать; для переустановки сначала явно регенерируйте токен.', $_SESSION['flash_message']);
         self::assertSame('warning', $_SESSION['flash_type']);

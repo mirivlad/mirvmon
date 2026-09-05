@@ -21,12 +21,12 @@ final class WindowsInstallerPackageService
 
     public function build(
         string $baseUrl,
-        string $installerCredential,
+        string $activationCredential,
         AgentArtifactCatalog $catalog
     ): WindowsInstallerPackage {
         $baseUrl = rtrim(trim($baseUrl), '/');
         new PublicUrlResolver($baseUrl);
-        if (preg_match('/^[a-f0-9]{64}$/', $installerCredential) !== 1) {
+        if (preg_match('/^[a-f0-9]{64}$/', $activationCredential) !== 1) {
             throw new RuntimeException('Invalid installer credential.');
         }
         if (!is_executable($this->compiler)) {
@@ -51,7 +51,7 @@ final class WindowsInstallerPackageService
         try {
             $this->writePrivate($payloadDirectory . '/bootstrap.json', $this->bootstrap(
                 $baseUrl,
-                $installerCredential
+                $activationCredential
             ));
             $this->copyArtifact($modern, $payloadDirectory . '/mirvmon-agent-modern.exe');
             $this->copyArtifact($legacy, $payloadDirectory . '/mirvmon-agent-legacy.exe');

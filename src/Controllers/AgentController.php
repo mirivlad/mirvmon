@@ -69,21 +69,25 @@ final class AgentController
         Response $response,
         array $args
     ): Response {
-        $installerToken = $request->getQueryParams()['token'] ?? null;
-        if (
-            !is_string($installerToken)
-            || !$this->credentials->validateInstaller($installerToken)
-        ) {
+        $downloadToken = $request->getQueryParams()['token'] ?? null;
+        if (!is_string($downloadToken)) {
+            return $this->plainError($response, 403, 'Invalid or expired installer token.');
+        }
+
+        try {
+            $activationToken = $this->credentials->redeemWindowsDownload($downloadToken);
+        } catch (Throwable) {
             return $this->plainError($response, 403, 'Invalid or expired installer token.');
         }
 
         try {
             $package = $this->windowsPackages->build(
                 $this->urlResolver->resolve($request),
-                $installerToken,
+                $activationToken,
                 ($this->artifactCatalog)()
             );
         } catch (Throwable) {
+            $this->credentials->revokeInstaller($activationToken);
             return $this->plainError($response, 400, 'Cannot build Windows installer.');
         }
 

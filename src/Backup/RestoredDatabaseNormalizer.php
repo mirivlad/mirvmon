@@ -25,11 +25,13 @@ final class RestoredDatabaseNormalizer
         try {
             $this->pdo->exec('DELETE FROM login_attempts');
             $this->pdo->exec('DELETE FROM worker_heartbeats');
-            $this->pdo->exec(
-                "UPDATE installer_tokens
-                 SET consumed_at = CURRENT_TIMESTAMP
-                 WHERE consumed_at IS NULL"
-            );
+            foreach (['installer_tokens', 'windows_installer_download_tokens'] as $table) {
+                $this->pdo->exec(
+                    'UPDATE ' . $table . '
+                     SET consumed_at = CURRENT_TIMESTAMP
+                     WHERE consumed_at IS NULL'
+                );
+            }
             $this->pdo->exec(
                 "UPDATE notification_outbox
                  SET status = 'failed',

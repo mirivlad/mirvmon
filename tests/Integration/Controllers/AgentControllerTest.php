@@ -206,12 +206,12 @@ SH
         self::assertSame(404, $forbidden->getStatusCode());
     }
 
-    public function testWindowsExeDownloadKeepsCredentialForNativeActivation(): void
+    public function testWindowsExeDownloadConsumesUrlTicketAndCreatesSeparateActivationCredential(): void
     {
-        $installerToken = $this->issuer->issueInstaller($this->serverId);
+        $downloadTicket = $this->issuer->issueWindowsDownload($this->serverId);
         $request = (new ServerRequestFactory())->createServerRequest(
             'GET',
-            'https://download.example/agent/install.exe?token=' . $installerToken
+            'https://download.example/agent/install.exe?token=' . $downloadTicket
         );
 
         $response = $this->controller->generateWindowsInstaller(
@@ -232,22 +232,56 @@ SH
         self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
         self::assertSame('no-referrer', $response->getHeaderLine('Referrer-Policy'));
         self::assertStringStartsWith('MZ', (string) $response->getBody());
-        self::assertTrue($this->issuer->validateInstaller($installerToken));
+        self::assertSame(
+            '1',
+            (string) self::$pdo?->query(
+                'SELECT count(*) FROM windows_installer_download_tokens WHERE consumed_at IS NOT NULL'
+            )->fetchColumn()
+        );
+        self::assertSame(
+            '1',
+            (string) self::$pdo?->query(
+                'SELECT count(*) FROM installer_tokens WHERE consumed_at IS NULL'
+            )->fetchColumn()
+        );
 
         $secondDownload = $this->controller->generateWindowsInstaller(
             $request,
             (new ResponseFactory())->createResponse(),
             []
         );
-        self::assertSame(200, $secondDownload->getStatusCode());
+        self::assertSame(403, $secondDownload->getStatusCode());
+    }
 
-        $this->issuer->exchange($installerToken);
-        $consumed = $this->controller->generateWindowsInstaller(
-            $request,
+    public function testFailedWindowsPackageBuildConsumesTicketAndRevokesActivationCredential(): void
+    {
+        $downloadTicket = $this->issuer->issueWindowsDownload($this->serverId);
+        $compiler = $this->artifactDirectory . '/fake-makensis';
+        file_put_contents($compiler, "#!/bin/sh\nexit 7\n");
+        chmod($compiler, 0700);
+
+        $response = $this->controller->generateWindowsInstaller(
+            (new ServerRequestFactory())->createServerRequest(
+                'GET',
+                'https://download.example/agent/install.exe?token=' . $downloadTicket
+            ),
             (new ResponseFactory())->createResponse(),
             []
         );
-        self::assertSame(403, $consumed->getStatusCode());
+
+        self::assertSame(400, $response->getStatusCode());
+        self::assertSame(
+            '0',
+            (string) self::$pdo?->query(
+                'SELECT count(*) FROM windows_installer_download_tokens WHERE consumed_at IS NULL'
+            )->fetchColumn()
+        );
+        self::assertSame(
+            '0',
+            (string) self::$pdo?->query(
+                'SELECT count(*) FROM installer_tokens WHERE consumed_at IS NULL'
+            )->fetchColumn()
+        );
     }
 
     public function testAgentCanPullOnlyItsOwnConfigurationWithBearerToken(): void

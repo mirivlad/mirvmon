@@ -35,7 +35,7 @@ openssl rand -hex 32     # DB_PASSWORD
 Обязательные переменные:
 
 ```dotenv
-MIRVMON_IMAGE=ghcr.io/mirivlad/mirvmon:0.6.6
+MIRVMON_IMAGE=ghcr.io/mirivlad/mirvmon:0.6.7
 APP_KEY=<base64-encoded-32-byte-key>
 SETUP_TOKEN=<random-hex-token>
 DB_PASSWORD=<random-database-password>
@@ -157,9 +157,13 @@ Windows 10/11 и Server 2016–2025 используют modern build, Windows 7
 и Server 2008 R2 SP1/2012/2012 R2 — legacy build. Windows Server 2008 без R2 и
 32-bit системы не поддерживаются. PowerShell/BAT установщику не нужны.
 
-Installer credential действует один час и не является permanent agent token.
-Windows получает постоянную конфигурацию по HTTPS непосредственно перед
-локальной транзакцией установки; Linux также не помещает permanent token в URL.
+Для Windows ссылка скачивания содержит только одноразовый download ticket. Он
+погашается при первом скачивании EXE и не является credential, который EXE затем
+использует для активации. В собранный installer помещается отдельный одноразовый
+activation credential со сроком жизни один час; постоянный agent token остаётся
+только в HTTPS-ответе активации и никогда не попадает в URL. Поэтому старые
+нескачанные Windows installer-ссылки, созданные до обновления на v0.6.7, нужно
+сгенерировать заново. Linux также не помещает permanent token в URL.
 При обновлении существующей установки прежний config/queue мигрируется до
 переключения, а post-commit failure приводит к rollback.
 

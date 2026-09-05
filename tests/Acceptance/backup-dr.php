@@ -147,13 +147,13 @@ try {
     $sourceToken = tokenRow($pdoA, $serverId);
 
     echo "[dr-acceptance] source backup uses one supported schema revision behind current\n";
-    $pdoA->exec('DROP TABLE website_check_schedule_cursor');
+    $pdoA->exec('DROP TABLE windows_installer_download_tokens');
     $migrationDelete = $pdoA->prepare('DELETE FROM schema_migrations WHERE version = :version');
-    $migrationDelete->execute(['version' => '022_website_schedule_cursor.sql']);
+    $migrationDelete->execute(['version' => '023_windows_installer_download_tokens.sql']);
     assertSame(1, $migrationDelete->rowCount(), 'Could not prepare one-version-old source schema.');
     assertSame(
         0,
-        scalarInt($pdoA, "SELECT count(*) FROM schema_migrations WHERE version = '022_website_schedule_cursor.sql'"),
+        scalarInt($pdoA, "SELECT count(*) FROM schema_migrations WHERE version = '023_windows_installer_download_tokens.sql'"),
         'Source schema still reports the newest migration.'
     );
 
@@ -176,7 +176,7 @@ try {
     $manifestMigrations = $manifest['schema_migrations'] ?? null;
     assertTrue(is_array($manifestMigrations), 'Backup manifest is missing migration metadata.');
     assertSame(
-        '021_website_timeseries.sql',
+        '022_website_schedule_cursor.sql',
         $manifestMigrations[array_key_last($manifestMigrations)]['version'] ?? null,
         'Acceptance backup is not actually from the intended older supported schema.'
     );
@@ -249,15 +249,16 @@ try {
     assertSame(1, scalarInt($pdoB, 'SELECT count(*) FROM website_check_samples WHERE website_id = ' . $websiteId), 'Website history was not restored.');
     assertSame($sourceToken, tokenRow($pdoB, $serverId), 'Permanent agent token hash/generation changed during restore.');
     assertSame(0, scalarInt($pdoB, 'SELECT count(*) FROM installer_tokens WHERE consumed_at IS NULL'), 'Unused installer tokens were resurrected after restore.');
+    assertSame(0, scalarInt($pdoB, 'SELECT count(*) FROM windows_installer_download_tokens WHERE consumed_at IS NULL'), 'Unused Windows download tickets were resurrected after restore.');
     assertSame(
         1,
-        scalarInt($pdoB, "SELECT count(*) FROM schema_migrations WHERE version = '022_website_schedule_cursor.sql'"),
+        scalarInt($pdoB, "SELECT count(*) FROM schema_migrations WHERE version = '023_windows_installer_download_tokens.sql'"),
         'Restore did not apply the pending forward migration.'
     );
     assertSame(
         1,
-        scalarInt($pdoB, 'SELECT count(*) FROM website_check_schedule_cursor WHERE id = 1'),
-        'Forward migration did not create and initialize the newest schema object.'
+        scalarInt($pdoB, "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'windows_installer_download_tokens'"),
+        'Forward migration did not create the Windows download-ticket table.'
     );
 
     $cipherB = new SecretCipher($keyBBytes);
