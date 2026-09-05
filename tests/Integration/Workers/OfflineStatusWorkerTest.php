@@ -147,25 +147,40 @@ final class OfflineStatusWorkerTest extends TestCase
         self::assertSame('offline', $this->availabilityState());
     }
 
-    public function testUntrustedExternalConnectivitySuppressesNewOfflineAssertion(): void
+    public function testExternalConnectivityLossAloneDoesNotHideSingleServerFailure(): void
     {
         $now = new DateTimeImmutable('2026-07-30T12:00:00Z');
 
-        self::assertSame(0, $this->worker->runOnce($now, false));
+        self::assertSame(1, $this->worker->runOnce($now, false));
+        self::assertSame(1, $this->tableCount('alerts'));
+        self::assertSame(1, $this->tableCount('notification_outbox'));
+        self::assertSame('offline', $this->availabilityState());
+    }
+
+    public function testExternalConnectivityLossWithMassAgentLossSuppressesOfflineAssertions(): void
+    {
+        $secondId = (int) self::$pdo?->query(
+            "INSERT INTO servers (
+                name, last_metrics_at, offline_timeout_seconds, notify_on_offline
+             ) VALUES (
+                'offline-server-2', '2026-07-30 11:59:40+00', 60, TRUE
+             ) RETURNING id"
+        )->fetchColumn();
+        self::$pdo?->prepare(
+            "INSERT INTO agent_tokens (server_id, token_hash, last_used_at)
+             VALUES (:server_id, :token_hash, '2026-07-30 11:50:00+00')"
+        )->execute([
+            'server_id' => $secondId,
+            'token_hash' => hash('sha256', str_repeat('d', 64)),
+        ]);
+
+        self::assertSame(0, $this->worker->runOnce(
+            new DateTimeImmutable('2026-07-30T12:00:00Z'),
+            false
+        ));
         self::assertSame(0, $this->tableCount('alerts'));
         self::assertSame(0, $this->tableCount('notification_outbox'));
         self::assertSame(0, $this->availabilityEventCount());
-
-        self::$pdo?->prepare(
-            'UPDATE agent_tokens SET last_used_at = :last_used_at WHERE server_id = :id'
-        )->execute([
-            'id' => $this->serverId,
-            'last_used_at' => '2026-07-30 11:59:45+00',
-        ]);
-
-        self::assertSame(0, $this->worker->runOnce($now, false));
-        self::assertSame('online', $this->availabilityState());
-        self::assertSame(1, $this->availabilityEventCount());
     }
 
     public function testFreshMetricTimestampCannotMaskStaleAgentContact(): void

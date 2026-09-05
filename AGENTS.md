@@ -55,9 +55,11 @@ tests/          unit, integration, functional и contract tests
 - `metric_samples_hourly` и `metric_samples_daily` — continuous aggregates;
 - `notification_outbox` отделяет приём метрик от Telegram/SMTP;
 - `maintenance_windows` подавляет доставку, но не создание алертов;
-- `bin/offline-worker` вычисляет offline transitions;
+- `bin/connectivity-worker` независимо проверяет внешнюю сетевую связность MirvMon;
+- `bin/offline-worker` вычисляет offline transitions и подавляет новые offline-состояния, когда потеря внешней связности совпадает с массовой потерей ранее наблюдаемых агентов;
+- `bin/website-check-worker` приостанавливает внешние проверки при подтверждённой потере связности MirvMon;
 - `bin/notification-worker` доставляет outbox jobs и раз в час чистит очередь;
-- оба worker отмечаются в `worker_heartbeats` на каждой итерации;
+- фоновые worker отмечаются в `worker_heartbeats` на каждой итерации;
 - SQL применяет `bin/migrate` под PostgreSQL advisory lock.
 
 Не создавайте параллельные schema dumps и не редактируйте уже применённую
