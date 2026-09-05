@@ -14,6 +14,7 @@ use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\ServerRepository;
 use App\Repositories\WorkerHeartbeatRepository;
 use App\Security\SecretCipher;
+use App\Services\ConnectivitySettingsService;
 use App\Services\ServerPlatformService;
 use App\Services\ServerStatusService;
 use App\Services\SystemHealthService;
@@ -61,7 +62,7 @@ final class SystemControllerTest extends TestCase
         self::$pdo?->exec('DELETE FROM notification_outbox');
         self::$pdo?->exec('DELETE FROM worker_heartbeats');
         self::$pdo?->prepare(
-            "DELETE FROM app_settings WHERE setting_key = 'mirvmon_host_server_id'"
+            "DELETE FROM app_settings WHERE setting_key IN ('mirvmon_host_server_id', 'mirvmon_connectivity_settings')"
         )->execute();
 
         $_SESSION = ['username' => 'admin', 'role' => 'admin'];
@@ -126,6 +127,8 @@ final class SystemControllerTest extends TestCase
         self::assertStringContainsString('system-page-host', $html);
         self::assertStringContainsString('v0.4.16', $html);
         self::assertStringContainsString('/admin/system/host', $html);
+        self::assertStringContainsString('/admin/system/connectivity', $html);
+        self::assertStringContainsString('one.one.one.one:443', $html);
         self::assertStringContainsString((string) $serverId, $html);
     }
 
@@ -153,6 +156,56 @@ final class SystemControllerTest extends TestCase
         );
         self::assertSame(302, $cleared->getStatusCode());
         self::assertNull($this->settings->get(SystemHealthService::HOST_SETTING));
+    }
+
+    public function testAdminCanSaveConnectivitySettings(): void
+    {
+        $response = $this->controller->saveConnectivity(
+            (new ServerRequestFactory())->createServerRequest(
+                'POST',
+                'https://monitor.example/admin/system/connectivity'
+            )->withParsedBody([
+                'targets' => ['example.net:443', '1.1.1.1:53', 'example.net:443'],
+                'quorum' => '2',
+                'interval_seconds' => '30',
+                'timeout_seconds' => '1.5',
+            ]),
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+
+        self::assertSame(302, $response->getStatusCode());
+        self::assertSame('/admin/system', $response->getHeaderLine('Location'));
+        $stored = $this->settings->get(ConnectivitySettingsService::SETTING_KEY);
+        self::assertIsArray($stored);
+        self::assertSame(['example.net:443', '1.1.1.1:53'], $stored['targets']);
+        self::assertSame(2, $stored['quorum']);
+        self::assertSame(1.5, $stored['timeout_seconds']);
+        self::assertSame(30, $stored['interval_seconds']);
+
+        $current = (new ConnectivitySettingsService($this->settings))->current();
+        self::assertSame('database', $current['source']);
+        self::assertSame(30, $current['interval_seconds']);
+    }
+
+    public function testInvalidConnectivityQuorumIsRejected(): void
+    {
+        $response = $this->controller->saveConnectivity(
+            (new ServerRequestFactory())->createServerRequest(
+                'POST',
+                'https://monitor.example/admin/system/connectivity'
+            )->withParsedBody([
+                'targets' => ['example.net:443'],
+                'quorum' => '2',
+                'interval_seconds' => '15',
+                'timeout_seconds' => '1',
+            ]),
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+
+        self::assertSame(302, $response->getStatusCode());
+        self::assertNull($this->settings->get(ConnectivitySettingsService::SETTING_KEY));
     }
 
     public function testBackupCreationQueuesAsyncOperation(): void

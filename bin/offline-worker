@@ -9,6 +9,7 @@ use App\Repositories\AppSettingsRepository;
 use App\Repositories\ConnectivityStateRepository;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\WorkerHeartbeatRepository;
+use App\Services\ConnectivitySettingsService;
 use App\Workers\OfflineStatusWorker;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
@@ -23,8 +24,6 @@ if ($interval === false) {
     exit(1);
 }
 
-$connectivityInterval = (int) (getenv('CONNECTIVITY_CHECK_INTERVAL') ?: 15);
-$connectivityFreshSeconds = max(60, min(1200, $connectivityInterval * 4));
 
 $once = in_array('--once', $argv, true);
 $running = true;
@@ -64,6 +63,11 @@ do {
                 }
                 $runtime['startup_checked'] = true;
             }
+            $connectivityConfig = $runtime['connectivity_config']->current();
+            $connectivityFreshSeconds = max(
+                60,
+                min(1200, $connectivityConfig['interval_seconds'] * 4)
+            );
             $connectivityState = $runtime['connectivity']->freshState(
                 $now,
                 $connectivityFreshSeconds
@@ -115,11 +119,12 @@ do {
 } while ($running);
 
 /**
- * @return array{worker: OfflineStatusWorker, heartbeat: WorkerHeartbeatRepository, connectivity: ConnectivityStateRepository, startup_checked: bool, last_connectivity_state: string}
+ * @return array{worker: OfflineStatusWorker, heartbeat: WorkerHeartbeatRepository, connectivity: ConnectivityStateRepository, connectivity_config: ConnectivitySettingsService, startup_checked: bool, last_connectivity_state: string}
  */
 function createOfflineRuntime(): array
 {
     $pdo = ConnectionFactory::fromEnvironment();
+    $settings = new AppSettingsRepository($pdo);
 
     return [
         'worker' => new OfflineStatusWorker(
@@ -127,7 +132,8 @@ function createOfflineRuntime(): array
             new NotificationOutboxRepository($pdo)
         ),
         'heartbeat' => new WorkerHeartbeatRepository($pdo),
-        'connectivity' => new ConnectivityStateRepository(new AppSettingsRepository($pdo)),
+        'connectivity' => new ConnectivityStateRepository($settings),
+        'connectivity_config' => new ConnectivitySettingsService($settings),
         'startup_checked' => false,
         'last_connectivity_state' => 'unknown',
     ];

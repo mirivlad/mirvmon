@@ -75,6 +75,7 @@ return [
     'audit.event.language.saved' => 'Interface language was changed to {locale}.',
     'audit.event.system.host_saved' => 'The server used to monitor MirvMon was changed.',
     'audit.event.system.host_cleared' => 'The MirvMon monitoring server was cleared.',
+    'audit.event.system.connectivity_saved' => 'MirvMon external connectivity check settings were changed.',
     'audit.event.alert.resolved' => 'Incident #{id} was resolved manually.',
     'audit.event.retention.forever' => 'Audit retention changed: keep history forever.',
     'audit.event.retention.saved' => 'Audit retention changed to {days} days.',

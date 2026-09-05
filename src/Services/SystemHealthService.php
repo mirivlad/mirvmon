@@ -177,6 +177,16 @@ final class SystemHealthService
             ];
         }
 
+        try {
+            $connectivityConfig = (new ConnectivitySettingsService($this->settings))->current();
+            $connectivityStaleAfter = max(
+                WorkerHeartbeatRepository::STALE_AFTER_SECONDS,
+                $connectivityConfig['interval_seconds'] * 4
+            );
+        } catch (Throwable) {
+            $connectivityStaleAfter = WorkerHeartbeatRepository::STALE_AFTER_SECONDS;
+        }
+
         $items = [];
         foreach (
             [
@@ -197,9 +207,13 @@ final class SystemHealthService
                 ];
                 continue;
             }
+            $stale = $heartbeat['stale'];
+            if ($worker === WorkerHeartbeatRepository::CONNECTIVITY_WORKER) {
+                $stale = (int) $heartbeat['seconds_since_tick'] > $connectivityStaleAfter;
+            }
             $items[] = [
                 'worker' => $worker,
-                'status' => $heartbeat['stale'] ? 'critical' : 'ok',
+                'status' => $stale ? 'critical' : 'ok',
                 'last_tick_at' => $heartbeat['last_tick_at'],
                 'started_at' => $heartbeat['started_at'],
                 'seconds_since_tick' => $heartbeat['seconds_since_tick'],
@@ -242,14 +256,23 @@ final class SystemHealthService
         } catch (Throwable) {
             $age = PHP_INT_MAX;
         }
+        try {
+            $connectivityConfig = (new ConnectivitySettingsService($this->settings))->current();
+            $staleAfter = max(
+                WorkerHeartbeatRepository::STALE_AFTER_SECONDS,
+                $connectivityConfig['interval_seconds'] * 4
+            );
+        } catch (Throwable) {
+            $staleAfter = WorkerHeartbeatRepository::STALE_AFTER_SECONDS;
+        }
         $status = $current['state'] === 'offline' ? 'critical' : 'ok';
-        if ($age > WorkerHeartbeatRepository::STALE_AFTER_SECONDS) {
+        if ($age > $staleAfter) {
             $status = 'warning';
         }
 
         return [
             'status' => $status,
-            'state' => $age > WorkerHeartbeatRepository::STALE_AFTER_SECONDS
+            'state' => $age > $staleAfter
                 ? 'unknown'
                 : $current['state'],
             'checked_at' => $current['checked_at'],

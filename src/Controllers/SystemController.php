@@ -17,6 +17,7 @@ use App\Repositories\AppSettingsRepository;
 use App\Repositories\AuditLogRepository;
 use App\Security\SecretCipher;
 use App\Services\AuditLogger;
+use App\Services\ConnectivitySettingsService;
 use App\Services\SystemHealthService;
 use PDO;
 use Psr\Http\Message\ResponseInterface as Response;
@@ -64,6 +65,7 @@ final class SystemController
             'system' => $this->health->details(),
             'servers' => $servers,
             'selected_host_id' => $this->health->selectedHostId(),
+            'connectivity_settings' => (new ConnectivitySettingsService($this->settings))->current(),
         ]);
     }
 
@@ -411,6 +413,50 @@ final class SystemController
             $this->flash('system.host.saved', 'success');
         } catch (Throwable) {
             $this->flash('system.host.save_failed', 'error');
+        }
+
+        return $this->redirect($response, '/admin/system');
+    }
+
+    /** @param array<string, string> $args */
+    public function saveConnectivity(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->isAdmin()) {
+            return $this->redirect($response, '/');
+        }
+
+        $body = $request->getParsedBody();
+        $body = is_array($body) ? $body : [];
+        $targets = $body['targets'] ?? [];
+        if (!is_array($targets)) {
+            $targets = [];
+        }
+
+        $service = new ConnectivitySettingsService($this->settings);
+        $before = $service->current();
+        try {
+            $saved = $service->save([
+                'targets' => $targets,
+                'quorum' => $body['quorum'] ?? null,
+                'timeout_seconds' => $body['timeout_seconds'] ?? null,
+                'interval_seconds' => $body['interval_seconds'] ?? null,
+            ]);
+            $this->recordAudit(
+                'system.connectivity.save',
+                null,
+                null,
+                $this->translator->trans('audit.event.system.connectivity_saved'),
+                [
+                    'before' => $before,
+                    'after' => $saved,
+                ]
+            );
+            $this->flash('system.connectivity.saved', 'success');
+        } catch (\InvalidArgumentException) {
+            $this->flash('system.connectivity.invalid', 'error');
+        } catch (Throwable $exception) {
+            error_log('[mirvmon][connectivity-settings] ' . $exception->getMessage());
+            $this->flash('system.connectivity.save_failed', 'error');
         }
 
         return $this->redirect($response, '/admin/system');

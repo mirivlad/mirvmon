@@ -162,6 +162,7 @@ final class AppFactory
             $group->post('/language', self::controller($container, LanguageController::class, 'save'));
             $group->get('/system', self::controller($container, SystemController::class, 'index'));
             $group->post('/system/host', self::controller($container, SystemController::class, 'saveHost'));
+            $group->post('/system/connectivity', self::controller($container, SystemController::class, 'saveConnectivity'));
             $group->get('/system/backup', self::controller($container, SystemController::class, 'backup'));
             $group->post('/system/backup/create', self::controller($container, SystemController::class, 'createBackup'));
             $group->get('/system/backup/{id}/download', self::controller($container, SystemController::class, 'downloadBackup'));

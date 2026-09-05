@@ -16,6 +16,7 @@ use App\Repositories\WebsiteTlsRepository;
 use App\Repositories\WorkerHeartbeatRepository;
 use App\Security\SecretCipher;
 use App\Services\CentralWebsiteProbeExecutor;
+use App\Services\ConnectivitySettingsService;
 use App\Services\DomainRegistrationChecker;
 use App\Services\TlsCertificateInspector;
 use App\Services\WebsiteEndpointValidator;
@@ -40,8 +41,6 @@ if ($interval === false || $concurrency === false) {
     exit(1);
 }
 
-$connectivityInterval = (int) (getenv('CONNECTIVITY_CHECK_INTERVAL') ?: 15);
-$connectivityFreshSeconds = max(60, min(1200, $connectivityInterval * 4));
 
 $key = base64_decode((string) getenv('APP_KEY'), true);
 if ($key === false || strlen($key) !== 32) {
@@ -66,6 +65,11 @@ do {
         try {
             $runtime ??= createWebsiteRuntime($key, $leaseOwner, $concurrency);
             $now = new DateTimeImmutable();
+            $connectivityConfig = $runtime['connectivity_config']->current();
+            $connectivityFreshSeconds = max(
+                60,
+                min(1200, $connectivityConfig['interval_seconds'] * 4)
+            );
             $connectivityState = $runtime['connectivity']->freshState(
                 $now,
                 $connectivityFreshSeconds
@@ -112,10 +116,11 @@ do {
     }
 } while ($running);
 
-/** @return array{worker: WebsiteCheckWorker, heartbeat: WorkerHeartbeatRepository, connectivity: ConnectivityStateRepository, last_connectivity_state: string} */
+/** @return array{worker: WebsiteCheckWorker, heartbeat: WorkerHeartbeatRepository, connectivity: ConnectivityStateRepository, connectivity_config: ConnectivitySettingsService, last_connectivity_state: string} */
 function createWebsiteRuntime(string $key, string $leaseOwner, int $concurrency): array
 {
     $pdo = ConnectionFactory::fromEnvironment();
+    $settings = new AppSettingsRepository($pdo);
     $cipher = new SecretCipher($key);
     $websites = new WebsiteRepository($pdo, $cipher);
     $incidents = new WebsiteIncidentService(
@@ -143,7 +148,8 @@ function createWebsiteRuntime(string $key, string $leaseOwner, int $concurrency)
             $concurrency,
         ),
         'heartbeat' => new WorkerHeartbeatRepository($pdo),
-        'connectivity' => new ConnectivityStateRepository(new AppSettingsRepository($pdo)),
+        'connectivity' => new ConnectivityStateRepository($settings),
+        'connectivity_config' => new ConnectivitySettingsService($settings),
         'last_connectivity_state' => 'unknown',
     ];
 }
