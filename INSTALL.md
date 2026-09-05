@@ -35,7 +35,7 @@ openssl rand -hex 32     # DB_PASSWORD
 Обязательные переменные:
 
 ```dotenv
-MIRVMON_IMAGE=ghcr.io/mirivlad/mirvmon:0.6.5
+MIRVMON_IMAGE=ghcr.io/mirivlad/mirvmon:0.6.6
 APP_KEY=<base64-encoded-32-byte-key>
 SETUP_TOKEN=<random-hex-token>
 DB_PASSWORD=<random-database-password>
@@ -130,11 +130,16 @@ assertions, timeout/deadline, TTFB/total thresholds и при необходим
 self-signed, redirect origins или domain registration. Состояние worker видно в
 `/admin/system`; ручная проверка — `bin/website-check-worker --once`.
 
-Для внутреннего URL используется только explicit trusted-admin модель. Worker
-блокирует loopback, private/link-local и metadata targets и повторно проверяет
-redirect origins. Секреты auth и headers шифруются, в диагностику и HTML не
-попадают. Не добавляйте для сайтов третий Compose service и не настраивайте
-website probes на native agent.
+Мониторинг сайтов использует explicit trusted-admin модель: администратор может
+намеренно проверять любой HTTP(S)-адрес, достижимый из контейнера `app`, включая
+localhost, private/link-local адреса и внутренние DNS-имена. Это не SSRF-граница
+между недоверенными пользователями: создавать и изменять website checks может
+только administrator. Worker разрешает только HTTP(S), не использует ambient
+proxy, ограничивает redirect/deadline/размер ответа и снимает credentials и
+чувствительные headers при cross-origin redirect, если destination заранее не
+разрешён администратором. Тела ответов и секреты не сохраняются в history,
+диагностике или HTML. Не добавляйте для сайтов третий Compose service и не
+настраивайте website probes на native agent.
 
 ## Нативные агенты
 

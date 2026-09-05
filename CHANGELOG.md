@@ -6,6 +6,12 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.6.6
+
+- Made the website-monitoring network security contract explicit and consistent: website definitions are trusted administrator input, so host-reachable HTTP(S) loopback/private/link-local/internal targets remain intentionally supported rather than being presented as an SSRF isolation boundary.
+- Documented the actual outbound-request controls: HTTP(S)-only URLs, no ambient proxy, bounded redirects/deadlines/body size, credential stripping on unapproved cross-origin redirects, and no response-body/secret persistence.
+- Added a contract test preventing deployment/security documentation from drifting back to claims that contradict the implemented trusted-admin model.
+
 ## 0.6.5
 
 - Restored explicit three-level authorization: `user` is read-only, `operator` may perform bounded operational actions, and `admin` remains required for structural changes, system/DR, agent credentials and agent updates.

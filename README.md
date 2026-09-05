@@ -38,7 +38,7 @@ Production stack состоит из `app` и `db`; TLS обычно завер�
 
 1. Создайте Docker/Portainer stack из этого репозитория с compose-файлом `docker/docker-compose.yml`.
 2. Скопируйте переменные из `docker/.env.example` и обязательно задайте `APP_KEY`, `SETUP_TOKEN` и `DB_PASSWORD`.
-3. Укажите образ релиза, например `ghcr.io/mirivlad/mirvmon:0.6.5`.
+3. Укажите образ релиза, например `ghcr.io/mirivlad/mirvmon:0.6.6`.
 4. Настройте reverse proxy на приложение.
 5. Откройте `https://ваш-домен/setup`, введите `SETUP_TOKEN` и создайте первого администратора.
 

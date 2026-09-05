@@ -65,7 +65,7 @@ final class WebsiteEndpointValidatorTest extends TestCase
         ]];
     }
 
-    public function testAllowsPrivateAndInternalTargets(): void
+    public function testTrustedAdminModelAllowsPrivateAndInternalTargets(): void
     {
         $definition = (new WebsiteEndpointValidator())->validate([
             'name' => 'Intranet',
