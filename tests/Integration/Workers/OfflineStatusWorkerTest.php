@@ -147,6 +147,27 @@ final class OfflineStatusWorkerTest extends TestCase
         self::assertSame('offline', $this->availabilityState());
     }
 
+    public function testUntrustedExternalConnectivitySuppressesNewOfflineAssertion(): void
+    {
+        $now = new DateTimeImmutable('2026-07-30T12:00:00Z');
+
+        self::assertSame(0, $this->worker->runOnce($now, false));
+        self::assertSame(0, $this->tableCount('alerts'));
+        self::assertSame(0, $this->tableCount('notification_outbox'));
+        self::assertSame(0, $this->availabilityEventCount());
+
+        self::$pdo?->prepare(
+            'UPDATE agent_tokens SET last_used_at = :last_used_at WHERE server_id = :id'
+        )->execute([
+            'id' => $this->serverId,
+            'last_used_at' => '2026-07-30 11:59:45+00',
+        ]);
+
+        self::assertSame(0, $this->worker->runOnce($now, false));
+        self::assertSame('online', $this->availabilityState());
+        self::assertSame(1, $this->availabilityEventCount());
+    }
+
     public function testFreshMetricTimestampCannotMaskStaleAgentContact(): void
     {
         $now = new DateTimeImmutable('2026-07-30T12:00:00Z');

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Repositories\AppSettingsRepository;
+use App\Repositories\ConnectivityStateRepository;
 use App\Repositories\MetricRepository;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\ServerRepository;
@@ -36,6 +37,7 @@ final class SystemHealthService
         $database = $this->databaseDiagnostics();
         $workers = $this->workerDiagnostics();
         $queue = $this->queueDiagnostics();
+        $connectivity = $this->connectivityDiagnostics();
         $host = $this->hostDiagnostics();
 
         return [
@@ -44,6 +46,7 @@ final class SystemHealthService
                     (string) $database['status'],
                     (string) $workers['status'],
                     (string) $queue['status'],
+                    (string) $connectivity['status'],
                 ]),
                 'version' => $this->appVersion,
                 'environment' => $this->appEnvironment,
@@ -55,6 +58,7 @@ final class SystemHealthService
             'database' => $database,
             'workers' => $workers,
             'queue' => $queue,
+            'connectivity' => $connectivity,
             'host' => $host,
         ];
     }
@@ -65,6 +69,7 @@ final class SystemHealthService
         $database = $this->databaseDiagnostics();
         $workers = $this->workerDiagnostics();
         $queue = $this->queueDiagnostics();
+        $connectivity = $this->connectivityDiagnostics();
         $host = $this->hostDiagnostics(false);
 
         return [
@@ -72,6 +77,7 @@ final class SystemHealthService
                 (string) $database['status'],
                 (string) $workers['status'],
                 (string) $queue['status'],
+                (string) $connectivity['status'],
             ]),
             'host_status' => (string) $host['status'],
             'host_configured' => $host['configured'] === true,
@@ -176,6 +182,7 @@ final class SystemHealthService
             [
                 WorkerHeartbeatRepository::NOTIFICATION_WORKER,
                 WorkerHeartbeatRepository::OFFLINE_WORKER,
+                WorkerHeartbeatRepository::CONNECTIVITY_WORKER,
                 WorkerHeartbeatRepository::WEBSITE_CHECK_WORKER,
             ] as $worker
         ) {
@@ -205,6 +212,52 @@ final class SystemHealthService
                 $items
             )),
             'items' => $items,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function connectivityDiagnostics(): array
+    {
+        try {
+            $current = (new ConnectivityStateRepository($this->settings))->current();
+        } catch (Throwable) {
+            $current = null;
+        }
+        if ($current === null) {
+            return [
+                'status' => 'unknown',
+                'state' => 'unknown',
+                'checked_at' => null,
+                'changed_at' => null,
+                'successes' => 0,
+                'failures' => 0,
+                'successful_targets' => [],
+                'failed_targets' => [],
+            ];
+        }
+
+        try {
+            $checkedAt = new \DateTimeImmutable($current['checked_at']);
+            $age = max(0, time() - $checkedAt->getTimestamp());
+        } catch (Throwable) {
+            $age = PHP_INT_MAX;
+        }
+        $status = $current['state'] === 'offline' ? 'critical' : 'ok';
+        if ($age > WorkerHeartbeatRepository::STALE_AFTER_SECONDS) {
+            $status = 'warning';
+        }
+
+        return [
+            'status' => $status,
+            'state' => $age > WorkerHeartbeatRepository::STALE_AFTER_SECONDS
+                ? 'unknown'
+                : $current['state'],
+            'checked_at' => $current['checked_at'],
+            'changed_at' => $current['changed_at'],
+            'successes' => $current['successes'],
+            'failures' => $current['failures'],
+            'successful_targets' => $current['successful_targets'],
+            'failed_targets' => $current['failed_targets'],
         ];
     }
 

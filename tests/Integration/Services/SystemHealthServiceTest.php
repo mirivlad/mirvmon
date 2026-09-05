@@ -7,6 +7,7 @@ namespace Tests\Integration\Services;
 use App\Database\ConnectionFactory;
 use App\Database\Migrator;
 use App\Repositories\AppSettingsRepository;
+use App\Repositories\ConnectivityStateRepository;
 use App\Repositories\MetricRepository;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\ServerRepository;
@@ -14,6 +15,7 @@ use App\Repositories\WorkerHeartbeatRepository;
 use App\Services\ServerPlatformService;
 use App\Services\ServerStatusService;
 use App\Services\SystemHealthService;
+use DateTimeImmutable;
 use PDO;
 use PHPUnit\Framework\TestCase;
 
@@ -44,7 +46,7 @@ final class SystemHealthServiceTest extends TestCase
         self::$pdo?->exec('DELETE FROM notification_outbox');
         self::$pdo?->exec('DELETE FROM worker_heartbeats');
         self::$pdo?->prepare(
-            "DELETE FROM app_settings WHERE setting_key = 'mirvmon_host_server_id'"
+            "DELETE FROM app_settings WHERE setting_key IN ('mirvmon_host_server_id', 'mirvmon_external_connectivity')"
         )->execute();
     }
 
@@ -62,6 +64,8 @@ final class SystemHealthServiceTest extends TestCase
         $heartbeats->record(WorkerHeartbeatRepository::NOTIFICATION_WORKER);
         $heartbeats->record(WorkerHeartbeatRepository::OFFLINE_WORKER);
         $heartbeats->record(WorkerHeartbeatRepository::WEBSITE_CHECK_WORKER);
+        $heartbeats->record(WorkerHeartbeatRepository::CONNECTIVITY_WORKER);
+        $this->recordConnectivity(true);
         (new AppSettingsRepository(self::$pdo))->set(SystemHealthService::HOST_SETTING, $serverId);
 
         foreach ([
@@ -86,7 +90,9 @@ final class SystemHealthServiceTest extends TestCase
         self::assertTrue($details['database']['available']);
         self::assertNotSame('', $details['database']['timescale_version']);
         self::assertSame('ok', $details['workers']['status']);
-        self::assertCount(3, $details['workers']['items']);
+        self::assertCount(4, $details['workers']['items']);
+        self::assertSame('ok', $details['connectivity']['status']);
+        self::assertSame('online', $details['connectivity']['state']);
         self::assertSame('ok', $details['queue']['status']);
         self::assertSame([
             'pending' => 0,
@@ -126,6 +132,8 @@ final class SystemHealthServiceTest extends TestCase
         $heartbeats->record(WorkerHeartbeatRepository::NOTIFICATION_WORKER);
         $heartbeats->record(WorkerHeartbeatRepository::OFFLINE_WORKER);
         $heartbeats->record(WorkerHeartbeatRepository::WEBSITE_CHECK_WORKER);
+        $heartbeats->record(WorkerHeartbeatRepository::CONNECTIVITY_WORKER);
+        $this->recordConnectivity(true);
 
         $details = $this->service()->details();
 
@@ -133,6 +141,17 @@ final class SystemHealthServiceTest extends TestCase
         self::assertSame('warning', $details['host']['status']);
         self::assertNull($details['host']['server']);
         self::assertSame('ok', $details['application']['status']);
+    }
+
+    private function recordConnectivity(bool $available): void
+    {
+        (new ConnectivityStateRepository(new AppSettingsRepository(self::$pdo)))->record([
+            'available' => $available,
+            'successes' => $available ? 2 : 0,
+            'failures' => $available ? 0 : 2,
+            'successful_targets' => $available ? ['one:443', 'two:443'] : [],
+            'failed_targets' => $available ? [] : ['one:443', 'two:443'],
+        ], new DateTimeImmutable());
     }
 
     private function service(): SystemHealthService
