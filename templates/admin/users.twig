@@ -35,8 +35,10 @@
                                 <td>
                                     {% if user.role == 'admin' %}
                                         <span class="badge bg-danger"><i class="fas fa-crown"></i> {{ t('users.role.admin') }}</span>
+                                    {% elseif user.role == 'operator' %}
+                                        <span class="badge bg-primary"><i class="fas fa-user-gear"></i> {{ t('users.role.operator') }}</span>
                                     {% else %}
-                                        <span class="badge bg-secondary"><i class="fas fa-user"></i> {{ t('users.role.user') }}</span>
+                                        <span class="badge bg-secondary"><i class="fas fa-eye"></i> {{ t('users.role.user') }}</span>
                                     {% endif %}
                                 </td>
                                 <td>{{ user.telegram_chat_id|default('-') }}</td>
@@ -107,6 +109,7 @@
                         <label for="role" class="form-label">{{ t('users.role') }}</label>
                         <select class="form-select" id="role" name="role">
                             <option value="user">{{ t('users.role.user') }}</option>
+                            <option value="operator">{{ t('users.role.operator') }}</option>
                             <option value="admin">{{ t('users.role.admin') }}</option>
                         </select>
                     </div>

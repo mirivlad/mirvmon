@@ -118,6 +118,34 @@ final class AdminControllerTest extends TestCase
         self::assertTrue(self::$pdo?->inTransaction());
     }
 
+    public function testOperatorRoleCanBeAssigned(): void
+    {
+        $request = (new ServerRequestFactory())
+            ->createServerRequest('POST', '/admin/users/save')
+            ->withParsedBody([
+                'username' => 'operations-user',
+                'email' => '',
+                'password' => 'a-secure-password',
+                'role' => 'operator',
+                'telegram_chat_id' => '',
+                'email_for_alerts' => '',
+            ]);
+
+        $response = $this->controller->saveUser(
+            $request,
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+
+        self::assertSame(302, $response->getStatusCode());
+        self::assertSame(
+            'operator',
+            self::$pdo?->query(
+                "SELECT role FROM users WHERE username = 'operations-user'"
+            )->fetchColumn()
+        );
+    }
+
     public function testLastAdministratorCannotBeDemoted(): void
     {
         $adminId = $this->insertUser('only-admin', 'admin');

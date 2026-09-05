@@ -10,6 +10,7 @@
     <a href="/servers/{{ server.id }}?tab=overview" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-1" aria-hidden="true"></i>{{ t('server18.settings.back') }}</a>
 </div>
 
+{% if session.role == 'admin' %}
 <div class="card mb-3">
     <div class="card-header bg-white"><h2 class="h5 mb-0"><i class="fas fa-server me-1" aria-hidden="true"></i>{{ t('server18.settings.general') }}</h2></div>
     <div class="card-body">
@@ -112,6 +113,7 @@
         </form>
     </div>
 </div>
+{% endif %}
 
 <div class="card mb-3" id="thresholds">
     <div class="card-header bg-white"><h2 class="h5 mb-0"><i class="fas fa-gauge-high me-1" aria-hidden="true"></i>{{ t('server18.settings.thresholds') }}</h2></div>

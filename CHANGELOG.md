@@ -6,6 +6,13 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.6.5
+
+- Restored explicit three-level authorization: `user` is read-only, `operator` may perform bounded operational actions, and `admin` remains required for structural changes, system/DR, agent credentials and agent updates.
+- Closed non-admin installer issuance and related server/group mutation paths that previously inherited only authentication.
+- Added operator role management in the user UI and authorization regression coverage.
+- Synchronized production image examples with the release version and added a contract test so stale pinned deployment examples fail CI.
+
 ## 0.6.4
 
 - Moved MirvMon host selection and external-connectivity probe configuration from `System / MirvMon` to the main Settings page. The system page is now diagnostics-only; existing POST endpoints remain compatible with forms opened before upgrading.

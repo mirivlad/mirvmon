@@ -24,7 +24,7 @@
                     <th>{{ t('incidents.column.level') }}</th>
                     <th>{{ t('incidents.column.started') }}</th>
                     <th>{{ t('incidents.column.duration') }}</th>
-                    <th>{{ t('common.actions') }}</th>
+                    {% if session.role in ['admin', 'operator'] %}<th>{{ t('common.actions') }}</th>{% endif %}
                 </tr></thead>
                 <tbody>
                     {% for event in active_incidents %}
@@ -53,6 +53,7 @@
                             <td class="small text-nowrap">
                                 {% if days > 0 %}{{ days }} {{ t('common.days') }} {% endif %}{% if hours > 0 or days > 0 %}{{ hours }} {{ t('common.hours') }} {% endif %}{{ minutes }} {{ t('common.minutes') }}
                             </td>
+{% if session.role in ['admin', 'operator'] %}
                             <td>
                                 {% if event.id is not null %}
                                     {% include "partials/action-button.twig" with {
@@ -64,6 +65,7 @@
                                     } %}
                                 {% else %}<span class="text-muted">—</span>{% endif %}
                             </td>
+                            {% endif %}
                         </tr>
                     {% endfor %}
                 </tbody>

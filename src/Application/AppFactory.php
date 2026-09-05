@@ -32,6 +32,7 @@ use App\Middlewares\AuthMiddleware;
 use App\Middlewares\CsrfMiddleware;
 use App\Middlewares\DrMaintenanceMiddleware;
 use App\Middlewares\LocaleMiddleware;
+use App\Middlewares\OperatorMiddleware;
 use App\Middlewares\RequestIdMiddleware;
 use App\Middlewares\RequestSizeMiddleware;
 use App\Middlewares\SecurityHeadersMiddleware;
@@ -71,6 +72,7 @@ final class AppFactory
         $csrf = new CsrfMiddleware($responseFactory, $twig);
         $auth = new AuthMiddleware($responseFactory, $pdo);
         $admin = new AdminMiddleware($responseFactory);
+        $operator = new OperatorMiddleware($responseFactory);
         /** @var AuditTrailMiddleware $auditTrail */
         $auditTrail = $container->get(AuditTrailMiddleware::class);
 
@@ -83,7 +85,7 @@ final class AppFactory
         $app->get('/agent/install.sh', self::controller($container, AgentController::class, 'generateInstallScript'));
         $app->get('/agent/install.exe', self::controller($container, AgentController::class, 'generateWindowsInstaller'));
 
-        $protected = $app->group('', function (RouteCollectorProxyInterface $group) use ($container, $admin): void {
+        $protected = $app->group('', function (RouteCollectorProxyInterface $group) use ($container, $admin, $operator): void {
             $group->get('/', self::controller($container, DashboardController::class, 'index'));
             $group->post('/logout', self::controller($container, AuthController::class, 'logout'));
             $group->get('/api/dashboard/stats', self::controller($container, DashboardController::class, 'getDashboardData'));
@@ -94,11 +96,11 @@ final class AppFactory
             $group->get('/api/v1/agent/{id}/processes', self::controller($container, MetricsController::class, 'getProcesses'));
 
             $group->get('/groups', self::controller($container, GroupController::class, 'index'));
-            $group->get('/groups/create', self::controller($container, GroupController::class, 'create'));
-            $group->post('/groups', self::controller($container, GroupController::class, 'store'));
-            $group->get('/groups/{id}/edit', self::controller($container, GroupController::class, 'edit'));
-            $group->post('/groups/{id}', self::controller($container, GroupController::class, 'update'));
-            $group->post('/groups/{id}/delete', self::controller($container, GroupController::class, 'delete'));
+            $group->get('/groups/create', self::controller($container, GroupController::class, 'create'))->add($admin);
+            $group->post('/groups', self::controller($container, GroupController::class, 'store'))->add($admin);
+            $group->get('/groups/{id}/edit', self::controller($container, GroupController::class, 'edit'))->add($admin);
+            $group->post('/groups/{id}', self::controller($container, GroupController::class, 'update'))->add($admin);
+            $group->post('/groups/{id}/delete', self::controller($container, GroupController::class, 'delete'))->add($admin);
             $group->get('/groups/{id}', self::controller($container, GroupController::class, 'show'));
 
             $group->get('/server/{id}', static function (ServerRequestInterface $request, ResponseInterface $response, array $arguments): ResponseInterface {
@@ -106,19 +108,19 @@ final class AppFactory
             });
             $group->get('/servers', self::controller($container, ServerController::class, 'index'));
             $group->get('/agents', self::controller($container, AgentFleetController::class, 'index'));
-            $group->get('/servers/create', self::controller($container, ServerController::class, 'create'));
-            $group->post('/servers', self::controller($container, ServerController::class, 'store'));
-            $group->get('/servers/{id}/edit', self::controller($container, ServerController::class, 'edit'));
-            $group->post('/servers/{id}', self::controller($container, ServerController::class, 'update'));
-            $group->post('/servers/{id}/delete', self::controller($container, ServerController::class, 'delete'));
-            $group->post('/servers/{id}/installers', self::controller($container, ServerController::class, 'installers'));
+            $group->get('/servers/create', self::controller($container, ServerController::class, 'create'))->add($admin);
+            $group->post('/servers', self::controller($container, ServerController::class, 'store'))->add($admin);
+            $group->get('/servers/{id}/edit', self::controller($container, ServerController::class, 'edit'))->add($operator);
+            $group->post('/servers/{id}', self::controller($container, ServerController::class, 'update'))->add($admin);
+            $group->post('/servers/{id}/delete', self::controller($container, ServerController::class, 'delete'))->add($admin);
+            $group->post('/servers/{id}/installers', self::controller($container, ServerController::class, 'installers'))->add($admin);
             $group->post('/servers/agents/update-outdated', self::controller($container, AgentUpdateController::class, 'requestAllOutdated'))->add($admin);
             $group->post('/servers/{id}/agent/update', self::controller($container, AgentUpdateController::class, 'requestUpdate'))->add($admin);
             $group->post('/servers/{id}/regenerate-token', self::controller($container, ServerController::class, 'regenerateToken'))->add($admin);
-            $group->post('/servers/{id}/maintenance', self::controller($container, ServerDetailController::class, 'startMaintenance'));
-            $group->post('/servers/{id}/maintenance/cancel', self::controller($container, ServerDetailController::class, 'cancelMaintenance'));
-            $group->post('/servers/{id}/thresholds', self::controller($container, ServerDetailController::class, 'saveThresholds'));
-            $group->post('/servers/{id}/services', self::controller($container, ServerDetailController::class, 'saveServices'));
+            $group->post('/servers/{id}/maintenance', self::controller($container, ServerDetailController::class, 'startMaintenance'))->add($operator);
+            $group->post('/servers/{id}/maintenance/cancel', self::controller($container, ServerDetailController::class, 'cancelMaintenance'))->add($operator);
+            $group->post('/servers/{id}/thresholds', self::controller($container, ServerDetailController::class, 'saveThresholds'))->add($operator);
+            $group->post('/servers/{id}/services', self::controller($container, ServerDetailController::class, 'saveServices'))->add($operator);
             $group->get('/servers/{id}', self::controller($container, ServerDetailController::class, 'show'));
 
             $group->get('/sites', self::controller($container, WebsiteController::class, 'index'));
@@ -138,9 +140,9 @@ final class AppFactory
             $group->get('/api/sites/{id}/status', self::controller($container, WebsiteMetricsApiController::class, 'status'));
 
             $group->get('/alerts', self::controller($container, AlertController::class, 'index'));
-            $group->post('/alerts/{id}/resolve', self::controller($container, AlertController::class, 'markAsResolved'));
+            $group->post('/alerts/{id}/resolve', self::controller($container, AlertController::class, 'markAsResolved'))->add($operator);
             $group->get('/agent/{id}/config', self::controller($container, AgentController::class, 'getConfig'));
-            $group->post('/agent/{id}/config', self::controller($container, AgentController::class, 'updateConfig'));
+            $group->post('/agent/{id}/config', self::controller($container, AgentController::class, 'updateConfig'))->add($operator);
             $group->get('/agent/{id}/status', self::controller($container, AgentController::class, 'getStatus'));
         });
         $protected->add($auditTrail)->add($csrf)->add($auth);

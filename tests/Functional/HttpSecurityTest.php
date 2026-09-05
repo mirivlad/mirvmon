@@ -202,6 +202,18 @@ final class HttpSecurityTest extends TestCase
         self::assertSame(401, $response->getStatusCode());
     }
 
+    public function testViewerCannotOpenAdministrativeServerCreation(): void
+    {
+        [, $sessionId] = $this->authenticatedSession('user');
+
+        $response = $this->app->handle(
+            $this->request('GET', '/servers/create')
+                ->withCookieParams(['mirvmon_test' => $sessionId])
+        );
+
+        self::assertSame(403, $response->getStatusCode());
+    }
+
     public function testDeletedUserSessionIsRejected(): void
     {
         [, $sessionId] = $this->authenticatedSession();
@@ -358,7 +370,7 @@ final class HttpSecurityTest extends TestCase
     /**
      * @return array{string, string}
      */
-    private function authenticatedSession(): array
+    private function authenticatedSession(string $role = 'admin'): array
     {
         $statement = $this->pdo->prepare(
             'INSERT OR IGNORE INTO users(id, username, password_hash, role)
@@ -366,17 +378,17 @@ final class HttpSecurityTest extends TestCase
         );
         $statement->execute([
             1,
-            'admin',
+            $role === 'admin' ? 'admin' : 'viewer',
             password_hash('correct horse battery staple', PASSWORD_DEFAULT),
-            'admin',
+            $role,
         ]);
 
         session_name('mirvmon_test');
         session_id(bin2hex(random_bytes(16)));
         session_start();
         $_SESSION['user_id'] = 1;
-        $_SESSION['username'] = 'admin';
-        $_SESSION['role'] = 'admin';
+        $_SESSION['username'] = $role === 'admin' ? 'admin' : 'viewer';
+        $_SESSION['role'] = $role;
         $id = session_id();
         session_write_close();
 

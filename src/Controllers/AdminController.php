@@ -444,7 +444,7 @@ final class AdminController
 
     /**
      * @param array<string, mixed> $body
-     * @return array{user_id:?int,username:string,email:?string,password:string,role:'admin'|'user',telegram_chat_id:?string,email_for_alerts:?string}
+     * @return array{user_id:?int,username:string,email:?string,password:string,role:'admin'|'operator'|'user',telegram_chat_id:?string,email_for_alerts:?string}
      */
     private function validatedUserInput(array $body): array
     {
@@ -471,7 +471,7 @@ final class AdminController
             throw new InvalidArgumentException($this->translator->trans('admin.user.validation.new_password_short'));
         }
         $role = $body['role'] ?? 'user';
-        if (!is_string($role) || !in_array($role, ['admin', 'user'], true)) {
+        if (!is_string($role) || !in_array($role, ['admin', 'operator', 'user'], true)) {
             throw new InvalidArgumentException($this->translator->trans('admin.user.validation.role'));
         }
         $telegramChatId = $this->optionalString($body['telegram_chat_id'] ?? null, 100);
@@ -490,7 +490,7 @@ final class AdminController
         ];
     }
 
-    /** @param array{username:string,email:?string,password:string,role:'admin'|'user'} $input */
+    /** @param array{username:string,email:?string,password:string,role:'admin'|'operator'|'user'} $input */
     private function createUser(array $input): int
     {
         $statement = $this->pdo->prepare(
@@ -507,7 +507,7 @@ final class AdminController
         return (int) $statement->fetchColumn();
     }
 
-    /** @param array{user_id:int,username:string,email:?string,password:string,role:'admin'|'user'} $input */
+    /** @param array{user_id:int,username:string,email:?string,password:string,role:'admin'|'operator'|'user'} $input */
     private function updateUser(array $input): void
     {
         $lookup = $this->pdo->prepare('SELECT role FROM users WHERE id = :id FOR UPDATE');

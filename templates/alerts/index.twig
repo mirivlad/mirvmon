@@ -117,7 +117,7 @@
                         <th>{{ t('incidents.column.period') }}</th>
                         <th>{{ t('incidents.column.duration') }}</th>
                         {% if view == 'history' %}<th>{{ t('incidents.column.resolved_by') }}</th>{% endif %}
-                        {% if view == 'active' %}<th>{{ t('common.actions') }}</th>{% endif %}
+                        {% if view == 'active' and session.role in ['admin', 'operator'] %}<th>{{ t('common.actions') }}</th>{% endif %}
                     </tr>
                 </thead>
                 <tbody>
@@ -189,7 +189,7 @@
                         {% if view == 'history' %}
                         <td><span class="small">{{ event.resolved_by_username ?: t('incidents.resolved.automatic') }}</span></td>
                         {% endif %}
-                        {% if view == 'active' %}
+                        {% if view == 'active' and session.role in ['admin', 'operator'] %}
                         <td>
                             {% if event.id is not null %}
                                 {% include "partials/action-button.twig" with {
