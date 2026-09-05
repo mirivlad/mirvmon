@@ -45,6 +45,7 @@ final class DashboardReadModelTest extends TestCase
 
     protected function setUp(): void
     {
+        $_SESSION = ['role' => 'admin', 'username' => 'test-admin'];
         self::$pdo?->beginTransaction();
         $server = self::$pdo?->query(
             <<<'SQL'
@@ -106,6 +107,7 @@ final class DashboardReadModelTest extends TestCase
 
     protected function tearDown(): void
     {
+        $_SESSION = [];
         if (self::$pdo?->inTransaction()) {
             self::$pdo->rollBack();
         }
