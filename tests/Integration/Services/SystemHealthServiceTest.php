@@ -46,7 +46,7 @@ final class SystemHealthServiceTest extends TestCase
         self::$pdo?->exec('DELETE FROM notification_outbox');
         self::$pdo?->exec('DELETE FROM worker_heartbeats');
         self::$pdo?->prepare(
-            "DELETE FROM app_settings WHERE setting_key IN ('mirvmon_host_server_id', 'mirvmon_external_connectivity')"
+            "DELETE FROM app_settings WHERE setting_key IN ('mirvmon_host_server_id', 'mirvmon_external_connectivity', 'mirvmon_connectivity_settings')"
         )->execute();
     }
 

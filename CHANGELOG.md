@@ -6,6 +6,8 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+- Added administrator-managed external connectivity probe settings in `System / MirvMon`: probe targets can be added/removed, quorum, interval and per-target timeout are editable without redeploying. Environment variables remain bootstrap defaults until settings are saved in MirvMon.
+
 ## 0.6.2
 
 - Added a supervised external-connectivity quorum probe (Cloudflare, Google and Quad9 by default). Centralized website checks pause while the quorum is lost; server offline assertions are suppressed only when the same connectivity loss coincides with a mass loss of previously observable agents. After connectivity returns, agents receive one normal offline timeout to reconnect before MirvMon can declare them offline.

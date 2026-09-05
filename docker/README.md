@@ -145,11 +145,14 @@ audit-retention-worker и отдельный `dr-worker` для disaster recover
 full backup (по умолчанию 8 GiB). `WEBSITE_CHECK_LOOP_INTERVAL` задаёт паузу
 website worker (1–60 секунд), `NOTIFICATION_POLL_INTERVAL` — паузу notification
 worker при пустой очереди (1–60 секунд), а `NOTIFICATION_BATCH_SIZE` — размер
-одного claim (1–100). `CONNECTIVITY_CHECK_INTERVAL` управляет независимой
-проверкой внешней связности. По умолчанию worker делает TCP connect к
-`one.one.one.one:443`, `dns.google:443` и `dns.quad9.net:443`; quorum 2 из 3 и timeout 1 second
-можно изменить через `CONNECTIVITY_PROBE_TARGETS`, `CONNECTIVITY_PROBE_QUORUM`
-и `CONNECTIVITY_PROBE_TIMEOUT`. При потере quorum централизованные website checks приостанавливаются; server-offline
+одного claim (1–100). Параметры независимой проверки внешней связности
+редактируются в **System / MirvMon**: список `host:port`, quorum, период и timeout.
+`CONNECTIVITY_PROBE_TARGETS`, `CONNECTIVITY_PROBE_QUORUM`,
+`CONNECTIVITY_PROBE_TIMEOUT` и `CONNECTIVITY_CHECK_INTERVAL` остаются bootstrap
+defaults для новой/ещё не настроенной установки. По умолчанию используются
+`one.one.one.one:443`, `dns.google:443` и `dns.quad9.net:443`, quorum 2 из 3,
+период 15 секунд и timeout 1 second. Изменения из UI подхватываются worker без
+redeploy контейнера. При потере quorum централизованные website checks приостанавливаются; server-offline
 считается недостоверным только если одновременно массово протухают ранее
 наблюдаемые агенты.
 Telegram/SMTP delivery никогда не выполняется в процессе ingestion.

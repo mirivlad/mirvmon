@@ -8,36 +8,11 @@ use App\Database\ConnectionFactory;
 use App\Repositories\AppSettingsRepository;
 use App\Repositories\ConnectivityStateRepository;
 use App\Repositories\WorkerHeartbeatRepository;
+use App\Services\ConnectivitySettingsService;
 use App\Services\ExternalConnectivityProbe;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
-$interval = filter_var(
-    getenv('CONNECTIVITY_CHECK_INTERVAL') ?: 15,
-    FILTER_VALIDATE_INT,
-    ['options' => ['min_range' => 5, 'max_range' => 300]],
-);
-$timeout = filter_var(
-    getenv('CONNECTIVITY_PROBE_TIMEOUT') ?: '1.0',
-    FILTER_VALIDATE_FLOAT,
-);
-$targets = array_values(array_filter(array_map(
-    'trim',
-    explode(',', (string) (getenv('CONNECTIVITY_PROBE_TARGETS')
-        ?: 'one.one.one.one:443,dns.google:443,dns.quad9.net:443')),
-)));
-$quorum = filter_var(
-    getenv('CONNECTIVITY_PROBE_QUORUM') ?: 2,
-    FILTER_VALIDATE_INT,
-    ['options' => ['min_range' => 1]],
-);
-if ($interval === false || $timeout === false || $timeout <= 0 || $timeout > 10
-    || $quorum === false || $quorum > count($targets) || $targets === []) {
-    fwrite(STDERR, "Invalid connectivity probe configuration.\n");
-    exit(1);
-}
-
-$probe = new ExternalConnectivityProbe($targets, $quorum, $timeout);
 $once = in_array('--once', $argv, true);
 $running = true;
 if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
@@ -48,24 +23,44 @@ if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
 
 $runtime = null;
 $lastState = null;
+$lastConfig = null;
+$nextProbeAt = 0;
 $maintenance = new DrMaintenanceLock(dirname(__DIR__) . '/var/dr');
 do {
+    $sleepSeconds = 5;
     $lease = $maintenance->acquireShared();
     if ($lease !== null) {
         try {
             $runtime ??= createConnectivityRuntime();
+            $config = $runtime['config']->current();
             $now = new DateTimeImmutable();
-            $result = $probe->probe();
-            $runtime['state']->record($result, $now);
-            $runtime['heartbeat']->record(WorkerHeartbeatRepository::CONNECTIVITY_WORKER);
-            $state = $result['available'] ? 'online' : 'offline';
-            if ($state !== $lastState) {
-                fwrite(STDERR, 'connectivity_' . $state . PHP_EOL);
-                $lastState = $state;
+            $nowTimestamp = $now->getTimestamp();
+            $configChanged = $lastConfig !== null && $config !== $lastConfig;
+
+            if ($nextProbeAt <= $nowTimestamp || $configChanged) {
+                $probe = new ExternalConnectivityProbe(
+                    $config['targets'],
+                    $config['quorum'],
+                    $config['timeout_seconds'],
+                );
+                $result = $probe->probe();
+                $runtime['state']->record($result, $now);
+                $state = $result['available'] ? 'online' : 'offline';
+                if ($state !== $lastState) {
+                    fwrite(STDERR, 'connectivity_' . $state . PHP_EOL);
+                    $lastState = $state;
+                }
+                $nextProbeAt = $nowTimestamp + $config['interval_seconds'];
+                $lastConfig = $config;
             }
+
+            $runtime['heartbeat']->record(WorkerHeartbeatRepository::CONNECTIVITY_WORKER);
+            $sleepSeconds = max(1, min(5, $nextProbeAt - $nowTimestamp));
         } catch (PDOException) {
             fwrite(STDERR, "connectivity_worker_database_unavailable\n");
             $runtime = null;
+            $lastConfig = null;
+            $nextProbeAt = 0;
             if ($once) {
                 $lease->release();
                 exit(1);
@@ -81,17 +76,19 @@ do {
     if ($once) {
         break;
     }
-    for ($second = 0; $second < $interval && $running; $second++) {
+    for ($second = 0; $second < $sleepSeconds && $running; $second++) {
         sleep(1);
     }
 } while ($running);
 
-/** @return array{state: ConnectivityStateRepository, heartbeat: WorkerHeartbeatRepository} */
+/** @return array{state: ConnectivityStateRepository, heartbeat: WorkerHeartbeatRepository, config: ConnectivitySettingsService} */
 function createConnectivityRuntime(): array
 {
     $pdo = ConnectionFactory::fromEnvironment();
+    $settings = new AppSettingsRepository($pdo);
     return [
-        'state' => new ConnectivityStateRepository(new AppSettingsRepository($pdo)),
+        'state' => new ConnectivityStateRepository($settings),
         'heartbeat' => new WorkerHeartbeatRepository($pdo),
+        'config' => new ConnectivitySettingsService($settings),
     ];
 }

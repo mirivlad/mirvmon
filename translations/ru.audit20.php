@@ -75,6 +75,7 @@ return [
     'audit.event.language.saved' => 'Изменён язык интерфейса на {locale}.',
     'audit.event.system.host_saved' => 'Изменён сервер, используемый для мониторинга MirvMon.',
     'audit.event.system.host_cleared' => 'Сервер мониторинга MirvMon сброшен.',
+    'audit.event.system.connectivity_saved' => 'Изменены параметры контроля внешней сетевой связности MirvMon.',
     'audit.event.alert.resolved' => 'Инцидент #{id} закрыт вручную.',
     'audit.event.retention.forever' => 'Политика хранения журнала изменена: хранить бессрочно.',
     'audit.event.retention.saved' => 'Политика хранения журнала изменена: {days} дней.',
