@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Repositories;
 
+use DateTimeImmutable;
 use PDO;
 
 /**
@@ -18,10 +19,23 @@ final class WorkerHeartbeatRepository
     public const WEBSITE_CHECK_WORKER = 'website-check-worker';
 
     /** A worker is late once it has missed this many seconds of ticks. */
-    private const STALE_AFTER_SECONDS = 120;
+    public const STALE_AFTER_SECONDS = 120;
 
     public function __construct(private readonly PDO $pdo)
     {
+    }
+
+    public function lastTickAt(string $worker): ?DateTimeImmutable
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT last_tick_at FROM worker_heartbeats WHERE worker = :worker'
+        );
+        $statement->execute(['worker' => $worker]);
+        $value = $statement->fetchColumn();
+
+        return is_string($value) && $value !== ''
+            ? new DateTimeImmutable($value)
+            : null;
     }
 
     public function record(string $worker): void

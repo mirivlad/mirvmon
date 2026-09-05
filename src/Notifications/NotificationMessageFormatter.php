@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace App\Notifications;
 
 use App\Services\WebsiteUrlSanitizer;
+use DateTimeImmutable;
+use DateTimeZone;
+use Throwable;
 
 final class NotificationMessageFormatter
 {
     private readonly ?string $publicBaseUrl;
+    private readonly DateTimeZone $timezone;
 
     /**
      * @param string $publicBaseUrl PUBLIC_BASE_URL. Empty when the deployment
@@ -16,10 +20,11 @@ final class NotificationMessageFormatter
      *                              no link, because a background worker has no
      *                              request to derive the origin from.
      */
-    public function __construct(string $publicBaseUrl = '')
+    public function __construct(string $publicBaseUrl = '', string $timezone = 'UTC')
     {
         $publicBaseUrl = rtrim(trim($publicBaseUrl), '/');
         $this->publicBaseUrl = $publicBaseUrl === '' ? null : $publicBaseUrl;
+        $this->timezone = new DateTimeZone($timezone);
     }
 
     /**
@@ -47,7 +52,7 @@ final class NotificationMessageFormatter
         $payload = is_array($job['payload'] ?? null) ? $job['payload'] : [];
         $eventType = (string) ($job['event_type'] ?? '');
         $server = $this->text($payload['server_name'] ?? 'unknown');
-        $time = $this->text(
+        $time = $this->timestamp(
             $payload['event_time'] ?? $payload['sample_time'] ?? gmdate(DATE_ATOM)
         );
 
@@ -141,9 +146,13 @@ final class NotificationMessageFormatter
                 'Статус: ' . ($recovered ? 'online' : 'offline'),
                 'Время события: ' . $time,
             ];
+            if (!$recovered && isset($payload['last_contact_at'])) {
+                $lines[] = 'Последний контакт: '
+                    . $this->timestamp($payload['last_contact_at']);
+            }
             if (!$recovered && isset($payload['last_metrics_at'])) {
                 $lines[] = 'Последняя метрика: '
-                    . $this->text($payload['last_metrics_at']);
+                    . $this->timestamp($payload['last_metrics_at']);
             }
 
             return [
@@ -217,7 +226,9 @@ final class NotificationMessageFormatter
             $lines[] = 'Факт: ' . $this->text($payload['actual']);
         }
         $lines[] = 'Серьёзность: ' . $severity;
-        $lines[] = 'Время события: ' . $this->text($payload['effective_at'] ?? $time);
+        $lines[] = 'Время события: ' . (isset($payload['effective_at'])
+            ? $this->timestamp($payload['effective_at'])
+            : $time);
 
         return [
             'subject' => $recovered
@@ -249,6 +260,22 @@ final class NotificationMessageFormatter
         }
 
         return 'Открыть сайт: ' . $url;
+    }
+
+    private function timestamp(mixed $value): string
+    {
+        $text = $this->text($value);
+        if ($text === 'unknown') {
+            return $text;
+        }
+
+        try {
+            return (new DateTimeImmutable($text))
+                ->setTimezone($this->timezone)
+                ->format('d.m.Y H:i:s T');
+        } catch (Throwable) {
+            return $text;
+        }
     }
 
     private function text(mixed $value): string

@@ -6,6 +6,10 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+- Suppress false server offline/recovery notification storms after an offline-worker observation gap: agents that were not observable while MirvMon itself was down now get one normal per-server offline timeout to reconnect before a new offline state can be asserted.
+- Render notification event/contact/metric timestamps consistently in `APP_TIMEZONE` using a readable local date/time format, and show the server-side last agent contact that actually drives offline detection.
+- Added missing incident-kind translations for website HTTP, assertion, performance, TLS and domain incidents.
+
 ## 0.6.1
 
 - Fixed Backup & Disaster Recovery UI so persistent backup jobs remain visible after leaving and reopening the page instead of being discoverable only through the original `?backup=<id>` URL.

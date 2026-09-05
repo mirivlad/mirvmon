@@ -108,6 +108,45 @@ final class OfflineStatusWorkerTest extends TestCase
         self::assertSame('online', $this->availabilityState());
     }
 
+    public function testBlindMonitoringWindowDoesNotCreateFalseOfflineIncident(): void
+    {
+        $resumedAt = new DateTimeImmutable('2026-07-30T12:00:00Z');
+        $this->worker->beginObservationRecovery($resumedAt);
+
+        self::assertSame(0, $this->worker->runOnce($resumedAt));
+        self::assertSame(0, $this->tableCount('alerts'));
+        self::assertSame(0, $this->tableCount('notification_outbox'));
+        self::assertSame(0, $this->availabilityEventCount());
+
+        self::$pdo?->prepare(
+            'UPDATE agent_tokens SET last_used_at = :last_used_at WHERE server_id = :id'
+        )->execute([
+            'id' => $this->serverId,
+            'last_used_at' => '2026-07-30 12:00:20+00',
+        ]);
+
+        self::assertSame(0, $this->worker->runOnce(
+            new DateTimeImmutable('2026-07-30T12:00:20Z')
+        ));
+        self::assertSame(0, $this->tableCount('alerts'));
+        self::assertSame(0, $this->tableCount('notification_outbox'));
+        self::assertSame('online', $this->availabilityState());
+    }
+
+    public function testServerStillSilentAfterRecoveryGraceBecomesOffline(): void
+    {
+        $resumedAt = new DateTimeImmutable('2026-07-30T12:00:00Z');
+        $this->worker->beginObservationRecovery($resumedAt);
+
+        self::assertSame(0, $this->worker->runOnce($resumedAt));
+        self::assertSame(1, $this->worker->runOnce(
+            new DateTimeImmutable('2026-07-30T12:01:01Z')
+        ));
+        self::assertSame(1, $this->tableCount('alerts'));
+        self::assertSame(1, $this->tableCount('notification_outbox'));
+        self::assertSame('offline', $this->availabilityState());
+    }
+
     public function testFreshMetricTimestampCannotMaskStaleAgentContact(): void
     {
         $now = new DateTimeImmutable('2026-07-30T12:00:00Z');

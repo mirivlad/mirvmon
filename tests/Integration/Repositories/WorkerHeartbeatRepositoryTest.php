@@ -62,6 +62,19 @@ final class WorkerHeartbeatRepositoryTest extends TestCase
         )->fetchColumn());
     }
 
+    public function testLastTickCanBeReadBeforeAWorkerResumes(): void
+    {
+        self::assertNull($this->repository->lastTickAt(
+            WorkerHeartbeatRepository::OFFLINE_WORKER
+        ));
+
+        $this->repository->record(WorkerHeartbeatRepository::OFFLINE_WORKER);
+
+        self::assertNotNull($this->repository->lastTickAt(
+            WorkerHeartbeatRepository::OFFLINE_WORKER
+        ));
+    }
+
     public function testASilentWorkerIsReportedAsStale(): void
     {
         $this->repository->record(WorkerHeartbeatRepository::NOTIFICATION_WORKER);
