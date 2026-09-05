@@ -12,7 +12,12 @@ final class WorkerRuntimeContractTest extends TestCase
     {
         $root = dirname(__DIR__, 2);
 
-        foreach (['bin/notification-worker', 'bin/offline-worker', 'bin/website-check-worker'] as $file) {
+        foreach ([
+            'bin/connectivity-worker',
+            'bin/notification-worker',
+            'bin/offline-worker',
+            'bin/website-check-worker',
+        ] as $file) {
             $source = (string) file_get_contents($root . '/' . $file);
             self::assertMatchesRegularExpression(
                 '/catch \\(Throwable \\$exception\\).*?exit\\(1\\);/s',

@@ -5,6 +5,8 @@ declare(strict_types=1);
 
 use App\Backup\DrMaintenanceLock;
 use App\Database\ConnectionFactory;
+use App\Repositories\AppSettingsRepository;
+use App\Repositories\ConnectivityStateRepository;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\WorkerHeartbeatRepository;
 use App\Workers\OfflineStatusWorker;
@@ -20,6 +22,9 @@ if ($interval === false) {
     fwrite(STDERR, "OFFLINE_CHECK_INTERVAL must be between 5 and 300 seconds.\n");
     exit(1);
 }
+
+$connectivityInterval = (int) (getenv('CONNECTIVITY_CHECK_INTERVAL') ?: 15);
+$connectivityFreshSeconds = max(60, min(1200, $connectivityInterval * 4));
 
 $once = in_array('--once', $argv, true);
 $running = true;
@@ -59,7 +64,28 @@ do {
                 }
                 $runtime['startup_checked'] = true;
             }
-            $runtime['worker']->runOnce($now);
+            $connectivityState = $runtime['connectivity']->freshState(
+                $now,
+                $connectivityFreshSeconds
+            );
+            if (
+                $runtime['last_connectivity_state'] === 'offline'
+                && $connectivityState === 'online'
+            ) {
+                $runtime['worker']->beginObservationRecovery($now);
+                fwrite(STDERR, "offline_worker_connectivity_recovered\n");
+            }
+            if (
+                $connectivityState === 'offline'
+                && $runtime['last_connectivity_state'] !== 'offline'
+            ) {
+                fwrite(STDERR, "offline_worker_connectivity_lost\n");
+            }
+            if ($connectivityState !== 'unknown') {
+                $runtime['last_connectivity_state'] = $connectivityState;
+            }
+
+            $runtime['worker']->runOnce($now, $connectivityState !== 'offline');
             $runtime['heartbeat']->record(WorkerHeartbeatRepository::OFFLINE_WORKER);
         } catch (PDOException) {
             fwrite(STDERR, "offline_worker_database_unavailable\n");
@@ -89,7 +115,7 @@ do {
 } while ($running);
 
 /**
- * @return array{worker: OfflineStatusWorker, heartbeat: WorkerHeartbeatRepository, startup_checked: bool}
+ * @return array{worker: OfflineStatusWorker, heartbeat: WorkerHeartbeatRepository, connectivity: ConnectivityStateRepository, startup_checked: bool, last_connectivity_state: string}
  */
 function createOfflineRuntime(): array
 {
@@ -101,6 +127,8 @@ function createOfflineRuntime(): array
             new NotificationOutboxRepository($pdo)
         ),
         'heartbeat' => new WorkerHeartbeatRepository($pdo),
+        'connectivity' => new ConnectivityStateRepository(new AppSettingsRepository($pdo)),
         'startup_checked' => false,
+        'last_connectivity_state' => 'unknown',
     ];
 }

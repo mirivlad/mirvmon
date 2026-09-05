@@ -25,7 +25,10 @@ final class OfflineStatusWorker
         $this->observationResumedAt = $resumedAt;
     }
 
-    public function runOnce(?DateTimeImmutable $now = null): int
+    public function runOnce(
+        ?DateTimeImmutable $now = null,
+        bool $offlineAssertionsTrusted = true
+    ): int
     {
         $now ??= new DateTimeImmutable();
         $ownsTransaction = $this->beginTransaction();
@@ -39,6 +42,9 @@ final class OfflineStatusWorker
                 $lastContactAt = new DateTimeImmutable((string) $server['last_contact_at']);
                 $offline = $timeout > 0
                     && $lastContactAt <= $now->modify('-' . $timeout . ' seconds');
+                if ($offline && !$offlineAssertionsTrusted) {
+                    continue;
+                }
                 if ($offline && $this->shouldDeferOfflineDecision(
                     $lastContactAt,
                     $timeout,

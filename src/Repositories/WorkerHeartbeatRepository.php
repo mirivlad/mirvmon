@@ -17,6 +17,7 @@ final class WorkerHeartbeatRepository
     public const NOTIFICATION_WORKER = 'notification-worker';
     public const OFFLINE_WORKER = 'offline-worker';
     public const WEBSITE_CHECK_WORKER = 'website-check-worker';
+    public const CONNECTIVITY_WORKER = 'connectivity-worker';
 
     /** A worker is late once it has missed this many seconds of ticks. */
     public const STALE_AFTER_SECONDS = 120;

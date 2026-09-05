@@ -137,16 +137,21 @@ docker compose -f docker/docker-compose.yml exec -T db \
   > mirvmon.dump
 ```
 
-Контейнер `app` запускает под `supervisord` шесть процессов от
-непривилегированного пользователя: FrankenPHP, offline-worker,
-`website-check-worker`, notification-worker, audit-retention-worker и отдельный
-`dr-worker` для disaster recovery. `DR_WORKER_INTERVAL` задаёт паузу DR worker
+Контейнер `app` запускает под `supervisord` семь процессов от
+непривилегированного пользователя: FrankenPHP, `connectivity-worker`,
+offline-worker, `website-check-worker`, notification-worker,
+audit-retention-worker и отдельный `dr-worker` для disaster recovery. `DR_WORKER_INTERVAL` задаёт паузу DR worker
 (1–30 секунд), а `BACKUP_MAX_UPLOAD_BYTES` — максимальный размер загружаемого
 full backup (по умолчанию 8 GiB). `WEBSITE_CHECK_LOOP_INTERVAL` задаёт паузу
 website worker (1–60 секунд), `NOTIFICATION_POLL_INTERVAL` — паузу notification
 worker при пустой очереди (1–60 секунд), а `NOTIFICATION_BATCH_SIZE` — размер
-одного claim (1–100). Telegram/SMTP delivery никогда не выполняется в процессе
-ingestion.
+одного claim (1–100). `CONNECTIVITY_CHECK_INTERVAL` управляет независимой
+проверкой внешней связности. По умолчанию worker делает TCP connect к
+`one.one.one.one:443`, `dns.google:443` и `dns.quad9.net:443`; quorum 2 из 3 и timeout 1 second
+можно изменить через `CONNECTIVITY_PROBE_TARGETS`, `CONNECTIVITY_PROBE_QUORUM`
+и `CONNECTIVITY_PROBE_TIMEOUT`. При потере quorum новые server-offline решения
+и централизованные website checks временно не считаются достоверными.
+Telegram/SMTP delivery никогда не выполняется в процессе ingestion.
 
 Website worker получает задания из БД, выполняет HTTP/TLS/RDAP/WHOIS проверки
 вне длинной транзакции, продлевает lease и пишет heartbeat. `maintenance`
