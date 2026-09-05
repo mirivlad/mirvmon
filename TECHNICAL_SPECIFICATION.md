@@ -192,8 +192,12 @@ Operational UI live refresh:
 - TLS check проверяет hostname, issuer и срок действия сертификата; self-signed
   сертификат разрешается только явной настройкой и остаётся operator-visible;
 - domain expiry определяется через RDAP с ограниченным WHOIS fallback;
-- internal/private targets допускаются только в trusted-admin модели и проходят
-  проверки SSRF и redirect destinations;
+- website targets используют trusted-admin модель: administrator может указать
+  любой HTTP(S)-адрес, достижимый из `app`, включая loopback/private/link-local и
+  внутренние DNS-имена; это намеренно не является tenant/SSRF isolation boundary;
+- исходящий checker запрещает URL credentials и не-HTTP(S) схемы, отключает
+  ambient proxy, ограничивает redirect/deadline/body и снимает auth/secret headers
+  на cross-origin redirect без явного administrator allowlist;
 - response bodies и credentials не сохраняются в history;
 - current state хранится отдельно от raw history, чтобы dashboard/list views не
   сканировали hypertable;
