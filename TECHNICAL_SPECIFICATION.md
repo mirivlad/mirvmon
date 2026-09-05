@@ -231,6 +231,18 @@ Operational UI live refresh:
 - `NOTIFICATION_POLL_INTERVAL` и `NOTIFICATION_BATCH_SIZE` ограничены и
   валидируются worker при старте.
 
+### Самодиагностика сетевой связности
+
+- внешний connectivity probe проверяет настроенный список `host:port` как один
+  параллельный TCP batch, а не последовательную цепочку соединений;
+- все цели получают одинаковый per-target timeout, и весь batch ограничен тем же
+  общим wall-clock deadline, поэтому 10 целей с timeout 10 секунд не могут
+  блокировать worker примерно на 100 секунд;
+- probe всегда сохраняет полный список успешных и неуспешных целей, после чего
+  вычисляет configured quorum; ambient HTTP proxy для этих TCP probes отключён;
+- настройки targets/quorum/timeout/interval остаются управляемыми из Settings и
+  не требуют redeploy.
+
 ### Dashboard
 
 - summary и server cards используют единый status algorithm;

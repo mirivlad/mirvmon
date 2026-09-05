@@ -6,6 +6,12 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.6.8
+
+- Reworked external-connectivity quorum checks from sequential `stream_socket_client` calls into one parallel cURL-multi TCP batch with a shared wall-clock deadline. A configured 10-target/10-second probe now takes at most roughly one timeout window rather than roughly 100 seconds during a full network outage.
+- Preserved complete per-target diagnostics by letting the parallel batch classify every configured target before applying quorum, while explicitly disabling ambient proxy use for these raw connectivity checks.
+- Added batch-connector tests and a production-connector smoke test against multiple local listening TCP endpoints.
+
 ## 0.6.7
 
 - Split Windows installer enrollment into two purpose-separated one-time secrets: the URL carries only a download ticket, which is consumed on the first EXE generation, while the generated package receives a distinct activation credential.
