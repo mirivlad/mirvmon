@@ -34,6 +34,9 @@ Application/domain code должен оставаться переносимым
 - состояние изменяется только небезопасными HTTP verbs с CSRF;
 - API возвращает JSON 4xx/5xx без stack trace и секретных значений;
 - forwarded headers доверяются только явно заданным proxy networks.
+- роли имеют явную иерархию: `user` — read-only наблюдатель, `operator` — эксплуатационные
+  действия (maintenance, thresholds/services, resolve alerts, agent config), `admin` —
+  структурные изменения, users/system/DR и любые agent credentials/update actions;
 
 ### Серверы и группы
 

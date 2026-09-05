@@ -35,9 +35,11 @@
             </button>
         </form>
         {% endif %}
+        {% if session.role == 'admin' %}
         <a href="/servers/create" class="btn btn-primary">
             <i class="fas fa-plus" aria-hidden="true"></i> {{ t('servers.add') }}
         </a>
+        {% endif %}
     </div>
 </header>
 {% if session.role == 'admin' %}
@@ -232,8 +234,12 @@
                     <td data-label="{{ t('common.actions') }}">
                         <div class="d-flex flex-wrap gap-1">
                             {% include "partials/action-button.twig" with {href: '/servers/' ~ server.id, icon: 'fa-eye', label: t('common.view'), class: 'btn-info'} %}
-                            {% include "partials/action-button.twig" with {href: '/servers/' ~ server.id ~ '/edit', icon: 'fa-edit', label: t('common.edit'), class: 'btn-outline-primary'} %}
+                            {% if session.role in ['admin', 'operator'] %}
+                            {% include "partials/action-button.twig" with {href: '/servers/' ~ server.id ~ '/edit', icon: 'fa-sliders', label: t('server18.settings.open'), class: 'btn-outline-primary'} %}
+                            {% endif %}
+                            {% if session.role == 'admin' %}
                             {% include "partials/action-button.twig" with {form_action: '/servers/' ~ server.id ~ '/delete', icon: 'fa-trash', label: t('common.delete'), class: 'btn-outline-danger', confirm: t('servers.delete.confirm')} %}
+                            {% endif %}
                         </div>
                     </td>
                 </tr>
@@ -253,9 +259,11 @@
         <span class="app-empty-state-icon"><i class="fas fa-server" aria-hidden="true"></i></span>
         <h3>{{ t('servers.empty.heading') }}</h3>
         <p>{{ t('ui19.servers.subtitle') }}</p>
+        {% if session.role == 'admin' %}
         <a href="/servers/create" class="btn btn-primary">
             <i class="fas fa-plus" aria-hidden="true"></i> {{ t('servers.empty.add') }}
         </a>
+        {% endif %}
     </div>
 </section>
 {% endif %}

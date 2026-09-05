@@ -7,12 +7,14 @@
         <h1><i class="fas fa-layer-group" aria-hidden="true"></i> {{ t('groups.title') }}</h1>
         <p class="page-subtitle">{{ t('ui19.groups.subtitle') }}</p>
     </div>
+    {% if session.role == 'admin' %}
     <div class="app-page-actions">
         <a href="/groups/create" class="btn btn-primary">
             <i class="fas fa-plus" aria-hidden="true"></i>
             <span>{{ t('groups.create') }}</span>
         </a>
     </div>
+    {% endif %}
 </header>
 
 <div data-live-fragment="group-overview" data-live-interval-ms="20000">
@@ -86,10 +88,12 @@
                     <a class="btn btn-sm btn-primary" href="/groups/{{ group.id }}">
                         <i class="fas fa-arrow-right" aria-hidden="true"></i> {{ t('ui19.groups.open') }}
                     </a>
+                    {% if session.role == 'admin' %}
                     <div class="d-flex gap-1">
                         {% include "partials/action-button.twig" with {href: '/groups/' ~ group.id ~ '/edit', icon: 'fa-edit', label: t('common.edit'), class: 'btn-outline-primary'} %}
                         {% include "partials/action-button.twig" with {form_action: '/groups/' ~ group.id ~ '/delete', icon: 'fa-trash', label: t('common.delete'), class: 'btn-outline-danger', confirm: t('groups.delete.confirm')} %}
                     </div>
+                    {% endif %}
                 </div>
             </div>
         </article>
@@ -101,9 +105,11 @@
         <span class="app-empty-state-icon"><i class="fas fa-layer-group" aria-hidden="true"></i></span>
         <h3>{{ t('groups.empty.heading') }}</h3>
         <p>{{ t('ui19.groups.subtitle') }}</p>
+        {% if session.role == 'admin' %}
         <a href="/groups/create" class="btn btn-primary">
             <i class="fas fa-plus" aria-hidden="true"></i> {{ t('groups.empty.create') }}
         </a>
+        {% endif %}
     </div>
 </div>
 {% endif %}
