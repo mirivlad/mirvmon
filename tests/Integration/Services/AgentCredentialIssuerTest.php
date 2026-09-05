@@ -82,6 +82,49 @@ final class AgentCredentialIssuerTest extends TestCase
         $this->issuer->exchange($firstInstaller);
     }
 
+
+    public function testWindowsDownloadTicketIsSingleUseAndMintsSeparateActivationCredential(): void
+    {
+        $downloadTicket = $this->issuer->issueWindowsDownload($this->serverId);
+        $activationToken = $this->issuer->redeemWindowsDownload($downloadTicket);
+
+        self::assertNotSame($downloadTicket, $activationToken);
+        self::assertTrue($this->issuer->validateInstaller($activationToken));
+        self::assertSame(
+            '1',
+            (string) self::$pdo?->query(
+                'SELECT count(*) FROM windows_installer_download_tokens WHERE consumed_at IS NOT NULL'
+            )->fetchColumn()
+        );
+        self::assertSame(
+            '1',
+            (string) self::$pdo?->query(
+                'SELECT count(*) FROM installer_tokens WHERE consumed_at IS NULL'
+            )->fetchColumn()
+        );
+
+        $credential = $this->issuer->exchange($activationToken);
+        self::assertSame($this->serverId, $credential->serverId);
+
+        $this->expectException(RuntimeException::class);
+        $this->issuer->redeemWindowsDownload($downloadTicket);
+    }
+
+    public function testRotationInvalidatesWindowsDownloadTickets(): void
+    {
+        $downloadTicket = $this->issuer->issueWindowsDownload($this->serverId);
+        $this->issuer->rotate($this->serverId);
+
+        self::assertSame(
+            '1',
+            (string) self::$pdo?->query(
+                'SELECT count(*) FROM windows_installer_download_tokens WHERE consumed_at IS NOT NULL'
+            )->fetchColumn()
+        );
+        $this->expectException(RuntimeException::class);
+        $this->issuer->redeemWindowsDownload($downloadTicket);
+    }
+
     public function testInstallerIssuanceRequiresRotationAfterRestoreWithDifferentKey(): void
     {
         $installer = $this->issuer->issueInstaller($this->serverId);

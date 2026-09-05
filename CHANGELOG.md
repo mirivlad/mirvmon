@@ -6,6 +6,12 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.6.7
+
+- Split Windows installer enrollment into two purpose-separated one-time secrets: the URL carries only a download ticket, which is consumed on the first EXE generation, while the generated package receives a distinct activation credential.
+- Added a dedicated database table for Windows download tickets; agent-token rotation invalidates both download tickets and activation credentials, and restore normalization consumes any surviving transient enrollment secrets.
+- Reusing a downloaded Windows installer URL now returns 403, while failed package compilation revokes the freshly minted activation credential. Existing unconsumed pre-v0.6.7 Windows installer links must be regenerated.
+
 ## 0.6.6
 
 - Made the website-monitoring network security contract explicit and consistent: website definitions are trusted administrator input, so host-reachable HTTP(S) loopback/private/link-local/internal targets remain intentionally supported rather than being presented as an SSRF isolation boundary.

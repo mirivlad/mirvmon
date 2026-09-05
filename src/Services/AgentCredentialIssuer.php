@@ -22,29 +22,91 @@ final class AgentCredentialIssuer
 
     public function issueInstaller(int $serverId, int $lifetimeSeconds = 3600): string
     {
-        if ($serverId < 1 || $lifetimeSeconds < 60 || $lifetimeSeconds > 86400) {
-            throw new RuntimeException('Invalid installer credential parameters.');
-        }
+        $this->assertIssuable($serverId, $lifetimeSeconds);
 
-        $this->ensureToken($serverId);
-        if (!$this->canIssueInstaller($serverId)) {
-            throw new RuntimeException('Agent credential requires explicit rotation.');
-        }
+        return $this->insertInstallerToken($serverId, $lifetimeSeconds);
+    }
+
+    public function issueWindowsDownload(int $serverId, int $lifetimeSeconds = 3600): string
+    {
+        $this->assertIssuable($serverId, $lifetimeSeconds);
         $token = bin2hex(random_bytes(32));
-        $expiresAt = (new DateTimeImmutable())
-            ->modify('+' . $lifetimeSeconds . ' seconds')
-            ->format('Y-m-d H:i:s.uP');
         $statement = $this->pdo->prepare(
-            'INSERT INTO installer_tokens (server_id, token_hash, expires_at)
+            'INSERT INTO windows_installer_download_tokens (server_id, token_hash, expires_at)
              VALUES (:server_id, :token_hash, :expires_at)'
         );
         $statement->execute([
             'server_id' => $serverId,
             'token_hash' => hash('sha256', $token),
-            'expires_at' => $expiresAt,
+            'expires_at' => $this->expiresAt($lifetimeSeconds),
         ]);
 
         return $token;
+    }
+
+    public function redeemWindowsDownload(
+        string $downloadToken,
+        int $activationLifetimeSeconds = 3600
+    ): string {
+        if (
+            preg_match('/^[a-f0-9]{64}$/', $downloadToken) !== 1
+            || $activationLifetimeSeconds < 60
+            || $activationLifetimeSeconds > 86400
+        ) {
+            throw new RuntimeException('Invalid or expired Windows installer download ticket.');
+        }
+
+        $ownsTransaction = $this->beginTransaction();
+        try {
+            $statement = $this->pdo->prepare(
+                'SELECT server_id
+                 FROM windows_installer_download_tokens
+                 WHERE token_hash = :token_hash
+                   AND consumed_at IS NULL
+                   AND expires_at > CURRENT_TIMESTAMP
+                 FOR UPDATE'
+            );
+            $tokenHash = hash('sha256', $downloadToken);
+            $statement->execute(['token_hash' => $tokenHash]);
+            $serverId = $statement->fetchColumn();
+            if ($serverId === false) {
+                throw new RuntimeException('Invalid or expired Windows installer download ticket.');
+            }
+
+            $consume = $this->pdo->prepare(
+                'UPDATE windows_installer_download_tokens
+                 SET consumed_at = CURRENT_TIMESTAMP
+                 WHERE token_hash = :token_hash'
+            );
+            $consume->execute(['token_hash' => $tokenHash]);
+
+            if (!$this->canIssueInstaller((int) $serverId)) {
+                throw new RuntimeException('Agent credential requires explicit rotation.');
+            }
+            $activationToken = $this->insertInstallerToken(
+                (int) $serverId,
+                $activationLifetimeSeconds
+            );
+            $this->commitTransaction($ownsTransaction);
+
+            return $activationToken;
+        } catch (Throwable $exception) {
+            $this->rollbackTransaction($ownsTransaction);
+            throw $exception;
+        }
+    }
+
+    public function revokeInstaller(string $installerToken): void
+    {
+        if (preg_match('/^[a-f0-9]{64}$/', $installerToken) !== 1) {
+            return;
+        }
+        $statement = $this->pdo->prepare(
+            'UPDATE installer_tokens
+             SET consumed_at = CURRENT_TIMESTAMP
+             WHERE token_hash = :token_hash AND consumed_at IS NULL'
+        );
+        $statement->execute(['token_hash' => hash('sha256', $installerToken)]);
     }
 
     public function canIssueInstaller(int $serverId): bool
@@ -169,16 +231,52 @@ final class AgentCredentialIssuer
                 'token_hash' => hash('sha256', $this->agentToken($serverId, $next)),
                 'generation' => $next,
             ]);
-            $expire = $this->pdo->prepare(
-                'UPDATE installer_tokens SET consumed_at = CURRENT_TIMESTAMP
-                 WHERE server_id = :server_id AND consumed_at IS NULL'
-            );
-            $expire->execute(['server_id' => $serverId]);
+            foreach (['installer_tokens', 'windows_installer_download_tokens'] as $table) {
+                $expire = $this->pdo->prepare(
+                    'UPDATE ' . $table . ' SET consumed_at = CURRENT_TIMESTAMP
+                     WHERE server_id = :server_id AND consumed_at IS NULL'
+                );
+                $expire->execute(['server_id' => $serverId]);
+            }
             $this->commitTransaction($ownsTransaction);
         } catch (Throwable $exception) {
             $this->rollbackTransaction($ownsTransaction);
             throw $exception;
         }
+    }
+
+    private function assertIssuable(int $serverId, int $lifetimeSeconds): void
+    {
+        if ($serverId < 1 || $lifetimeSeconds < 60 || $lifetimeSeconds > 86400) {
+            throw new RuntimeException('Invalid installer credential parameters.');
+        }
+        $this->ensureToken($serverId);
+        if (!$this->canIssueInstaller($serverId)) {
+            throw new RuntimeException('Agent credential requires explicit rotation.');
+        }
+    }
+
+    private function insertInstallerToken(int $serverId, int $lifetimeSeconds): string
+    {
+        $token = bin2hex(random_bytes(32));
+        $statement = $this->pdo->prepare(
+            'INSERT INTO installer_tokens (server_id, token_hash, expires_at)
+             VALUES (:server_id, :token_hash, :expires_at)'
+        );
+        $statement->execute([
+            'server_id' => $serverId,
+            'token_hash' => hash('sha256', $token),
+            'expires_at' => $this->expiresAt($lifetimeSeconds),
+        ]);
+
+        return $token;
+    }
+
+    private function expiresAt(int $lifetimeSeconds): string
+    {
+        return (new DateTimeImmutable())
+            ->modify('+' . $lifetimeSeconds . ' seconds')
+            ->format('Y-m-d H:i:s.uP');
     }
 
     private function ensureToken(int $serverId): void

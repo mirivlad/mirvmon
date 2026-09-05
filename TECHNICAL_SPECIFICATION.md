@@ -84,8 +84,12 @@ notifications. Запоздалый допустимый sample записыва
   SP1/8/8.1 и Server 2008 R2 SP1/2012/2012 R2 — Go 1.20.14; Windows Server
   2008 без R2 и x86 системы исключены;
 - единый неподписанный Windows EXE собирается NSIS на сервере и содержит обе
-  catalog-verified x64-сборки, защищённый `bootstrap.json` и одноразовый
-  часовой credential, но не permanent agent token и не PowerShell/BAT;
+  catalog-verified x64-сборки, защищённый `bootstrap.json` и отдельный одноразовый
+  activation credential, но не permanent agent token и не PowerShell/BAT;
+- URL скачивания Windows installer содержит только одноразовый download ticket:
+  он погашается при первом успешном начале генерации EXE, после чего сервер
+  выпускает отдельный часовой activation credential; ticket и activation secret
+  имеют разные таблицы/назначение и не взаимозаменяемы;
 - NSIS выбирает совместимый EXE и напрямую вызывает `install-windows`;
   выбранный Go-процесс получает конфигурацию через HTTPS и выполняет всю
   локальную транзакцию;

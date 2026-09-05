@@ -374,7 +374,7 @@ final class ServerController
     {
         return [
             'linux' => $this->credentials->issueInstaller($serverId),
-            'windows' => $this->credentials->issueInstaller($serverId),
+            'windows' => $this->credentials->issueWindowsDownload($serverId),
         ];
     }
 
