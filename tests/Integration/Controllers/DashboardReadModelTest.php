@@ -116,6 +116,7 @@ final class DashboardReadModelTest extends TestCase
     public function testDashboardAndDetailRenderTheNewestValue(): void
     {
         $twig = Twig::create(dirname(__DIR__, 3) . '/templates');
+        $twig->getEnvironment()->addGlobal('session', $_SESSION);
         $servers = new ServerRepository(self::$pdo);
         $metrics = new MetricRepository(self::$pdo);
         $responseFactory = new ResponseFactory();
