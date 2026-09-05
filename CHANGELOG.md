@@ -6,6 +6,8 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.6.4
+
 - Moved MirvMon host selection and external-connectivity probe configuration from `System / MirvMon` to the main Settings page. The system page is now diagnostics-only; existing POST endpoints remain compatible with forms opened before upgrading.
 
 ## 0.6.3
