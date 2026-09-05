@@ -6,6 +6,8 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.6.3
+
 - Added administrator-managed external connectivity probe settings in `System / MirvMon`: probe targets can be added/removed, quorum, interval and per-target timeout are editable without redeploying. Environment variables remain bootstrap defaults until settings are saved in MirvMon.
 
 ## 0.6.2
