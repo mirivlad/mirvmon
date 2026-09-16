@@ -15,6 +15,7 @@ final class WorkerRuntimeContractTest extends TestCase
         foreach ([
             'bin/connectivity-worker',
             'bin/notification-worker',
+            'bin/observation-worker',
             'bin/offline-worker',
             'bin/website-check-worker',
         ] as $file) {
