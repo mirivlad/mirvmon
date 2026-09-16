@@ -35,6 +35,7 @@ final class WorkerHeartbeatRepositoryTest extends TestCase
     protected function setUp(): void
     {
         self::$pdo?->beginTransaction();
+        self::$pdo?->exec('DELETE FROM worker_heartbeats');
         $this->repository = new WorkerHeartbeatRepository(self::$pdo);
     }
 

@@ -18,9 +18,11 @@ final class WorkerHeartbeatRepository
     public const OFFLINE_WORKER = 'offline-worker';
     public const WEBSITE_CHECK_WORKER = 'website-check-worker';
     public const CONNECTIVITY_WORKER = 'connectivity-worker';
+    public const OBSERVATION_WORKER = 'observation-worker';
 
     /** A worker is late once it has missed this many seconds of ticks. */
     public const STALE_AFTER_SECONDS = 120;
+    public const OBSERVATION_STALE_AFTER_SECONDS = 900;
 
     public function __construct(private readonly PDO $pdo)
     {

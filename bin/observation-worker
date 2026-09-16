@@ -1,0 +1,97 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use App\Backup\DrMaintenanceLock;
+use App\Database\ConnectionFactory;
+use App\Repositories\NotificationOutboxRepository;
+use App\Repositories\ObservationAnalysisRepository;
+use App\Repositories\ObservationRepository;
+use App\Repositories\WorkerHeartbeatRepository;
+use App\Services\ObservationAnalyzer;
+use App\Workers\ObservationWorker;
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+$interval = filter_var(
+    getenv('OBSERVATION_CHECK_INTERVAL') ?: 300,
+    FILTER_VALIDATE_INT,
+    ['options' => ['min_range' => 60, 'max_range' => 3600]]
+);
+if ($interval === false) {
+    fwrite(STDERR, "OBSERVATION_CHECK_INTERVAL must be between 60 and 3600 seconds.\n");
+    exit(1);
+}
+
+$once = in_array('--once', $argv, true);
+$running = true;
+if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
+    pcntl_async_signals(true);
+    pcntl_signal(SIGTERM, static function () use (&$running): void {
+        $running = false;
+    });
+    pcntl_signal(SIGINT, static function () use (&$running): void {
+        $running = false;
+    });
+}
+
+$runtime = null;
+$maintenance = new DrMaintenanceLock(dirname(__DIR__) . '/var/dr');
+
+do {
+    $lease = $maintenance->acquireShared();
+    if ($lease !== null) {
+        try {
+            $runtime ??= createObservationRuntime();
+            $result = $runtime['worker']->runOnce(new DateTimeImmutable());
+            $runtime['heartbeat']->record(WorkerHeartbeatRepository::OBSERVATION_WORKER);
+            fwrite(
+                STDERR,
+                sprintf(
+                    "observation_worker detected=%d notified=%d resolved=%d\n",
+                    $result['detected'],
+                    $result['notified'],
+                    $result['resolved']
+                )
+            );
+        } catch (PDOException) {
+            fwrite(STDERR, "observation_worker_database_unavailable\n");
+            $runtime = null;
+            if ($once) {
+                $lease->release();
+                exit(1);
+            }
+        } catch (Throwable $exception) {
+            fwrite(STDERR, 'observation_worker_failed:' . $exception::class . PHP_EOL);
+            $lease->release();
+            exit(1);
+        } finally {
+            $lease->release();
+        }
+    }
+
+    if ($once) {
+        break;
+    }
+    for ($second = 0; $second < $interval && $running; $second++) {
+        sleep(1);
+    }
+} while ($running);
+
+/** @return array{worker: ObservationWorker, heartbeat: WorkerHeartbeatRepository} */
+function createObservationRuntime(): array
+{
+    $pdo = ConnectionFactory::fromEnvironment();
+    $outbox = new NotificationOutboxRepository($pdo);
+
+    return [
+        'worker' => new ObservationWorker(
+            new ObservationAnalysisRepository($pdo),
+            new ObservationRepository($pdo),
+            new ObservationAnalyzer(),
+            $outbox
+        ),
+        'heartbeat' => new WorkerHeartbeatRepository($pdo),
+    ];
+}

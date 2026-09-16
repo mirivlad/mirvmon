@@ -29,6 +29,7 @@ final class SchemaTest extends TestCase
         self::assertFileExists(dirname(__DIR__, 3) . '/migrations/021_website_timeseries.sql');
         self::assertFileExists(dirname(__DIR__, 3) . '/migrations/022_website_schedule_cursor.sql');
         self::assertFileExists(dirname(__DIR__, 3) . '/migrations/023_windows_installer_download_tokens.sql');
+        self::assertFileExists(dirname(__DIR__, 3) . '/migrations/024_observations.sql');
 
         if (getenv('TEST_DB_HOST') === false) {
             self::markTestSkipped('Set TEST_DB_* to run the TimescaleDB integration suite.');
@@ -103,7 +104,8 @@ final class SchemaTest extends TestCase
                    'installer_tokens',
                    'windows_installer_download_tokens',
                    'notification_outbox',
-                   'notification_settings'
+                   'notification_settings',
+                   'observations'
                )
              ORDER BY table_name"
         )->fetchAll(PDO::FETCH_COLUMN);
@@ -115,6 +117,7 @@ final class SchemaTest extends TestCase
             'installer_tokens',
             'notification_outbox',
             'notification_settings',
+            'observations',
             'windows_installer_download_tokens',
         ], $tables);
 
@@ -181,7 +184,7 @@ final class SchemaTest extends TestCase
                    'agent_tokens'::regclass
                )"
         )->fetchColumn();
-        self::assertSame('9', (string) $foreignKeys);
+        self::assertSame('10', (string) $foreignKeys);
     }
 
     public function testTimescaleMaintenancePoliciesAreInstalled(): void
@@ -223,7 +226,7 @@ final class SchemaTest extends TestCase
         self::assertSame([], $migrator->migrate());
 
         $count = self::$pdo?->query('SELECT count(*) FROM schema_migrations')->fetchColumn();
-        self::assertSame('23', (string) $count);
+        self::assertSame('24', (string) $count);
     }
 
     public function testAvailabilitySchemaExists(): void

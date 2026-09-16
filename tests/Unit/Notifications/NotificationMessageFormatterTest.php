@@ -166,4 +166,48 @@ final class NotificationMessageFormatterTest extends TestCase
         self::assertStringNotContainsString('should-not-appear', $message['body']);
         self::assertStringNotContainsString('Bearer do-not-appear', $message['body']);
     }
+
+    public function testObservationAnomalyExplainsBaselineAndLinksToObservation(): void
+    {
+        $message = (new NotificationMessageFormatter('https://monitor.example'))->format([
+            'event_type' => 'observation_anomaly',
+            'payload' => [
+                'server_id' => 7,
+                'server_name' => 'db-1',
+                'observation_id' => 42,
+                'metric' => 'cpu_load',
+                'current_value' => 21.5,
+                'baseline_value' => 2.8,
+                'confidence' => 0.91,
+                'event_time' => '2026-09-16T00:00:00+00:00',
+            ],
+        ]);
+
+        self::assertStringContainsString('Необычное поведение', $message['subject']);
+        self::assertStringContainsString('Обычный уровень: 2.8', $message['body']);
+        self::assertStringContainsString('Уверенность: 91%', $message['body']);
+        self::assertStringContainsString('/observations#observation-42', $message['body']);
+    }
+
+    public function testObservationPredictionExplainsDiskTrend(): void
+    {
+        $message = (new NotificationMessageFormatter())->format([
+            'event_type' => 'observation_prediction',
+            'payload' => [
+                'server_name' => 'files-1',
+                'metric' => 'disk_used_root',
+                'current_value' => 82.0,
+                'confidence' => 0.88,
+                'event_time' => '2026-09-16T00:00:00+00:00',
+                'details' => [
+                    'slope_percent_per_day' => 1.7,
+                    'predicted_warning_at' => '2026-09-20T00:00:00+00:00',
+                ],
+            ],
+        ]);
+
+        self::assertStringContainsString('Прогноз MirvMon', $message['subject']);
+        self::assertStringContainsString('1.7 п.п./сутки', $message['body']);
+        self::assertStringContainsString('20.09.2026', $message['body']);
+    }
 }
