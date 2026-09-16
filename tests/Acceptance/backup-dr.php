@@ -57,7 +57,19 @@ try {
 
     $pdoA = connectDatabase($dbA, $dbHost, $dbPort, $dbUser, $dbPassword);
     $pdoB = connectDatabase($dbB, $dbHost, $dbPort, $dbUser, $dbPassword);
-    (new Migrator($pdoA, $migrations))->migrate();
+
+    $migrationFiles = Migrator::migrationFiles($migrations);
+    assertTrue(count($migrationFiles) >= 2, 'DR acceptance requires at least two schema revisions.');
+    $currentMigration = basename($migrationFiles[array_key_last($migrationFiles)]);
+    $previousMigration = basename($migrationFiles[count($migrationFiles) - 2]);
+    $sourceMigrations = $root . '/source-migrations';
+    mkdir($sourceMigrations, 0700, true);
+    foreach (array_slice($migrationFiles, 0, -1) as $migrationFile) {
+        $target = $sourceMigrations . '/' . basename($migrationFile);
+        assertTrue(copy($migrationFile, $target), 'Cannot prepare previous-revision migration fixture.');
+    }
+
+    (new Migrator($pdoA, $sourceMigrations))->migrate();
     (new Migrator($pdoB, $migrations))->migrate();
 
     $pdoA->prepare("INSERT INTO users (username, password_hash, role) VALUES ('source-admin', :hash, 'admin')")
@@ -147,14 +159,21 @@ try {
     $sourceToken = tokenRow($pdoA, $serverId);
 
     echo "[dr-acceptance] source backup uses one supported schema revision behind current\n";
-    $pdoA->exec('DROP TABLE windows_installer_download_tokens');
-    $migrationDelete = $pdoA->prepare('DELETE FROM schema_migrations WHERE version = :version');
-    $migrationDelete->execute(['version' => '023_windows_installer_download_tokens.sql']);
-    assertSame(1, $migrationDelete->rowCount(), 'Could not prepare one-version-old source schema.');
+    $sourceSchemaVersion = (string) $pdoA->query(
+        'SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1'
+    )->fetchColumn();
+    assertSame(
+        $previousMigration,
+        $sourceSchemaVersion,
+        'Source database is not exactly one schema revision behind current.'
+    );
     assertSame(
         0,
-        scalarInt($pdoA, "SELECT count(*) FROM schema_migrations WHERE version = '023_windows_installer_download_tokens.sql'"),
-        'Source schema still reports the newest migration.'
+        scalarInt(
+            $pdoA,
+            "SELECT count(*) FROM schema_migrations WHERE version = " . $pdoA->quote($currentMigration)
+        ),
+        'Source schema unexpectedly contains the current migration.'
     );
 
     $envA = databaseEnvironment($dbA, $dbHost, $dbPort, $dbUser, $dbPassword);
@@ -176,7 +195,7 @@ try {
     $manifestMigrations = $manifest['schema_migrations'] ?? null;
     assertTrue(is_array($manifestMigrations), 'Backup manifest is missing migration metadata.');
     assertSame(
-        '022_website_schedule_cursor.sql',
+        $previousMigration,
         $manifestMigrations[array_key_last($manifestMigrations)]['version'] ?? null,
         'Acceptance backup is not actually from the intended older supported schema.'
     );
