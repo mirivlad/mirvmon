@@ -44,6 +44,9 @@ final class RouteSecurityContractTest extends TestCase
             '/servers/{id}/delete',
             '/servers/{id}/regenerate-token',
             '/alerts/{id}/resolve',
+            '/observations/{id}/handle',
+            '/observations/{id}/accept-normal',
+            '/observations/{id}/reset-normal',
             '/admin/users/{id}/delete',
             '/admin/notifications/test',
             '/admin/notifications/queue/retry',
@@ -67,6 +70,7 @@ final class RouteSecurityContractTest extends TestCase
         self::assertSame(['GET'], $routes['/api/sites/{id}/metrics'] ?? null);
         self::assertSame(['GET'], $routes['/api/sites/{id}/status'] ?? null);
         self::assertSame(['GET'], $routes['/agents'] ?? null);
+        self::assertSame(['GET'], $routes['/observations'] ?? null);
         self::assertSame(['GET'], $routes['/api/agents/fleet-status'] ?? null);
 
         self::assertContains('GET', $routes['/sites'] ?? []);

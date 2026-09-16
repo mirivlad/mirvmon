@@ -118,6 +118,12 @@
                             {{ t('nav.incidents') }}
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/observations" data-nav-prefix="/observations">
+                            <i class="fas fa-magnifying-glass-chart" aria-hidden="true"></i>
+                            {{ t('nav.observations') }}
+                        </a>
+                    </li>
                     {% if session.role == 'admin' %}
                     <li class="nav-item dropdown">
                         <button class="nav-link dropdown-toggle app-nav-button"

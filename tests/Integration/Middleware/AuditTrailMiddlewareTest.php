@@ -175,6 +175,97 @@ final class AuditTrailMiddlewareTest extends TestCase
         self::assertSame('0', (string) $statement?->fetchColumn());
     }
 
+    public function testObservationFeedbackMutationsAreAudited(): void
+    {
+        $metricId = (int) self::$pdo?->query(
+            "SELECT id FROM metric_names WHERE name = 'cpu_load'"
+        )->fetchColumn();
+        $insert = self::$pdo?->prepare(
+            "INSERT INTO observations (
+                server_id, metric_id, kind, detector, fingerprint, status, details
+             ) VALUES (
+                :server_id, :metric_id, :kind, :detector, :fingerprint, 'active', '{}'::jsonb
+             ) RETURNING id"
+        );
+        $insert?->execute([
+            'server_id' => $this->serverId,
+            'metric_id' => $metricId,
+            'kind' => 'prediction',
+            'detector' => 'disk_growth_v1',
+            'fingerprint' => 'audit-prediction',
+        ]);
+        $predictionId = (int) $insert?->fetchColumn();
+        $insert?->execute([
+            'server_id' => $this->serverId,
+            'metric_id' => $metricId,
+            'kind' => 'anomaly',
+            'detector' => 'level_shift_v1',
+            'fingerprint' => 'audit-anomaly',
+        ]);
+        $anomalyId = (int) $insert?->fetchColumn();
+
+        $middleware = $this->middleware();
+        foreach ([
+            [$predictionId, 'handle', 'handled'],
+            [$anomalyId, 'accept-normal', 'accepted_normal'],
+            [$anomalyId, 'reset-normal', 'resolved'],
+        ] as [$id, $path, $status]) {
+            $request = (new ServerRequestFactory())->createServerRequest(
+                'POST',
+                '/observations/' . $id . '/' . $path
+            );
+            $response = $middleware->process(
+                $request,
+                $this->observationMutationHandler($id, $status)
+            );
+            self::assertSame(302, $response->getStatusCode());
+        }
+
+        $rows = self::$pdo?->query(
+            "SELECT action, actor_username, object_type, object_label,
+                    description, metadata::text AS metadata
+             FROM audit_log
+             WHERE object_type = 'observation'
+             ORDER BY id"
+        )->fetchAll();
+        self::assertCount(3, $rows);
+        self::assertSame([
+            'observation.handle',
+            'observation.accept_normal',
+            'observation.reset_normal',
+        ], array_column($rows, 'action'));
+        foreach ($rows as $row) {
+            self::assertSame('audit-middleware-admin', $row['actor_username']);
+            self::assertSame('observation', $row['object_type']);
+            self::assertStringContainsString('audit-before', (string) $row['object_label']);
+            self::assertStringContainsString('audit-before', (string) $row['description']);
+            self::assertStringContainsString('previous_status', (string) $row['metadata']);
+            self::assertStringContainsString('new_status', (string) $row['metadata']);
+        }
+    }
+
+    private function observationMutationHandler(int $id, string $status): RequestHandlerInterface
+    {
+        return new class(self::$pdo, $id, $status) implements RequestHandlerInterface {
+            public function __construct(
+                private readonly PDO $pdo,
+                private readonly int $id,
+                private readonly string $status
+            ) {
+            }
+
+            public function handle(ServerRequestInterface $request): ResponseInterface
+            {
+                $statement = $this->pdo->prepare(
+                    'UPDATE observations SET status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id'
+                );
+                $statement->execute(['status' => $this->status, 'id' => $this->id]);
+                return (new ResponseFactory())->createResponse(302)
+                    ->withHeader('Location', '/observations');
+            }
+        };
+    }
+
     private function middleware(): AuditTrailMiddleware
     {
         $repository = new AuditLogRepository(self::$pdo);

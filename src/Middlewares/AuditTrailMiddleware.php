@@ -104,6 +104,9 @@ final class AuditTrailMiddleware implements MiddlewareInterface
             '#^/sites/([1-9][0-9]*)/resume$#' => 'website_resume',
             '#^/sites/([1-9][0-9]*)/check$#' => 'website_check',
             '#^/sites/([1-9][0-9]*)$#' => 'website_update',
+            '#^/observations/([1-9][0-9]*)/handle$#' => 'observation_handle',
+            '#^/observations/([1-9][0-9]*)/accept-normal$#' => 'observation_accept_normal',
+            '#^/observations/([1-9][0-9]*)/reset-normal$#' => 'observation_reset_normal',
         ] as $pattern => $kind) {
             if (preg_match($pattern, $path, $matches) === 1) {
                 return ['kind' => $kind, 'id' => (int) $matches[1]];
@@ -149,6 +152,8 @@ final class AuditTrailMiddleware implements MiddlewareInterface
             'website_create' => $this->websiteByName($body['name'] ?? null),
             'website_update', 'website_delete', 'website_pause', 'website_resume', 'website_check'
                 => $id === null ? null : $this->websiteState($id),
+            'observation_handle', 'observation_accept_normal', 'observation_reset_normal'
+                => $id === null ? null : $this->observationState($id),
             default => null,
         };
     }
@@ -225,6 +230,33 @@ final class AuditTrailMiddleware implements MiddlewareInterface
                     'website.check.request', 'website', $id, (string) $after['name'],
                     'audit.event.website.check_requested', ['name' => (string) $after['name']],
                     ['endpoint_count' => $after['endpoint_count']]
+                );
+
+            case 'observation_handle':
+                if (!is_array($before) || !is_array($after)
+                    || $before['status'] === $after['status'] || $after['status'] !== 'handled') {
+                    return null;
+                }
+                return $this->observationEvent(
+                    'observation.handle', 'audit.event.observation.handled', $id, $before, $after
+                );
+
+            case 'observation_accept_normal':
+                if (!is_array($before) || !is_array($after)
+                    || $before['status'] === $after['status'] || $after['status'] !== 'accepted_normal') {
+                    return null;
+                }
+                return $this->observationEvent(
+                    'observation.accept_normal', 'audit.event.observation.accepted_normal', $id, $before, $after
+                );
+
+            case 'observation_reset_normal':
+                if (!is_array($before) || !is_array($after)
+                    || $before['status'] !== 'accepted_normal' || $after['status'] !== 'resolved') {
+                    return null;
+                }
+                return $this->observationEvent(
+                    'observation.reset_normal', 'audit.event.observation.reset_normal', $id, $before, $after
                 );
 
             case 'server_create':
@@ -492,6 +524,40 @@ final class AuditTrailMiddleware implements MiddlewareInterface
     }
 
     /**
+     * @param array<string, mixed> $before
+     * @param array<string, mixed> $after
+     * @return array{action:string,object_type:string,object_id:int|string|null,object_label:?string,description:string,metadata:array<string,mixed>}
+     */
+    private function observationEvent(
+        string $action,
+        string $descriptionKey,
+        ?int $id,
+        array $before,
+        array $after
+    ): array {
+        $server = (string) ($after['server_name'] ?? $before['server_name'] ?? '');
+        $metric = (string) ($after['metric_name'] ?? $before['metric_name'] ?? '');
+        $label = $server . ($metric === '' ? '' : ' / ' . $metric);
+
+        return $this->eventData(
+            $action,
+            'observation',
+            $id,
+            $label === '' ? null : $label,
+            $descriptionKey,
+            ['id' => $id ?? 0, 'server' => $server],
+            [
+                'server_id' => $after['server_id'] ?? $before['server_id'] ?? null,
+                'metric' => $metric === '' ? null : $metric,
+                'kind' => $after['kind'] ?? $before['kind'] ?? null,
+                'previous_status' => $before['status'] ?? null,
+                'new_status' => $after['status'] ?? null,
+                'notification_cycle' => $after['notification_cycle'] ?? null,
+            ]
+        );
+    }
+
+    /**
      * @param array<string, scalar|null> $parameters
      * @param array<string, mixed> $metadata
      * @return array{action:string,object_type:string,object_id:int|string|null,object_label:?string,description:string,metadata:array<string,mixed>}
@@ -520,6 +586,39 @@ final class AuditTrailMiddleware implements MiddlewareInterface
     {
         $body = $request->getParsedBody();
         return is_array($body) ? $body : [];
+    }
+
+    /** @return array<string, mixed>|null */
+    private function observationState(int $observationId): ?array
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT observations.id, observations.server_id, observations.kind,
+                    observations.status, observations.notification_cycle,
+                    observations.handled_by_username, observations.accepted_by_username,
+                    servers.name AS server_name, metric_names.name AS metric_name
+             FROM observations
+             INNER JOIN servers ON servers.id = observations.server_id
+             LEFT JOIN metric_names ON metric_names.id = observations.metric_id
+             WHERE observations.id = :id'
+        );
+        $statement->execute(['id' => $observationId]);
+        $row = $statement->fetch();
+        if (!is_array($row)) {
+            return null;
+        }
+        return [
+            'id' => (int) $row['id'],
+            'server_id' => (int) $row['server_id'],
+            'server_name' => (string) $row['server_name'],
+            'metric_name' => $row['metric_name'] === null ? null : (string) $row['metric_name'],
+            'kind' => (string) $row['kind'],
+            'status' => (string) $row['status'],
+            'notification_cycle' => (int) $row['notification_cycle'],
+            'handled_by_username' => $row['handled_by_username'] === null
+                ? null : (string) $row['handled_by_username'],
+            'accepted_by_username' => $row['accepted_by_username'] === null
+                ? null : (string) $row['accepted_by_username'],
+        ];
     }
 
     /** @return array<string, mixed>|null */
