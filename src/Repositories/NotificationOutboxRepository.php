@@ -1038,4 +1038,79 @@ final class NotificationOutboxRepository
         $this->pdo->exec('ROLLBACK TO SAVEPOINT notification_outbox_claim');
         $this->pdo->exec('RELEASE SAVEPOINT notification_outbox_claim');
     }
+
+    /** @param array<string, mixed> $payload */
+    public function enqueueObservationConfigured(
+        int $serverId,
+        int $observationId,
+        string $eventType,
+        array $payload,
+        string $deduplicationKey
+    ): int {
+        if ($serverId <= 0 || $observationId <= 0) {
+            throw new InvalidArgumentException('Observation notification source is invalid.');
+        }
+        $settings = $this->pdo->query(
+            'SELECT email_enabled, telegram_enabled, notify_on_warning,
+                    notify_on_critical, telegram_chat_id, smtp_recipients,
+                    cooldown_seconds
+             FROM notification_settings WHERE id = 1'
+        )?->fetch();
+        if (!is_array($settings) || !$this->severityIsEnabled($settings, $payload)) {
+            return 0;
+        }
+        if ($this->underMaintenance($serverId, null)) {
+            return 0;
+        }
+        if ($this->withinCooldown(
+            (int) ($settings['cooldown_seconds'] ?? 0),
+            $serverId,
+            null,
+            $eventType,
+            $payload
+        )) {
+            return 0;
+        }
+        $deliveries = $this->deliveries($settings, $serverId, null);
+        if ($deliveries === []) {
+            return 0;
+        }
+        try {
+            $encodedPayload = json_encode($payload, JSON_THROW_ON_ERROR);
+        } catch (JsonException $exception) {
+            throw new RuntimeException(
+                'Cannot encode observation notification payload.',
+                0,
+                $exception
+            );
+        }
+        $statement = $this->pdo->prepare(
+            'INSERT INTO notification_outbox (
+                server_id, observation_id, channel, recipient, event_type,
+                payload, deduplication_key
+             ) VALUES (
+                :server_id, :observation_id, :channel, :recipient, :event_type,
+                CAST(:payload AS jsonb), :deduplication_key
+             )
+             ON CONFLICT (deduplication_key) DO NOTHING'
+        );
+        $inserted = 0;
+        foreach ($deliveries as [$channel, $recipient]) {
+            $statement->execute([
+                'server_id' => $serverId,
+                'observation_id' => $observationId,
+                'channel' => $channel,
+                'recipient' => $recipient,
+                'event_type' => $eventType,
+                'payload' => $encodedPayload,
+                'deduplication_key' => $this->recipientKey(
+                    $deduplicationKey,
+                    $channel,
+                    $recipient
+                ),
+            ]);
+            $inserted += $statement->rowCount();
+        }
+        return $inserted;
+    }
 }

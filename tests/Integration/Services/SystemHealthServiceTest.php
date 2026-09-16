@@ -65,6 +65,7 @@ final class SystemHealthServiceTest extends TestCase
         $heartbeats->record(WorkerHeartbeatRepository::OFFLINE_WORKER);
         $heartbeats->record(WorkerHeartbeatRepository::WEBSITE_CHECK_WORKER);
         $heartbeats->record(WorkerHeartbeatRepository::CONNECTIVITY_WORKER);
+        $heartbeats->record(WorkerHeartbeatRepository::OBSERVATION_WORKER);
         $this->recordConnectivity(true);
         (new AppSettingsRepository(self::$pdo))->set(SystemHealthService::HOST_SETTING, $serverId);
 
@@ -90,7 +91,7 @@ final class SystemHealthServiceTest extends TestCase
         self::assertTrue($details['database']['available']);
         self::assertNotSame('', $details['database']['timescale_version']);
         self::assertSame('ok', $details['workers']['status']);
-        self::assertCount(4, $details['workers']['items']);
+        self::assertCount(5, $details['workers']['items']);
         self::assertSame('ok', $details['connectivity']['status']);
         self::assertSame('online', $details['connectivity']['state']);
         self::assertSame('ok', $details['queue']['status']);
@@ -133,6 +134,7 @@ final class SystemHealthServiceTest extends TestCase
         $heartbeats->record(WorkerHeartbeatRepository::OFFLINE_WORKER);
         $heartbeats->record(WorkerHeartbeatRepository::WEBSITE_CHECK_WORKER);
         $heartbeats->record(WorkerHeartbeatRepository::CONNECTIVITY_WORKER);
+        $heartbeats->record(WorkerHeartbeatRepository::OBSERVATION_WORKER);
         $this->recordConnectivity(true);
 
         $details = $this->service()->details();

@@ -194,6 +194,7 @@ final class SystemHealthService
                 WorkerHeartbeatRepository::OFFLINE_WORKER,
                 WorkerHeartbeatRepository::CONNECTIVITY_WORKER,
                 WorkerHeartbeatRepository::WEBSITE_CHECK_WORKER,
+                WorkerHeartbeatRepository::OBSERVATION_WORKER,
             ] as $worker
         ) {
             $heartbeat = $byName[$worker] ?? null;
@@ -210,6 +211,10 @@ final class SystemHealthService
             $stale = $heartbeat['stale'];
             if ($worker === WorkerHeartbeatRepository::CONNECTIVITY_WORKER) {
                 $stale = (int) $heartbeat['seconds_since_tick'] > $connectivityStaleAfter;
+            }
+            if ($worker === WorkerHeartbeatRepository::OBSERVATION_WORKER) {
+                $stale = (int) $heartbeat['seconds_since_tick']
+                    > WorkerHeartbeatRepository::OBSERVATION_STALE_AFTER_SECONDS;
             }
             $items[] = [
                 'worker' => $worker,
