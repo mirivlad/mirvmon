@@ -147,7 +147,7 @@ final class ObservationAnalysisRepository
     /**
      * @return list<array{
      *   server_id:int,server_name:string,metric_id:int,metric_name:string,
-     *   warning_threshold:float,current_value:float,time:string,value:float
+     *   warning_threshold:float,current_value:float,total_gb:?float,time:string,value:float
      * }>
      */
     public function diskHistory(DateTimeImmutable $now): array
@@ -167,6 +167,7 @@ final class ObservationAnalysisRepository
                     70.0
                 ) AS warning_threshold,
                 current_values.value AS current_value,
+                total_values.value AS total_gb,
                 hourly.bucket,
                 hourly.avg_value AS value
             FROM metric_samples_hourly AS hourly
@@ -178,6 +179,11 @@ final class ObservationAnalysisRepository
             LEFT JOIN metric_thresholds AS thresholds
               ON thresholds.server_id = hourly.server_id
              AND thresholds.metric_id = hourly.metric_id
+            LEFT JOIN metric_names AS total_metric_names
+              ON total_metric_names.name = 'disk_total_gb_' || substring(metric_names.name FROM 11)
+            LEFT JOIN current_metric_values AS total_values
+              ON total_values.server_id = hourly.server_id
+             AND total_values.metric_id = total_metric_names.id
             WHERE servers.is_active = TRUE
               AND metric_names.name LIKE 'disk_used_%'
               AND metric_names.name <> 'disk_used'
@@ -206,6 +212,7 @@ final class ObservationAnalysisRepository
                 'metric_name' => (string) $row['metric_name'],
                 'warning_threshold' => (float) $row['warning_threshold'],
                 'current_value' => (float) $row['current_value'],
+                'total_gb' => $row['total_gb'] === null ? null : (float) $row['total_gb'],
                 'time' => (string) $row['bucket'],
                 'value' => (float) $row['value'],
             ],

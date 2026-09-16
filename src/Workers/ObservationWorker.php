@@ -7,6 +7,7 @@ namespace App\Workers;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\ObservationAnalysisRepository;
 use App\Repositories\ObservationRepository;
+use App\Services\DiskMetricAliasResolver;
 use App\Services\ObservationAnalyzer;
 use DateTimeImmutable;
 
@@ -16,6 +17,7 @@ final class ObservationWorker
         private readonly ObservationAnalysisRepository $analysis,
         private readonly ObservationRepository $observations,
         private readonly ObservationAnalyzer $analyzer,
+        private readonly DiskMetricAliasResolver $diskAliases,
         private readonly NotificationOutboxRepository $outbox
     ) {
     }
@@ -94,6 +96,7 @@ final class ObservationWorker
                     'metric_name' => (string) $row['metric_name'],
                     'warning_threshold' => (float) $row['warning_threshold'],
                     'current_value' => (float) $row['current_value'],
+                    'total_gb' => $row['total_gb'] === null ? null : (float) $row['total_gb'],
                     'points' => [],
                 ];
             }
@@ -103,9 +106,16 @@ final class ObservationWorker
             ];
         }
         foreach ($diskGroups as $group) {
+            $evaluatedMetrics[] = $this->metricKey((int) $group['server_id'], (int) $group['metric_id']);
+        }
+        $diskResolution = $this->diskAliases->coalesce(array_values($diskGroups));
+        $resolvedAliases = $this->observations->resolveDiskAliases(
+            $diskResolution['alias_metric_keys'],
+            $now
+        );
+        foreach ($diskResolution['groups'] as $group) {
             $serverId = (int) $group['server_id'];
             $metricId = (int) $group['metric_id'];
-            $evaluatedMetrics[] = $this->metricKey($serverId, $metricId);
             $candidate = $this->analyzer->detectDiskGrowth(
                 (string) $group['metric_name'],
                 (float) $group['warning_threshold'],
@@ -115,6 +125,9 @@ final class ObservationWorker
             );
             if ($candidate === null) {
                 continue;
+            }
+            if (($group['aliases'] ?? []) !== []) {
+                $candidate['details']['aliases'] = array_values($group['aliases']);
             }
             $result = $this->observations->recordCandidate(
                 $serverId,
@@ -139,7 +152,7 @@ final class ObservationWorker
         return [
             'detected' => $detected,
             'notified' => $notified,
-            'resolved' => $this->observations->resolveMissing(
+            'resolved' => $resolvedAliases + $this->observations->resolveMissing(
                 $seen,
                 $evaluatedMetrics,
                 $now
