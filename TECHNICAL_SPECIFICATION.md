@@ -3,7 +3,7 @@
 ## Назначение
 
 MirvMon принимает push-метрики серверов, отображает их текущее и историческое
-состояние, создаёт алерты и доставляет уведомления. Система предназначена для
+состояние, создаёт алерты и проактивные наблюдения, доставляет уведомления. Система предназначена для
 публичной публикации и собственного production-использования, а не для
 одноразового прототипа.
 
@@ -46,7 +46,7 @@ Application/domain code должен оставаться переносимым
 - per-server offline timeout и notification policy;
 - per-metric warning/critical threshold и duration;
 - управление monitored services;
-- отображение current state, active alerts и last sample time.
+- отображение current state, active alerts, proactive observations и last sample time.
 
 ### Метрики
 
@@ -233,6 +233,23 @@ Operational UI live refresh:
 - `NOTIFICATION_POLL_INTERVAL` и `NOTIFICATION_BATCH_SIZE` ограничены и
   валидируются worker при старте.
 
+### Проактивные наблюдения
+
+- `observations` — отдельный от `alerts` домен: observation не является incident и не изменяет warning/critical thresholds;
+- v0.7.0 анализирует CPU/RAM level shifts и рост `disk_used_*` только по уже сохранённой истории; agent protocol не меняется;
+- CPU/RAM baseline строится per `server + metric` по historical hourly aggregates с robust p10/median/p90; свежие raw samples агрегируются в 5-minute buckets;
+- level-shift observation появляется только для устойчивого/повторяющегося отклонения ниже warning threshold и после достаточного периода обучения;
+- disk forecast после последнего существенного снижения usage строит новый trend segment, требует минимальные span/points, положительный slope и quality gate по R²;
+- каждая запись сохраняет explainable evidence: current/baseline values, confidence, detector details и forecast time;
+- fingerprint versioned detector name определяет дедупликацию; continuing condition обновляет одну запись вместо новых уведомлений;
+- anomaly можно перевести в `accepted_normal`; fingerprint остаётся подавленным до явного `reset-normal`;
+- prediction можно перевести в `handled`; он не возвращается в active, пока условие не исчезнет, после `resolved` следующий независимый цикл increment-ит notification cycle;
+- auto-resolve выполняется только для `server + metric`, реально оценённой текущим циклом analyzer; отсутствие входных данных, maintenance или DR gap не считаются recovery;
+- `observation-worker` выполняет bulk queries по парку, использует shared DR lock, heartbeat и supervisor restart semantics; отдельного Compose service нет;
+- notification outbox принимает observation jobs с `alert_id = NULL`, использует существующих server-specific recipients и maintenance suppression;
+- mutations `/observations/{id}/handle`, `/accept-normal`, `/reset-normal` — POST-only и требуют operator capability.
+- operator feedback по observations записывается в append-only Audit Log с observation ID, server/metric и переходом статуса.
+
 ### Самодиагностика сетевой связности
 
 - внешний connectivity probe проверяет настроенный список `host:port` как один
@@ -266,6 +283,7 @@ Operational UI live refresh:
 - `metric_samples` и `process_snapshots` — Timescale hypertables;
 - `website_check_samples` хранит raw историю HTTP(S)-проверок;
 - `website_state` и `website_endpoint_state` являются компактными current read models;
+- `observations` хранит отдельный lifecycle проактивных аномалий/прогнозов и operator feedback;
 - website raw history хранится 30 дней, агрегированная история — не менее 365 дней;
 - `current_metric_values` — компактная последняя точка каждой server/metric
   пары для dashboard и detail summary;
@@ -289,7 +307,8 @@ Production Compose:
 - требует `APP_KEY`, `SETUP_TOKEN`, `DB_PASSWORD`;
 - использует pinned base/database images;
 - healthcheck приложения вызывает `/readyz`;
-- выполняет checksum-protected migrations при старте.
+- выполняет checksum-protected migrations при старте;
+- supervisord внутри `app` запускает web runtime и background workers, включая `observation-worker`, без добавления третьего контейнера.
 
 Portainer использует готовый `MIRVMON_IMAGE`. Локальная разработка добавляет
 `docker/docker-compose.build.yml`.
@@ -328,6 +347,8 @@ Dashboard проверяется browser tests на desktop и mobile viewport.
 - website monitoring работает без отдельного Compose service и без изменения
   agent protocol;
 - HTTP(S) endpoint failure создаёт incident и recovery через общий pipeline;
+- CPU/RAM anomaly ниже warning threshold и disk-growth forecast создают observation, а не incident;
+- accepted-normal anomaly не уведомляет повторно, handled prediction rearms only after detector condition disappears;
 - недоступный Telegram не увеличивает latency ingestion;
 - current status согласован на summary, cards и details;
 - proxy credentials и application secrets отсутствуют в HTTP responses/logs;

@@ -72,7 +72,7 @@ PostgreSQL 17 + TimescaleDB 2.28:
 
 - relational: `users`, `server_groups`, `servers`, `metric_names`,
   `metric_thresholds`, `agent_tokens`, `installer_tokens`, `agent_configs`,
-  `service_status`, `alerts`, `notification_settings`, `app_settings`;
+  `service_status`, `alerts`, `observations`, `notification_settings`, `app_settings`;
 - idempotency: `ingested_samples`;
 - current read model: `current_metric_values`;
 - hypertables: `metric_samples`, `process_snapshots`;
@@ -120,10 +120,20 @@ credential в HTTPS body на публичный `POST /api/v1/metrics`.
 7. завершить HTTP без ожидания Telegram/SMTP.
 
 Фоновые процессы выбирают outbox через `FOR UPDATE SKIP LOCKED`, выполняют
-доставку с ограниченными retry и обрабатывают offline transitions. При разрыве
+доставку с ограниченными retry и обрабатывают offline transitions. Отдельный
+`observation-worker` bulk-чтением истории строит server-local baselines и disk
+trends, записывает advisory observations и не участвует в agent ingestion path. При разрыве
 соединения с БД worker отбрасывает весь PDO-dependent object graph и создаёт
 новое соединение после паузы; неизвестная программная ошибка завершает процесс
 для контролируемого restart через supervisor.
+
+## Проактивный анализ
+
+`observations` отделены от `alerts`: incident означает уже наступившее пороговое/availability-событие, observation — необычное поведение или прогноз обслуживания до порога. Analyzer не меняет thresholds и не выполняет remediation.
+
+CPU/RAM detector сравнивает свежие 5-minute buckets с robust p10/median/p90 baseline из hourly aggregates. Disk detector берёт `disk_used_*`, отбрасывает историю до последней заметной очистки и оценивает текущий линейный trend с quality gate. Оба детектора возвращают versioned fingerprint и evidence, достаточный для UI/notification без повторного вычисления объяснения.
+
+Lifecycle хранится в одной строке per `server + fingerprint`: `active`, `handled`, `accepted_normal`, `resolved`. Anomaly fingerprint после уведомления не спамит повторно; operator может принять его как норму и позже отменить решение. Prediction после `handled` молчит, пока условие остаётся, затем `resolved` rearms его для следующего независимого цикла. Auto-resolve разрешён только для метрики, которую текущий worker-run действительно смог оценить; maintenance/DR/data gap не считается recovery. Observation outbox jobs используют `observation_id` и существующий recipient resolution, не создавая fake alert row.
 
 ## URL и установщики
 
@@ -207,7 +217,8 @@ worker, что production-события.
 - интервалы до 48 часов читаются из raw hypertable, до 90 дней — из hourly
   aggregate, более длинные — из daily aggregate;
 - ingestion и notification delivery разделены;
-- один `app` контейнер содержит web runtime и управляемые supervisor workers.
+- observation analysis выполняется set-based/bulk queries, а не запросом на каждый сервер;
+- один `app` контейнер содержит web runtime и управляемые supervisor workers, включая `observation-worker`.
 
 Website monitoring использует тот же границу: один `app` запускает
 централизованный `website-check-worker`, а production Compose по-прежнему имеет

@@ -6,6 +6,14 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+- Added proactive Observations as a domain separate from incidents, with active/history/accepted-normal views and operator feedback actions.
+- Added deterministic CPU/RAM level-shift detection using server-local robust historical baselines, sustained/recurrent persistence checks and threshold ownership guards.
+- Added disk-growth forecasting with cleanup-aware trend segmentation, slope/R² quality gates and warning/full projections.
+- Added a supervised `observation-worker` using bulk TimescaleDB reads, DR maintenance coordination, worker heartbeat diagnostics and no agent-protocol changes.
+- Added observation lifecycle/deduplication so anomalies notify once per learned fingerprint, handled predictions stay quiet until the condition disappears, and later independent prediction cycles can notify again.
+- Reused the existing per-server Telegram/SMTP recipient resolution through observation-specific outbox jobs without creating fake alert rows.
+- Added migration 024, RU/EN UI, controller/state-machine/integration coverage and portable timeout-process test coverage for PHP images without `pcntl`.
+
 ## 0.6.9
 
 - Centralized the `user` / `operator` / `admin` authorization semantics in one `RolePolicy` instead of duplicating string comparisons across middleware and administrative controllers.
