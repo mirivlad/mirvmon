@@ -30,6 +30,7 @@ final class ObservationWorker
         $evaluatedMetrics = [];
         $detected = 0;
         $notified = 0;
+        $resolvedEpisodes = 0;
 
         $recent = [];
         foreach ($this->analysis->recentLevelBuckets($now) as $row) {
@@ -71,7 +72,8 @@ final class ObservationWorker
                 $candidate,
                 $now
             );
-            $seen[] = $serverId . ':' . $candidate['fingerprint'];
+            $seen[] = (int) $result['id'];
+            $resolvedEpisodes += (int) $result['resolved_siblings'];
             $detected++;
             if ($result['should_notify']) {
                 $notified += $this->notify(
@@ -135,7 +137,8 @@ final class ObservationWorker
                 $candidate,
                 $now
             );
-            $seen[] = $serverId . ':' . $candidate['fingerprint'];
+            $seen[] = (int) $result['id'];
+            $resolvedEpisodes += (int) $result['resolved_siblings'];
             $detected++;
             if ($result['should_notify']) {
                 $notified += $this->notify(
@@ -152,7 +155,7 @@ final class ObservationWorker
         return [
             'detected' => $detected,
             'notified' => $notified,
-            'resolved' => $resolvedAliases + $this->observations->resolveMissing(
+            'resolved' => $resolvedEpisodes + $resolvedAliases + $this->observations->resolveMissing(
                 $seen,
                 $evaluatedMetrics,
                 $now
@@ -162,7 +165,7 @@ final class ObservationWorker
 
     /**
      * @param array<string, mixed> $candidate
-     * @param array{id:int,status:string,notification_cycle:int,should_notify:bool} $result
+     * @param array{id:int,status:string,notification_cycle:int,should_notify:bool,resolved_siblings:int} $result
      */
     private function notify(
         int $serverId,

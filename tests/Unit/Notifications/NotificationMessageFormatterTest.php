@@ -186,7 +186,8 @@ final class NotificationMessageFormatterTest extends TestCase
         self::assertStringContainsString('Необычное поведение', $message['subject']);
         self::assertStringContainsString('Обычный уровень: 2.8', $message['body']);
         self::assertStringContainsString('Уверенность: 91%', $message['body']);
-        self::assertStringContainsString('/observations#observation-42', $message['body']);
+        self::assertStringContainsString('Открыть сервер: https://monitor.example/servers/7', $message['body']);
+        self::assertStringContainsString('Открыть наблюдение: https://monitor.example/observations#observation-42', $message['body']);
     }
 
     public function testObservationPredictionExplainsDiskTrend(): void

@@ -6,6 +6,13 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.7.2
+
+- Fixed anomaly episode identity: one continuous CPU/RAM deviation remains one observation and sends one notification even when its value crosses several 5-point pattern bands.
+- Added operator review semantics for anomalies: `Проверено` silences the current episode without teaching MirvMon that the behavior is normal; after true recovery a later independent episode can notify again.
+- Preserved `accepted_normal` as explicit pattern learning, separate from episode acknowledgement, and added migration 025 to collapse already-open duplicate anomaly rows while retaining prediction fingerprint uniqueness.
+- Notification formatting now emits all relevant internal links instead of choosing only one, so observation messages include both the direct server page and observation link; server alerts/warnings/recoveries keep their direct server link when `PUBLIC_BASE_URL` is configured.
+
 ## 0.7.1
 
 - Deduplicated disk-growth observations that represent the same filesystem through multiple mount aliases by requiring matching filesystem size, current usage and a strongly matching hourly history; `disk_used_root` is preferred as the canonical metric.

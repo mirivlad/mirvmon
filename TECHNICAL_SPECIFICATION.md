@@ -242,13 +242,15 @@ Operational UI live refresh:
 - disk forecast после последнего существенного снижения usage строит новый trend segment, требует минимальные span/points, положительный slope и quality gate по R²;
 - перед disk forecast эквивалентные `disk_used_*` mount aliases одного filesystem дедуплицируются по совпадающим current usage, `disk_total_gb_*` и достаточному участку hourly history; `disk_used_root` имеет canonical priority, а анализ использует минимальный warning threshold alias-группы;
 - каждая запись сохраняет explainable evidence: current/baseline values, confidence, detector details и forecast time;
-- fingerprint versioned detector name определяет дедупликацию; continuing condition обновляет одну запись вместо новых уведомлений;
-- anomaly можно перевести в `accepted_normal`; fingerprint остаётся подавленным до явного `reset-normal`;
-- prediction можно перевести в `handled`; он не возвращается в active, пока условие не исчезнет, после `resolved` следующий независимый цикл increment-ит notification cycle;
+- versioned anomaly fingerprint описывает behavior pattern, но не identity непрерывного episode: пока существует `active/handled` anomaly для того же `server + metric + detector`, новые bands обновляют ту же observation и не создают повторных уведомлений;
+- anomaly `handled` означает, что оператор проверил текущий episode; это не обучает normal pattern. После detector disappearance и `resolved` следующий независимый episode создаётся отдельно и снова может уведомить;
+- anomaly можно отдельно перевести в `accepted_normal`; только этот fingerprint pattern остаётся подавленным до явного `reset-normal`, а materially different pattern может снова стать observation;
+- prediction остаётся fingerprint-driven: `handled` не возвращается в active, пока условие не исчезнет, после `resolved` следующий независимый цикл increment-ит notification cycle;
 - auto-resolve выполняется только для `server + metric`, реально оценённой текущим циклом analyzer; отсутствие входных данных, maintenance или DR gap не считаются recovery;
 - `observation-worker` выполняет bulk queries по парку, использует shared DR lock, heartbeat и supervisor restart semantics; отдельного Compose service нет;
 - notification outbox принимает observation jobs с `alert_id = NULL`, использует существующих server-specific recipients и maintenance suppression;
-- mutations `/observations/{id}/handle`, `/accept-normal`, `/reset-normal` — POST-only и требуют operator capability.
+- при настроенном `PUBLIC_BASE_URL` formatter добавляет direct server link ко всем server-bound notifications; observation notification дополнительно содержит ссылку на `/observations#observation-{id}`;
+- mutations `/observations/{id}/handle`, `/accept-normal`, `/reset-normal` — POST-only и требуют operator capability;
 - operator feedback по observations записывается в append-only Audit Log с observation ID, server/metric и переходом статуса.
 
 ### Самодиагностика сетевой связности
