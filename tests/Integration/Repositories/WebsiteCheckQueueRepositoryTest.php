@@ -279,8 +279,7 @@ final class WebsiteCheckQueueRepositoryTest extends TestCase
             [
                 PHP_BINARY,
                 '-r',
-                'pcntl_async_signals(true); pcntl_signal(SIGTERM, static function (): void {});'
-                . ' while (true) { usleep(100000); }',
+                'while (true) { usleep(100000); }',
             ],
             [
                 0 => ['pipe', 'r'],
