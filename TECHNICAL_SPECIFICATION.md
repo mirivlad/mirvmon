@@ -240,6 +240,7 @@ Operational UI live refresh:
 - CPU/RAM baseline строится per `server + metric` по historical hourly aggregates с robust p10/median/p90; свежие raw samples агрегируются в 5-minute buckets;
 - level-shift observation появляется только для устойчивого/повторяющегося отклонения ниже warning threshold и после достаточного периода обучения;
 - disk forecast после последнего существенного снижения usage строит новый trend segment, требует минимальные span/points, положительный slope и quality gate по R²;
+- перед disk forecast эквивалентные `disk_used_*` mount aliases одного filesystem дедуплицируются по совпадающим current usage, `disk_total_gb_*` и достаточному участку hourly history; `disk_used_root` имеет canonical priority, а анализ использует минимальный warning threshold alias-группы;
 - каждая запись сохраняет explainable evidence: current/baseline values, confidence, detector details и forecast time;
 - fingerprint versioned detector name определяет дедупликацию; continuing condition обновляет одну запись вместо новых уведомлений;
 - anomaly можно перевести в `accepted_normal`; fingerprint остаётся подавленным до явного `reset-normal`;
