@@ -35,7 +35,9 @@ final class NotificationMessageFormatter
     {
         $message = $this->message($job);
         $payload = is_array($job['payload'] ?? null) ? $job['payload'] : [];
-        $link = $this->websiteLink($payload) ?? $this->serverLink($payload);
+        $link = $this->observationLink($payload)
+            ?? $this->websiteLink($payload)
+            ?? $this->serverLink($payload);
         if ($link !== null) {
             $message['body'] .= "\n" . $link;
         }
@@ -68,6 +70,10 @@ final class NotificationMessageFormatter
 
         if (str_starts_with($eventType, 'website_')) {
             return $this->websiteMessage($eventType, $payload, $time);
+        }
+
+        if (str_starts_with($eventType, 'observation_')) {
+            return $this->observationMessage($eventType, $payload, $time);
         }
 
         if ($eventType === 'alert_resolved') {
@@ -171,6 +177,59 @@ final class NotificationMessageFormatter
                 'Время события: ' . $time,
             ]),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array{subject: string, body: string}
+     */
+    private function observationMessage(string $eventType, array $payload, string $time): array
+    {
+        $server = $this->text($payload['server_name'] ?? 'unknown');
+        $metric = $this->text($payload['metric'] ?? 'unknown');
+        $kind = $eventType === 'observation_prediction' ? 'prediction' : 'anomaly';
+        $current = $this->text($payload['current_value'] ?? 'unknown');
+        $baseline = $this->text($payload['baseline_value'] ?? 'unknown');
+        $lines = [
+            'Сервер: ' . $server,
+            'Метрика: ' . $metric,
+            'Текущее значение: ' . $current,
+        ];
+        if ($kind === 'anomaly') {
+            $lines[] = 'Обычный уровень: ' . $baseline;
+        }
+        $details = is_array($payload['details'] ?? null) ? $payload['details'] : [];
+        if ($kind === 'prediction' && isset($details['slope_percent_per_day'])) {
+            $lines[] = 'Рост: ' . $this->text($details['slope_percent_per_day']) . ' п.п./сутки';
+        }
+        if ($kind === 'prediction' && isset($details['predicted_warning_at'])) {
+            $lines[] = 'Прогноз порога: ' . $this->timestamp($details['predicted_warning_at']);
+        }
+        if (isset($payload['confidence'])) {
+            $lines[] = 'Уверенность: ' . round((float) $payload['confidence'] * 100) . '%';
+        }
+        $lines[] = 'Время наблюдения: ' . $time;
+
+        return [
+            'subject' => $kind === 'prediction'
+                ? sprintf('📈 Прогноз MirvMon: %s / %s', $server, $metric)
+                : sprintf('🔎 Необычное поведение: %s / %s', $server, $metric),
+            'body' => implode("\n", $lines),
+        ];
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function observationLink(array $payload): ?string
+    {
+        $id = filter_var(
+            $payload['observation_id'] ?? null,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1]]
+        );
+        if ($this->publicBaseUrl === null || $id === false) {
+            return null;
+        }
+        return 'Открыть наблюдение: ' . $this->publicBaseUrl . '/observations#observation-' . $id;
     }
 
     /** @param array<string, mixed> $payload */

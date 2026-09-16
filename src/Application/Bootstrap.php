@@ -17,6 +17,7 @@ use App\Controllers\AuthController;
 use App\Controllers\DashboardController;
 use App\Controllers\GroupController;
 use App\Controllers\LanguageController;
+use App\Controllers\ObservationController;
 use App\Controllers\ServerController;
 use App\Controllers\ServerDetailController;
 use App\Controllers\SetupController;
@@ -36,6 +37,7 @@ use App\Repositories\MaintenanceWindowRepository;
 use App\Repositories\MetricRepository;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\NotificationSettingsRepository;
+use App\Repositories\ObservationRepository;
 use App\Repositories\ServerRepository;
 use App\Repositories\WorkerHeartbeatRepository;
 use App\Repositories\WebsiteCheckQueueRepository;
@@ -430,6 +432,20 @@ final class Bootstrap
                 $container->get(NotificationOutboxRepository::class),
                 $container->get(Translator::class),
                 $container->get(IncidentRepository::class)
+            )
+        );
+        $container->set(
+            ObservationRepository::class,
+            static fn (Container $container): ObservationRepository => new ObservationRepository(
+                $container->get(PDO::class)
+            )
+        );
+        $container->set(
+            ObservationController::class,
+            static fn (Container $container): ObservationController => new ObservationController(
+                $container->get(Twig::class),
+                $container->get(ObservationRepository::class),
+                $container->get(Translator::class)
             )
         );
         $container->set(

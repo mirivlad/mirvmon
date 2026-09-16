@@ -141,6 +141,7 @@ final class AuditController
             'group' => '/groups/' . $id,
             'user' => '/admin/users',
             'alert' => '/alerts?view=history',
+            'observation' => '/observations',
             'notification_job', 'notification_queue' => '/admin/notifications/queue',
             default => null,
         };

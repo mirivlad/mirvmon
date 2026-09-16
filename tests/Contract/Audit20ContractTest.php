@@ -100,6 +100,9 @@ final class Audit20ContractTest extends TestCase
             'notification_queue.job.retry',
             'notification_queue.job.delete',
             'notification_queue.delete',
+            'observation.handle',
+            'observation.accept_normal',
+            'observation.reset_normal',
         ] as $action) {
             self::assertStringContainsString("'{$action}'", $middleware, $action);
         }

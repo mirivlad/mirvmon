@@ -17,6 +17,7 @@ final class Ui19TemplateContractTest extends TestCase
         self::assertStringContainsString('data-nav-prefix="/servers"', $layout);
         self::assertStringContainsString('data-nav-prefix="/agents"', $layout);
         self::assertStringContainsString('data-nav-prefix="/alerts"', $layout);
+        self::assertStringContainsString('data-nav-prefix="/observations"', $layout);
         self::assertStringContainsString('data-nav-section="settings"', $layout);
         self::assertStringContainsString('/js/ui19.js', $layout);
     }
@@ -56,6 +57,7 @@ final class Ui19TemplateContractTest extends TestCase
             'templates/agents/index.twig' => 'fa-microchip',
             'templates/sites/index.twig' => 'fa-globe',
             'templates/alerts/index.twig' => 'fa-triangle-exclamation',
+            'templates/observations/index.twig' => 'fa-magnifying-glass-chart',
             'templates/admin/users.twig' => 'fa-users',
             'templates/admin/notifications.twig' => 'fa-paper-plane',
             'templates/admin/notification-queue.twig' => 'fa-list-check',

@@ -1,0 +1,110 @@
+{% extends "layout.twig" %}
+{% set page_title = t('observations.title') %}
+
+{% block content %}
+<header class="mb-3">
+    <h1 class="h2 mb-1"><i class="fas fa-magnifying-glass-chart" aria-hidden="true"></i> {{ t('observations.title') }}</h1>
+    <p class="text-muted mb-0">{{ t('observations.subtitle') }}</p>
+</header>
+
+<ul class="nav nav-tabs mb-3" aria-label="{{ t('observations.title') }}">
+    <li class="nav-item">
+        <a href="/observations?view=active" class="nav-link {{ view == 'active' ? 'active fw-semibold' : '' }}">
+            <i class="fas fa-eye me-1" aria-hidden="true"></i>{{ t('observations.tab.active') }}
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="/observations?view=history" class="nav-link {{ view == 'history' ? 'active fw-semibold' : '' }}">
+            <i class="fas fa-clock-rotate-left me-1" aria-hidden="true"></i>{{ t('observations.tab.history') }}
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="/observations?view=normal" class="nav-link {{ view == 'normal' ? 'active fw-semibold' : '' }}">
+            <i class="fas fa-graduation-cap me-1" aria-hidden="true"></i>{{ t('observations.tab.normal') }}
+        </a>
+    </li>
+</ul>
+<div class="card">
+    <div class="card-body p-0">
+        {% if observations|length > 0 %}
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>{{ t('incidents.column.source') }}</th>
+                        <th>{{ t('incidents.column.problem') }}</th>
+                        <th>{{ t('observations.current') }}</th>
+                        <th>{{ t('observations.confidence') }}</th>
+                        <th>{{ t('observations.last_seen') }}</th>
+                        {% if session.role in ['admin', 'operator'] %}<th>{{ t('common.actions') }}</th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                {% for observation in observations %}
+                    {% set metric = observation.metric_name ?: observation.details.metric|default('') %}
+                    {% set confidence = observation.confidence is not null ? (observation.confidence * 100)|round : null %}
+                    <tr id="observation-{{ observation.id }}">
+                        <td>
+                            <a class="fw-semibold text-decoration-none" href="/servers/{{ observation.server_id }}">{{ observation.server_name }}</a>
+                            <div class="small text-muted mt-1">{{ metric|replace({'_': ' '}) }}</div>
+                        </td>
+                        <td>
+                            <div class="fw-semibold">{{ t('observations.kind.' ~ observation.kind) }}</div>
+                            <div class="small text-muted mt-1">
+                                {% if observation.kind == 'anomaly' %}
+                                    {{ observation.details.reason|default('') }}
+                                    {% if observation.baseline_value is not null %} · {{ t('observations.baseline') }} {{ observation.baseline_value|round(2) }}{% endif %}
+                                {% else %}
+                                    {% if observation.details.slope_percent_per_day is defined %}{{ t('observations.slope') }} {{ observation.details.slope_percent_per_day }} п.п./сутки{% endif %}
+                                    {% if observation.details.predicted_warning_at is defined %} · {{ t('observations.forecast') }} {{ observation.details.predicted_warning_at|date('d.m.Y H:i') }}{% endif %}
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="text-nowrap fw-semibold">
+                            {% if observation.current_value is not null %}{{ observation.current_value|round(2) }}{% if observation.metric_unit %} {{ observation.metric_unit }}{% endif %}{% else %}—{% endif %}
+                        </td>
+                        <td class="text-nowrap">{% if confidence is not null %}{{ confidence }}%{% else %}—{% endif %}</td>
+                        <td class="text-nowrap">
+                            <div>{{ observation.last_seen_at|date('d.m.Y H:i') }}</div>
+                            {% if view != 'active' %}<div class="small text-muted">{{ t('observations.status.' ~ observation.status) }}</div>{% endif %}
+                        </td>
+                        {% if session.role in ['admin', 'operator'] %}
+                        <td class="text-nowrap">
+                            {% if view == 'active' and observation.kind == 'prediction' %}
+                                {% include "partials/action-button.twig" with {
+                                    form_action: '/observations/' ~ observation.id ~ '/handle',
+                                    icon: 'fa-check',
+                                    label: t('observations.action.handle'),
+                                    class: 'btn-outline-success'
+                                } %}
+                            {% elseif view == 'active' and observation.kind == 'anomaly' %}
+                                {% include "partials/action-button.twig" with {
+                                    form_action: '/observations/' ~ observation.id ~ '/accept-normal',
+                                    icon: 'fa-graduation-cap',
+                                    label: t('observations.action.accept_normal'),
+                                    class: 'btn-outline-primary'
+                                } %}
+                            {% elseif view == 'normal' %}
+                                {% include "partials/action-button.twig" with {
+                                    form_action: '/observations/' ~ observation.id ~ '/reset-normal',
+                                    icon: 'fa-rotate-left',
+                                    label: t('observations.action.reset_normal'),
+                                    class: 'btn-outline-secondary'
+                                } %}
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        {% endif %}
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5 px-3">
+            <i class="fas {{ view == 'normal' ? 'fa-graduation-cap' : (view == 'history' ? 'fa-clock-rotate-left' : 'fa-circle-check') }} fa-3x text-muted mb-3" aria-hidden="true"></i>
+            <p class="text-muted mb-0">{{ t('observations.empty.' ~ view) }}</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

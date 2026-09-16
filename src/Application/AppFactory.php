@@ -18,6 +18,7 @@ use App\Controllers\AuthController;
 use App\Controllers\DashboardController;
 use App\Controllers\GroupController;
 use App\Controllers\LanguageController;
+use App\Controllers\ObservationController;
 use App\Controllers\ServerController;
 use App\Controllers\ServerDetailController;
 use App\Controllers\SetupController;
@@ -141,6 +142,10 @@ final class AppFactory
 
             $group->get('/alerts', self::controller($container, AlertController::class, 'index'));
             $group->post('/alerts/{id}/resolve', self::controller($container, AlertController::class, 'markAsResolved'))->add($operator);
+            $group->get('/observations', self::controller($container, ObservationController::class, 'index'));
+            $group->post('/observations/{id}/handle', self::controller($container, ObservationController::class, 'handle'))->add($operator);
+            $group->post('/observations/{id}/accept-normal', self::controller($container, ObservationController::class, 'acceptNormal'))->add($operator);
+            $group->post('/observations/{id}/reset-normal', self::controller($container, ObservationController::class, 'resetNormal'))->add($operator);
             $group->get('/agent/{id}/config', self::controller($container, AgentController::class, 'getConfig'));
             $group->post('/agent/{id}/config', self::controller($container, AgentController::class, 'updateConfig'))->add($operator);
             $group->get('/agent/{id}/status', self::controller($container, AgentController::class, 'getStatus'));
