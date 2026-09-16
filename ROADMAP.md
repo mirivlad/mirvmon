@@ -1,11 +1,11 @@
 # Roadmap MirvMon
 
 Этот roadmap фиксирует текущее направление развития MirvMon после выпуска
-`v0.7.0`. Стабильный релиз на момент обновления документа — `v0.7.0`.
+`v0.7.1`. Стабильный релиз на момент обновления документа — `v0.7.1`.
 История уже выпущенных изменений сохраняется в [CHANGELOG.md](CHANGELOG.md) и
 [docs/releases](docs/releases).
 
-## Текущее состояние: v0.7.0
+## Текущее состояние: v0.7.1
 
 MirvMon уже закрывает два основных сценария эксплуатации:
 
@@ -285,6 +285,22 @@ maintenance, DR pause и observation gap не должны rearm-ить обра
    паттерна в анализ.
 7. Интеграционные, functional, contract и performance проверки; обновление
    README/ARCHITECTURE/TECHNICAL_SPECIFICATION/CHANGELOG/release notes.
+
+## v0.7.1 — Дедупликация disk forecast aliases (выпущен)
+
+Hotfix после первого production deployment v0.7.0: один и тот же filesystem мог
+появляться как несколько `disk_used_*` метрик для bind-mount/mount aliases и
+создавать несколько идентичных прогнозных наблюдений.
+
+- disk aliases определяются сервером без изменения agent protocol: должны совпасть
+  текущий usage, reported filesystem size и достаточный участок hourly history;
+- при совпадении canonical метрикой становится `disk_used_root`, если она есть;
+- для canonical forecast используется самый ранний (минимальный) warning threshold
+  из эквивалентных метрик;
+- уже существующие active/handled duplicate observations закрываются сразу, без
+  ожидания обычного recovery grace;
+- canonical fingerprint сохраняется, поэтому hotfix не создаёт повторное
+  уведомление по уже присланному root-прогнозу.
 
 ## Не входит в v0.5.3–v0.6.0
 
