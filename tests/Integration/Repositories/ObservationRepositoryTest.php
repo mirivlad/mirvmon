@@ -100,7 +100,7 @@ final class ObservationRepositoryTest extends TestCase
             $now
         );
         $this->repository->markNotified($created['id'], 1, $now);
-        self::assertTrue($this->repository->handlePrediction($created['id'], null, 'operator'));
+        self::assertTrue($this->repository->handle($created['id'], null, 'operator'));
 
         $stillPresent = $this->repository->recordCandidate(
             $this->serverId,
@@ -137,11 +137,11 @@ final class ObservationRepositoryTest extends TestCase
         $secondId = (int) $second?->fetchColumn();
         $now = new DateTimeImmutable('2026-09-16T00:00:00Z');
         $candidate = $this->anomaly('level_shift_v1:cpu_load:p0:b20');
-        $this->repository->recordCandidate($this->serverId, $this->metricId, $candidate, $now);
+        $first = $this->repository->recordCandidate($this->serverId, $this->metricId, $candidate, $now);
         $this->repository->recordCandidate($secondId, $this->metricId, $candidate, $now);
 
         $resolved = $this->repository->resolveMissing(
-            [$this->serverId . ':' . $candidate['fingerprint']],
+            [$first['id']],
             [
                 $this->serverId . ':' . $this->metricId,
                 $secondId . ':' . $this->metricId,
@@ -152,6 +152,103 @@ final class ObservationRepositoryTest extends TestCase
         self::assertCount(1, $this->repository->active());
     }
 
+
+    public function testContinuousAnomalyBandChangesStayOneEpisodeAndNotifyOnce(): void
+    {
+        $now = new DateTimeImmutable('2026-09-16T00:00:00Z');
+        $first = $this->repository->recordCandidate(
+            $this->serverId,
+            $this->metricId,
+            $this->anomaly('level_shift_v1:cpu_load:p0:b30'),
+            $now
+        );
+        self::assertTrue($first['should_notify']);
+        $this->repository->markNotified($first['id'], 1, $now);
+
+        $second = $this->repository->recordCandidate(
+            $this->serverId,
+            $this->metricId,
+            $this->anomaly('level_shift_v1:cpu_load:p0:b40'),
+            $now->modify('+5 minutes')
+        );
+        $third = $this->repository->recordCandidate(
+            $this->serverId,
+            $this->metricId,
+            $this->anomaly('level_shift_v1:cpu_load:p0:b45'),
+            $now->modify('+10 minutes')
+        );
+
+        self::assertSame($first['id'], $second['id']);
+        self::assertSame($first['id'], $third['id']);
+        self::assertFalse($second['should_notify']);
+        self::assertFalse($third['should_notify']);
+        self::assertSame('level_shift_v1:cpu_load:p0:b45', (string) self::$pdo?->query(
+            'SELECT fingerprint FROM observations WHERE id = ' . $first['id']
+        )->fetchColumn());
+        self::assertSame('1', (string) self::$pdo?->query(
+            "SELECT count(*) FROM observations WHERE server_id = {$this->serverId} AND kind = 'anomaly' AND status = 'active'"
+        )->fetchColumn());
+    }
+
+    public function testResolvedAnomalyStartsANewEpisodeAndNotifiesAgain(): void
+    {
+        $now = new DateTimeImmutable('2026-09-16T00:00:00Z');
+        $candidate = $this->anomaly('level_shift_v1:cpu_load:p0:b30');
+        $first = $this->repository->recordCandidate($this->serverId, $this->metricId, $candidate, $now);
+        $this->repository->markNotified($first['id'], 1, $now);
+        self::assertSame(1, $this->repository->resolveMissing(
+            [],
+            [$this->serverId . ':' . $this->metricId],
+            $now->modify('+30 minutes')
+        ));
+
+        $next = $this->repository->recordCandidate(
+            $this->serverId,
+            $this->metricId,
+            $candidate,
+            $now->modify('+35 minutes')
+        );
+        self::assertNotSame($first['id'], $next['id']);
+        self::assertSame('active', $next['status']);
+        self::assertTrue($next['should_notify']);
+    }
+
+    public function testHandledAnomalyStaysQuietUntilRecoveryThenRearms(): void
+    {
+        $now = new DateTimeImmutable('2026-09-16T00:00:00Z');
+        $first = $this->repository->recordCandidate(
+            $this->serverId,
+            $this->metricId,
+            $this->anomaly('level_shift_v1:cpu_load:p0:b30'),
+            $now
+        );
+        $this->repository->markNotified($first['id'], 1, $now);
+        self::assertTrue($this->repository->handle($first['id'], null, 'operator'));
+
+        $continued = $this->repository->recordCandidate(
+            $this->serverId,
+            $this->metricId,
+            $this->anomaly('level_shift_v1:cpu_load:p0:b45'),
+            $now->modify('+5 minutes')
+        );
+        self::assertSame($first['id'], $continued['id']);
+        self::assertSame('handled', $continued['status']);
+        self::assertFalse($continued['should_notify']);
+        self::assertSame(1, $this->repository->resolveMissing(
+            [],
+            [$this->serverId . ':' . $this->metricId],
+            $now->modify('+30 minutes')
+        ));
+
+        $next = $this->repository->recordCandidate(
+            $this->serverId,
+            $this->metricId,
+            $this->anomaly('level_shift_v1:cpu_load:p0:b45'),
+            $now->modify('+35 minutes')
+        );
+        self::assertNotSame($first['id'], $next['id']);
+        self::assertTrue($next['should_notify']);
+    }
 
     public function testObservationDoesNotResolveAcrossAnAnalysisGap(): void
     {
@@ -164,7 +261,7 @@ final class ObservationRepositoryTest extends TestCase
             $now
         );
         $this->repository->markNotified($created['id'], 1, $now);
-        $this->repository->handlePrediction($created['id'], null, 'operator');
+        $this->repository->handle($created['id'], null, 'operator');
 
         self::assertSame(0, $this->repository->resolveMissing(
             [],
@@ -186,7 +283,7 @@ final class ObservationRepositoryTest extends TestCase
             $candidate,
             $now
         );
-        $this->repository->handlePrediction($created['id'], null, 'operator');
+        $this->repository->handle($created['id'], null, 'operator');
         self::$pdo?->prepare(
             "INSERT INTO maintenance_windows (server_id, starts_at, ends_at)
              VALUES (:server_id, :starts_at, :ends_at)"

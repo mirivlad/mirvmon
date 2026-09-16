@@ -48,7 +48,7 @@ final class ObservationController
         if ($id === null) {
             return $this->flashRedirect($response, 'observations.flash.not_found', 'error');
         }
-        $ok = $this->observations->handlePrediction(
+        $ok = $this->observations->handle(
             $id,
             $this->userId(),
             $this->username()

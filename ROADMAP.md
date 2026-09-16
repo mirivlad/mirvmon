@@ -1,11 +1,11 @@
 # Roadmap MirvMon
 
 Этот roadmap фиксирует текущее направление развития MirvMon после выпуска
-`v0.7.1`. Стабильный релиз на момент обновления документа — `v0.7.1`.
+`v0.7.2`. Стабильный релиз на момент обновления документа — `v0.7.2`.
 История уже выпущенных изменений сохраняется в [CHANGELOG.md](CHANGELOG.md) и
 [docs/releases](docs/releases).
 
-## Текущее состояние: v0.7.1
+## Текущее состояние: v0.7.2
 
 MirvMon уже закрывает два основных сценария эксплуатации:
 
@@ -301,6 +301,24 @@ Hotfix после первого production deployment v0.7.0: один и то�
   ожидания обычного recovery grace;
 - canonical fingerprint сохраняется, поэтому hotfix не создаёт повторное
   уведомление по уже присланному root-прогнозу.
+
+## v0.7.2 — Episode semantics и прямые notification links (выпущен)
+
+Hotfix по результатам первых production anomalies v0.7.0–v0.7.1.
+
+- один непрерывный CPU/RAM anomaly episode определяется текущей open observation
+  `server + metric + detector`, а не изменяющимся 5-процентным band fingerprint;
+- переход нагрузки между `b30`, `b40`, `b45` обновляет evidence одной observation
+  и не создаёт повторные Telegram/SMTP notifications;
+- после настоящего recovery следующий независимый anomaly episode создаётся заново
+  и снова может уведомить;
+- действие **«Проверено»** переводит текущий anomaly episode в `handled`, не обучая
+  MirvMon считать паттерн нормальным; **«Считать это нормальным»** остаётся
+  отдельным явным и обратимым suppression;
+- migration 025 схлопывает уже открытые band-дубликаты, сохраняя самый свежий;
+- formatter добавляет все применимые internal links: для observation — прямую
+  ссылку на server detail и на observation, для server alerts/warnings/recovery —
+  прямую ссылку на server detail при настроенном `PUBLIC_BASE_URL`.
 
 ## Не входит в v0.5.3–v0.6.0
 
