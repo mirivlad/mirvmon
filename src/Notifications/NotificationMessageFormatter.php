@@ -205,8 +205,13 @@ final class NotificationMessageFormatter
         if ($kind === 'prediction' && isset($details['predicted_warning_at'])) {
             $lines[] = 'Прогноз порога: ' . $this->timestamp($details['predicted_warning_at']);
         }
+        if ($kind === 'prediction' && isset($details['aliases']) && is_array($details['aliases']) && $details['aliases'] !== []) {
+            $aliases = array_map(fn (mixed $alias): string => $this->text($alias), $details['aliases']);
+            $lines[] = 'Эквивалентные метрики файловой системы: ' . implode(', ', $aliases);
+        }
         if (isset($payload['confidence'])) {
-            $lines[] = 'Уверенность: ' . round((float) $payload['confidence'] * 100) . '%';
+            $label = $kind === 'prediction' ? 'Качество прогноза' : 'Уверенность';
+            $lines[] = $label . ': ' . round((float) $payload['confidence'] * 100) . '%';
         }
         $lines[] = 'Время наблюдения: ' . $time;
 

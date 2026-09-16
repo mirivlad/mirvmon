@@ -69,6 +69,8 @@ versioned by detector name so later algorithms can coexist safely.
 
 Source: hourly `disk_used_*` history plus the latest current value.
 
+Before fitting a trend, v0.7.1 coalesces mount aliases that are strong evidence of the same filesystem: reported `disk_total_gb_*`, current usage and at least one day of overlapping hourly history must match within tight tolerances. `disk_used_root` is preferred as the canonical metric; otherwise the stable metric-name order is used. Different filesystem sizes or diverging histories are never collapsed.
+
 Before fitting a trend, find the latest material downward step (a cleanup or
 storage expansion) and discard the older segment. The remaining segment must
 cover enough time and points. Fit an ordinary least-squares line to percentage

@@ -206,6 +206,48 @@ final class ObservationRepositoryTest extends TestCase
         )->fetchColumn());
     }
 
+    public function testDiskAliasObservationResolvesImmediatelyWithoutTouchingCanonical(): void
+    {
+        $rootMetricId = $this->insertMetric('disk_used_root_hotfix');
+        $aliasMetricId = $this->insertMetric('disk_used_tmp_hotfix');
+        $now = new DateTimeImmutable('2026-09-16T00:00:00Z');
+        $root = $this->repository->recordCandidate(
+            $this->serverId,
+            $rootMetricId,
+            $this->prediction('disk_growth_v1:disk_used_root_hotfix'),
+            $now
+        );
+        $alias = $this->repository->recordCandidate(
+            $this->serverId,
+            $aliasMetricId,
+            $this->prediction('disk_growth_v1:disk_used_tmp_hotfix'),
+            $now
+        );
+
+        self::assertSame(1, $this->repository->resolveDiskAliases(
+            [$this->serverId . ':' . $aliasMetricId],
+            $now->modify('+5 minutes')
+        ));
+        self::assertSame('active', $this->observationStatus($root['id']));
+        self::assertSame('resolved', $this->observationStatus($alias['id']));
+    }
+
+    private function insertMetric(string $name): int
+    {
+        $statement = self::$pdo?->prepare(
+            "INSERT INTO metric_names (name, unit, description) VALUES (:name, '%', 'test') RETURNING id"
+        );
+        $statement?->execute(['name' => $name]);
+        return (int) $statement?->fetchColumn();
+    }
+
+    private function observationStatus(int $id): string
+    {
+        return (string) self::$pdo?->query(
+            'SELECT status FROM observations WHERE id = ' . $id
+        )->fetchColumn();
+    }
+
     /** @return array<string, mixed> */
     private function anomaly(string $fingerprint): array
     {
