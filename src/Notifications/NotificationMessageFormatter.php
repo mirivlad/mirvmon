@@ -35,11 +35,13 @@ final class NotificationMessageFormatter
     {
         $message = $this->message($job);
         $payload = is_array($job['payload'] ?? null) ? $job['payload'] : [];
-        $link = $this->observationLink($payload)
-            ?? $this->websiteLink($payload)
-            ?? $this->serverLink($payload);
-        if ($link !== null) {
-            $message['body'] .= "\n" . $link;
+        $links = array_values(array_unique(array_filter([
+            $this->serverLink($payload),
+            $this->observationLink($payload),
+            $this->websiteLink($payload),
+        ], static fn (?string $link): bool => $link !== null)));
+        if ($links !== []) {
+            $message['body'] .= "\n" . implode("\n", $links);
         }
 
         return $message;

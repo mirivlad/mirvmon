@@ -77,7 +77,7 @@ return [
     'audit.event.system.host_cleared' => 'The MirvMon monitoring server was cleared.',
     'audit.event.system.connectivity_saved' => 'MirvMon external connectivity check settings were changed.',
     'audit.event.alert.resolved' => 'Incident #{id} was resolved manually.',
-    'audit.event.observation.handled' => 'Observation #{id} for server “{server}” was marked handled.',
+    'audit.event.observation.handled' => 'Observation #{id} for server “{server}” was marked reviewed/handled.',
     'audit.event.observation.accepted_normal' => 'Anomaly #{id} for server “{server}” was accepted as normal behavior.',
     'audit.event.observation.reset_normal' => 'Observation #{id} for server “{server}” was returned to analysis.',
     'audit.event.retention.forever' => 'Audit retention changed: keep history forever.',
