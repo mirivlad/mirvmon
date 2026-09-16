@@ -6,6 +6,13 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.7.1
+
+- Deduplicated disk-growth observations that represent the same filesystem through multiple mount aliases by requiring matching filesystem size, current usage and a strongly matching hourly history; `disk_used_root` is preferred as the canonical metric.
+- Existing active/handled duplicate disk predictions are resolved immediately when aliases are recognized, while the canonical observation keeps its original fingerprint and notification cycle.
+- Disk forecast notifications now describe prediction confidence as forecast quality and include equivalent filesystem metrics when aliases were collapsed.
+- No database migration or agent protocol change is required.
+
 ## 0.7.0
 
 - Added proactive Observations as a domain separate from incidents, with active/history/accepted-normal views and operator feedback actions.

@@ -235,6 +235,34 @@ final class ObservationRepository
         return $statement->rowCount();
     }
 
+    /** @param list<string> $metricKeys server_id:metric_id */
+    public function resolveDiskAliases(array $metricKeys, DateTimeImmutable $now): int
+    {
+        $metricKeys = array_values(array_unique($metricKeys));
+        if ($metricKeys === []) {
+            return 0;
+        }
+
+        $params = ['resolved_at' => $this->timestamp($now)];
+        $placeholders = [];
+        foreach ($metricKeys as $index => $metricKey) {
+            $key = 'alias_' . $index;
+            $placeholders[] = ':' . $key;
+            $params[$key] = $metricKey;
+        }
+
+        $statement = $this->pdo->prepare(
+            "UPDATE observations
+             SET status = 'resolved', resolved_at = :resolved_at, updated_at = :resolved_at
+             WHERE detector = 'disk_growth_v1'
+               AND status IN ('active', 'handled')
+               AND (server_id::text || ':' || metric_id::text) IN ("
+                . implode(', ', $placeholders) . ')'
+        );
+        $statement->execute($params);
+        return $statement->rowCount();
+    }
+
     public function markNotified(int $id, int $cycle, DateTimeImmutable $now): void
     {
         $statement = $this->pdo->prepare(
