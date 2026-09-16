@@ -66,7 +66,7 @@
                         <td class="text-nowrap">{% if confidence is not null %}{{ confidence }}%{% else %}—{% endif %}</td>
                         <td class="text-nowrap">
                             <div>{{ observation.last_seen_at|date('d.m.Y H:i') }}</div>
-                            {% if view != 'active' %}<div class="small text-muted">{{ t('observations.status.' ~ observation.status) }}</div>{% endif %}
+                            {% if view != 'active' %}<div class="small text-muted">{{ observation.kind == 'anomaly' and observation.status == 'handled' ? t('observations.status.reviewed') : t('observations.status.' ~ observation.status) }}</div>{% endif %}
                         </td>
                         {% if session.role in ['admin', 'operator'] %}
                         <td class="text-nowrap">
@@ -78,6 +78,12 @@
                                     class: 'btn-outline-success'
                                 } %}
                             {% elseif view == 'active' and observation.kind == 'anomaly' %}
+                                {% include "partials/action-button.twig" with {
+                                    form_action: '/observations/' ~ observation.id ~ '/handle',
+                                    icon: 'fa-check',
+                                    label: t('observations.action.review'),
+                                    class: 'btn-outline-success'
+                                } %}
                                 {% include "partials/action-button.twig" with {
                                     form_action: '/observations/' ~ observation.id ~ '/accept-normal',
                                     icon: 'fa-graduation-cap',

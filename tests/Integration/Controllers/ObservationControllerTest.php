@@ -80,6 +80,7 @@ final class ObservationControllerTest extends TestCase
 
         self::assertSame(200, $response->getStatusCode());
         self::assertStringContainsString('observation-server', $html);
+        self::assertStringContainsString('/observations/' . $anomalyId . '/handle', $html);
         self::assertStringContainsString('/observations/' . $anomalyId . '/accept-normal', $html);
         self::assertStringContainsString('/observations/' . $predictionId . '/handle', $html);
     }
@@ -100,6 +101,24 @@ final class ObservationControllerTest extends TestCase
         self::assertSame('operator', (string) self::$pdo?->query(
             'SELECT handled_by_username FROM observations WHERE id = ' . $id
         )->fetchColumn());
+    }
+
+    public function testAnomalyCanBeReviewedWithoutAcceptingItAsNormal(): void
+    {
+        $id = $this->createObservation('anomaly', 'level_shift_v1:cpu_load:p1:b20');
+        $response = $this->controller->handle(
+            (new ServerRequestFactory())->createServerRequest('POST', '/observations/' . $id . '/handle'),
+            (new ResponseFactory())->createResponse(),
+            ['id' => (string) $id]
+        );
+
+        self::assertSame('/observations', $response->getHeaderLine('Location'));
+        self::assertSame('handled', (string) self::$pdo?->query(
+            'SELECT status FROM observations WHERE id = ' . $id
+        )->fetchColumn());
+        self::assertNull(self::$pdo?->query(
+            'SELECT accepted_at FROM observations WHERE id = ' . $id
+        )->fetchColumn() ?: null);
     }
 
     public function testAnomalyCanBeAcceptedAndReset(): void

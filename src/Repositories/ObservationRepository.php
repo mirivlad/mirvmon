@@ -20,7 +20,7 @@ final class ObservationRepository
 
     /**
      * @param array<string, mixed> $candidate
-     * @return array{id:int,status:string,notification_cycle:int,should_notify:bool}
+     * @return array{id:int,status:string,notification_cycle:int,should_notify:bool,resolved_siblings:int}
      */
     public function recordCandidate(
         int $serverId,
@@ -30,34 +30,9 @@ final class ObservationRepository
     ): array {
         $ownsTransaction = $this->beginTransaction();
         try {
-            $select = $this->pdo->prepare(
-                'SELECT id, kind, status, recurrence_count, notification_cycle, notified_at
-                 FROM observations
-                 WHERE server_id = :server_id AND fingerprint = :fingerprint
-                 FOR UPDATE'
-            );
-            $select->execute([
-                'server_id' => $serverId,
-                'fingerprint' => (string) $candidate['fingerprint'],
-            ]);
-            $existing = $select->fetch();
-            if (!is_array($existing)) {
-                $result = $this->insertCandidate(
-                    $serverId,
-                    $metricId,
-                    $candidate,
-                    $now
-                );
-                $this->commitTransaction($ownsTransaction);
-                return $result;
-            }
-
-            $result = $this->refreshCandidate(
-                $existing,
-                $metricId,
-                $candidate,
-                $now
-            );
+            $result = (string) ($candidate['kind'] ?? '') === 'anomaly'
+                ? $this->recordAnomalyCandidate($serverId, $metricId, $candidate, $now)
+                : $this->recordFingerprintCandidate($serverId, $metricId, $candidate, $now);
             $this->commitTransaction($ownsTransaction);
             return $result;
         } catch (Throwable $exception) {
@@ -65,9 +40,98 @@ final class ObservationRepository
             throw $exception;
         }
     }
+
     /**
      * @param array<string, mixed> $candidate
-     * @return array{id:int,status:string,notification_cycle:int,should_notify:bool}
+     * @return array{id:int,status:string,notification_cycle:int,should_notify:bool,resolved_siblings:int}
+     */
+    private function recordFingerprintCandidate(
+        int $serverId,
+        int $metricId,
+        array $candidate,
+        DateTimeImmutable $now
+    ): array {
+        $select = $this->pdo->prepare(
+            'SELECT id, kind, status, recurrence_count, notification_cycle, notified_at
+             FROM observations
+             WHERE server_id = :server_id AND fingerprint = :fingerprint
+             FOR UPDATE'
+        );
+        $select->execute([
+            'server_id' => $serverId,
+            'fingerprint' => (string) $candidate['fingerprint'],
+        ]);
+        $existing = $select->fetch();
+        if (!is_array($existing)) {
+            return $this->insertCandidate($serverId, $metricId, $candidate, $now);
+        }
+        return $this->refreshCandidate($existing, $metricId, $candidate, $now);
+    }
+
+    /**
+     * @param array<string, mixed> $candidate
+     * @return array{id:int,status:string,notification_cycle:int,should_notify:bool,resolved_siblings:int}
+     */
+    private function recordAnomalyCandidate(
+        int $serverId,
+        int $metricId,
+        array $candidate,
+        DateTimeImmutable $now
+    ): array {
+        $accepted = $this->pdo->prepare(
+            "SELECT id, kind, status, recurrence_count, notification_cycle, notified_at
+             FROM observations
+             WHERE server_id = :server_id
+               AND kind = 'anomaly'
+               AND fingerprint = :fingerprint
+               AND status = 'accepted_normal'
+             ORDER BY accepted_at DESC NULLS LAST, id DESC
+             LIMIT 1
+             FOR UPDATE"
+        );
+        $accepted->execute([
+            'server_id' => $serverId,
+            'fingerprint' => (string) $candidate['fingerprint'],
+        ]);
+        $existing = $accepted->fetch();
+
+        if (!is_array($existing)) {
+            $episode = $this->pdo->prepare(
+                "SELECT id, kind, status, recurrence_count, notification_cycle, notified_at
+                 FROM observations
+                 WHERE server_id = :server_id
+                   AND metric_id = :metric_id
+                   AND kind = 'anomaly'
+                   AND detector = :detector
+                   AND status IN ('active', 'handled')
+                 ORDER BY last_seen_at DESC, id DESC
+                 LIMIT 1
+                 FOR UPDATE"
+            );
+            $episode->execute([
+                'server_id' => $serverId,
+                'metric_id' => $metricId,
+                'detector' => (string) $candidate['detector'],
+            ]);
+            $existing = $episode->fetch();
+        }
+
+        $result = is_array($existing)
+            ? $this->refreshCandidate($existing, $metricId, $candidate, $now)
+            : $this->insertCandidate($serverId, $metricId, $candidate, $now);
+        $result['resolved_siblings'] = $this->resolveAnomalySiblings(
+            $serverId,
+            $metricId,
+            (string) $candidate['detector'],
+            (int) $result['id'],
+            $now
+        );
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $candidate
+     * @return array{id:int,status:string,notification_cycle:int,should_notify:bool,resolved_siblings:int}
      */
     private function insertCandidate(
         int $serverId,
@@ -103,15 +167,17 @@ final class ObservationRepository
             'status' => 'active',
             'notification_cycle' => (int) $created['notification_cycle'],
             'should_notify' => true,
+            'resolved_siblings' => 0,
         ];
     }
 
     /**
      * @param array<string, mixed> $existing
      * @param array<string, mixed> $candidate
-     * @return array{id:int,status:string,notification_cycle:int,should_notify:bool}
+     * @return array{id:int,status:string,notification_cycle:int,should_notify:bool,resolved_siblings:int}
      */
-    private function refreshCandidate(        array $existing,
+    private function refreshCandidate(
+        array $existing,
         int $metricId,
         array $candidate,
         DateTimeImmutable $now
@@ -140,6 +206,7 @@ final class ObservationRepository
         $statement = $this->pdo->prepare(
             'UPDATE observations
              SET metric_id = :metric_id,
+                 fingerprint = :fingerprint,
                  status = :status,
                  current_value = :current_value,
                  baseline_value = :baseline_value,
@@ -156,12 +223,14 @@ final class ObservationRepository
         );
         $statement->execute([
             'metric_id' => $metricId,
+            'fingerprint' => (string) $candidate['fingerprint'],
             'status' => $newStatus,
             'current_value' => $candidate['current_value'] ?? null,
             'baseline_value' => $candidate['baseline_value'] ?? null,
             'confidence' => $candidate['confidence'] ?? null,
             'forecast_at' => $candidate['forecast_at'] ?? null,
-            'details' => $this->json($candidate['details'] ?? []),            'recurrence_count' => $recurrence,
+            'details' => $this->json($candidate['details'] ?? []),
+            'recurrence_count' => $recurrence,
             'notification_cycle' => $cycle,
             'notified_at' => $notifiedAt,
             'last_seen_at' => $this->timestamp($now),
@@ -174,15 +243,16 @@ final class ObservationRepository
             'status' => $newStatus,
             'notification_cycle' => $cycle,
             'should_notify' => $shouldNotify,
+            'resolved_siblings' => 0,
         ];
     }
 
     /**
-     * @param list<string> $seenKeys server_id:fingerprint
+     * @param list<int> $seenObservationIds
      * @param list<string> $evaluatedMetricKeys server_id:metric_id
      */
     public function resolveMissing(
-        array $seenKeys,
+        array $seenObservationIds,
         array $evaluatedMetricKeys,
         DateTimeImmutable $now
     ): int {
@@ -203,14 +273,14 @@ final class ObservationRepository
         }
 
         $seenFilter = '';
-        if ($seenKeys !== []) {
+        if ($seenObservationIds !== []) {
             $seenPlaceholders = [];
-            foreach (array_values(array_unique($seenKeys)) as $index => $seenKey) {
+            foreach (array_values(array_unique($seenObservationIds)) as $index => $seenObservationId) {
                 $key = 'seen_' . $index;
                 $seenPlaceholders[] = ':' . $key;
-                $params[$key] = $seenKey;
+                $params[$key] = $seenObservationId;
             }
-            $seenFilter = " AND (observations.server_id::text || ':' || observations.fingerprint) NOT IN ("
+            $seenFilter = ' AND observations.id NOT IN ('
                 . implode(', ', $seenPlaceholders) . ')';
         }
 
@@ -263,6 +333,33 @@ final class ObservationRepository
         return $statement->rowCount();
     }
 
+    private function resolveAnomalySiblings(
+        int $serverId,
+        int $metricId,
+        string $detector,
+        int $keepId,
+        DateTimeImmutable $now
+    ): int {
+        $statement = $this->pdo->prepare(
+            "UPDATE observations
+             SET status = 'resolved', resolved_at = :resolved_at, updated_at = :resolved_at
+             WHERE server_id = :server_id
+               AND metric_id = :metric_id
+               AND detector = :detector
+               AND kind = 'anomaly'
+               AND status IN ('active', 'handled')
+               AND id <> :keep_id"
+        );
+        $statement->execute([
+            'server_id' => $serverId,
+            'metric_id' => $metricId,
+            'detector' => $detector,
+            'keep_id' => $keepId,
+            'resolved_at' => $this->timestamp($now),
+        ]);
+        return $statement->rowCount();
+    }
+
     public function markNotified(int $id, int $cycle, DateTimeImmutable $now): void
     {
         $statement = $this->pdo->prepare(
@@ -278,7 +375,7 @@ final class ObservationRepository
         ]);
     }
 
-    public function handlePrediction(int $id, ?int $userId, ?string $username): bool
+    public function handle(int $id, ?int $userId, ?string $username): bool
     {
         $statement = $this->pdo->prepare(
             "UPDATE observations
@@ -287,7 +384,7 @@ final class ObservationRepository
                  handled_by_user_id = :user_id,
                  handled_by_username = :username,
                  updated_at = CURRENT_TIMESTAMP
-             WHERE id = :id AND kind = 'prediction' AND status = 'active'"
+             WHERE id = :id AND status = 'active'"
         );
         $statement->execute([
             'id' => $id,

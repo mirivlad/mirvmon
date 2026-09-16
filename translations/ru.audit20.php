@@ -77,7 +77,7 @@ return [
     'audit.event.system.host_cleared' => 'Сервер мониторинга MirvMon сброшен.',
     'audit.event.system.connectivity_saved' => 'Изменены параметры контроля внешней сетевой связности MirvMon.',
     'audit.event.alert.resolved' => 'Инцидент #{id} закрыт вручную.',
-    'audit.event.observation.handled' => 'Наблюдение #{id} для сервера «{server}» отмечено как обработанное.',
+    'audit.event.observation.handled' => 'Наблюдение #{id} для сервера «{server}» отмечено как проверенное/обработанное.',
     'audit.event.observation.accepted_normal' => 'Аномалия #{id} для сервера «{server}» отмечена как нормальное поведение.',
     'audit.event.observation.reset_normal' => 'Наблюдение #{id} для сервера «{server}» возвращено в анализ.',
     'audit.event.retention.forever' => 'Политика хранения журнала изменена: хранить бессрочно.',
