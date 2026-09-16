@@ -6,6 +6,8 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.7.0
+
 - Added proactive Observations as a domain separate from incidents, with active/history/accepted-normal views and operator feedback actions.
 - Added deterministic CPU/RAM level-shift detection using server-local robust historical baselines, sustained/recurrent persistence checks and threshold ownership guards.
 - Added disk-growth forecasting with cleanup-aware trend segmentation, slope/R² quality gates and warning/full projections.
