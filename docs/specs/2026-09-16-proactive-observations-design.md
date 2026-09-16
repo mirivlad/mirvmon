@@ -88,21 +88,28 @@ Persist slope, R², segment duration and both forecast times in observation
 
 ## Lifecycle and deduplication
 
-The worker evaluates the complete detector set per run and records `seen`
-fingerprints plus the `server + metric` pairs for which enough current data was
-actually evaluated. A row may auto-resolve only after its own metric was evaluated
-and its fingerprint was absent. Missing input because of maintenance, DR downtime
-or another observation gap is not evidence that the condition disappeared.
+The worker evaluates the complete detector set per run and records the observation
+IDs actually seen plus the `server + metric` pairs for which enough current data
+was evaluated. A row may auto-resolve only after its own metric was evaluated and
+the row was absent. Missing input because of maintenance, DR downtime or another
+observation gap is not evidence that the condition disappeared.
 
-New anomaly fingerprint:
+Anomaly episode semantics (corrected in v0.7.2):
 
-1. insert `active`;
-2. enqueue one observation notification;
-3. later runs only refresh evidence/`last_seen_at`;
-4. when unseen for the resolution grace window, mark `resolved`;
-5. recurrence of the same resolved anomaly reopens the row but does not spam a
-   second notification for the same learned fingerprint;
-6. `accepted_normal` never reopens until the operator explicitly resets it.
+1. the fingerprint describes a behavior pattern (day-part/value band), not the
+   identity of the current episode;
+2. while an `active` or `handled` anomaly exists for the same
+   `server + metric + detector`, later bands refresh that row and never enqueue a
+   second notification;
+3. `handled` means the operator reviewed this episode; it stays quiet while the
+   detector still sees the condition and becomes `resolved` only after recovery;
+4. after recovery, a later independent episode creates a new row and may notify
+   again, even when its pattern fingerprint matches an older resolved episode;
+5. `accepted_normal` is separate from acknowledgement: it suppresses only the
+   explicitly accepted fingerprint until reset, so a materially different pattern
+   can still surface;
+6. migration 025 collapses already-open band duplicates and enforces one open
+   anomaly episode per `server + metric + detector`.
 
 Prediction fingerprint:
 
@@ -119,8 +126,7 @@ Prediction fingerprint:
 Reuse the existing server recipient resolution and transport outbox. Add an
 observation-specific enqueue entry point that permits `alert_id = NULL` and does
 not create a fake alert. Maintenance suppresses delivery the same way it does for
-incidents. Formatting links to `/observations` and includes the evidence needed
-to understand the recommendation.
+incidents. Formatting includes the evidence needed to understand the recommendation. With `PUBLIC_BASE_URL` configured, server-bound notifications include a direct server-detail link; observation messages additionally link to `/observations#observation-{id}`.
 
 ## Runtime
 
@@ -141,7 +147,7 @@ queries, never one query per server. This matters because MirvMon already has a
 - History — resolved/handled cycles;
 - Normal behavior — fingerprints explicitly accepted by operators.
 
-An anomaly exposes "Считать это нормальным". A prediction exposes "Обработано".
+An active anomaly exposes both "Проверено" (acknowledge only this episode) and "Считать это нормальным" (learn this pattern). A prediction exposes "Обработано".
 Accepted-normal rows expose "Снова анализировать". All mutations require
 operator capability and CSRF protection, and successful operator feedback is recorded
 in the append-only audit log with the observation identity and state transition.
