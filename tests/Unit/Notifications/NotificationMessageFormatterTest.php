@@ -202,6 +202,7 @@ final class NotificationMessageFormatterTest extends TestCase
                 'details' => [
                     'slope_percent_per_day' => 1.7,
                     'predicted_warning_at' => '2026-09-20T00:00:00+00:00',
+                    'aliases' => ['disk_used_tmp', 'disk_used_var_tmp'],
                 ],
             ],
         ]);
@@ -209,5 +210,8 @@ final class NotificationMessageFormatterTest extends TestCase
         self::assertStringContainsString('Прогноз MirvMon', $message['subject']);
         self::assertStringContainsString('1.7 п.п./сутки', $message['body']);
         self::assertStringContainsString('20.09.2026', $message['body']);
+        self::assertStringContainsString('Эквивалентные метрики файловой системы: disk_used_tmp, disk_used_var_tmp', $message['body']);
+        self::assertStringContainsString('Качество прогноза: 88%', $message['body']);
+        self::assertStringNotContainsString('Уверенность: 88%', $message['body']);
     }
 }

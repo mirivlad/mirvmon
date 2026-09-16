@@ -9,6 +9,7 @@ use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\ObservationAnalysisRepository;
 use App\Repositories\ObservationRepository;
 use App\Repositories\WorkerHeartbeatRepository;
+use App\Services\DiskMetricAliasResolver;
 use App\Services\ObservationAnalyzer;
 use App\Workers\ObservationWorker;
 
@@ -90,6 +91,7 @@ function createObservationRuntime(): array
             new ObservationAnalysisRepository($pdo),
             new ObservationRepository($pdo),
             new ObservationAnalyzer(),
+            new DiskMetricAliasResolver(),
             $outbox
         ),
         'heartbeat' => new WorkerHeartbeatRepository($pdo),
