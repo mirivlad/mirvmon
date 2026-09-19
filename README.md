@@ -38,6 +38,7 @@ MirvMon — self-hosted система мониторинга серверов �
 ## Быстрый старт
 
 Production stack состоит из `app` и `db`; TLS обычно завершает внешний nginx.
+Официальный image уже содержит зафиксированный PHP 8.5 runtime, поэтому PHP на Docker/Portainer host устанавливать не требуется.
 
 1. Создайте Docker/Portainer stack из этого репозитория с compose-файлом `docker/docker-compose.yml`.
 2. Скопируйте переменные из `docker/.env.example` и обязательно задайте `APP_KEY`, `SETUP_TOKEN` и `DB_PASSWORD`.
