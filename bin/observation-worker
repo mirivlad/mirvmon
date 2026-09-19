@@ -9,6 +9,7 @@ use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\ObservationAnalysisRepository;
 use App\Repositories\ObservationRepository;
 use App\Repositories\WorkerHeartbeatRepository;
+use App\Services\ContextualLevelShiftAnalyzer;
 use App\Services\DiskMetricAliasResolver;
 use App\Services\ObservationAnalyzer;
 use App\Workers\ObservationWorker;
@@ -85,12 +86,15 @@ function createObservationRuntime(): array
 {
     $pdo = ConnectionFactory::fromEnvironment();
     $outbox = new NotificationOutboxRepository($pdo);
+    $timezone = getenv('APP_TIMEZONE') ?: 'UTC';
+    new DateTimeZone($timezone);
 
     return [
         'worker' => new ObservationWorker(
-            new ObservationAnalysisRepository($pdo),
+            new ObservationAnalysisRepository($pdo, $timezone),
             new ObservationRepository($pdo),
             new ObservationAnalyzer(),
+            new ContextualLevelShiftAnalyzer(),
             new DiskMetricAliasResolver(),
             $outbox
         ),

@@ -6,6 +6,15 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.7.3
+
+- Replaced the global CPU/RAM median detector with deterministic `level_shift_v2` contextual baselines built from up to 56 days of hourly history in `APP_TIMEZONE`: same weekday/hour first, then weekday-vs-weekend/hour, then hour-of-day; the expected band preserves historical hourly minima/maxima instead of comparing fresh 5-minute peaks only with smoothed hourly averages.
+- Removed global-only anomaly fallback: when contextual history is not mature enough, MirvMon stays silent instead of presenting a misleading all-day baseline as normal.
+- Added explicit level-shift hysteresis: trigger disappearance is `elevated`, configured warning ownership is `incident_owned`, and an open anomaly resolves only after twelve consecutive normal 5-minute buckets using the recovery boundary for the current contextual baseline.
+- Made accepted-normal CPU/RAM patterns contextual by weekday/hour and bounded load range while retaining v0.7.0/v0.7.2 accepted v1 fingerprints as compatibility hints.
+- Observation notifications and UI now show the expected contextual range, median, context and history depth instead of a single opaque "usual" value.
+- Added migration 026 to retire open v1 level-shift episodes; no agent protocol change or agent reinstall is required.
+
 ## 0.7.2
 
 - Fixed anomaly episode identity: one continuous CPU/RAM deviation remains one observation and sends one notification even when its value crosses several 5-point pattern bands.
