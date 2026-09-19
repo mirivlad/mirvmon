@@ -6,6 +6,12 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.7.4
+
+- Added a canonical MirvMon visual identity to the product UI: the same telemetry mark is now used in the main navbar, authentication/setup screens and browser favicon.
+- Replaced the Font Awesome placeholder brand with the MirvMon wordmark, including a light navbar variant and the standard dark/blue variant on light surfaces.
+- Added the reusable SVG brand asset under `public/brand`; no database, agent protocol or deployment configuration changes are required.
+
 ## 0.7.3
 
 - Replaced the global CPU/RAM median detector with deterministic `level_shift_v2` contextual baselines built from up to 56 days of hourly history in `APP_TIMEZONE`: same weekday/hour first, then weekday-vs-weekend/hour, then hour-of-day; the expected band preserves historical hourly minima/maxima instead of comparing fresh 5-minute peaks only with smoothed hourly averages.
