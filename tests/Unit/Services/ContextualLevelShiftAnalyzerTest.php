@@ -136,20 +136,30 @@ final class ContextualLevelShiftAnalyzerTest extends TestCase
         self::assertSame('triggered', $otherWeekday['state']);
     }
 
-    public function testRecoveryUsesOpeningEpisodeBoundaryAcrossContextChange(): void
+    public function testContextChangeStillRequiresAFullHourBeforeRecovery(): void
     {
-        $evaluation = $this->analyzer->evaluate(
+        $elevenBuckets = $this->analyzer->evaluate(
             'cpu_load',
             80.0,
             $this->baseline(25.0, 45.0, 68.0, 6, 10),
-            $this->recent([20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20]),
+            $this->recent([40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40]),
+            $this->now,
+            [],
+            ['details' => ['recovery_boundary' => 12.0]]
+        );
+        $fullHour = $this->analyzer->evaluate(
+            'cpu_load',
+            80.0,
+            $this->baseline(25.0, 45.0, 68.0, 6, 10),
+            $this->recent([40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40]),
             $this->now,
             [],
             ['details' => ['recovery_boundary' => 12.0]]
         );
 
-        self::assertSame('elevated', $evaluation['state']);
-        self::assertSame(12.0, $evaluation['evidence']['recovery_boundary']);
+        self::assertSame('elevated', $elevenBuckets['state']);
+        self::assertSame('clear', $fullHour['state']);
+        self::assertSame(68.0, $fullHour['evidence']['recovery_boundary']);
     }
 
     /** @return array<string,mixed> */
