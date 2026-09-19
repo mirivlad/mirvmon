@@ -1,11 +1,11 @@
 # Roadmap MirvMon
 
 Этот roadmap фиксирует текущее направление развития MirvMon после выпуска
-`v0.7.5`. Стабильный релиз на момент обновления документа — `v0.7.5`.
+`v0.7.6`. Стабильный релиз на момент обновления документа — `v0.7.6`.
 История уже выпущенных изменений сохраняется в [CHANGELOG.md](CHANGELOG.md) и
 [docs/releases](docs/releases).
 
-## Текущее состояние: v0.7.5
+## Текущее состояние: v0.7.6
 
 MirvMon уже закрывает два основных сценария эксплуатации:
 
@@ -369,6 +369,15 @@ alerts/incidents фиксируются.
 
 Migration 027 хранит только ожидающие post-maintenance доставки. Agent protocol
 не меняется.
+
+## v0.7.6 — Исправление shared layout (выпущен)
+
+Небольшой UI hotfix: буквальная последовательность `\\n` случайно попала в
+`<head>` основного и auth layout и отображалась текстом в верхней части страницы.
+
+- исправлены `templates/layout.twig` и `templates/login-layout.twig`;
+- добавлен contract-test на shared document heads;
+- schema, agent protocol и deployment configuration не меняются.
 
 ## Не входит в v0.5.3–v0.6.0
 
