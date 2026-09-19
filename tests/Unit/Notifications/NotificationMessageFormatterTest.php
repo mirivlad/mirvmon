@@ -33,6 +33,34 @@ final class NotificationMessageFormatterTest extends TestCase
         self::assertStringContainsString('30.07.2026 01:02:03 UTC', $message['body']);
     }
 
+    public function testPostMaintenanceMessageIsExplicitlyMarked(): void
+    {
+        $message = (new NotificationMessageFormatter())->format([
+            'event_type' => 'metric_triggered',
+            'payload' => [
+                'type' => 'metric',
+                'event' => 'triggered',
+                'server_name' => 'db-1',
+                'metric' => 'cpu_load',
+                'value' => 91,
+                'severity' => 'critical',
+                'event_time' => '2026-09-19T02:00:00+00:00',
+                'maintenance_original_event_time' => '2026-09-19T01:30:00+00:00',
+                'post_maintenance' => true,
+            ],
+        ]);
+
+        self::assertStringContainsString('После обслуживания', $message['subject']);
+        self::assertStringContainsString(
+            'После обслуживания: проблема всё ещё активна.',
+            $message['body']
+        );
+        self::assertStringContainsString(
+            'Исходное событие: 19.09.2026 01:30:00 UTC',
+            $message['body']
+        );
+    }
+
     public function testTimesAreRenderedConsistentlyInConfiguredTimezone(): void
     {
         $message = (new NotificationMessageFormatter('', 'Asia/Irkutsk'))->format([

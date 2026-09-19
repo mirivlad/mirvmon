@@ -52,6 +52,7 @@ final class MetricsIngestionService
                 $currentMetricIds
             );
             $this->updateServices($server, $envelope);
+            $this->outbox->flushMaintenanceDeferralsForServer($server['id']);
 
             $this->commitTransaction($ownsTransaction);
             return new MetricsIngestionResult($server['id'], false);
