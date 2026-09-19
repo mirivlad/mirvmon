@@ -69,9 +69,10 @@ Lifecycle is explicitly hysteretic and separate from triggering:
 - `insufficient_data`: the current analysis cannot prove either trigger or
   recovery.
 
-The recovery boundary is stored in the episode evidence at opening and remains
-authoritative across later time-context changes. This prevents an 11:59→12:00
-baseline change from closing an episode.
+Recovery is evaluated against the current contextual recovery boundary, but only
+after twelve consecutive 5-minute buckets satisfy it. Therefore a scheduled
+night→day profile change can legitimately end a night anomaly after one stable
+hour, while a context boundary can never close an episode instantly.
 
 `accepted_normal` remains explicit and reversible. A v2 accepted pattern is
 matched only in a comparable weekday/hour context and bounded value range. Older
@@ -116,8 +117,8 @@ Anomaly episode semantics (v0.7.2 identity, v0.7.3 contextual recovery):
    second notification;
 3. `handled` means the operator reviewed this episode; it stays quiet while the
    episode is `triggered`, `elevated` or `incident_owned`;
-4. `level_shift_v2` recovery is explicit `clear` after one hour below the opening
-   recovery boundary; generic 20-minute candidate absence never resolves v2;
+4. `level_shift_v2` recovery is explicit `clear` after one hour below the current
+   contextual recovery boundary; generic 20-minute candidate absence never resolves v2;
 5. after recovery, a later independent episode creates a new row and may notify
    again, even when its pattern fingerprint matches an older resolved episode;
 6. `accepted_normal` is separate from acknowledgement: v2 limits suppression to
