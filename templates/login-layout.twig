@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="color-scheme" content="light">
+    <meta name="color-scheme" content="light">\n    <meta name="theme-color" content="#f3f6fb">
     {% set effective_title = page_title|default(title)|default(t('app.name')) %}
     <title>{{ effective_title }} · MirvMon</title>
-    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="icon" type="image/svg+xml" href="/brand/mirvmon-mark.svg">
     <link rel="stylesheet" href="/vendor/bootstrap/bootstrap.min.css">
     <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css">
     <link rel="stylesheet" href="/css/app.css">
@@ -14,10 +14,7 @@
 <body class="auth-page">
     <main class="auth-shell">
         <a class="auth-brand" href="/" aria-label="MirvMon">
-            <span class="app-brand-mark" aria-hidden="true">
-                <i class="fas fa-wave-square"></i>
-            </span>
-            <span>MirvMon</span>
+            {% include 'partials/brand.twig' %}
         </a>
         {% block content %}{% endblock %}
     </main>
