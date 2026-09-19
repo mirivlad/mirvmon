@@ -53,7 +53,15 @@
                             <div class="small text-muted mt-1">
                                 {% if observation.kind == 'anomaly' %}
                                     {{ observation.details.reason|default('') }}
-                                    {% if observation.baseline_value is not null %} · {{ t('observations.baseline') }} {{ observation.baseline_value|round(2) }}{% endif %}
+                                    {% if observation.details.expected_low is defined and observation.details.expected_high is defined %}
+                                        · {{ t('observations.expected_range') }}
+                                        {{ observation.details.expected_low|round(2) }}–{{ observation.details.expected_high|round(2) }}
+                                        {% if observation.details.baseline_context is defined %}
+                                            · {{ t('observations.context.' ~ observation.details.baseline_context) }}
+                                        {% endif %}
+                                    {% elseif observation.baseline_value is not null %}
+                                        · {{ t('observations.baseline') }} {{ observation.baseline_value|round(2) }}
+                                    {% endif %}
                                 {% else %}
                                     {% if observation.details.slope_percent_per_day is defined %}{{ t('observations.slope') }} {{ observation.details.slope_percent_per_day }} п.п./сутки{% endif %}
                                     {% if observation.details.predicted_warning_at is defined %} · {{ t('observations.forecast') }} {{ observation.details.predicted_warning_at|date('d.m.Y H:i') }}{% endif %}
