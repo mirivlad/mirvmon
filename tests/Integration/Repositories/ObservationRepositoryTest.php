@@ -250,6 +250,62 @@ final class ObservationRepositoryTest extends TestCase
         self::assertTrue($next['should_notify']);
     }
 
+    public function testContextualAnomalyIsNotResolvedByGenericMissingGrace(): void
+    {
+        $now = new DateTimeImmutable('2026-09-19T00:00:00Z');
+        $candidate = $this->anomalyV2('level_shift_v2:cpu_load:d6:h08:b30');
+        $created = $this->repository->recordCandidate(
+            $this->serverId,
+            $this->metricId,
+            $candidate,
+            $now
+        );
+        $this->repository->markNotified($created['id'], 1, $now);
+
+        self::assertSame(0, $this->repository->resolveMissing(
+            [],
+            [$this->serverId . ':' . $this->metricId],
+            $now->modify('+2 hours')
+        ));
+        self::assertSame('active', $this->observationStatus($created['id']));
+    }
+
+    public function testContextualAnomalyRequiresExplicitClearAndCanBeTouchedWhileElevated(): void
+    {
+        $now = new DateTimeImmutable('2026-09-19T00:00:00Z');
+        $created = $this->repository->recordCandidate(
+            $this->serverId,
+            $this->metricId,
+            $this->anomalyV2('level_shift_v2:cpu_load:d6:h08:b30'),
+            $now
+        );
+
+        $touchedId = $this->repository->touchAnomalyEpisode(
+            $this->serverId,
+            $this->metricId,
+            'level_shift_v2',
+            [
+                'current_value' => 18.0,
+                'baseline_value' => 8.5,
+                'lifecycle_state' => 'elevated',
+            ],
+            $now->modify('+30 minutes')
+        );
+        self::assertSame($created['id'], $touchedId);
+        self::assertSame('active', $this->observationStatus($created['id']));
+        self::assertSame('18', (string) self::$pdo?->query(
+            'SELECT current_value FROM observations WHERE id = ' . $created['id']
+        )->fetchColumn());
+
+        self::assertSame(1, $this->repository->resolveAnomalyEpisode(
+            $this->serverId,
+            $this->metricId,
+            'level_shift_v2',
+            $now->modify('+1 hour')
+        ));
+        self::assertSame('resolved', $this->observationStatus($created['id']));
+    }
+
     public function testObservationDoesNotResolveAcrossAnAnalysisGap(): void
     {
         $now = new DateTimeImmutable('2026-09-16T00:00:00Z');
@@ -357,6 +413,27 @@ final class ObservationRepositoryTest extends TestCase
             'confidence' => 0.9,
             'forecast_at' => null,
             'details' => ['metric' => 'cpu_load', 'reason' => 'sustained'],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function anomalyV2(string $fingerprint): array
+    {
+        return [
+            'kind' => 'anomaly',
+            'detector' => 'level_shift_v2',
+            'fingerprint' => $fingerprint,
+            'current_value' => 30.0,
+            'baseline_value' => 8.5,
+            'confidence' => 0.9,
+            'forecast_at' => null,
+            'details' => [
+                'metric' => 'cpu_load',
+                'reason' => 'sustained',
+                'recovery_boundary' => 12.0,
+                'context_weekday' => 6,
+                'context_hour' => 8,
+            ],
         ];
     }
 
