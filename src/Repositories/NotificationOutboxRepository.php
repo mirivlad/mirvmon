@@ -82,8 +82,27 @@ final class NotificationOutboxRepository
              WHERE id = 1'
         )?->fetch();
 
-        if ($this->underMaintenance($serverId, $websiteId)) {
-            if ($this->isRecoveryEvent($eventType)) {
+        $recoveryEvent = $this->isRecoveryEvent($eventType);
+        $underMaintenance = $this->underMaintenance($serverId, $websiteId);
+
+        if ($recoveryEvent
+            && !$underMaintenance
+            && $this->maintenanceAlertDeferralExists($alertId)
+        ) {
+            $hadPriorDelivery = $this->alertHasQueuedNotification($alertId);
+            $this->clearMaintenanceAlertDeferral($alertId);
+            if (!$hadPriorDelivery) {
+                return 0;
+            }
+        }
+        if (!is_array($settings) || !$this->severityIsEnabled($settings, $payload)) {
+            if ($recoveryEvent) {
+                $this->clearMaintenanceAlertDeferral($alertId);
+            }
+            return 0;
+        }
+        if ($underMaintenance) {
+            if ($recoveryEvent) {
                 $this->clearMaintenanceAlertDeferral($alertId);
             } elseif (!$this->alertEventWasQueued($alertId, $eventType)) {
                 $this->deferMaintenanceNotification(
@@ -96,18 +115,6 @@ final class NotificationOutboxRepository
                     $deduplicationKey
                 );
             }
-            return 0;
-        }
-        if ($this->isRecoveryEvent($eventType)
-            && $this->maintenanceAlertDeferralExists($alertId)
-        ) {
-            $hadPriorDelivery = $this->alertHasQueuedNotification($alertId);
-            $this->clearMaintenanceAlertDeferral($alertId);
-            if (!$hadPriorDelivery) {
-                return 0;
-            }
-        }
-        if (!is_array($settings) || !$this->severityIsEnabled($settings, $payload)) {
             return 0;
         }
         if (
@@ -1283,6 +1290,9 @@ final class NotificationOutboxRepository
                     cooldown_seconds
              FROM notification_settings WHERE id = 1'
         )?->fetch();
+        if (!is_array($settings) || !$this->severityIsEnabled($settings, $payload)) {
+            return 0;
+        }
         if ($this->underMaintenance($serverId, null)) {
             $this->deferMaintenanceNotification(
                 $serverId,
@@ -1293,9 +1303,6 @@ final class NotificationOutboxRepository
                 $payload,
                 $deduplicationKey
             );
-            return 0;
-        }
-        if (!is_array($settings) || !$this->severityIsEnabled($settings, $payload)) {
             return 0;
         }
         if ($this->withinCooldown(
