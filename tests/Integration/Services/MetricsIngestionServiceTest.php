@@ -117,6 +117,59 @@ final class MetricsIngestionServiceTest extends TestCase
         );
     }
 
+    public function testMaintenanceKeepsMetricsAndAlertsButDefersDeliveryUntilProblemStillExists(): void
+    {
+        $metricId = $this->metricId('cpu_load');
+        self::$pdo?->prepare(
+            'INSERT INTO metric_thresholds
+                (server_id, metric_id, warning_threshold, critical_threshold)
+             VALUES (:server_id, :metric_id, 70, 90)'
+        )->execute(['server_id' => $this->serverId, 'metric_id' => $metricId]);
+        self::$pdo?->prepare(
+            "INSERT INTO maintenance_windows (
+                server_id, ends_at, reason, created_by
+             ) VALUES (
+                :server_id, CURRENT_TIMESTAMP + INTERVAL '1 hour',
+                'Deploy', 'operator'
+             )"
+        )->execute(['server_id' => $this->serverId]);
+
+        $this->ingestion->ingest($this->envelope(
+            '21000000-0000-4000-8000-000000000001',
+            '2026-09-19T09:00:00Z',
+            ['cpu_load' => 95]
+        ));
+
+        self::assertSame(1, $this->tableCount('metric_samples'));
+        self::assertSame(1, $this->tableCount('alerts'));
+        self::assertSame(0, $this->tableCount('notification_outbox'));
+        self::assertSame(1, $this->tableCount('maintenance_notification_deferrals'));
+
+        self::$pdo?->prepare(
+            'UPDATE maintenance_windows
+             SET ends_at = CURRENT_TIMESTAMP
+             WHERE server_id = :server_id'
+        )->execute(['server_id' => $this->serverId]);
+
+        $this->ingestion->ingest($this->envelope(
+            '21000000-0000-4000-8000-000000000002',
+            '2026-09-19T09:01:00Z',
+            ['cpu_load' => 94]
+        ));
+
+        self::assertSame(2, $this->tableCount('metric_samples'));
+        self::assertSame(1, $this->tableCount('alerts'));
+        self::assertSame(1, $this->tableCount('notification_outbox'));
+        self::assertSame(0, $this->tableCount('maintenance_notification_deferrals'));
+
+        $payload = self::$pdo?->query(
+            'SELECT payload::text FROM notification_outbox ORDER BY id DESC LIMIT 1'
+        )->fetchColumn();
+        self::assertIsString($payload);
+        $decoded = json_decode($payload, true, 512, JSON_THROW_ON_ERROR);
+        self::assertTrue($decoded['post_maintenance'] ?? false);
+    }
+
     public function testRecoveryResolvesAlertAndQueuesOneRecovery(): void
     {
         $metricId = $this->metricId('cpu_load');

@@ -78,6 +78,10 @@ final class OfflineStatusWorker
                 if (!$offline && $alertId !== null) {
                     $this->resolveOfflineAlert($server, $alertId, $now);
                     $transitions++;
+                } elseif ($offline && $alertId !== null) {
+                    $this->outbox->flushMaintenanceDeferralsForServer(
+                        (int) $server['id']
+                    );
                 }
             }
 

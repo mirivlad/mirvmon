@@ -98,6 +98,73 @@ final class MaintenanceWindowRepositoryTest extends TestCase
         self::assertSame(1, $this->enqueue($outbox, 'after'));
     }
 
+    public function testPersistentAlertIsDeliveredOnceAfterMaintenanceEnds(): void
+    {
+        $outbox = new NotificationOutboxRepository(self::$pdo);
+        $this->repository->start($this->serverId, 3600, 'Deploy', 'operator');
+
+        self::assertSame(0, $this->enqueue($outbox, 'during'));
+        self::assertSame(1, (int) self::$pdo?->query(
+            'SELECT count(*) FROM maintenance_notification_deferrals'
+        )->fetchColumn());
+
+        self::assertSame(1, $this->repository->cancel($this->serverId));
+        self::assertSame(1, $outbox->flushMaintenanceDeferralsForServer($this->serverId));
+        self::assertSame(0, $outbox->flushMaintenanceDeferralsForServer($this->serverId));
+        self::assertSame(1, (int) self::$pdo?->query(
+            'SELECT count(*) FROM notification_outbox'
+        )->fetchColumn());
+        self::assertSame(0, (int) self::$pdo?->query(
+            'SELECT count(*) FROM maintenance_notification_deferrals'
+        )->fetchColumn());
+
+        $payload = self::$pdo?->query(
+            'SELECT payload::text FROM notification_outbox ORDER BY id DESC LIMIT 1'
+        )->fetchColumn();
+        self::assertIsString($payload);
+        $decoded = json_decode($payload, true, 512, JSON_THROW_ON_ERROR);
+        self::assertTrue($decoded['post_maintenance'] ?? false);
+        self::assertArrayHasKey('maintenance_original_event_time', $decoded);
+    }
+
+    public function testAlertThatRecoversDuringMaintenanceDoesNotProduceCatchUpNoise(): void
+    {
+        $outbox = new NotificationOutboxRepository(self::$pdo);
+        $this->repository->start($this->serverId, 3600, 'Deploy', 'operator');
+
+        self::assertSame(0, $this->enqueue($outbox, 'during'));
+        self::assertSame(1, (int) self::$pdo?->query(
+            'SELECT count(*) FROM maintenance_notification_deferrals'
+        )->fetchColumn());
+
+        self::$pdo?->prepare(
+            'UPDATE alerts SET resolved = TRUE, resolved_at = CURRENT_TIMESTAMP WHERE id = :id'
+        )->execute(['id' => $this->alertId]);
+        self::assertSame(0, $outbox->enqueueConfigured(
+            $this->serverId,
+            $this->alertId,
+            'metric_recovered',
+            [
+                'type' => 'metric',
+                'event' => 'recovered',
+                'severity' => 'critical',
+                'server_id' => $this->serverId,
+                'metric' => 'cpu_load',
+                'event_time' => '2026-09-19T00:10:00+00:00',
+            ],
+            'recovered-during'
+        ));
+
+        self::assertSame(0, (int) self::$pdo?->query(
+            'SELECT count(*) FROM maintenance_notification_deferrals'
+        )->fetchColumn());
+        $this->repository->cancel($this->serverId);
+        self::assertSame(0, $outbox->flushMaintenanceDeferralsForServer($this->serverId));
+        self::assertSame(0, (int) self::$pdo?->query(
+            'SELECT count(*) FROM notification_outbox'
+        )->fetchColumn());
+    }
+
     public function testAnotherServerKeepsItsNotifications(): void
     {
         $outbox = new NotificationOutboxRepository(self::$pdo);
@@ -141,7 +208,11 @@ final class MaintenanceWindowRepositoryTest extends TestCase
             $this->serverId,
             $this->alertId,
             'metric_triggered',
-            ['severity' => 'critical', 'server_id' => $this->serverId],
+            [
+                'severity' => 'critical',
+                'server_id' => $this->serverId,
+                'event_time' => '2026-09-19T00:00:00+00:00',
+            ],
             $key
         );
     }

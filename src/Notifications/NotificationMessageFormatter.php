@@ -35,6 +35,15 @@ final class NotificationMessageFormatter
     {
         $message = $this->message($job);
         $payload = is_array($job['payload'] ?? null) ? $job['payload'] : [];
+        if (($payload['post_maintenance'] ?? false) === true) {
+            $context = ['После обслуживания: проблема всё ещё активна.'];
+            if (isset($payload['maintenance_original_event_time'])) {
+                $context[] = 'Исходное событие: '
+                    . $this->timestamp($payload['maintenance_original_event_time']);
+            }
+            $message['subject'] = '⏱ После обслуживания: ' . $message['subject'];
+            $message['body'] = implode("\n", $context) . "\n" . $message['body'];
+        }
         $links = array_values(array_unique(array_filter([
             $this->serverLink($payload),
             $this->observationLink($payload),
