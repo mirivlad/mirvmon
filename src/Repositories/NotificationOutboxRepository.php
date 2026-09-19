@@ -82,10 +82,32 @@ final class NotificationOutboxRepository
              WHERE id = 1'
         )?->fetch();
 
-        if (!is_array($settings) || !$this->severityIsEnabled($settings, $payload)) {
+        if ($this->underMaintenance($serverId, $websiteId)) {
+            if ($this->isRecoveryEvent($eventType)) {
+                $this->clearMaintenanceAlertDeferral($alertId);
+            } elseif (!$this->alertEventWasQueued($alertId, $eventType)) {
+                $this->deferMaintenanceNotification(
+                    $serverId,
+                    $websiteId,
+                    $alertId,
+                    null,
+                    $eventType,
+                    $payload,
+                    $deduplicationKey
+                );
+            }
             return 0;
         }
-        if ($this->underMaintenance($serverId, $websiteId)) {
+        if ($this->isRecoveryEvent($eventType)
+            && $this->maintenanceAlertDeferralExists($alertId)
+        ) {
+            $hadPriorDelivery = $this->alertHasQueuedNotification($alertId);
+            $this->clearMaintenanceAlertDeferral($alertId);
+            if (!$hadPriorDelivery) {
+                return 0;
+            }
+        }
+        if (!is_array($settings) || !$this->severityIsEnabled($settings, $payload)) {
             return 0;
         }
         if (
@@ -153,7 +175,211 @@ final class NotificationOutboxRepository
             $inserted += $statement->rowCount();
         }
 
+        if ($inserted > 0) {
+            $this->clearMaintenanceAlertDeferral($alertId);
+        }
+
         return $inserted;
+    }
+
+    public function flushMaintenanceDeferralsForServer(int $serverId): int
+    {
+        return $this->flushMaintenanceDeferrals('server_id', $serverId);
+    }
+
+    public function flushMaintenanceDeferralsForWebsite(int $websiteId): int
+    {
+        return $this->flushMaintenanceDeferrals('website_id', $websiteId);
+    }
+
+    private function flushMaintenanceDeferrals(string $column, int $sourceId): int
+    {
+        if ($sourceId <= 0) {
+            return 0;
+        }
+        $serverId = $column === 'server_id' ? $sourceId : null;
+        $websiteId = $column === 'website_id' ? $sourceId : null;
+        if ($this->underMaintenance($serverId, $websiteId)) {
+            return 0;
+        }
+
+        $this->pdo->prepare(
+            "DELETE FROM maintenance_notification_deferrals AS deferred
+             WHERE deferred.{$column} = :source_id
+               AND (
+                    deferred.alert_id IS NOT NULL
+                    AND NOT EXISTS (
+                        SELECT 1 FROM alerts
+                        WHERE alerts.id = deferred.alert_id
+                          AND alerts.resolved = FALSE
+                    )
+                    OR deferred.observation_id IS NOT NULL
+                    AND NOT EXISTS (
+                        SELECT 1 FROM observations
+                        WHERE observations.id = deferred.observation_id
+                          AND observations.status = 'active'
+                    )
+               )"
+        )->execute(['source_id' => $sourceId]);
+
+        $statement = $this->pdo->prepare(
+            "SELECT id, alert_id, observation_id, event_type,
+                    payload::text AS payload, deduplication_key
+             FROM maintenance_notification_deferrals
+             WHERE {$column} = :source_id
+             ORDER BY suppressed_at, id
+             FOR UPDATE"
+        );
+        $statement->execute(['source_id' => $sourceId]);
+
+        $queued = 0;
+        foreach ($statement->fetchAll() as $row) {
+            try {
+                $payload = json_decode((string) $row['payload'], true, 512, JSON_THROW_ON_ERROR);
+            } catch (JsonException $exception) {
+                throw new RuntimeException('Cannot decode deferred maintenance payload.', 0, $exception);
+            }
+            if (!is_array($payload)) {
+                continue;
+            }
+            $originalEventTime = $payload['event_time'] ?? $payload['sample_time'] ?? null;
+            if ($originalEventTime !== null) {
+                $payload['maintenance_original_event_time'] = $originalEventTime;
+            }
+            $payload['post_maintenance'] = true;
+            $payload['event_time'] = (new DateTimeImmutable())->format(DATE_ATOM);
+
+            $inserted = 0;
+            if ($row['alert_id'] !== null) {
+                $inserted = $this->enqueueForSource(
+                    $serverId,
+                    $websiteId,
+                    (int) $row['alert_id'],
+                    (string) $row['event_type'],
+                    $payload,
+                    (string) $row['deduplication_key']
+                );
+            } elseif ($serverId !== null && $row['observation_id'] !== null) {
+                $inserted = $this->enqueueObservationConfigured(
+                    $serverId,
+                    (int) $row['observation_id'],
+                    (string) $row['event_type'],
+                    $payload,
+                    (string) $row['deduplication_key']
+                );
+            }
+            if ($inserted > 0) {
+                $queued += $inserted;
+                $this->pdo->prepare(
+                    'DELETE FROM maintenance_notification_deferrals WHERE id = :id'
+                )->execute(['id' => (int) $row['id']]);
+            }
+        }
+
+        return $queued;
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function deferMaintenanceNotification(
+        ?int $serverId,
+        ?int $websiteId,
+        ?int $alertId,
+        ?int $observationId,
+        string $eventType,
+        array $payload,
+        string $deduplicationKey
+    ): void {
+        try {
+            $encodedPayload = json_encode($payload, JSON_THROW_ON_ERROR);
+        } catch (JsonException $exception) {
+            throw new RuntimeException('Cannot encode deferred maintenance payload.', 0, $exception);
+        }
+
+        $conflictTarget = $alertId !== null ? 'alert_id' : 'observation_id';
+        $statement = $this->pdo->prepare(
+            "INSERT INTO maintenance_notification_deferrals (
+                server_id, website_id, alert_id, observation_id, event_type,
+                payload, deduplication_key
+             ) VALUES (
+                :server_id, :website_id, :alert_id, :observation_id, :event_type,
+                CAST(:payload AS jsonb), :deduplication_key
+             )
+             ON CONFLICT ({$conflictTarget}) WHERE {$conflictTarget} IS NOT NULL
+             DO UPDATE SET
+                event_type = EXCLUDED.event_type,
+                payload = EXCLUDED.payload,
+                deduplication_key = EXCLUDED.deduplication_key,
+                suppressed_at = CURRENT_TIMESTAMP"
+        );
+        $statement->execute([
+            'server_id' => $serverId,
+            'website_id' => $websiteId,
+            'alert_id' => $alertId,
+            'observation_id' => $observationId,
+            'event_type' => $eventType,
+            'payload' => $encodedPayload,
+            'deduplication_key' => $deduplicationKey,
+        ]);
+    }
+
+    private function maintenanceAlertDeferralExists(int $alertId): bool
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT EXISTS(
+                SELECT 1 FROM maintenance_notification_deferrals
+                WHERE alert_id = :alert_id
+            )'
+        );
+        $statement->execute(['alert_id' => $alertId]);
+
+        return $this->toBool($statement->fetchColumn());
+    }
+
+    private function clearMaintenanceAlertDeferral(int $alertId): void
+    {
+        $this->pdo->prepare(
+            'DELETE FROM maintenance_notification_deferrals WHERE alert_id = :alert_id'
+        )->execute(['alert_id' => $alertId]);
+    }
+
+    private function clearMaintenanceObservationDeferral(int $observationId): void
+    {
+        $this->pdo->prepare(
+            'DELETE FROM maintenance_notification_deferrals WHERE observation_id = :observation_id'
+        )->execute(['observation_id' => $observationId]);
+    }
+
+    private function alertEventWasQueued(int $alertId, string $eventType): bool
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT EXISTS(
+                SELECT 1 FROM notification_outbox
+                WHERE alert_id = :alert_id AND event_type = :event_type
+            )'
+        );
+        $statement->execute(['alert_id' => $alertId, 'event_type' => $eventType]);
+
+        return $this->toBool($statement->fetchColumn());
+    }
+
+    private function alertHasQueuedNotification(int $alertId): bool
+    {
+        $statement = $this->pdo->prepare(
+            "SELECT EXISTS(
+                SELECT 1 FROM notification_outbox
+                WHERE alert_id = :alert_id
+                  AND event_type NOT LIKE '%_recovered'
+                  AND event_type <> 'alert_resolved'
+            )"
+        );
+        $statement->execute(['alert_id' => $alertId]);
+
+        return $this->toBool($statement->fetchColumn());
+    }
+
+    private function isRecoveryEvent(string $eventType): bool
+    {
+        return str_ends_with($eventType, '_recovered') || $eventType === 'alert_resolved';
     }
 
     /**
@@ -962,6 +1188,7 @@ final class NotificationOutboxRepository
             'type', 'event', 'severity', 'kind', 'website_id', 'website_name',
             'endpoint_id', 'endpoint_name', 'safe_url', 'expected', 'actual',
             'event_time', 'effective_at', 'alert_id', 'reason', 'hostname', 'domain',
+            'post_maintenance', 'maintenance_original_event_time',
         ];
         foreach ($payload as $key => $value) {
             if (!is_string($key) || !in_array($key, $allowed, true)) {
@@ -1056,10 +1283,19 @@ final class NotificationOutboxRepository
                     cooldown_seconds
              FROM notification_settings WHERE id = 1'
         )?->fetch();
-        if (!is_array($settings) || !$this->severityIsEnabled($settings, $payload)) {
+        if ($this->underMaintenance($serverId, null)) {
+            $this->deferMaintenanceNotification(
+                $serverId,
+                null,
+                null,
+                $observationId,
+                $eventType,
+                $payload,
+                $deduplicationKey
+            );
             return 0;
         }
-        if ($this->underMaintenance($serverId, null)) {
+        if (!is_array($settings) || !$this->severityIsEnabled($settings, $payload)) {
             return 0;
         }
         if ($this->withinCooldown(
@@ -1111,6 +1347,10 @@ final class NotificationOutboxRepository
             ]);
             $inserted += $statement->rowCount();
         }
+        if ($inserted > 0) {
+            $this->clearMaintenanceObservationDeferral($observationId);
+        }
+
         return $inserted;
     }
 }
