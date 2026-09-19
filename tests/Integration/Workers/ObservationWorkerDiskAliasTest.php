@@ -9,6 +9,7 @@ use App\Database\Migrator;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\ObservationAnalysisRepository;
 use App\Repositories\ObservationRepository;
+use App\Services\ContextualLevelShiftAnalyzer;
 use App\Services\DiskMetricAliasResolver;
 use App\Services\ObservationAnalyzer;
 use App\Workers\ObservationWorker;
@@ -72,6 +73,7 @@ final class ObservationWorkerDiskAliasTest extends TestCase
                 new ObservationAnalysisRepository(self::$pdo),
                 $repository,
                 new ObservationAnalyzer(),
+                new ContextualLevelShiftAnalyzer(),
                 new DiskMetricAliasResolver(),
                 new NotificationOutboxRepository(self::$pdo)
             );

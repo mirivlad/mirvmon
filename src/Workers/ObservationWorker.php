@@ -7,6 +7,7 @@ namespace App\Workers;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\ObservationAnalysisRepository;
 use App\Repositories\ObservationRepository;
+use App\Services\ContextualLevelShiftAnalyzer;
 use App\Services\DiskMetricAliasResolver;
 use App\Services\ObservationAnalyzer;
 use DateTimeImmutable;
@@ -17,6 +18,7 @@ final class ObservationWorker
         private readonly ObservationAnalysisRepository $analysis,
         private readonly ObservationRepository $observations,
         private readonly ObservationAnalyzer $analyzer,
+        private readonly ContextualLevelShiftAnalyzer $levelAnalyzer,
         private readonly DiskMetricAliasResolver $diskAliases,
         private readonly NotificationOutboxRepository $outbox
     ) {
@@ -32,6 +34,17 @@ final class ObservationWorker
         $notified = 0;
         $resolvedEpisodes = 0;
 
+        $approvedPatterns = [];
+        foreach ($this->analysis->approvedLevelPatterns() as $pattern) {
+            $key = $this->metricKey((int) $pattern['server_id'], (int) $pattern['metric_id']);
+            $approvedPatterns[$key][] = $pattern;
+        }
+        $openEpisodes = [];
+        foreach ($this->analysis->openLevelEpisodes() as $episode) {
+            $key = $this->metricKey((int) $episode['server_id'], (int) $episode['metric_id']);
+            $openEpisodes[$key] = $episode;
+        }
+
         $recent = [];
         foreach ($this->analysis->recentLevelBuckets($now) as $row) {
             $key = $this->metricKey((int) $row['server_id'], (int) $row['metric_id']);
@@ -45,11 +58,13 @@ final class ObservationWorker
             $serverId = (int) $baseline['server_id'];
             $metricId = (int) $baseline['metric_id'];
             $metricName = (string) $baseline['metric_name'];
-            $recentPoints = $recent[$this->metricKey($serverId, $metricId)] ?? [];
+            $key = $this->metricKey($serverId, $metricId);
+            $recentPoints = $recent[$key] ?? [];
             if (count($recentPoints) >= 6) {
-                $evaluatedMetrics[] = $this->metricKey($serverId, $metricId);
+                $evaluatedMetrics[] = $key;
             }
-            $candidate = $this->analyzer->detectLevelShift(
+
+            $evaluation = $this->levelAnalyzer->evaluate(
                 $metricName,
                 (float) $baseline['warning_threshold'],
                 [
@@ -57,31 +72,75 @@ final class ObservationWorker
                     'median' => (float) $baseline['median'],
                     'p90' => (float) $baseline['p90'],
                     'points' => (int) $baseline['points'],
+                    'weeks' => (int) $baseline['weeks'],
                     'first_at' => (string) $baseline['first_at'],
                     'last_at' => (string) $baseline['last_at'],
+                    'context' => (string) $baseline['context'],
+                    'timezone' => (string) $baseline['timezone'],
+                    'local_weekday' => (int) $baseline['local_weekday'],
+                    'local_hour' => (int) $baseline['local_hour'],
                 ],
                 $recentPoints,
-                $now
+                $now,
+                $approvedPatterns[$key] ?? [],
+                $openEpisodes[$key] ?? null
             );
-            if ($candidate === null) {
+
+            $state = (string) $evaluation['state'];
+            if ($state === 'triggered') {
+                $candidate = $evaluation['candidate'];
+                if (!is_array($candidate)) {
+                    continue;
+                }
+                $result = $this->observations->recordCandidate(
+                    $serverId,
+                    $metricId,
+                    $candidate,
+                    $now
+                );
+                $seen[] = (int) $result['id'];
+                $openEpisodes[$key] = [
+                    'id' => (int) $result['id'],
+                    'server_id' => $serverId,
+                    'metric_id' => $metricId,
+                    'detector' => 'level_shift_v2',
+                    'status' => (string) $result['status'],
+                    'details' => $candidate['details'] ?? [],
+                ];
+                $resolvedEpisodes += (int) $result['resolved_siblings'];
+                $detected++;
+                if ($result['should_notify']) {
+                    $notified += $this->notify(
+                        $serverId,
+                        (string) $baseline['server_name'],
+                        $metricName,
+                        $candidate,
+                        $result,
+                        $now
+                    );
+                }
                 continue;
             }
-            $result = $this->observations->recordCandidate(
-                $serverId,
-                $metricId,
-                $candidate,
-                $now
-            );
-            $seen[] = (int) $result['id'];
-            $resolvedEpisodes += (int) $result['resolved_siblings'];
-            $detected++;
-            if ($result['should_notify']) {
-                $notified += $this->notify(
+
+            if (in_array($state, ['elevated', 'incident_owned'], true)) {
+                $episodeId = $this->observations->touchAnomalyEpisode(
                     $serverId,
-                    (string) $baseline['server_name'],
-                    $metricName,
-                    $candidate,
-                    $result,
+                    $metricId,
+                    'level_shift_v2',
+                    $evaluation['evidence'],
+                    $now
+                );
+                if ($episodeId !== null) {
+                    $seen[] = $episodeId;
+                }
+                continue;
+            }
+
+            if ($state === 'clear') {
+                $resolvedEpisodes += $this->observations->resolveAnomalyEpisode(
+                    $serverId,
+                    $metricId,
+                    'level_shift_v2',
                     $now
                 );
             }

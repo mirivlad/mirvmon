@@ -37,33 +37,50 @@ Statuses:
 The accepted-normal row itself is the durable learned pattern. There is no hidden
 opaque model that an operator cannot inspect or undo.
 
-## Detector 1: CPU/RAM level shift
+## Detector 1: CPU/RAM contextual level shift
 
-Baseline source: hourly aggregates from the historical window ending before the
-fresh-analysis window. Use robust percentiles (`p10`, median, `p90`) and require
-multiple days of history before the detector is armed.
+v0.7.3 replaces the original all-hours `level_shift_v1` baseline with
+`level_shift_v2`. The historical source is up to 56 days of hourly aggregates,
+interpreted in `APP_TIMEZONE`. The detector chooses the most specific mature
+context available:
 
-Fresh source: 5-minute buckets from raw samples over the recent two hours.
+1. same ISO weekday and local hour, with an hour-distance window of ±1;
+2. same weekday/weekend type and local hour ±1;
+3. same local hour-of-day ±1.
 
-A bucket is anomalous only when it is materially above both the historic upper
-band and historic median. Absolute minimum deltas prevent tiny low-load noise
-from becoming an observation; robust spread scaling prevents naturally volatile
-servers from being treated like stable ones.
+A global all-hours median is deliberately not an anomaly-producing fallback. If
+none of the contextual profiles has enough coverage, the detector returns
+`insufficient_data` and learns from more history instead of inventing a normal
+level.
 
-An observation requires either:
+Each chosen profile preserves within-hour variability: its lower envelope is the
+p10 of hourly minima, median is computed from hourly averages, and upper envelope
+is the p90 of hourly maxima. Fresh raw samples are aggregated into 5-minute
+buckets over the recent two hours. This avoids treating a normal recurring
+25–70% workload as a narrow ~45% profile merely because history was averaged. Triggering still
+requires a material shift above the contextual upper distribution and either
+sustained or recently recurrent evidence.
 
-- sustained behavior: most buckets in the latest ~30 minutes are anomalous; or
-- recurrent behavior: enough anomalous buckets occur in separated clusters over
-  the recent window.
+Lifecycle is explicitly hysteretic and separate from triggering:
 
-If the fresh value is already at/above the configured warning threshold, the
-observation detector stands down because the normal incident pipeline owns the
-problem.
+- `triggered`: enough recent buckets exceed the trigger boundary;
+- `elevated`: the strict trigger is not currently met, but recovery is not proven;
+- `incident_owned`: the configured warning threshold has been reached, so the
+  normal incident pipeline owns urgency while the observation episode stays open;
+- `clear`: twelve consecutive 5-minute buckets (one hour) are below the recovery
+  boundary;
+- `insufficient_data`: the current analysis cannot prove either trigger or
+  recovery.
 
-Fingerprint v1 combines detector + metric + coarse value band + coarse UTC
-part-of-day. This lets a recurring nightly 20% workload be accepted without
-silencing a materially different 80% event. Fingerprint format is internal and
-versioned by detector name so later algorithms can coexist safely.
+Recovery is evaluated against the current contextual recovery boundary, but only
+after twelve consecutive 5-minute buckets satisfy it. Therefore a scheduled
+night→day profile change can legitimately end a night anomaly after one stable
+hour, while a context boundary can never close an episode instantly.
+
+`accepted_normal` remains explicit and reversible. A v2 accepted pattern is
+matched only in a comparable weekday/hour context and bounded value range. Older
+v1 accepted fingerprints are retained as compatibility hints, so operator
+feedback from v0.7.0–v0.7.2 is not silently discarded.
 
 ## Detector 2: disk growth forecast
 
@@ -94,7 +111,7 @@ was evaluated. A row may auto-resolve only after its own metric was evaluated an
 the row was absent. Missing input because of maintenance, DR downtime or another
 observation gap is not evidence that the condition disappeared.
 
-Anomaly episode semantics (corrected in v0.7.2):
+Anomaly episode semantics (v0.7.2 identity, v0.7.3 contextual recovery):
 
 1. the fingerprint describes a behavior pattern (day-part/value band), not the
    identity of the current episode;
@@ -102,14 +119,16 @@ Anomaly episode semantics (corrected in v0.7.2):
    `server + metric + detector`, later bands refresh that row and never enqueue a
    second notification;
 3. `handled` means the operator reviewed this episode; it stays quiet while the
-   detector still sees the condition and becomes `resolved` only after recovery;
-4. after recovery, a later independent episode creates a new row and may notify
+   episode is `triggered`, `elevated` or `incident_owned`;
+4. `level_shift_v2` recovery is explicit `clear` after one hour below the current
+   contextual recovery boundary; generic 20-minute candidate absence never resolves v2;
+5. after recovery, a later independent episode creates a new row and may notify
    again, even when its pattern fingerprint matches an older resolved episode;
-5. `accepted_normal` is separate from acknowledgement: it suppresses only the
-   explicitly accepted fingerprint until reset, so a materially different pattern
+6. `accepted_normal` is separate from acknowledgement: v2 limits suppression to
+   comparable weekday/hour context and bounded load range, so different context
    can still surface;
-6. migration 025 collapses already-open band duplicates and enforces one open
-   anomaly episode per `server + metric + detector`.
+7. migration 025 collapses old band duplicates; migration 026 retires open v1
+   episodes while preserving accepted-normal v1 feedback as compatibility hints.
 
 Prediction fingerprint:
 

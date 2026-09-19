@@ -190,6 +190,35 @@ final class NotificationMessageFormatterTest extends TestCase
         self::assertStringContainsString('Открыть наблюдение: https://monitor.example/observations#observation-42', $message['body']);
     }
 
+    public function testContextualObservationExplainsExpectedRangeInsteadOfGlobalUsual(): void
+    {
+        $message = (new NotificationMessageFormatter())->format([
+            'event_type' => 'observation_anomaly',
+            'payload' => [
+                'server_name' => 'kp-1c',
+                'metric' => 'cpu_load',
+                'current_value' => 48.0,
+                'baseline_value' => 31.5,
+                'confidence' => 0.87,
+                'event_time' => '2026-09-19T02:00:00+00:00',
+                'details' => [
+                    'expected_low' => 24.0,
+                    'expected_high' => 41.0,
+                    'baseline_context' => 'weekly_hour',
+                    'baseline_weeks' => 7,
+                ],
+            ],
+        ]);
+
+        self::assertStringContainsString('Ожидаемый диапазон в это время: 24–41', $message['body']);
+        self::assertStringContainsString('Медиана этого контекста: 31.5', $message['body']);
+        self::assertStringContainsString('Контекст нормы: тот же день недели и время', $message['body']);
+        self::assertStringContainsString('История контекста: 7 нед.', $message['body']);
+        self::assertStringContainsString('Оценка отклонения: 87%', $message['body']);
+        self::assertStringNotContainsString('Обычный уровень:', $message['body']);
+        self::assertStringNotContainsString('Уверенность: 87%', $message['body']);
+    }
+
     public function testObservationPredictionExplainsDiskTrend(): void
     {
         $message = (new NotificationMessageFormatter())->format([
