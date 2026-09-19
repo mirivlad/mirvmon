@@ -6,6 +6,12 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.7.6
+
+- Fixed literal `\\n` text leaking from shared Twig `<head>` markup into rendered pages.
+- Fixed both the main application layout and login/setup layout.
+- Added a contract test preventing escaped newline sequences from reappearing in shared document heads.
+
 ## 0.7.5
 
 - Maintenance windows now preserve suppressed alert/observation notifications and emit one explicit post-maintenance notification when the underlying problem is still active after the window ends; issues that recover during maintenance stay silent.
