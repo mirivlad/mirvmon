@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="color-scheme" content="light">
+    <meta name="color-scheme" content="light">\n    <meta name="theme-color" content="#17233f">
     {% set effective_title = page_title|default(title)|default(t('app.name')) %}
     <title>{{ effective_title }} · MirvMon</title>
-    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="icon" type="image/svg+xml" href="/brand/mirvmon-mark.svg">
     <link rel="stylesheet" href="/vendor/bootstrap/bootstrap.min.css">
     <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css">
     <link rel="stylesheet" href="/css/app.css">
@@ -67,10 +67,7 @@
     <nav class="navbar navbar-expand-lg navbar-dark app-navbar">
         <div class="container-xl">
             <a class="navbar-brand app-brand" href="/" aria-label="MirvMon — {{ t('nav.dashboard') }}">
-                <span class="app-brand-mark" aria-hidden="true">
-                    <i class="fas fa-wave-square"></i>
-                </span>
-                <span>MirvMon</span>
+                {% include 'partials/brand.twig' %}
             </a>
 
             <button class="navbar-toggler" type="button"

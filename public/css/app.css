@@ -78,20 +78,41 @@ a {
 .app-brand {
     display: inline-flex;
     align-items: center;
-    gap: 0.7rem;
+    gap: 0.62rem;
     margin-right: 2rem;
     font-weight: 800;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.03em;
+    text-decoration: none;
 }
 
-.app-brand-mark {
-    display: inline-grid;
+.mirvmon-brand-mark {
+    display: block;
     width: 34px;
     height: 34px;
-    place-items: center;
+    flex: 0 0 34px;
+}
+
+.mirvmon-brand-word {
+    display: inline-flex;
+    align-items: baseline;
+    font-size: 1.08rem;
+    line-height: 1;
+}
+
+.mirvmon-brand-mirv {
+    color: var(--app-text);
+}
+
+.mirvmon-brand-mon {
+    color: var(--app-primary);
+}
+
+.app-navbar .mirvmon-brand-mirv {
     color: #ffffff;
-    background: var(--app-primary);
-    border-radius: 10px;
+}
+
+.app-navbar .mirvmon-brand-mon {
+    color: #7891ff;
 }
 
 .app-nav-links {
@@ -658,13 +679,23 @@ a {
 .auth-brand {
     display: flex;
     width: max-content;
-    gap: 0.65rem;
+    gap: 0.72rem;
     align-items: center;
     margin: 0 auto 1rem;
     color: var(--app-text);
     font-size: 1.2rem;
     font-weight: 800;
     text-decoration: none;
+}
+
+.auth-brand .mirvmon-brand-mark {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+}
+
+.auth-brand .mirvmon-brand-word {
+    font-size: 1.35rem;
 }
 
 .auth-shell .card {
