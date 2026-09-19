@@ -295,7 +295,10 @@ final class ContextualLevelShiftAnalyzer
         return $contextWeight * (0.55 + 0.25 * $coverage + 0.20 * $density);
     }
 
-    /** @param list<array{time:string,value:float}> $points */
+    /**
+     * @param list<array{time:string,value:float}> $points
+     * @return list<array{time:string,value:float}>
+     */
     private function orderedPoints(array $points): array
     {
         usort(
