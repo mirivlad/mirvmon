@@ -197,10 +197,27 @@ final class NotificationMessageFormatter
             'Метрика: ' . $metric,
             'Текущее значение: ' . $current,
         ];
-        if ($kind === 'anomaly') {
-            $lines[] = 'Обычный уровень: ' . $baseline;
-        }
         $details = is_array($payload['details'] ?? null) ? $payload['details'] : [];
+        if ($kind === 'anomaly') {
+            if (isset($details['expected_low'], $details['expected_high'])) {
+                $lines[] = sprintf(
+                    'Ожидаемый диапазон в это время: %s–%s',
+                    $this->text($details['expected_low']),
+                    $this->text($details['expected_high'])
+                );
+                $lines[] = 'Медиана этого контекста: ' . $baseline;
+                if (isset($details['baseline_context'])) {
+                    $lines[] = 'Контекст нормы: '
+                        . $this->baselineContext((string) $details['baseline_context']);
+                }
+                if (isset($details['baseline_weeks'])) {
+                    $lines[] = 'История контекста: '
+                        . $this->text($details['baseline_weeks']) . ' нед.';
+                }
+            } else {
+                $lines[] = 'Обычный уровень: ' . $baseline;
+            }
+        }
         if ($kind === 'prediction' && isset($details['slope_percent_per_day'])) {
             $lines[] = 'Рост: ' . $this->text($details['slope_percent_per_day']) . ' п.п./сутки';
         }
@@ -212,7 +229,9 @@ final class NotificationMessageFormatter
             $lines[] = 'Эквивалентные метрики файловой системы: ' . implode(', ', $aliases);
         }
         if (isset($payload['confidence'])) {
-            $label = $kind === 'prediction' ? 'Качество прогноза' : 'Уверенность';
+            $label = $kind === 'prediction'
+                ? 'Качество прогноза'
+                : (isset($details['baseline_context']) ? 'Оценка отклонения' : 'Уверенность');
             $lines[] = $label . ': ' . round((float) $payload['confidence'] * 100) . '%';
         }
         $lines[] = 'Время наблюдения: ' . $time;
@@ -326,6 +345,16 @@ final class NotificationMessageFormatter
         }
 
         return 'Открыть сайт: ' . $url;
+    }
+
+    private function baselineContext(string $context): string
+    {
+        return match ($context) {
+            'weekly_hour' => 'тот же день недели и время',
+            'day_type_hour' => 'выходной/рабочий день и время',
+            'hour_of_day' => 'это время суток',
+            default => 'исторический профиль',
+        };
     }
 
     private function timestamp(mixed $value): string
