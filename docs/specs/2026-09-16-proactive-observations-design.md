@@ -53,8 +53,11 @@ none of the contextual profiles has enough coverage, the detector returns
 `insufficient_data` and learns from more history instead of inventing a normal
 level.
 
-Each chosen profile stores robust `p10`, median and `p90`. Fresh raw samples are
-aggregated into 5-minute buckets over the recent two hours. Triggering still
+Each chosen profile preserves within-hour variability: its lower envelope is the
+p10 of hourly minima, median is computed from hourly averages, and upper envelope
+is the p90 of hourly maxima. Fresh raw samples are aggregated into 5-minute
+buckets over the recent two hours. This avoids treating a normal recurring
+25–70% workload as a narrow ~45% profile merely because history was averaged. Triggering still
 requires a material shift above the contextual upper distribution and either
 sustained or recently recurrent evidence.
 

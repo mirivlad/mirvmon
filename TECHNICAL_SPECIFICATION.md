@@ -237,7 +237,7 @@ Operational UI live refresh:
 
 - `observations` — отдельный от `alerts` домен: observation не является incident и не изменяет warning/critical thresholds;
 - v0.7.0 анализирует CPU/RAM level shifts и рост `disk_used_*` только по уже сохранённой истории; agent protocol не меняется;
-- CPU/RAM `level_shift_v2` строит robust p10/median/p90 baseline из последних 56 дней hourly aggregates в `APP_TIMEZONE`; приоритет контекста: same weekday/hour ±1, затем weekday/weekend/hour ±1, затем hour-of-day ±1; global-only baseline не имеет права создавать anomaly;
+- CPU/RAM `level_shift_v2` строит contextual baseline из последних 56 дней hourly aggregates в `APP_TIMEZONE`: p10 lower envelope рассчитывается по `min_value`, median по `avg_value`, p90 upper envelope по `max_value`; приоритет контекста: same weekday/hour ±1, затем weekday/weekend/hour ±1, затем hour-of-day ±1; global-only baseline не имеет права создавать anomaly;
 - level-shift observation появляется только для устойчивого/повторяющегося отклонения ниже warning threshold и после достаточного contextual обучения; отсутствие contextual history означает `insufficient_data`, а не fallback к общей суточной медиане;
 - lifecycle level-shift разделяет `triggered`, `elevated`, `incident_owned`, `clear`: исчезновение trigger не является recovery, warning threshold передаёт сигнал incident pipeline, а `clear` требует 12 последовательных 5-minute buckets ниже recovery boundary текущего contextual baseline;
 - disk forecast после последнего существенного снижения usage строит новый trend segment, требует минимальные span/points, положительный slope и quality gate по R²;
