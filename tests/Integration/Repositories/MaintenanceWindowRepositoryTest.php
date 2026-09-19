@@ -208,7 +208,11 @@ final class MaintenanceWindowRepositoryTest extends TestCase
             $this->serverId,
             $this->alertId,
             'metric_triggered',
-            ['severity' => 'critical', 'server_id' => $this->serverId],
+            [
+                'severity' => 'critical',
+                'server_id' => $this->serverId,
+                'event_time' => '2026-09-19T00:00:00+00:00',
+            ],
             $key
         );
     }
