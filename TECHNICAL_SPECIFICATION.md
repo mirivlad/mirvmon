@@ -237,16 +237,17 @@ Operational UI live refresh:
 
 - `observations` — отдельный от `alerts` домен: observation не является incident и не изменяет warning/critical thresholds;
 - v0.7.0 анализирует CPU/RAM level shifts и рост `disk_used_*` только по уже сохранённой истории; agent protocol не меняется;
-- CPU/RAM baseline строится per `server + metric` по historical hourly aggregates с robust p10/median/p90; свежие raw samples агрегируются в 5-minute buckets;
-- level-shift observation появляется только для устойчивого/повторяющегося отклонения ниже warning threshold и после достаточного периода обучения;
+- CPU/RAM `level_shift_v2` строит robust p10/median/p90 baseline из последних 56 дней hourly aggregates в `APP_TIMEZONE`; приоритет контекста: same weekday/hour ±1, затем weekday/weekend/hour ±1, затем hour-of-day ±1; global-only baseline не имеет права создавать anomaly;
+- level-shift observation появляется только для устойчивого/повторяющегося отклонения ниже warning threshold и после достаточного contextual обучения; отсутствие contextual history означает `insufficient_data`, а не fallback к общей суточной медиане;
+- lifecycle level-shift разделяет `triggered`, `elevated`, `incident_owned`, `clear`: исчезновение trigger не является recovery, warning threshold передаёт сигнал incident pipeline, а `clear` требует 12 последовательных 5-minute buckets ниже recovery boundary, зафиксированной при открытии episode;
 - disk forecast после последнего существенного снижения usage строит новый trend segment, требует минимальные span/points, положительный slope и quality gate по R²;
 - перед disk forecast эквивалентные `disk_used_*` mount aliases одного filesystem дедуплицируются по совпадающим current usage, `disk_total_gb_*` и достаточному участку hourly history; `disk_used_root` имеет canonical priority, а анализ использует минимальный warning threshold alias-группы;
 - каждая запись сохраняет explainable evidence: current/baseline values, confidence, detector details и forecast time;
 - versioned anomaly fingerprint описывает behavior pattern, но не identity непрерывного episode: пока существует `active/handled` anomaly для того же `server + metric + detector`, новые bands обновляют ту же observation и не создают повторных уведомлений;
 - anomaly `handled` означает, что оператор проверил текущий episode; это не обучает normal pattern. После detector disappearance и `resolved` следующий независимый episode создаётся отдельно и снова может уведомить;
-- anomaly можно отдельно перевести в `accepted_normal`; только этот fingerprint pattern остаётся подавленным до явного `reset-normal`, а materially different pattern может снова стать observation;
+- anomaly можно отдельно перевести в `accepted_normal`; v2 сохраняет weekday/hour context и bounded value range, поэтому подтверждение периодического workload не подавляет materially different context; v1 accepted-normal fingerprints остаются compatibility hints до явного `reset-normal`;
 - prediction остаётся fingerprint-driven: `handled` не возвращается в active, пока условие не исчезнет, после `resolved` следующий независимый цикл increment-ит notification cycle;
-- auto-resolve выполняется только для `server + metric`, реально оценённой текущим циклом analyzer; отсутствие входных данных, maintenance или DR gap не считаются recovery;
+- generic auto-resolve по отсутствию candidate сохраняется для prediction/legacy rows, но запрещён для `level_shift_v2`; отсутствие входных данных, maintenance или DR gap не считаются recovery;
 - `observation-worker` выполняет bulk queries по парку, использует shared DR lock, heartbeat и supervisor restart semantics; отдельного Compose service нет;
 - notification outbox принимает observation jobs с `alert_id = NULL`, использует существующих server-specific recipients и maintenance suppression;
 - при настроенном `PUBLIC_BASE_URL` formatter добавляет direct server link ко всем server-bound notifications; observation notification дополнительно содержит ссылку на `/observations#observation-{id}`;
