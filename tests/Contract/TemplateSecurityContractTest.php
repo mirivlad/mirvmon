@@ -73,6 +73,24 @@ final class TemplateSecurityContractTest extends TestCase
         }
     }
 
+    public function testSharedLayoutsDoNotContainLiteralEscapedNewlinesInHead(): void
+    {
+        $root = dirname(__DIR__, 2);
+        foreach ([
+            'templates/layout.twig',
+            'templates/login-layout.twig',
+        ] as $path) {
+            $template = (string) file_get_contents($root . '/' . $path);
+            self::assertMatchesRegularExpression('/<head>.*?<\/head>/s', $template);
+            preg_match('/<head>.*?<\/head>/s', $template, $match);
+            self::assertStringNotContainsString(
+                '\\n',
+                $match[0],
+                $path . ' contains a literal escaped newline in <head>.'
+            );
+        }
+    }
+
     public function testListActionControlsUseAccessibleIconOnlyMarkup(): void
     {
         $partial = (string) file_get_contents(
