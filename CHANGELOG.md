@@ -6,8 +6,11 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.7.5
+
 - Maintenance windows now preserve suppressed alert/observation notifications and emit one explicit post-maintenance notification when the underlying problem is still active after the window ends; issues that recover during maintenance stay silent.
 - Documented that maintenance does not stop agent ingestion, website checks, metric history, alert creation or incident history; it suppresses delivery only.
+- Kept the current application compatible with a database one migration behind during DR acceptance, so migration 027 does not break supported backup/restore validation.
 - Added the MirvMon brand mark to the README header.
 
 ## 0.7.4
