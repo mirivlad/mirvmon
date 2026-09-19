@@ -35,7 +35,7 @@ openssl rand -hex 32     # DB_PASSWORD
 Обязательные переменные:
 
 ```dotenv
-MIRVMON_IMAGE=ghcr.io/mirivlad/mirvmon:0.7.4
+MIRVMON_IMAGE=ghcr.io/mirivlad/mirvmon:0.7.5
 APP_KEY=<base64-encoded-32-byte-key>
 SETUP_TOKEN=<random-hex-token>
 DB_PASSWORD=<random-database-password>
