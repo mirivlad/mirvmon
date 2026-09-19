@@ -77,6 +77,9 @@ final class WebsiteIncidentService
                 }
             }
             $this->refreshWebsiteState($result->websiteId, $result->checkedAt);
+            $this->notifications->flushMaintenanceDeferralsForWebsite(
+                $result->websiteId
+            );
         });
     }
 
@@ -105,6 +108,9 @@ final class WebsiteIncidentService
             }
             if ($severity === null) {
                 $this->closeAlert((int) $row['website_id'], $result->endpointId, 'website_tls', $result->checkedAt);
+                $this->notifications->flushMaintenanceDeferralsForWebsite(
+                    (int) $row['website_id']
+                );
                 return;
             }
             $this->openSourceAlert(
@@ -116,6 +122,9 @@ final class WebsiteIncidentService
                 $result->checkedAt,
                 $result->errorKind,
                 ['hostname' => $result->hostname, 'event_time' => $result->checkedAt->format(DATE_ATOM)],
+            );
+            $this->notifications->flushMaintenanceDeferralsForWebsite(
+                (int) $row['website_id']
             );
         });
     }
@@ -144,6 +153,7 @@ final class WebsiteIncidentService
             }
             if ($severity === null) {
                 $this->closeAlert($websiteId, null, 'website_domain', $result->checkedAt);
+                $this->notifications->flushMaintenanceDeferralsForWebsite($websiteId);
                 return;
             }
             $this->openSourceAlert(
@@ -156,6 +166,7 @@ final class WebsiteIncidentService
                 $result->expiresAt?->format(DATE_ATOM),
                 ['domain' => $result->domain, 'event_time' => $result->checkedAt->format(DATE_ATOM)],
             );
+            $this->notifications->flushMaintenanceDeferralsForWebsite($websiteId);
         });
     }
 
