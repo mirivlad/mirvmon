@@ -35,6 +35,21 @@ final class ContextualLevelShiftAnalyzerTest extends TestCase
         self::assertSame(68.0, $evaluation['evidence']['expected_high']);
     }
 
+    public function testSustainedLoadAboveLearnedPeakEnvelopeTriggersBeforeWarning(): void
+    {
+        $evaluation = $this->analyzer->evaluate(
+            'cpu_load',
+            80.0,
+            $this->baseline(25.0, 45.0, 68.0, 6, 10),
+            $this->recent([55, 60, 76, 78, 77, 79]),
+            $this->now
+        );
+
+        self::assertSame('triggered', $evaluation['state']);
+        self::assertLessThan(80.0, $evaluation['candidate']['current_value']);
+        self::assertGreaterThan(68.0, $evaluation['evidence']['trigger_boundary']);
+    }
+
     public function testSameLoadTriggersAgainstNightBaseline(): void
     {
         $evaluation = $this->analyzer->evaluate(
