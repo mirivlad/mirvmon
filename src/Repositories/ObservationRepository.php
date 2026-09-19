@@ -290,6 +290,7 @@ final class ObservationRepository
                  resolved_at = :resolved_at,
                  updated_at = :resolved_at
              WHERE status IN ('active', 'handled')
+               AND NOT (kind = 'anomaly' AND detector = 'level_shift_v2')
                AND last_seen_at <= :cutoff
                AND (server_id::text || ':' || metric_id::text) IN ("
                 . implode(', ', $evaluatedPlaceholders) . "){$seenFilter}
@@ -302,6 +303,73 @@ final class ObservationRepository
                )"
         );
         $statement->execute($params);
+        return $statement->rowCount();
+    }
+
+    /**
+     * Keep an already-open contextual anomaly episode alive without creating a
+     * new episode. Used for ELEVATED and INCIDENT_OWNED states.
+     *
+     * @param array<string,mixed> $evidence
+     */
+    public function touchAnomalyEpisode(
+        int $serverId,
+        int $metricId,
+        string $detector,
+        array $evidence,
+        DateTimeImmutable $now
+    ): ?int {
+        $statement = $this->pdo->prepare(
+            "UPDATE observations
+             SET current_value = :current_value,
+                 baseline_value = :baseline_value,
+                 details = details || CAST(:details AS jsonb),
+                 last_seen_at = :last_seen_at,
+                 updated_at = :updated_at
+             WHERE server_id = :server_id
+               AND metric_id = :metric_id
+               AND kind = 'anomaly'
+               AND detector = :detector
+               AND status IN ('active', 'handled')
+             RETURNING id"
+        );
+        $statement->execute([
+            'server_id' => $serverId,
+            'metric_id' => $metricId,
+            'detector' => $detector,
+            'current_value' => $evidence['current_value'] ?? null,
+            'baseline_value' => $evidence['baseline_value'] ?? null,
+            'details' => $this->json($evidence),
+            'last_seen_at' => $this->timestamp($now),
+            'updated_at' => $this->timestamp($now),
+        ]);
+        $id = $statement->fetchColumn();
+        return $id === false ? null : (int) $id;
+    }
+
+    public function resolveAnomalyEpisode(
+        int $serverId,
+        int $metricId,
+        string $detector,
+        DateTimeImmutable $now
+    ): int {
+        $statement = $this->pdo->prepare(
+            "UPDATE observations
+             SET status = 'resolved',
+                 resolved_at = :resolved_at,
+                 updated_at = :resolved_at
+             WHERE server_id = :server_id
+               AND metric_id = :metric_id
+               AND kind = 'anomaly'
+               AND detector = :detector
+               AND status IN ('active', 'handled')"
+        );
+        $statement->execute([
+            'server_id' => $serverId,
+            'metric_id' => $metricId,
+            'detector' => $detector,
+            'resolved_at' => $this->timestamp($now),
+        ]);
         return $statement->rowCount();
     }
 
