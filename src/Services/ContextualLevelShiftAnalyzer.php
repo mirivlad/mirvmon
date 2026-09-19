@@ -73,13 +73,6 @@ final class ContextualLevelShiftAnalyzer
             max($p90, $median + max(3.0, $robustSpread))
         );
 
-        $episodeDetails = is_array($openEpisode['details'] ?? null)
-            ? $openEpisode['details']
-            : [];
-        $effectiveRecoveryBoundary = isset($episodeDetails['recovery_boundary'])
-            ? (float) $episodeDetails['recovery_boundary']
-            : $recoveryBoundary;
-
         $values = array_map('floatval', array_column($buckets, 'value'));
         $recentValues = array_slice($values, -self::RECENT_BUCKETS);
         $latestValue = (float) $recentValues[array_key_last($recentValues)];
@@ -104,7 +97,7 @@ final class ContextualLevelShiftAnalyzer
             'expected_low' => round($p10, 3),
             'expected_high' => round($p90, 3),
             'trigger_boundary' => round($triggerBoundary, 3),
-            'recovery_boundary' => round($effectiveRecoveryBoundary, 3),
+            'recovery_boundary' => round($recoveryBoundary, 3),
             'warning_threshold' => round($warningThreshold, 3),
             'current_value' => round($latestValue, 3),
             'baseline_value' => round($median, 3),
@@ -123,7 +116,7 @@ final class ContextualLevelShiftAnalyzer
             count($recoveryValues) >= self::RECOVERY_BUCKETS
             && count(array_filter(
                 $recoveryValues,
-                static fn (float $value): bool => $value <= $effectiveRecoveryBoundary
+                static fn (float $value): bool => $value <= $recoveryBoundary
             )) === self::RECOVERY_BUCKETS
         ) {
             $evidence['lifecycle_state'] = 'clear';
