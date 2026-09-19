@@ -65,7 +65,7 @@ final class ContextualLevelShiftAnalyzer
         $p90 = (float) $baseline['p90'];
         $robustSpread = max(1.0, ($p90 - $p10) / 2.0);
         $triggerBoundary = max(
-            $p90 + max(4.0, 1.5 * $robustSpread),
+            $p90 + max(4.0, 0.25 * $robustSpread),
             $median + max(self::MIN_ABSOLUTE_DELTA, abs($median) * 0.50)
         );
         $recoveryBoundary = min(
