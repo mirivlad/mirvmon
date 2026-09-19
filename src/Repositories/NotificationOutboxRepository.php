@@ -15,6 +15,8 @@ final class NotificationOutboxRepository
 {
     private const MAX_ATTEMPTS = 10;
 
+    private ?bool $maintenanceDeferralsAvailable = null;
+
     public function __construct(private readonly PDO $pdo)
     {
     }
@@ -201,7 +203,7 @@ final class NotificationOutboxRepository
 
     private function flushMaintenanceDeferrals(string $column, int $sourceId): int
     {
-        if ($sourceId <= 0) {
+        if ($sourceId <= 0 || !$this->maintenanceDeferralsAvailable()) {
             return 0;
         }
         $serverId = $column === 'server_id' ? $sourceId : null;
@@ -296,6 +298,10 @@ final class NotificationOutboxRepository
         array $payload,
         string $deduplicationKey
     ): void {
+        if (!$this->maintenanceDeferralsAvailable()) {
+            return;
+        }
+
         try {
             $encodedPayload = json_encode($payload, JSON_THROW_ON_ERROR);
         } catch (JsonException $exception) {
@@ -331,6 +337,10 @@ final class NotificationOutboxRepository
 
     private function maintenanceAlertDeferralExists(int $alertId): bool
     {
+        if (!$this->maintenanceDeferralsAvailable()) {
+            return false;
+        }
+
         $statement = $this->pdo->prepare(
             'SELECT EXISTS(
                 SELECT 1 FROM maintenance_notification_deferrals
@@ -344,6 +354,10 @@ final class NotificationOutboxRepository
 
     private function clearMaintenanceAlertDeferral(int $alertId): void
     {
+        if (!$this->maintenanceDeferralsAvailable()) {
+            return;
+        }
+
         $this->pdo->prepare(
             'DELETE FROM maintenance_notification_deferrals WHERE alert_id = :alert_id'
         )->execute(['alert_id' => $alertId]);
@@ -351,6 +365,10 @@ final class NotificationOutboxRepository
 
     private function clearMaintenanceObservationDeferral(int $observationId): void
     {
+        if (!$this->maintenanceDeferralsAvailable()) {
+            return;
+        }
+
         $this->pdo->prepare(
             'DELETE FROM maintenance_notification_deferrals WHERE observation_id = :observation_id'
         )->execute(['observation_id' => $observationId]);
@@ -382,6 +400,22 @@ final class NotificationOutboxRepository
         $statement->execute(['alert_id' => $alertId]);
 
         return $this->toBool($statement->fetchColumn());
+    }
+
+    private function maintenanceDeferralsAvailable(): bool
+    {
+        if ($this->maintenanceDeferralsAvailable !== null) {
+            return $this->maintenanceDeferralsAvailable;
+        }
+
+        $statement = $this->pdo->query(
+            "SELECT to_regclass('public.maintenance_notification_deferrals') IS NOT NULL"
+        );
+        $this->maintenanceDeferralsAvailable = $this->toBool(
+            $statement === false ? false : $statement->fetchColumn()
+        );
+
+        return $this->maintenanceDeferralsAvailable;
     }
 
     private function isRecoveryEvent(string $eventType): bool
