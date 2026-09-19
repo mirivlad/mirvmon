@@ -35,10 +35,14 @@ final class ObservationAnalysisRepository
     {
         $statement = $this->pdo->prepare(
             <<<'SQL'
-            WITH context AS (
+            WITH settings AS (
                 SELECT
                     CAST(:timezone AS text) AS timezone,
-                    CAST(:now AS timestamptz) AT TIME ZONE CAST(:timezone AS text) AS local_now
+                    CAST(:now AS timestamptz) AS now_utc
+            ),
+            context AS (
+                SELECT timezone, now_utc AT TIME ZONE timezone AS local_now
+                FROM settings
             ),
             base AS (
                 SELECT
@@ -138,22 +142,6 @@ final class ObservationAnalysisRepository
                 WHERE hour_distance <= 1
                 GROUP BY server_id, server_name, metric_id, metric_name,
                          warning_threshold, timezone, current_dow, current_hour
-
-                UNION ALL
-
-                SELECT
-                    server_id, server_name, metric_id, metric_name, warning_threshold,
-                    'global'::text, 4, timezone, current_dow, current_hour,
-                    percentile_cont(0.10) WITHIN GROUP (ORDER BY avg_value),
-                    percentile_cont(0.50) WITHIN GROUP (ORDER BY avg_value),
-                    percentile_cont(0.90) WITHIN GROUP (ORDER BY avg_value),
-                    count(*),
-                    count(DISTINCT date_trunc('week', bucket AT TIME ZONE timezone)),
-                    min(bucket),
-                    max(bucket)
-                FROM scoped
-                GROUP BY server_id, server_name, metric_id, metric_name,
-                         warning_threshold, timezone, current_dow, current_hour
             )
             SELECT *
             FROM stats
@@ -174,9 +162,9 @@ final class ObservationAnalysisRepository
             $weeks = (int) $row['weeks'];
             $ready = match ($context) {
                 'weekly_hour' => $points >= 9 && $weeks >= 4,
-                'day_type_hour' => $points >= 24 && $weeks >= 2,
-                'hour_of_day' => $points >= 36 && $weeks >= 2,
-                default => $points >= 72,
+                'day_type_hour' => $points >= 12 && $weeks >= 2,
+                'hour_of_day' => $points >= 18 && $weeks >= 1,
+                default => false,
             };
             $key = (int) $row['server_id'] . ':' . (int) $row['metric_id'];
             if (!$ready || isset($selected[$key])) {
