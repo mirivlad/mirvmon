@@ -86,8 +86,8 @@ final class WebsiteStateEvaluator
         $successesKey = $dimension . '_successes';
         $seriesKey = $dimension . '_series_started_at';
         $previous = (string) ($state[$stateKey] ?? 'no_data');
-        $failures = $failed ? (int) ($state[$failuresKey] ?? 0) + 1 : 0;
-        $successes = $failed ? 0 : (int) ($state[$successesKey] ?? 0) + 1;
+        $failures = $failed ? min(3, (int) ($state[$failuresKey] ?? 0) + 1) : 0;
+        $successes = $failed ? 0 : min(2, (int) ($state[$successesKey] ?? 0) + 1);
         $seriesStarted = $state[$seriesKey] ?? null;
 
         if ($failed) {
