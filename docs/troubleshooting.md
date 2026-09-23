@@ -20,6 +20,12 @@ docker compose -f docker/docker-compose.yml exec -T app bin/website-check-worker
 TLS. Redirect проверяется на каждом hop и может быть отклонён из-за origin,
 которого нет в allowlist.
 
+После первого успешного ответа открытый инцидент ещё ожидает второго
+последовательного успеха. Если он не закрывается, сравните время последней
+проверки на странице сайта, состояние endpoint и heartbeat worker в
+`/admin/system`: восстановление для внешнего клиента не подтверждает, что
+проверка из контейнера MirvMon тоже успешна.
+
 Для domain expiry проверьте configured domain и записи RDAP; WHOIS fallback
 может отсутствовать у registry. Ошибка источника оставляет безопасную причину
 в состоянии domain target, но не публикует SQL, auth, headers или тело ответа.

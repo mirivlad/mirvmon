@@ -446,8 +446,14 @@ final class WebsiteRepository
             ], true)) {
                 throw new InvalidArgumentException('Website status filter is invalid.');
             }
-            $where[] = 'state.status = :status';
-            $params['status'] = $status;
+            if ($status === 'critical') {
+                $where[] = "state.status IN ('critical', 'unavailable', 'problem')";
+            } elseif ($status === 'warning') {
+                $where[] = "state.status IN ('warning', 'slow', 'degraded')";
+            } else {
+                $where[] = 'state.status = :status';
+                $params['status'] = $status;
+            }
         }
         if (isset($filters['search']) && trim((string) $filters['search']) !== '') {
             $where[] = '(websites.name ILIKE :search OR primary_endpoint.url ILIKE :search)';

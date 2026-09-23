@@ -422,12 +422,13 @@ final class WebsiteIncidentService
     {
         $statement = $this->pdo->prepare(
             "SELECT
-                bool_or(state.transport_state = 'problem') FILTER (WHERE endpoints.is_primary) AS primary_down,
-                bool_or(state.transport_state = 'problem') AS any_down,
-                bool_or(state.assertion_state = 'problem') AS assertion_problem,
-                bool_or(state.performance_state = 'problem') AS performance_problem,
-                count(*) FILTER (WHERE state.transport_state = 'problem'
-                    OR state.assertion_state = 'problem' OR state.performance_state = 'problem') AS problems,
+                bool_or(state.transport_state IN ('problem', 'recovering')) FILTER (WHERE endpoints.is_primary) AS primary_down,
+                bool_or(state.transport_state IN ('problem', 'recovering')) AS any_down,
+                bool_or(state.assertion_state IN ('problem', 'recovering')) AS assertion_problem,
+                bool_or(state.performance_state IN ('problem', 'recovering')) AS performance_problem,
+                count(*) FILTER (WHERE state.transport_state IN ('problem', 'recovering')
+                    OR state.assertion_state IN ('problem', 'recovering')
+                    OR state.performance_state IN ('problem', 'recovering')) AS problems,
                 bool_or(state.last_sample_at IS NOT NULL) AS has_sample
              FROM website_endpoint_state state
              JOIN website_endpoints endpoints ON endpoints.id = state.endpoint_id
