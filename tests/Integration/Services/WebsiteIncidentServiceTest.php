@@ -92,9 +92,18 @@ final class WebsiteIncidentServiceTest extends TestCase
 
         $this->service->recordHttp($this->makeResult(true, '00:03:00'));
         self::assertCount(1, (new IncidentRepository(self::$pdo))->active(['website_id' => $this->websiteId]));
+        self::assertSame('unavailable', self::$pdo?->query(
+            "SELECT status FROM website_state WHERE website_id = {$this->websiteId}"
+        )->fetchColumn());
+        self::assertSame(1, (int) self::$pdo?->query(
+            "SELECT active_problem_count FROM website_state WHERE website_id = {$this->websiteId}"
+        )->fetchColumn());
         $this->service->recordHttp($this->makeResult(true, '00:04:00'));
 
         self::assertCount(0, (new IncidentRepository(self::$pdo))->active(['website_id' => $this->websiteId]));
+        self::assertSame('healthy', self::$pdo?->query(
+            "SELECT status FROM website_state WHERE website_id = {$this->websiteId}"
+        )->fetchColumn());
         self::assertSame(2, (int) self::$pdo?->query(
             "SELECT count(*) FROM website_availability_events WHERE website_id = {$this->websiteId}"
         )->fetchColumn());

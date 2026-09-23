@@ -277,6 +277,31 @@ final class WebsiteRepositoryTest extends TestCase
         self::assertArrayHasKey('domain_expires_at', $groups[0]['websites'][0]);
     }
 
+    public function testSummaryStatusFiltersReturnTheSitesTheyCount(): void
+    {
+        foreach (['unavailable', 'problem', 'slow', 'degraded'] as $status) {
+            $site = self::pdo()->prepare(
+                'INSERT INTO websites (name, group_id) VALUES (:name, :group_id) RETURNING id'
+            );
+            $site->execute(['name' => $status, 'group_id' => $this->groupId]);
+            $siteId = (int) $site->fetchColumn();
+            self::pdo()->prepare('INSERT INTO website_state (website_id, status) VALUES (:id, :status)')
+                ->execute(['id' => $siteId, 'status' => $status]);
+        }
+
+        $summary = $this->repository->dashboardSummary();
+        self::assertSame(2, $summary['critical']);
+        self::assertSame(2, $summary['warning']);
+        self::assertCount(2, array_merge(...array_map(
+            static fn (array $group): array => $group['websites'],
+            $this->repository->groupedList(['status' => 'critical'])
+        )));
+        self::assertCount(2, array_merge(...array_map(
+            static fn (array $group): array => $group['websites'],
+            $this->repository->groupedList(['status' => 'warning'])
+        )));
+    }
+
     /** @param array<string, mixed> $overrides */
     private function endpoint(array $overrides = []): WebsiteEndpointDefinition
     {
