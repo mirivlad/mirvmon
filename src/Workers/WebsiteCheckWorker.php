@@ -31,6 +31,7 @@ final class WebsiteCheckWorker
     public function runOnce(?DateTimeImmutable $now = null): int
     {
         $now ??= new DateTimeImmutable();
+        $this->queue->terminalizeExhausted($now);
         $this->queue->scheduleDue($now, $this->concurrency * 10);
         $jobs = $this->queue->claim($this->leaseOwner, $now, $this->concurrency);
         $completed = $this->probes->execute($jobs, $this->concurrency);

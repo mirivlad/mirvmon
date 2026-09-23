@@ -205,6 +205,26 @@ final class WebsiteCheckQueueRepository
         }
     }
 
+    public function terminalizeExhausted(DateTimeImmutable $now): int
+    {
+        $statement = $this->pdo->prepare(
+            "UPDATE website_check_jobs
+             SET state = 'failed',
+                 lease_owner = NULL,
+                 lease_until = NULL,
+                 failed_at = CAST(:failed_at AS timestamptz),
+                 safe_error_kind = COALESCE(safe_error_kind, 'retry_exhausted')
+             WHERE attempts >= :max_attempts
+               AND (state = 'pending' OR (state = 'leased' AND lease_until < CAST(:lease_cutoff AS timestamptz)))"
+        );
+        $statement->bindValue('failed_at', $this->timestamp($now));
+        $statement->bindValue('lease_cutoff', $this->timestamp($now));
+        $statement->bindValue('max_attempts', self::MAX_ATTEMPTS, PDO::PARAM_INT);
+        $statement->execute();
+
+        return $statement->rowCount();
+    }
+
     public function release(
         int $jobId,
         string $leaseOwner,
@@ -218,10 +238,11 @@ final class WebsiteCheckQueueRepository
         $statement = $this->pdo->prepare(
             <<<'SQL'
             UPDATE website_check_jobs
-            SET state = 'pending',
+            SET state = CASE WHEN attempts >= :max_attempts_state THEN 'failed' ELSE 'pending' END,
                 lease_owner = NULL,
                 lease_until = NULL,
                 available_at = CAST(:available_at AS timestamptz),
+                failed_at = CASE WHEN attempts >= :max_attempts_time THEN clock_timestamp() ELSE NULL END,
                 safe_error_kind = :safe_error_kind
             WHERE id = :id
               AND state = 'leased'
@@ -229,12 +250,13 @@ final class WebsiteCheckQueueRepository
               AND lease_until > clock_timestamp()
             SQL
         );
-        $statement->execute([
-            'id' => $jobId,
-            'lease_owner' => $leaseOwner,
-            'available_at' => $this->timestamp($availableAt),
-            'safe_error_kind' => $safeError,
-        ]);
+        $statement->bindValue('id', $jobId, PDO::PARAM_INT);
+        $statement->bindValue('lease_owner', $leaseOwner);
+        $statement->bindValue('available_at', $this->timestamp($availableAt));
+        $statement->bindValue('safe_error_kind', $safeError);
+        $statement->bindValue('max_attempts_state', self::MAX_ATTEMPTS, PDO::PARAM_INT);
+        $statement->bindValue('max_attempts_time', self::MAX_ATTEMPTS, PDO::PARAM_INT);
+        $statement->execute();
         if ($statement->rowCount() !== 1) {
             throw new RuntimeException('Website check lease is not owned or has expired.');
         }
