@@ -76,12 +76,12 @@
             </article>
         </div>
         {% else %}
-            <div class="col-12"><div class="alert alert-secondary mb-0">{{ t('websites.empty') }}</div></div>
+            <div class="col-12"><div class="alert alert-secondary mb-0">{{ t(has_filters ? 'websites.filter.empty' : 'websites.empty') }}</div></div>
         {% endfor %}
     </div>
 </section>
 {% else %}
-<div class="alert alert-secondary">{{ t('websites.empty') }}</div>
+<div class="alert alert-secondary">{{ t(has_filters ? 'websites.filter.empty' : 'websites.empty') }}</div>
 {% endfor %}
 </div>
 {% endblock %}

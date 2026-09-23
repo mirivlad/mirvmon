@@ -8,6 +8,7 @@ return [
     'websites.edit' => 'Website settings',
     'websites.check' => 'Check now',
     'websites.empty' => 'No websites have been added yet.',
+    'websites.filter.empty' => 'No websites match the selected filters.',
     'websites.no_group' => 'No group',
     'websites.no_endpoint' => 'Primary endpoint is not configured',
     'websites.active_problems' => 'Active problems: {count}',

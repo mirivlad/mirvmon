@@ -33,10 +33,14 @@ final class WebsiteController
     {
         try {
             $filters = $request->getQueryParams();
+            $hasFilters = trim((string) ($filters['search'] ?? '')) !== ''
+                || (string) ($filters['group_id'] ?? '') !== ''
+                || (string) ($filters['status'] ?? '') !== '';
             return $this->twig->render($response, 'sites/index.twig', [
                 'title' => $this->translator->trans('websites.title'),
                 'groups' => $this->websites->groupedList($filters),
                 'group_options' => $this->websites->groups(),
+                'has_filters' => $hasFilters,
                 'filters' => [
                     'search' => (string) ($filters['search'] ?? ''),
                     'group_id' => (string) ($filters['group_id'] ?? ''),

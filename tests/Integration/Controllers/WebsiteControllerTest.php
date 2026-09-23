@@ -101,6 +101,20 @@ final class WebsiteControllerTest extends TestCase
         self::assertStringContainsString('data-add-endpoint', $html);
     }
 
+    public function testFilteredEmptyStateDoesNotClaimNoSitesExist(): void
+    {
+        $response = $this->controller->index(
+            $this->request('GET', '/sites')->withQueryParams(['status' => 'critical']),
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+        $html = (string) $response->getBody();
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertStringContainsString('По выбранным фильтрам сайты не найдены.', $html);
+        self::assertStringNotContainsString('Сайты пока не добавлены.', $html);
+    }
+
     public function testValidationRendersNonSecretFieldsWithoutSubmittedSecret(): void
     {
         $secret = 'never-render-this-secret';
