@@ -388,7 +388,7 @@ final class WebsiteCheckQueueRepositoryTest extends TestCase
         self::assertSame('leased', $this->job((int) $job['id'])['state']);
     }
 
-    public function testAttemptCapPreventsAnEleventhClaimAndCompleteDeletesOwnedJob(): void
+    public function testAttemptCapTerminalizesJobAndAllowsManualRequeue(): void
     {
         $this->queue->enqueueManual($this->websiteId, $this->now);
         $leaseNow = $this->databaseNow();
@@ -409,12 +409,37 @@ final class WebsiteCheckQueueRepositoryTest extends TestCase
             $leaseNow->modify('+1 hour'),
             'timeout'
         );
+        $failed = $this->job((int) $job['id']);
+        self::assertSame('failed', $failed['state']);
+        self::assertNotNull($failed['failed_at']);
+        self::assertSame('timeout', $failed['safe_error_kind']);
         $remaining = $this->queue->claim('worker-b', $leaseNow->modify('+2 hours'), 10);
         self::assertNotContains((int) $job['id'], array_column($remaining, 'id'));
+
+        self::assertGreaterThan(0, $this->queue->enqueueManual($this->websiteId, $leaseNow));
 
         $next = $remaining[0];
         $this->queue->complete((int) $next['id'], 'worker-b');
         self::assertNull($this->jobOrNull((int) $next['id']));
+    }
+
+    public function testExpiredLastAttemptIsTerminalized(): void
+    {
+        $this->queue->enqueueManual($this->websiteId, $this->now);
+        $leaseNow = $this->databaseNow();
+        $job = $this->queue->claim('worker-a', $leaseNow, 1)[0];
+        self::pdo()->prepare(
+            "UPDATE website_check_jobs SET attempts = 10, lease_until = clock_timestamp() - INTERVAL '1 second'
+             WHERE id = :id"
+        )->execute(['id' => $job['id']]);
+
+        self::assertSame(1, $this->queue->terminalizeExhausted($leaseNow));
+        self::assertSame('failed', $this->job((int) $job['id'])['state']);
+        self::assertSame(0, $this->queue->terminalizeExhausted($leaseNow));
+        self::assertNotContains(
+            (int) $job['id'],
+            array_column($this->queue->claim('worker-b', $leaseNow, 10), 'id')
+        );
     }
 
     private function createWebsite(): int

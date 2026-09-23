@@ -96,6 +96,22 @@
 
 <section class="card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center gap-2">
+        <h2 class="h5 mb-0"><i class="fas fa-globe me-2" aria-hidden="true"></i>{{ t('system.website_queue.title') }}</h2>
+        <span class="badge bg-{{ health_classes[system.website_queue.status]|default('secondary') }}">{{ health_labels[system.website_queue.status]|default(t('system.status.unknown')) }}</span>
+    </div>
+    <div class="card-body">
+        <dl class="row mb-0">
+            <dt class="col-sm-7">{{ t('system.website_queue.pending') }}</dt><dd class="col-sm-5">{{ system.website_queue.pending }}</dd>
+            <dt class="col-sm-7">{{ t('system.website_queue.leased') }}</dt><dd class="col-sm-5">{{ system.website_queue.leased }}</dd>
+            <dt class="col-sm-7">{{ t('system.website_queue.failed') }}</dt><dd class="col-sm-5">{{ system.website_queue.failed }}</dd>
+            <dt class="col-sm-7">{{ t('system.website_queue.overdue_ready') }}</dt><dd class="col-sm-5">{{ system.website_queue.overdue_ready }}</dd>
+            <dt class="col-sm-7">{{ t('system.website_queue.recent_failed') }}</dt><dd class="col-sm-5">{{ system.website_queue.recent_failed }}</dd>
+        </dl>
+    </div>
+</section>
+
+<section class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center gap-2">
         <h2 class="h5 mb-0"><i class="fas fa-globe me-2" aria-hidden="true"></i>{{ t('system.connectivity.title') }}</h2>
         <span class="badge bg-{{ health_classes[system.connectivity.status]|default('secondary') }}">{{ health_labels[system.connectivity.status]|default(t('system.status.unknown')) }}</span>
     </div>

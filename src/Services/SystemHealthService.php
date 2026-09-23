@@ -37,6 +37,7 @@ final class SystemHealthService
         $database = $this->databaseDiagnostics();
         $workers = $this->workerDiagnostics();
         $queue = $this->queueDiagnostics();
+        $websiteQueue = $this->websiteQueueDiagnostics();
         $connectivity = $this->connectivityDiagnostics();
         $host = $this->hostDiagnostics();
 
@@ -46,6 +47,7 @@ final class SystemHealthService
                     (string) $database['status'],
                     (string) $workers['status'],
                     (string) $queue['status'],
+                    (string) $websiteQueue['status'],
                     (string) $connectivity['status'],
                 ]),
                 'version' => $this->appVersion,
@@ -58,6 +60,7 @@ final class SystemHealthService
             'database' => $database,
             'workers' => $workers,
             'queue' => $queue,
+            'website_queue' => $websiteQueue,
             'connectivity' => $connectivity,
             'host' => $host,
         ];
@@ -69,6 +72,7 @@ final class SystemHealthService
         $database = $this->databaseDiagnostics();
         $workers = $this->workerDiagnostics();
         $queue = $this->queueDiagnostics();
+        $websiteQueue = $this->websiteQueueDiagnostics();
         $connectivity = $this->connectivityDiagnostics();
         $host = $this->hostDiagnostics(false);
 
@@ -77,6 +81,7 @@ final class SystemHealthService
                 (string) $database['status'],
                 (string) $workers['status'],
                 (string) $queue['status'],
+                (string) $websiteQueue['status'],
                 (string) $connectivity['status'],
             ]),
             'host_status' => (string) $host['status'],
@@ -358,6 +363,52 @@ final class SystemHealthService
                 'stale_processing' => 0,
                 'overdue_ready' => 0,
                 'oldest_ready_seconds' => null,
+            ];
+        }
+    }
+
+    /** @return array{status:string,pending:int,leased:int,failed:int,overdue_ready:int,recent_failed:int} */
+    private function websiteQueueDiagnostics(): array
+    {
+        try {
+            $row = $this->pdo->query(
+                <<<'SQL'
+                SELECT
+                    COUNT(*) FILTER (WHERE state = 'pending') AS pending,
+                    COUNT(*) FILTER (WHERE state = 'leased') AS leased,
+                    COUNT(*) FILTER (WHERE state = 'failed') AS failed,
+                    COUNT(*) FILTER (
+                        WHERE state = 'pending' AND available_at < CURRENT_TIMESTAMP - INTERVAL '2 minutes'
+                    ) AS overdue_ready,
+                    COUNT(*) FILTER (
+                        WHERE state = 'failed' AND failed_at > CURRENT_TIMESTAMP - INTERVAL '1 hour'
+                    ) AS recent_failed
+                FROM website_check_jobs
+                SQL
+            )?->fetch();
+            if (!is_array($row)) {
+                throw new RuntimeException('Website queue diagnostics query returned no row.');
+            }
+
+            $overdue = (int) $row['overdue_ready'];
+            $recentFailed = (int) $row['recent_failed'];
+
+            return [
+                'status' => $overdue > 0 ? 'critical' : ($recentFailed > 0 ? 'warning' : 'ok'),
+                'pending' => (int) $row['pending'],
+                'leased' => (int) $row['leased'],
+                'failed' => (int) $row['failed'],
+                'overdue_ready' => $overdue,
+                'recent_failed' => $recentFailed,
+            ];
+        } catch (Throwable) {
+            return [
+                'status' => 'critical',
+                'pending' => 0,
+                'leased' => 0,
+                'failed' => 0,
+                'overdue_ready' => 0,
+                'recent_failed' => 0,
             ];
         }
     }

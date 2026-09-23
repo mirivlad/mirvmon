@@ -95,6 +95,8 @@ final class SystemHealthServiceTest extends TestCase
         self::assertSame('ok', $details['connectivity']['status']);
         self::assertSame('online', $details['connectivity']['state']);
         self::assertSame('ok', $details['queue']['status']);
+        self::assertSame('ok', $details['website_queue']['status']);
+        self::assertSame(0, $details['website_queue']['failed']);
         self::assertSame([
             'pending' => 0,
             'processing' => 0,
@@ -110,6 +112,33 @@ final class SystemHealthServiceTest extends TestCase
         self::assertSame(0.42, $details['host']['metrics']['load_1']['value']);
         self::assertSame('/', $details['host']['disks'][0]['name']);
         self::assertSame(55.5, $details['host']['disks'][0]['used_percent']);
+    }
+
+    public function testWebsiteQueueDiagnosticsShowsOverdueAndRecentTerminalFailures(): void
+    {
+        $websiteId = (int) self::$pdo?->query(
+            "INSERT INTO websites (name, registration_domain, domain_check_enabled, default_interval_seconds)
+             VALUES ('Queue test', 'example.com', FALSE, 120) RETURNING id"
+        )->fetchColumn();
+        self::$pdo?->prepare(
+            "INSERT INTO website_check_jobs (website_id, kind, scheduled_for, available_at)
+             VALUES (:website_id, 'domain', CURRENT_TIMESTAMP - INTERVAL '5 minutes',
+                     CURRENT_TIMESTAMP - INTERVAL '5 minutes')"
+        )->execute(['website_id' => $websiteId]);
+
+        $details = $this->service()->details();
+        self::assertSame('critical', $details['website_queue']['status']);
+        self::assertSame(1, $details['website_queue']['overdue_ready']);
+
+        self::$pdo?->prepare(
+            "UPDATE website_check_jobs SET state = 'failed', attempts = 10,
+                    failed_at = CURRENT_TIMESTAMP, safe_error_kind = 'retry_exhausted'
+             WHERE website_id = :website_id"
+        )->execute(['website_id' => $websiteId]);
+        $details = $this->service()->details();
+        self::assertSame('warning', $details['website_queue']['status']);
+        self::assertSame(1, $details['website_queue']['failed']);
+        self::assertSame(1, $details['website_queue']['recent_failed']);
     }
 
     public function testMissingWorkerHeartbeatMakesApplicationCriticalWithoutChangingHostState(): void
