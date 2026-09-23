@@ -80,6 +80,29 @@ final class WebsiteStateEvaluatorTest extends TestCase
         self::assertSame(1, $decision->nextState['transport_successes']);
     }
 
+    public function testConsecutiveCountersStopAtTransitionThresholds(): void
+    {
+        $healthy = $this->noDataState();
+        $healthy['transport_state'] = 'healthy';
+        $healthy['assertion_state'] = 'healthy';
+        $healthy['transport_successes'] = 32767;
+        $healthy['assertion_successes'] = 32767;
+
+        $success = $this->evaluator->evaluate(
+            $healthy,
+            $this->makeResult(true, true, '00:00:00', passedStatusAssertion: true),
+        );
+        self::assertSame(2, $success->nextState['transport_successes']);
+        self::assertSame(2, $success->nextState['assertion_successes']);
+
+        $failing = $this->noDataState();
+        $failing['transport_state'] = 'problem';
+        $failing['transport_failures'] = 32767;
+
+        $failure = $this->evaluator->evaluate($failing, $this->makeResult(false, false, '00:01:00'));
+        self::assertSame(3, $failure->nextState['transport_failures']);
+    }
+
     /** @return array<string, mixed> */
     private function noDataState(): array
     {
@@ -106,9 +129,13 @@ final class WebsiteStateEvaluatorTest extends TestCase
         ?WebsiteCheckError $error = null,
         bool $slow = false,
         bool $manual = false,
+        bool $passedStatusAssertion = false,
     ): WebsiteCheckResult {
         $checkedAt = new DateTimeImmutable('2026-08-27T' . $time . '+00:00');
         $assertionResults = [];
+        if ($passedStatusAssertion) {
+            $assertionResults[] = ['kind' => 'status', 'passed' => true, 'safe_message' => 'Expected status received.'];
+        }
         if (!$assertions) {
             $assertionResults[] = ['kind' => 'content', 'passed' => false, 'safe_message' => 'Expected content was not found.'];
         }
