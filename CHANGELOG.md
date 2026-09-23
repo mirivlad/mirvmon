@@ -6,6 +6,13 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.7.7
+
+- Restored automatic website incident closure after consecutive healthy checks and capped transition counters to prevent PostgreSQL `smallint` overflow from stopping the website worker.
+- Fixed the critical website summary link, shared critical/warning status groups, and the empty message for filtered site lists.
+- Terminalized exhausted website check jobs, allowed manual requeue, and added website queue diagnostics; migration 028 marks older exhausted jobs as failed.
+- Corrected the website benchmark to report raw sample reads and measure a representative 24-hour history without claiming an unmeasured query improvement.
+
 ## 0.7.6
 
 - Fixed literal `\\n` text leaking from shared Twig `<head>` markup into rendered pages.
