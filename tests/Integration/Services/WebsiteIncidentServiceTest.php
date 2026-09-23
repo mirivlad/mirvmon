@@ -109,6 +109,25 @@ final class WebsiteIncidentServiceTest extends TestCase
         )->fetchColumn());
     }
 
+    public function testRecoveryPersistsWhenAssertionSuccessCounterReachedSmallintLimit(): void
+    {
+        $this->service->recordHttp($this->makeResult(false, '00:00:00'));
+        $this->service->recordHttp($this->makeResult(false, '00:01:00'));
+        $this->service->recordHttp($this->makeResult(false, '00:02:00'));
+        self::$pdo?->exec(
+            "UPDATE website_endpoint_state SET assertion_successes = 32767
+             WHERE endpoint_id = {$this->endpointId}"
+        );
+
+        $this->service->recordHttp($this->makeResult(true, '00:03:00', passedStatusAssertion: true));
+        $this->service->recordHttp($this->makeResult(true, '00:04:00', passedStatusAssertion: true));
+
+        self::assertSame(2, (int) self::$pdo?->query(
+            "SELECT assertion_successes FROM website_endpoint_state WHERE endpoint_id = {$this->endpointId}"
+        )->fetchColumn());
+        self::assertCount(0, (new IncidentRepository(self::$pdo))->active(['website_id' => $this->websiteId]));
+    }
+
     public function testWebsiteNotificationPayloadIncludesWebsiteName(): void
     {
         self::$pdo?->exec(
@@ -186,7 +205,7 @@ final class WebsiteIncidentServiceTest extends TestCase
         self::assertSame(['website_domain', 'website_tls'], $kinds);
     }
 
-    private function makeResult(bool $available, string $time): WebsiteCheckResult
+    private function makeResult(bool $available, string $time, bool $passedStatusAssertion = false): WebsiteCheckResult
     {
         return new WebsiteCheckResult(
             websiteId: $this->websiteId,
@@ -201,7 +220,9 @@ final class WebsiteIncidentServiceTest extends TestCase
             redirectChain: [],
             timings: ['dns_ms' => 1.0, 'tcp_ms' => 1.0, 'tls_ms' => 1.0, 'ttfb_ms' => 5.0, 'total_ms' => 10.0],
             error: $available ? null : WebsiteCheckError::Connect,
-            assertionResults: [],
+            assertionResults: $passedStatusAssertion
+                ? [['kind' => 'status', 'passed' => true, 'safe_message' => 'Expected status received.']]
+                : [],
             manual: false,
         );
     }
