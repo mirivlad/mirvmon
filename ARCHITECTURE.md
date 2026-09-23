@@ -223,8 +223,9 @@ worker, что production-события.
 Website monitoring использует тот же границу: один `app` запускает
 централизованный `website-check-worker`, а production Compose по-прежнему имеет
 ровно `app` и `db`. Native agent не выполняет website probes. Текущая сводка
-читает `website_state` и `website_endpoint_state`; raw `website_check_samples`
-используется только для исторических графиков, с hourly/daily aggregates и
+читает `website_state` и `website_endpoint_state`; карточка сайта дополнительно
+вычисляет доступность за 24 часа по raw `website_check_samples`. Исторические
+графики используют raw данные и hourly/daily aggregates с
 retention ориентиром 30 days / 365 days. Internal targets разрешены лишь в
 trusted-admin модели и проходят SSRF/redirect проверки. RDAP — основной источник
 domain expiry, WHOIS — fallback; self-signed TLS является явным предупреждением.

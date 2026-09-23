@@ -8,6 +8,7 @@ return [
     'websites.edit' => 'Настройки сайта',
     'websites.check' => 'Проверить',
     'websites.empty' => 'Сайты пока не добавлены.',
+    'websites.filter.empty' => 'По выбранным фильтрам сайты не найдены.',
     'websites.no_group' => 'Без группы',
     'websites.no_endpoint' => 'Основной endpoint не настроен',
     'websites.active_problems' => 'Активных проблем: {count}',

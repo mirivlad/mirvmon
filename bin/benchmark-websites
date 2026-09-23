@@ -91,13 +91,13 @@ function benchmarkWebsites(WebsiteBenchmarkPdo $pdo, int $websiteCount): array
                 sample_time, website_id, endpoint_id, sample_id, transport_available,
                 assertions_passed, status_code, configured_url, ttfb_ms, total_ms
              )
-             SELECT CURRENT_TIMESTAMP - samples.number * INTERVAL '1 minute',
+             SELECT CURRENT_TIMESTAMP - samples.number * INTERVAL '12 minutes',
                     websites.id, endpoints.id,
                     md5(websites.id::text || ':' || endpoints.id::text || ':' || samples.number::text)::uuid,
                     TRUE, TRUE, 200, endpoints.url, 40 + samples.number, 80 + samples.number
              FROM websites
              INNER JOIN website_endpoints AS endpoints ON endpoints.website_id = websites.id
-             CROSS JOIN generate_series(0, 2) AS samples(number)
+             CROSS JOIN generate_series(0, 119) AS samples(number)
              WHERE websites.name LIKE :prefix_pattern"
         );
         $insertSamples->execute(['prefix_pattern' => $prefix . '%']);
@@ -116,9 +116,7 @@ function benchmarkWebsites(WebsiteBenchmarkPdo $pdo, int $websiteCount): array
         if ($queryCount > 5) {
             throw new RuntimeException('Website read models used more than five SQL statements.');
         }
-        if (stripos($readSql, 'website_check_samples') !== false) {
-            throw new RuntimeException('Website current-state read model scanned raw samples.');
-        }
+        $rawHypertableScan = stripos($readSql, 'website_check_samples') !== false;
 
         $pdo->recording = false;
         $planStatement = $pdo->prepare('EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ' . $readSql);
@@ -131,7 +129,7 @@ function benchmarkWebsites(WebsiteBenchmarkPdo $pdo, int $websiteCount): array
         return [
             'websites' => $websiteCount,
             'endpoints' => $websiteCount * 3,
-            'samples' => $websiteCount * 3 * 3,
+            'samples' => $websiteCount * 3 * 120,
             'returned_rows' => count(array_merge(...array_map(
                 static fn (array $group): array => $group['websites'],
                 $groups
@@ -143,7 +141,7 @@ function benchmarkWebsites(WebsiteBenchmarkPdo $pdo, int $websiteCount): array
             'planning_ms' => round((float) ($plan[0]['Planning Time'] ?? 0), 3),
             'execution_ms' => round((float) ($plan[0]['Execution Time'] ?? 0), 3),
             'plan_nodes' => array_values(array_unique($nodeTypes)),
-            'raw_hypertable_scan' => false,
+            'raw_hypertable_scan' => $rawHypertableScan,
         ];
     } finally {
         if ($pdo->inTransaction()) {

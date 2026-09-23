@@ -16,6 +16,9 @@ use Throwable;
 
 final class WebsiteRepository
 {
+    private const CRITICAL_STATUS_SQL = "'critical', 'unavailable', 'problem'";
+    private const WARNING_STATUS_SQL = "'warning', 'slow', 'degraded'";
+
     private readonly AppSettingsRepository $settings;
 
     public function __construct(
@@ -447,9 +450,9 @@ final class WebsiteRepository
                 throw new InvalidArgumentException('Website status filter is invalid.');
             }
             if ($status === 'critical') {
-                $where[] = "state.status IN ('critical', 'unavailable', 'problem')";
+                $where[] = 'state.status IN (' . self::CRITICAL_STATUS_SQL . ')';
             } elseif ($status === 'warning') {
-                $where[] = "state.status IN ('warning', 'slow', 'degraded')";
+                $where[] = 'state.status IN (' . self::WARNING_STATUS_SQL . ')';
             } else {
                 $where[] = 'state.status = :status';
                 $params['status'] = $status;
@@ -552,6 +555,8 @@ final class WebsiteRepository
      */
     public function dashboardSummary(array $filters = []): array
     {
+        $criticalStatuses = self::CRITICAL_STATUS_SQL;
+        $warningStatuses = self::WARNING_STATUS_SQL;
         $where = '';
         $parameters = [];
         if (isset($filters['search']) && trim($filters['search']) !== '') {
@@ -563,12 +568,8 @@ final class WebsiteRepository
             SELECT
                 count(*) AS total,
                 count(*) FILTER (WHERE COALESCE(state.status, 'no_data') = 'healthy') AS healthy,
-                count(*) FILTER (WHERE COALESCE(state.status, 'no_data') IN (
-                    'warning', 'slow', 'degraded'
-                )) AS warning,
-                count(*) FILTER (WHERE COALESCE(state.status, 'no_data') IN (
-                    'critical', 'unavailable', 'problem'
-                )) AS critical,
+                count(*) FILTER (WHERE COALESCE(state.status, 'no_data') IN ({$warningStatuses})) AS warning,
+                count(*) FILTER (WHERE COALESCE(state.status, 'no_data') IN ({$criticalStatuses})) AS critical,
                 count(*) FILTER (WHERE COALESCE(state.status, 'no_data') = 'no_data') AS no_data,
                 count(*) FILTER (WHERE COALESCE(state.status, 'no_data') = 'paused') AS paused
             FROM websites

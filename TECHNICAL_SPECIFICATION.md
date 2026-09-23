@@ -205,8 +205,9 @@ Operational UI live refresh:
   ambient proxy, ограничивает redirect/deadline/body и снимает auth/secret headers
   на cross-origin redirect без явного administrator allowlist;
 - response bodies и credentials не сохраняются в history;
-- current state хранится отдельно от raw history, чтобы dashboard/list views не
-  сканировали hypertable;
+- current state хранится отдельно от raw history; dashboard status не сканирует
+  hypertable, но список сайтов использует raw samples для точной доступности
+  за последние 24 часа;
 - HTTP transport, assertions, performance, TLS и domain problems создают обычные
   incidents и используют существующие maintenance/notification semantics;
 - maintenance подавляет delivery, но не скрывает факт события;
