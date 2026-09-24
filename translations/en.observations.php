@@ -1,6 +1,14 @@
 <?php
 
 return [
+    'observations.assessment.label' => 'Outcome assessment',
+    'observations.assessment.help' => 'Confidence measures signal strength under detector rules, not a verified event probability. Record the outcome to assess real-world accuracy.',
+    'observations.assessment.clear' => 'Unreviewed',
+    'observations.assessment.actionable' => 'Useful signal',
+    'observations.assessment.normal' => 'Normal behavior',
+    'observations.assessment.intervention' => 'Prevented by action',
+    'observations.assessment.uncertain' => 'Unclear outcome',
+    'observations.assessment.saved' => 'Observation outcome saved.',
     'nav.observations' => 'Observations',
     'observations.title' => 'Observations',
     'observations.subtitle' => 'Unusual behavior and forecasts that have not become incidents yet.',

@@ -19,6 +19,8 @@ use App\Controllers\DashboardController;
 use App\Controllers\GroupController;
 use App\Controllers\LanguageController;
 use App\Controllers\ObservationController;
+use App\Controllers\PublicStatusController;
+use App\Controllers\ReliabilityReportController;
 use App\Controllers\ServerController;
 use App\Controllers\ServerDetailController;
 use App\Controllers\SetupController;
@@ -85,11 +87,13 @@ final class AppFactory
         $app->get('/agent/binaries/{artifact:[a-z0-9-]+}', self::controller($container, AgentController::class, 'downloadBinary'));
         $app->get('/agent/install.sh', self::controller($container, AgentController::class, 'generateInstallScript'));
         $app->get('/agent/install.exe', self::controller($container, AgentController::class, 'generateWindowsInstaller'));
+        $app->get('/status', self::controller($container, PublicStatusController::class, 'page'));
 
         $protected = $app->group('', function (RouteCollectorProxyInterface $group) use ($container, $admin, $operator): void {
             $group->get('/', self::controller($container, DashboardController::class, 'index'));
             $group->post('/logout', self::controller($container, AuthController::class, 'logout'));
             $group->get('/api/dashboard/stats', self::controller($container, DashboardController::class, 'getDashboardData'));
+            $group->get('/reports/reliability', self::controller($container, ReliabilityReportController::class, 'index'));
             $group->get('/api/agent-updates/status', self::controller($container, AgentUpdateController::class, 'statuses'));
             $group->get('/api/agents/fleet-status', self::controller($container, AgentFleetController::class, 'status'));
             $group->get('/api/servers/{id}/metrics', self::controller($container, MetricsApiController::class, 'getServerMetrics'));
@@ -146,6 +150,7 @@ final class AppFactory
             $group->post('/observations/{id}/handle', self::controller($container, ObservationController::class, 'handle'))->add($operator);
             $group->post('/observations/{id}/accept-normal', self::controller($container, ObservationController::class, 'acceptNormal'))->add($operator);
             $group->post('/observations/{id}/reset-normal', self::controller($container, ObservationController::class, 'resetNormal'))->add($operator);
+            $group->post('/observations/{id}/assess', self::controller($container, ObservationController::class, 'assess'))->add($operator);
             $group->get('/agent/{id}/config', self::controller($container, AgentController::class, 'getConfig'));
             $group->post('/agent/{id}/config', self::controller($container, AgentController::class, 'updateConfig'))->add($operator);
             $group->get('/agent/{id}/status', self::controller($container, AgentController::class, 'getStatus'));
@@ -181,6 +186,8 @@ final class AppFactory
             $group->post('/system/restore/preflight', self::controller($container, SystemController::class, 'preflightRestore'));
             $group->post('/system/restore/execute', self::controller($container, SystemController::class, 'executeRestore'));
             $group->get('/audit', self::controller($container, AuditController::class, 'index'));
+            $group->get('/public-status', self::controller($container, PublicStatusController::class, 'settings'));
+            $group->post('/public-status', self::controller($container, PublicStatusController::class, 'save'));
             $group->post('/audit/retention', self::controller($container, AuditController::class, 'saveRetention'));
         });
         $administration->add($auditTrail)->add($csrf)->add($admin)->add($auth);
@@ -209,6 +216,7 @@ final class AppFactory
             statelessPaths: [
                 '/livez',
                 '/readyz',
+                '/status',
                 '/api/v1/metrics',
                 '/agent/binaries/*',
                 '/agent/install.sh',

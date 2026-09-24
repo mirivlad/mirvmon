@@ -18,6 +18,8 @@ use App\Controllers\DashboardController;
 use App\Controllers\GroupController;
 use App\Controllers\LanguageController;
 use App\Controllers\ObservationController;
+use App\Controllers\PublicStatusController;
+use App\Controllers\ReliabilityReportController;
 use App\Controllers\ServerController;
 use App\Controllers\ServerDetailController;
 use App\Controllers\SetupController;
@@ -38,6 +40,8 @@ use App\Repositories\MetricRepository;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\NotificationSettingsRepository;
 use App\Repositories\ObservationRepository;
+use App\Repositories\PublicStatusRepository;
+use App\Repositories\ReliabilityReportRepository;
 use App\Repositories\ServerRepository;
 use App\Repositories\WorkerHeartbeatRepository;
 use App\Repositories\WebsiteCheckQueueRepository;
@@ -342,6 +346,22 @@ final class Bootstrap
                 $container->get(SystemHealthService::class),
                 $container->get(IncidentRepository::class),
                 $container->get(WebsiteRepository::class)
+            )
+        );
+        $container->set(
+            ReliabilityReportController::class,
+            static fn (Container $container): ReliabilityReportController => new ReliabilityReportController(
+                $container->get(Twig::class),
+                new ReliabilityReportRepository($container->get(PDO::class)),
+                $container->get(Translator::class),
+            )
+        );
+        $container->set(
+            PublicStatusController::class,
+            static fn (Container $container): PublicStatusController => new PublicStatusController(
+                $container->get(Twig::class),
+                new PublicStatusRepository($container->get(PDO::class)),
+                $container->get(Translator::class),
             )
         );
         $container->set(

@@ -66,6 +66,8 @@ return [
     'audit.event.user.updated' => 'User “{name}” was changed.',
     'audit.event.user.deleted' => 'User “{name}” was deleted.',
     'audit.event.notifications.saved' => 'Global notification settings were changed.',
+    'audit.event.public_status.saved' => 'Public status page selection changed.',
+    'audit.event.observation.assessed' => 'Observation #{id} outcome was assessed.',
     'audit.event.notifications.tested' => 'Test notifications were queued: {count}.',
     'audit.event.queue.retried' => 'Notifications requeued: {count}.',
     'audit.event.queue.job_retried' => 'Notification job #{id} was requeued.',

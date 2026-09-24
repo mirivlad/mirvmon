@@ -83,6 +83,7 @@ final class ObservationControllerTest extends TestCase
         self::assertStringContainsString('/observations/' . $anomalyId . '/handle', $html);
         self::assertStringContainsString('/observations/' . $anomalyId . '/accept-normal', $html);
         self::assertStringContainsString('/observations/' . $predictionId . '/handle', $html);
+        self::assertStringContainsString('/observations/' . $predictionId . '/assess', $html);
     }
 
     public function testPredictionCanBeMarkedHandled(): void

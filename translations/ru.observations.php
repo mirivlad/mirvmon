@@ -1,6 +1,14 @@
 <?php
 
 return [
+    'observations.assessment.label' => 'Оценка результата',
+    'observations.assessment.help' => 'Confidence отражает силу сигнала по правилам детектора, а не подтверждённую вероятность события. Отметьте исход, чтобы оценивать точность по реальным случаям.',
+    'observations.assessment.clear' => 'Без оценки',
+    'observations.assessment.actionable' => 'Полезный сигнал',
+    'observations.assessment.normal' => 'Обычное поведение',
+    'observations.assessment.intervention' => 'Предотвращено действием',
+    'observations.assessment.uncertain' => 'Исход неясен',
+    'observations.assessment.saved' => 'Оценка наблюдения сохранена.',
     'nav.observations' => 'Наблюдения',
     'observations.title' => 'Наблюдения',
     'observations.subtitle' => 'Необычное поведение и прогнозы, которые ещё не стали инцидентами.',

@@ -14,6 +14,8 @@
 - [FAQ](faq.md) — короткие ответы на частые вопросы;
 - [Use cases](use-cases.md) — типовые сценарии применения;
 - [Audit log](audit-log.md) — журнал административных действий;
+- [Надёжность и публичная статусная страница](reliability-status.md) — расчёты, полнота данных и публикация объектов;
+- [Проверка качества predictive](predictive-quality.md) — production-срез, оценки исходов и методика проверки;
 - [Release/hotfix tags](release-hotfix-tags.md) — выпуск тегов и hotfix flow.
 
 ## Архитектура и разработка

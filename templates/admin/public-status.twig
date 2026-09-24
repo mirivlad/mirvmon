@@ -1,0 +1,45 @@
+{% extends "layout.twig" %}
+{% set page_title = t('public_status.settings') %}
+
+{% block content %}
+<header class="mb-4">
+    <h1 class="h2 mb-1"><i class="fas fa-bullhorn" aria-hidden="true"></i> {{ t('public_status.settings') }}</h1>
+    <p class="text-muted mb-0">{{ t('public_status.settings_help') }}</p>
+</header>
+<form method="post" action="/admin/public-status">
+    {% include 'partials/csrf.twig' %}
+    {% for type, items in {'server': choices.servers, 'website': choices.websites} %}
+    <section class="card mb-4">
+        <div class="card-header fw-semibold">{{ t('public_status.type.' ~ type) }}</div>
+        <div class="card-body">
+            {% if items is empty %}
+                <p class="text-muted mb-0">{{ t('public_status.no_choices') }}</p>
+            {% else %}
+                {% for item in items %}
+                    <div class="row g-2 align-items-center mb-3">
+                        <div class="col-md-5">
+                            <label class="form-check-label">
+                                <input class="form-check-input me-2" type="checkbox"
+                                       name="items[{{ type }}][{{ item.id }}][enabled]" value="1"
+                                       {{ item.published ? 'checked' : '' }}>
+                                {{ item.name }}
+                            </label>
+                        </div>
+                        <div class="col-md-7">
+                            <input class="form-control" type="text" maxlength="100"
+                                   name="items[{{ type }}][{{ item.id }}][display_name]"
+                                   value="{{ item.display_name }}"
+                                   aria-label="{{ t('public_status.public_name') }}: {{ item.name }}">
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+    </section>
+    {% endfor %}
+    <div class="d-flex gap-2 align-items-center">
+        <button class="btn btn-primary" type="submit">{{ t('common.save') }}</button>
+        <a href="/status" class="btn btn-outline-secondary">{{ t('public_status.preview') }}</a>
+    </div>
+</form>
+{% endblock %}
