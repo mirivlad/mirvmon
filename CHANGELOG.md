@@ -6,6 +6,13 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.8.0
+
+- Added a 7/30-day reliability report for servers and websites, including observation coverage, availability, incident duration and mean recovery time. Availability is withheld when coverage is insufficient.
+- Added an opt-in public status page. Administrators choose exactly which objects and public names appear; stale observations are shown as unknown.
+- Added operator outcome labels for predictive observations, bound to each recurrence, with audit history and a documented baseline quality assessment.
+- Added migrations 029 and 030. No agent protocol or Compose service changes are required.
+
 ## 0.7.7
 
 - Restored automatic website incident closure after consecutive healthy checks and capped transition counters to prevent PostgreSQL `smallint` overflow from stopping the website worker.

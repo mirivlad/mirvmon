@@ -107,6 +107,7 @@ final class AuditTrailMiddleware implements MiddlewareInterface
             '#^/observations/([1-9][0-9]*)/handle$#' => 'observation_handle',
             '#^/observations/([1-9][0-9]*)/accept-normal$#' => 'observation_accept_normal',
             '#^/observations/([1-9][0-9]*)/reset-normal$#' => 'observation_reset_normal',
+            '#^/observations/([1-9][0-9]*)/assess$#' => 'observation_assess',
         ] as $pattern => $kind) {
             if (preg_match($pattern, $path, $matches) === 1) {
                 return ['kind' => $kind, 'id' => (int) $matches[1]];
@@ -121,6 +122,7 @@ final class AuditTrailMiddleware implements MiddlewareInterface
             '/admin/notifications/save' => ['kind' => 'notifications_save', 'id' => null],
             '/admin/notifications/queue/retry' => ['kind' => 'queue_retry', 'id' => null],
             '/admin/notifications/queue/delete' => ['kind' => 'queue_delete', 'id' => null],
+            '/admin/public-status' => ['kind' => 'public_status_save', 'id' => null],
             '/sites' => ['kind' => 'website_create', 'id' => null],
             default => null,
         };
@@ -149,10 +151,11 @@ final class AuditTrailMiddleware implements MiddlewareInterface
             'queue_retry' => $this->queueRetryState(),
             'queue_job_retry', 'queue_job_delete' => $id === null ? null : $this->queueJobState($id),
             'queue_delete' => $this->queueDeleteState($body),
+            'public_status_save' => $this->publicStatusState(),
             'website_create' => $this->websiteByName($body['name'] ?? null),
             'website_update', 'website_delete', 'website_pause', 'website_resume', 'website_check'
                 => $id === null ? null : $this->websiteState($id),
-            'observation_handle', 'observation_accept_normal', 'observation_reset_normal'
+            'observation_handle', 'observation_accept_normal', 'observation_reset_normal', 'observation_assess'
                 => $id === null ? null : $this->observationState($id),
             default => null,
         };
@@ -257,6 +260,22 @@ final class AuditTrailMiddleware implements MiddlewareInterface
                 }
                 return $this->observationEvent(
                     'observation.reset_normal', 'audit.event.observation.reset_normal', $id, $before, $after
+                );
+
+            case 'observation_assess':
+                if (!is_array($before) || !is_array($after)
+                    || $before['assessment_outcome'] === $after['assessment_outcome']) {
+                    return null;
+                }
+                return $this->eventData(
+                    'observation.assess', 'observation', $id,
+                    (string) $after['server_name'], 'audit.event.observation.assessed',
+                    ['id' => $id ?? 0], [
+                        'server_id' => $after['server_id'],
+                        'recurrence_count' => $after['recurrence_count'],
+                        'previous_outcome' => $before['assessment_outcome'],
+                        'new_outcome' => $after['assessment_outcome'],
+                    ]
                 );
 
             case 'server_create':
@@ -518,6 +537,16 @@ final class AuditTrailMiddleware implements MiddlewareInterface
                         'filters' => $this->safeQueueFilters($before['filters']),
                     ]
                 );
+
+            case 'public_status_save':
+                if (!is_array($before) || !is_array($after) || $before === $after) {
+                    return null;
+                }
+                return $this->eventData(
+                    'public_status.save', 'public_status', null, null,
+                    'audit.event.public_status.saved', [],
+                    ['published' => $after]
+                );
         }
 
         return null;
@@ -594,11 +623,15 @@ final class AuditTrailMiddleware implements MiddlewareInterface
         $statement = $this->pdo->prepare(
             'SELECT observations.id, observations.server_id, observations.kind,
                     observations.status, observations.notification_cycle,
+                    observations.recurrence_count, assessment.outcome AS assessment_outcome,
                     observations.handled_by_username, observations.accepted_by_username,
                     servers.name AS server_name, metric_names.name AS metric_name
              FROM observations
              INNER JOIN servers ON servers.id = observations.server_id
              LEFT JOIN metric_names ON metric_names.id = observations.metric_id
+             LEFT JOIN observation_assessments AS assessment
+               ON assessment.observation_id = observations.id
+              AND assessment.recurrence_count = observations.recurrence_count
              WHERE observations.id = :id'
         );
         $statement->execute(['id' => $observationId]);
@@ -614,6 +647,9 @@ final class AuditTrailMiddleware implements MiddlewareInterface
             'kind' => (string) $row['kind'],
             'status' => (string) $row['status'],
             'notification_cycle' => (int) $row['notification_cycle'],
+            'recurrence_count' => (int) $row['recurrence_count'],
+            'assessment_outcome' => $row['assessment_outcome'] === null
+                ? null : (string) $row['assessment_outcome'],
             'handled_by_username' => $row['handled_by_username'] === null
                 ? null : (string) $row['handled_by_username'],
             'accepted_by_username' => $row['accepted_by_username'] === null
@@ -1010,6 +1046,16 @@ final class AuditTrailMiddleware implements MiddlewareInterface
             'to' => $filters['to'] ?? null,
             'error_filter_used' => ($filters['error'] ?? null) !== null,
         ];
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function publicStatusState(): array
+    {
+        $statement = $this->pdo->query(
+            'SELECT server_id, website_id, display_name, sort_order
+             FROM public_status_items ORDER BY sort_order, id'
+        );
+        return $statement === false ? [] : $statement->fetchAll();
     }
 
     /**

@@ -1,0 +1,60 @@
+{% extends "layout.twig" %}
+{% set page_title = t('reliability.title') %}
+
+{% block content %}
+<header class="d-flex flex-wrap gap-3 justify-content-between align-items-end mb-4">
+    <div>
+        <h1 class="h2 mb-1"><i class="fas fa-chart-line" aria-hidden="true"></i> {{ t('reliability.title') }}</h1>
+        <p class="text-muted mb-0">{{ t('reliability.subtitle') }}</p>
+    </div>
+    <div class="btn-group" aria-label="{{ t('common.period') }}">
+        <a href="/reports/reliability?period=7" class="btn {{ period == 7 ? 'btn-primary' : 'btn-outline-primary' }}">7 {{ t('common.days') }}</a>
+        <a href="/reports/reliability?period=30" class="btn {{ period == 30 ? 'btn-primary' : 'btn-outline-primary' }}">30 {{ t('common.days') }}</a>
+    </div>
+</header>
+<p class="small text-muted">{{ from|date('d.m.Y H:i') }} — {{ to|date('d.m.Y H:i') }} · {{ t('reliability.window_note') }}</p>
+
+{% for type, items in {'servers': report.servers, 'websites': report.websites} %}
+<section class="card mb-4">
+    <div class="card-header fw-semibold">{{ t('reliability.' ~ type) }}</div>
+    {% if items is empty %}
+        <div class="card-body text-muted">{{ t('reliability.empty') }}</div>
+    {% else %}
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead><tr>
+                <th>{{ t('common.name') }}</th>
+                <th>{{ t('reliability.availability') }}</th>
+                <th>{{ t('reliability.coverage') }}</th>
+                {% if type == 'servers' %}<th>{{ t('reliability.downtime') }}</th>{% endif %}
+                <th>{{ t('reliability.incidents') }}</th>
+                <th>{{ t('reliability.duration') }}</th>
+                <th>{{ t('reliability.recovery') }}</th>
+            </tr></thead>
+            <tbody>
+            {% for item in items %}
+                <tr>
+                    <td><a href="/{{ type == 'servers' ? 'servers' : 'sites' }}/{{ item.id }}">{{ item.name }}</a></td>
+                    <td>
+                        {% if item.reportable and item.availability is not null %}
+                            <strong>{{ item.availability|number_format(2, '.', '') }}%</strong>
+                        {% else %}
+                            <span class="text-muted">{{ t('reliability.insufficient') }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ item.coverage.coverage_percent|number_format(1, '.', '') }}%
+                        <span class="small text-muted">({{ item.coverage.observed }}/{{ item.coverage.expected }})</span></td>
+                    {% if type == 'servers' %}<td>{{ item.reportable ? item.downtime_text : '—' }}</td>{% endif %}
+                    <td>{{ item.incidents.count }}</td>
+                    <td>{{ item.incident_duration_text }}</td>
+                    <td>{{ item.recovery_text ?? '—' }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</section>
+{% endfor %}
+<p class="small text-muted">{{ t('reliability.method') }}</p>
+{% endblock %}

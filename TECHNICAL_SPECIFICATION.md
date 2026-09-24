@@ -254,6 +254,17 @@ Operational UI live refresh:
 - при настроенном `PUBLIC_BASE_URL` formatter добавляет direct server link ко всем server-bound notifications; observation notification дополнительно содержит ссылку на `/observations#observation-{id}`;
 - mutations `/observations/{id}/handle`, `/accept-normal`, `/reset-normal` — POST-only и требуют operator capability;
 - operator feedback по observations записывается в append-only Audit Log с observation ID, server/metric и переходом статуса.
+- `observation_assessments` хранит независимую оценку исхода по `(observation_id, recurrence_count)`; operator POST `/observations/{id}/assess` не меняет lifecycle, detector thresholds или notification cycle, требует CSRF и записывается в Audit Log.
+
+### Отчёт о надёжности и публичный статус
+
+- `/reports/reliability` требует пользовательскую сессию и показывает 7/30 дней для активных серверов и сайтов;
+- server availability вычисляется по `server_availability_events` с переносом последнего состояния до начала окна; неизвестное время до первой записи не считается доступным;
+- website availability вычисляется по немануальным пробам основного endpoint как доля `transport_available AND assertions_passed`;
+- для каждого объекта показывается полнота наблюдений: полученные пакеты агента либо проверки сайта относительно ожидаемых при текущем интервале; при полноте ниже 95% или недостаточной истории переходов серверная доступность скрывается;
+- число и длительность инцидентов считаются по `alerts`, пересечения считаются отдельно; среднее время восстановления включает только закрытые инциденты;
+- `/status` — stateless публичный GET без пользовательских сессий; по умолчанию список пуст, публикация возможна только после административного POST `/admin/public-status` с CSRF и журналированием;
+- `public_status_items` содержит явно выбранные server/website ID и публичные названия; публичная страница не выдаёт адреса, URL, метрики, endpoint details или тексты инцидентов, а при устаревших данных показывает неизвестное состояние.
 
 ### Самодиагностика сетевой связности
 

@@ -66,6 +66,8 @@ return [
     'audit.event.user.updated' => 'Изменён пользователь «{name}».',
     'audit.event.user.deleted' => 'Удалён пользователь «{name}».',
     'audit.event.notifications.saved' => 'Изменены общие настройки уведомлений.',
+    'audit.event.public_status.saved' => 'Изменён состав публичной статусной страницы.',
+    'audit.event.observation.assessed' => 'Оценён исход наблюдения #{id}.',
     'audit.event.notifications.tested' => 'Поставлено в очередь тестовое уведомление: {count}.',
     'audit.event.queue.retried' => 'Повторно поставлены в очередь уведомления: {count}.',
     'audit.event.queue.job_retried' => 'Повторно поставлено в очередь уведомление #{id}.',

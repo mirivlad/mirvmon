@@ -65,7 +65,7 @@
 </head>
 <body>
     {% if session.username %}
-    <nav class="navbar navbar-expand-lg navbar-dark app-navbar">
+    <nav class="navbar navbar-expand-xl navbar-dark app-navbar">
         <div class="container-xl">
             <a class="navbar-brand app-brand" href="/" aria-label="MirvMon — {{ t('nav.dashboard') }}">
                 {% include 'partials/brand.twig' %}
@@ -116,11 +116,16 @@
                             {{ t('nav.incidents') }}
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/observations" data-nav-prefix="/observations">
-                            <i class="fas fa-magnifying-glass-chart" aria-hidden="true"></i>
-                            {{ t('nav.observations') }}
-                        </a>
+                    <li class="nav-item dropdown">
+                        <button class="nav-link dropdown-toggle app-nav-button" type="button"
+                                data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-chart-line" aria-hidden="true"></i>
+                            {{ t('reliability.analytics') }}
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="/observations" data-nav-prefix="/observations">{{ t('nav.observations') }}</a></li>
+                            <li><a class="dropdown-item" href="/reports/reliability" data-nav-prefix="/reports">{{ t('reliability.title') }}</a></li>
+                        </ul>
                     </li>
                     {% if session.role == 'admin' %}
                     <li class="nav-item dropdown">
@@ -161,6 +166,12 @@
                                 <a class="dropdown-item" href="/admin/system" data-nav-exact="/admin/system">
                                     <i class="fas fa-heart-pulse" aria-hidden="true"></i>
                                     {{ t('nav.system') }}
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/admin/public-status" data-nav-exact="/admin/public-status">
+                                    <i class="fas fa-bullhorn" aria-hidden="true"></i>
+                                    {{ t('public_status.settings') }}
                                 </a>
                             </li>
                             <li>

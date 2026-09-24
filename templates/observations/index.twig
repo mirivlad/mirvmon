@@ -5,6 +5,7 @@
 <header class="mb-3">
     <h1 class="h2 mb-1"><i class="fas fa-magnifying-glass-chart" aria-hidden="true"></i> {{ t('observations.title') }}</h1>
     <p class="text-muted mb-0">{{ t('observations.subtitle') }}</p>
+    <p class="small text-muted mb-0">{{ t('observations.assessment.help') }}</p>
 </header>
 
 <ul class="nav nav-tabs mb-3" aria-label="{{ t('observations.title') }}">
@@ -35,6 +36,7 @@
                         <th>{{ t('incidents.column.problem') }}</th>
                         <th>{{ t('observations.current') }}</th>
                         <th>{{ t('observations.confidence') }}</th>
+                        <th>{{ t('observations.assessment.label') }}</th>
                         <th>{{ t('observations.last_seen') }}</th>
                         {% if session.role in ['admin', 'operator'] %}<th>{{ t('common.actions') }}</th>{% endif %}
                     </tr>
@@ -72,6 +74,23 @@
                             {% if observation.current_value is not null %}{{ observation.current_value|round(2) }}{% if observation.metric_unit %} {{ observation.metric_unit }}{% endif %}{% else %}—{% endif %}
                         </td>
                         <td class="text-nowrap">{% if confidence is not null %}{{ confidence }}%{% else %}—{% endif %}</td>
+                        <td>
+                            {% if session.role in ['admin', 'operator'] %}
+                                <form method="post" action="/observations/{{ observation.id }}/assess" class="d-flex gap-1 align-items-center">
+                                    {% include 'partials/csrf.twig' %}
+                                    <input type="hidden" name="recurrence_count" value="{{ observation.recurrence_count }}">
+                                    <input type="hidden" name="view" value="{{ view }}">
+                                    <select name="outcome" class="form-select form-select-sm" aria-label="{{ t('observations.assessment.label') }}">
+                                        {% for outcome in ['clear', 'actionable', 'normal', 'intervention', 'uncertain'] %}
+                                            <option value="{{ outcome }}" {{ (observation.assessment_outcome|default('clear') == outcome) ? 'selected' : '' }}>{{ t('observations.assessment.' ~ outcome) }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button class="btn btn-sm btn-outline-primary" type="submit">{{ t('common.save') }}</button>
+                                </form>
+                            {% else %}
+                                {{ t('observations.assessment.' ~ (observation.assessment_outcome|default('clear'))) }}
+                            {% endif %}
+                        </td>
                         <td class="text-nowrap">
                             <div>{{ observation.last_seen_at|date('d.m.Y H:i') }}</div>
                             {% if view != 'active' %}<div class="small text-muted">{{ observation.kind == 'anomaly' and observation.status == 'handled' ? t('observations.status.reviewed') : t('observations.status.' ~ observation.status) }}</div>{% endif %}

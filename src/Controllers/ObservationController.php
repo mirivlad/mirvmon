@@ -92,6 +92,30 @@ final class ObservationController
             $ok ? 'success' : 'warning'
         );
     }
+
+    /** @param array<string, string> $args */
+    public function assess(Request $request, Response $response, array $args): Response
+    {
+        $id = $this->id($args);
+        $body = $request->getParsedBody();
+        $body = is_array($body) ? $body : [];
+        $cycle = filter_var($body['recurrence_count'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        $outcome = is_string($body['outcome'] ?? null) ? $body['outcome'] : '';
+        $view = in_array($body['view'] ?? '', ['active', 'history', 'normal'], true)
+            ? (string) $body['view'] : 'active';
+        if ($id === null || $cycle === false) {
+            return $this->flashRedirect($response, 'observations.flash.no_change', 'warning', $view);
+        }
+        $ok = $this->observations->assess(
+            $id, (int) $cycle, $outcome, $this->userId(), $this->username()
+        );
+        return $this->flashRedirect(
+            $response,
+            $ok ? 'observations.assessment.saved' : 'observations.flash.no_change',
+            $ok ? 'success' : 'warning',
+            $view
+        );
+    }
     /** @param array<string, string> $args */
     private function id(array $args): ?int
     {
@@ -119,10 +143,11 @@ final class ObservationController
         return is_string($username) ? $username : null;
     }
 
-    private function flashRedirect(Response $response, string $key, string $type): Response
+    private function flashRedirect(Response $response, string $key, string $type, string $view = 'active'): Response
     {
         $_SESSION['flash_message'] = $this->translator->trans($key);
         $_SESSION['flash_type'] = $type;
-        return $response->withHeader('Location', '/observations')->withStatus(302);
+        $location = $view === 'active' ? '/observations' : '/observations?view=' . $view;
+        return $response->withHeader('Location', $location)->withStatus(302);
     }
 }

@@ -128,6 +128,31 @@ final class ObservationRepositoryTest extends TestCase
         self::assertTrue($reopened['should_notify']);
     }
 
+    public function testAssessmentIsScopedToTheCurrentRecurrence(): void
+    {
+        $now = new DateTimeImmutable('2026-09-16T00:00:00Z');
+        $candidate = $this->prediction('disk_growth_v1:disk_used_root');
+        $created = $this->repository->recordCandidate($this->serverId, $this->metricId, $candidate, $now);
+        $id = $created['id'];
+
+        self::assertTrue($this->repository->assess($id, 1, 'intervention', null, 'operator'));
+        self::assertSame('intervention', $this->repository->active()[0]['assessment_outcome']);
+        self::assertFalse($this->repository->assess($id, 2, 'normal', null, 'operator'));
+
+        $this->repository->resolveMissing([], [$this->serverId . ':' . $this->metricId], $now->modify('+30 minutes'));
+        $this->repository->recordCandidate($this->serverId, $this->metricId, $candidate, $now->modify('+35 minutes'));
+
+        self::assertNull($this->repository->active()[0]['assessment_outcome']);
+        self::assertFalse($this->repository->assess($id, 1, 'normal', null, 'operator'));
+        self::assertTrue($this->repository->assess($id, 2, 'actionable', null, 'operator'));
+        self::assertSame('actionable', $this->repository->active()[0]['assessment_outcome']);
+        self::assertTrue($this->repository->assess($id, 2, 'clear', null, 'operator'));
+        self::assertNull($this->repository->active()[0]['assessment_outcome']);
+        self::assertSame(1, (int) self::$pdo?->query(
+            'SELECT count(*) FROM observation_assessments WHERE observation_id = ' . $id
+        )->fetchColumn());
+    }
+
     public function testSeenKeyIsScopedByServer(): void
     {
         $second = self::$pdo?->prepare(

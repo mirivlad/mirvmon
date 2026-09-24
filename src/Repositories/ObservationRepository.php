@@ -498,6 +498,43 @@ final class ObservationRepository
         return $statement->rowCount() === 1;
     }
 
+    public function assess(int $id, int $recurrence, string $outcome, ?int $userId, ?string $username): bool
+    {
+        if (!in_array($outcome, ['actionable', 'normal', 'intervention', 'uncertain', 'clear'], true)) {
+            return false;
+        }
+        if ($outcome === 'clear') {
+            $statement = $this->pdo->prepare(
+                'DELETE FROM observation_assessments AS assessment
+                 USING observations
+                 WHERE assessment.observation_id = observations.id
+                   AND assessment.observation_id = :id
+                   AND assessment.recurrence_count = :recurrence
+                   AND observations.recurrence_count = :current_recurrence'
+            );
+            $statement->execute(['id' => $id, 'recurrence' => $recurrence, 'current_recurrence' => $recurrence]);
+            return $statement->rowCount() === 1;
+        }
+
+        $statement = $this->pdo->prepare(
+            'INSERT INTO observation_assessments (
+                observation_id, recurrence_count, outcome, assessed_by_user_id, assessed_by_username
+             )
+             SELECT id, recurrence_count, :outcome, :user_id, :username
+             FROM observations WHERE id = :id AND recurrence_count = :recurrence
+             ON CONFLICT (observation_id, recurrence_count) DO UPDATE SET
+                outcome = EXCLUDED.outcome,
+                assessed_at = CURRENT_TIMESTAMP,
+                assessed_by_user_id = EXCLUDED.assessed_by_user_id,
+                assessed_by_username = EXCLUDED.assessed_by_username'
+        );
+        $statement->execute([
+            'outcome' => $outcome, 'user_id' => $userId, 'username' => $this->username($username),
+            'id' => $id, 'recurrence' => $recurrence,
+        ]);
+        return $statement->rowCount() === 1;
+    }
+
     /** @return list<array<string, mixed>> */
     public function active(): array
     {
@@ -526,9 +563,13 @@ final class ObservationRepository
     private function rows(string $where, string $orderBy): array
     {
         $statement = $this->pdo->query(
-            "SELECT observations.*, servers.name AS server_name,
+            "SELECT observations.*, assessments.outcome AS assessment_outcome,
+                    servers.name AS server_name,
                     metric_names.name AS metric_name, metric_names.unit AS metric_unit
              FROM observations
+             LEFT JOIN observation_assessments AS assessments
+               ON assessments.observation_id = observations.id
+              AND assessments.recurrence_count = observations.recurrence_count
              INNER JOIN servers ON servers.id = observations.server_id
              LEFT JOIN metric_names ON metric_names.id = observations.metric_id
              WHERE {$where}
