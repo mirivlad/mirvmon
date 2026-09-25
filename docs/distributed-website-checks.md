@@ -55,3 +55,11 @@ TLS verification на агенте включена всегда. URL credential
 ## Cadence
 
 У каждого remote job сохраняется interval endpoint. Runner просыпается с минимальным из host-metrics interval и probe intervals, но host metrics собирает только когда наступил их собственный срок. Поэтому 10-секундная проверка сайта не превращает 60-секундный сбор CPU/RAM в 10-секундный.
+
+## История и отчёт надёжности
+
+Raw central и remote observations хранятся раздельно. Графики TTFB/response/assertions остаются центральными, но отчёт **Аналитика → Надёжность** для сайтов пересчитывает transport каждой центральной автоматической проверки с учётом свежих remote observations и настроенного failure quorum. Missing/stale remote observation не считается failure. Assertions по-прежнему берутся только из Central MirvMon.
+
+В деталях сайта на вкладке **События** показывается компактная история переходов доступности каждой точки за последние 7 дней плюс её последнее состояние. Это позволяет увидеть, какая именно точка перестала или снова начала видеть endpoint.
+
+Endpoint с authentication, custom headers или `allow_self_signed` агенту не выдаётся. Для такого endpoint effective quorum автоматически становится `1`, даже если на уровне сайта выбран больший quorum: Central MirvMon остаётся единственной авторитетной transport-точкой, поэтому центральный отказ не может быть скрыт отсутствующими remote results.

@@ -1,11 +1,11 @@
 # Roadmap MirvMon
 
 Этот roadmap фиксирует текущее направление развития MirvMon после выпуска
-`v0.7.6`. Стабильный релиз на момент обновления документа — `v0.7.6`.
+`v0.9.3`. Стабильный релиз на момент обновления документа — `v0.9.3`.
 История уже выпущенных изменений сохраняется в [CHANGELOG.md](CHANGELOG.md) и
 [docs/releases](docs/releases).
 
-## Текущее состояние: v0.7.6
+## Текущее состояние: v0.9.3
 
 MirvMon уже закрывает два основных сценария эксплуатации:
 
@@ -378,6 +378,22 @@ Migration 027 хранит только ожидающие post-maintenance до
 - исправлены `templates/layout.twig` и `templates/login-layout.twig`;
 - добавлен contract-test на shared document heads;
 - schema, agent protocol и deployment configuration не меняются.
+
+## v0.8.0 — Надёжность и публичный статус (выпущен)
+
+- 7/30-дневный reliability report для серверов и сайтов;
+- opt-in публичная status page для явно выбранных объектов;
+- operator outcome labels для predictive observations.
+
+## v0.9.0–v0.9.3 — Распределённый website monitoring (выпущены)
+
+- существующие native agents могут выполнять outbound-only transport HTTP(S)-проверки сайтов без новых входящих портов;
+- Central MirvMon всегда остаётся обязательной точкой, дополнительные агенты выбираются per-site;
+- failure quorum агрегирует только свежие observations, missing/stale data не считается отказом;
+- агенты не получают auth secrets/custom headers и не выполняют self-signed/TLS expiry/domain/assertion checks; endpoint, который нельзя безопасно выдать агентам, автоматически использует Central-only quorum;
+- `/sites` показывает состояние точек и quorum, а detail events — 7-дневную историю переходов по точкам;
+- reliability report учитывает distributed quorum для transport, сохраняя Central-only assertions;
+- быстрые probe toggles доступны в списках серверов/агентов; UI/navigation и cache-busting доведены в patch-релизах 0.9.1–0.9.3.
 
 ## Не входит в v0.5.3–v0.6.0
 
