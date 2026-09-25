@@ -155,6 +155,7 @@
                         </a>
                     </th>
                     <th>{{ t('servers.column.agent') }}</th>
+                    <th>{{ t('server18.probe.quick.column') }}</th>
                     <th>{{ t('common.actions') }}</th>
                 </tr>
             </thead>
@@ -230,6 +231,9 @@
                                 {% endif %}
                             </span>
                         {% endif %}
+                    </td>
+                    <td data-label="{{ t('server18.probe.quick.column') }}">
+                        {% include "partials/website-probe-toggle.twig" with {server: server} %}
                     </td>
                     <td data-label="{{ t('common.actions') }}">
                         <div class="d-flex flex-wrap gap-1">

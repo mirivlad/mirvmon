@@ -98,4 +98,13 @@ return [
     'server18.settings.services_saved' => 'Список отслеживаемых сервисов сохранён.',
     'server18.settings.website_probe' => 'Использовать агент как точку проверок сайтов',
     'server18.settings.website_probe_help' => 'Агент будет получать назначенные HTTP-проверки через обычный remote config и отправлять результаты исходящими HTTPS-запросами. Входящие порты не нужны.',
+    'server18.probe.quick.column' => 'Проверки сайтов',
+    'server18.probe.quick.label' => 'Использовать агент как точку проверок сайтов',
+    'server18.probe.quick.enabled' => 'Включено',
+    'server18.probe.quick.disabled' => 'Выключено',
+    'server18.probe.quick.unsupported' => 'Нет поддержки',
+    'server18.probe.quick.unsupported_help' => 'Агент ещё не сообщил capability website_probe_v1. Обновите агент до версии с поддержкой распределённых проверок.',
+    'server18.probe.quick.used_by' => 'Используется сайтами: {count}',
+    'server18.probe.quick.disable_confirm' => 'Эта точка используется сайтами: {count}. При выключении она будет снята с этих сайтов, а их кворум будет скорректирован. Продолжить?',
+    'server18.probe.quick.error' => 'Не удалось изменить доступность агента для проверок сайтов.',
 ];

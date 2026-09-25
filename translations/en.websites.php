@@ -150,4 +150,10 @@ return [
     'websites.detail.start_maintenance' => 'Enable maintenance',
     'websites.flash.maintenance_started' => 'Maintenance window enabled.',
     'websites.flash.maintenance_cancelled' => 'Maintenance window ended.',
+    'websites.card.probes' => 'Points',
+    'websites.card.quorum' => 'Quorum',
+    'websites.card.quorum_help' => 'Failed points: {failures}; quorum requires: {quorum}.',
+    'websites.probe.available' => 'reachable',
+    'websites.probe.unavailable' => 'unreachable',
+    'websites.probe.unknown' => 'no fresh data',
 ];

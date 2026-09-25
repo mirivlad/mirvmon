@@ -53,6 +53,34 @@
                     </div>
                     <p class="text-muted small mb-0 text-truncate">{{ website.primary_url|default(t('websites.no_endpoint')) }}</p>
                     {% if website.description %}<p class="mb-0 small">{{ website.description }}</p>{% endif %}
+                    {% if website.probe_points is not empty %}
+                    {% set probe_quorum_reached = website.probe_failures >= website.probe_quorum %}
+                    <div class="website-probe-card-summary" aria-label="{{ t('websites.card.probes') }}">
+                        <div class="website-probe-card-points">
+                            <span class="website-probe-card-label">{{ t('websites.card.probes') }}</span>
+                            <span class="website-probe-dots">
+                            {% for point in website.probe_points %}
+                                <span class="website-probe-dot is-{{ point.status }}{% if point.kind == 'app' %} is-central{% endif %}"
+                                      title="{{ point.name }} · {{ t('websites.probe.' ~ point.status) }}"
+                                      aria-label="{{ point.name }} · {{ t('websites.probe.' ~ point.status) }}"></span>
+                            {% endfor %}
+                            </span>
+                            <span class="website-probe-reporting">
+                                {{ website.probe_reporting }}/{{ website.probe_points|length }}
+                            </span>
+                        </div>
+                        <div class="website-probe-quorum{% if probe_quorum_reached %} is-reached{% endif %}"
+                             title="{{ t('websites.card.quorum_help', {failures: website.probe_failures, quorum: website.probe_quorum}) }}">
+                            <span class="website-probe-card-label">{{ t('websites.card.quorum') }}</span>
+                            <span class="website-quorum-slots" aria-hidden="true">
+                                {% for slot in 1..website.probe_quorum %}
+                                    <span class="website-quorum-slot{% if slot <= website.probe_failures %} is-filled{% endif %}"></span>
+                                {% endfor %}
+                            </span>
+                            <strong>{{ website.probe_failures }}/{{ website.probe_quorum }}</strong>
+                        </div>
+                    </div>
+                    {% endif %}
                     <div class="d-flex flex-wrap gap-x-3 gap-y-1 small">
                         <span class="me-3">{{ t('websites.card.availability_24h') }}: <strong>{% if website.availability_24h is not null %}{{ (website.availability_24h * 100)|number_format(2, '.', '') }}%{% else %}—{% endif %}</strong></span>
                         <span>{{ t('websites.card.response') }}: <strong>{% if website.last_total_ms is not null %}{{ website.last_total_ms|round }} ms{% else %}—{% endif %}</strong></span>

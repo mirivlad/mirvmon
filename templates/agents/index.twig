@@ -84,7 +84,7 @@
             <thead><tr>
                 <th>{{ t('fleet.column.server') }}</th><th>{{ t('fleet.column.connection') }}</th>
                 <th>{{ t('fleet.column.version') }}</th><th>{{ t('fleet.column.platform') }}</th>
-                <th>{{ t('fleet.column.update') }}</th><th>{{ t('common.actions') }}</th>
+                <th>{{ t('fleet.column.update') }}</th><th>{{ t('server18.probe.quick.column') }}</th><th>{{ t('common.actions') }}</th>
             </tr></thead>
             <tbody>
             {% for server in servers %}
@@ -112,6 +112,9 @@
                     <td data-label="{{ t('fleet.column.update') }}">
                         <span class="text-{{ update_indicator[1] }}" data-fleet-update-state><i class="fas {{ update_indicator[0] }} me-1" data-fleet-update-icon></i><span data-fleet-update-label>{{ t('agent.state.' ~ update_state) }}</span></span>
                         <div class="small mt-1{% if update_state not in ['failed', 'manual_required'] %} d-none{% elseif update_state == 'failed' %} text-danger{% else %} text-warning{% endif %}" data-fleet-update-detail>{% if update_state == 'failed' and update.command.error_code %}{{ t('agent.error.' ~ update.command.error_code) }}{% elseif update_state == 'manual_required' %}{{ update.requires_compatible_updater ? t('fleet.manual.compatibility') : t('fleet.manual.unsupported') }}{% endif %}</div>
+                    </td>
+                    <td data-label="{{ t('server18.probe.quick.column') }}">
+                        {% include "partials/website-probe-toggle.twig" with {server: server} %}
                     </td>
                     <td data-label="{{ t('common.actions') }}"><a class="btn btn-sm btn-outline-primary text-nowrap" href="/servers/{{ server.id }}?tab=agent"><i class="fas fa-arrow-right" aria-hidden="true"></i> {{ t('fleet.open_agent') }}</a></td>
                 </tr>
@@ -219,6 +222,23 @@
             const showRuntime = ['warning', 'critical'].includes(server.status);
             runtime.className = `small${showRuntime ? ` text-${server.status === 'critical' ? 'danger' : 'warning'}` : ' d-none'}`;
             runtime.textContent = showRuntime ? `${text.runtime}: ${server.status === 'critical' ? text.critical : text.warning}` : '';
+        }
+
+        const probeInput = row.querySelector('[data-probe-toggle-input]');
+        const probeForm = row.querySelector('[data-probe-toggle-form]');
+        const probeState = row.querySelector('[data-probe-toggle-state]');
+        if (probeInput && probeForm) {
+            probeInput.checked = server.website_probe_enabled === true;
+            probeInput.disabled = server.website_probe_capable !== true
+                || probeForm.dataset.probeEditable !== '1';
+            probeForm.dataset.probeCapable = server.website_probe_capable === true ? '1' : '0';
+            probeForm.dataset.probeSites = String(server.probe_site_count || 0);
+            if (probeState) {
+                probeState.classList.toggle('is-enabled', server.website_probe_enabled === true);
+                probeState.textContent = server.website_probe_enabled === true
+                    ? probeState.dataset.enabledLabel
+                    : probeState.dataset.disabledLabel;
+            }
         }
 
         const update = server.update || {};

@@ -80,118 +80,75 @@
 
             <div class="collapse navbar-collapse" id="primaryNavigation">
                 <ul class="navbar-nav me-auto app-nav-links">
-                    <li class="nav-item">
+                    <li class="nav-item nav-accent-dashboard">
                         <a class="nav-link" href="/" data-nav-exact="/">
                             <i class="fas fa-table-cells-large" aria-hidden="true"></i>
                             {{ t('nav.dashboard') }}
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/groups" data-nav-prefix="/groups">
-                            <i class="fas fa-layer-group" aria-hidden="true"></i>
-                            {{ t('nav.groups') }}
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/servers" data-nav-prefix="/servers">
+                    <li class="nav-item dropdown nav-accent-servers">
+                        <button class="nav-link dropdown-toggle app-nav-button" type="button"
+                                data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="fas fa-server" aria-hidden="true"></i>
                             {{ t('nav.servers') }}
-                        </a>
+                        </button>
+                        <ul class="dropdown-menu app-nav-menu">
+                            <li>
+                                <a class="dropdown-item" href="/servers" data-nav-prefix="/servers">
+                                    <i class="fas fa-server" aria-hidden="true"></i>
+                                    {{ t('nav.server_list') }}
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/groups" data-nav-prefix="/groups">
+                                    <i class="fas fa-layer-group" aria-hidden="true"></i>
+                                    {{ t('nav.server_groups') }}
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/agents" data-nav-prefix="/agents">
+                                    <i class="fas fa-microchip" aria-hidden="true"></i>
+                                    {{ t('nav.agents') }}
+                                </a>
+                            </li>
+                        </ul>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/agents" data-nav-prefix="/agents">
-                            <i class="fas fa-microchip" aria-hidden="true"></i>
-                            {{ t('nav.agents') }}
-                        </a>
-                    </li>
-                    <li class="nav-item">
+                    <li class="nav-item nav-accent-websites">
                         <a class="nav-link" href="/sites" data-nav-prefix="/sites">
                             <i class="fas fa-globe" aria-hidden="true"></i>
                             {{ t('nav.websites') }}
                         </a>
                     </li>
-                    <li class="nav-item">
+                    <li class="nav-item nav-accent-incidents">
                         <a class="nav-link" href="/alerts" data-nav-prefix="/alerts">
                             <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
                             {{ t('nav.incidents') }}
                         </a>
                     </li>
-                    <li class="nav-item dropdown">
+                    <li class="nav-item dropdown nav-accent-analytics">
                         <button class="nav-link dropdown-toggle app-nav-button" type="button"
                                 data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="fas fa-chart-line" aria-hidden="true"></i>
                             {{ t('reliability.analytics') }}
                         </button>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="/observations" data-nav-prefix="/observations">{{ t('nav.observations') }}</a></li>
-                            <li><a class="dropdown-item" href="/reports/reliability" data-nav-prefix="/reports">{{ t('reliability.title') }}</a></li>
-                        </ul>
-                    </li>
-                    {% if session.role == 'admin' %}
-                    <li class="nav-item dropdown">
-                        <button class="nav-link dropdown-toggle app-nav-button"
-                                type="button" id="adminDropdown"
-                                data-nav-section="settings"
-                                data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="fas fa-gear" aria-hidden="true"></i>
-                            {{ t('nav.settings') }}
-                        </button>
-                        <ul class="dropdown-menu" aria-labelledby="adminDropdown">
+                        <ul class="dropdown-menu app-nav-menu">
                             <li>
-                                <a class="dropdown-item" href="/admin/users" data-nav-prefix="/admin/users">
-                                    <i class="fas fa-users" aria-hidden="true"></i>
-                                    {{ t('nav.users') }}
+                                <a class="dropdown-item" href="/observations" data-nav-prefix="/observations">
+                                    <i class="fas fa-magnifying-glass-chart" aria-hidden="true"></i>
+                                    {{ t('nav.observations') }}
                                 </a>
                             </li>
                             <li>
-                                <a class="dropdown-item" href="/admin/notifications" data-nav-exact="/admin/notifications">
-                                    <i class="fas fa-paper-plane" aria-hidden="true"></i>
-                                    {{ t('nav.notifications') }}
-                                </a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="/admin/notifications/queue" data-nav-prefix="/admin/notifications/queue">
-                                    <i class="fas fa-list-check" aria-hidden="true"></i>
-                                    {{ t('nav.notification_queue') }}
-                                </a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="/admin/audit" data-nav-prefix="/admin/audit">
-                                    <i class="fas fa-clock-rotate-left" aria-hidden="true"></i>
-                                    {{ t('nav.audit') }}
-                                </a>
-                            </li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li>
-                                <a class="dropdown-item" href="/admin/system" data-nav-exact="/admin/system">
-                                    <i class="fas fa-heart-pulse" aria-hidden="true"></i>
-                                    {{ t('nav.system') }}
-                                </a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="/admin/public-status" data-nav-exact="/admin/public-status">
-                                    <i class="fas fa-bullhorn" aria-hidden="true"></i>
-                                    {{ t('public_status.settings') }}
-                                </a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="/admin/system/backup" data-nav-exact="/admin/system/backup">
-                                    <i class="fas fa-box-archive" aria-hidden="true"></i>
-                                    {{ t('backup.system.open') }}
-                                </a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="/admin/defaults" data-nav-prefix="/admin/defaults">
-                                    <i class="fas fa-sliders" aria-hidden="true"></i>
-                                    {{ t('nav.defaults') }}
+                                <a class="dropdown-item" href="/reports/reliability" data-nav-prefix="/reports">
+                                    <i class="fas fa-chart-line" aria-hidden="true"></i>
+                                    {{ t('reliability.title') }}
                                 </a>
                             </li>
                         </ul>
                     </li>
-                    {% endif %}
                 </ul>
 
-                <div class="dropdown">
+                <div class="dropdown nav-accent-settings">
                     <button class="btn app-user-button dropdown-toggle" type="button"
                             data-bs-toggle="dropdown" aria-expanded="false">
                         <span class="app-user-avatar" aria-hidden="true">
@@ -199,7 +156,25 @@
                         </span>
                         <span class="app-user-name">{{ session.username }}</span>
                     </button>
-                    <ul class="dropdown-menu dropdown-menu-end">
+                    <ul class="dropdown-menu dropdown-menu-end app-user-menu">
+                        {% if session.role == 'admin' %}
+                        <li>
+                            <h6 class="dropdown-header app-user-menu-heading">
+                                <i class="fas fa-gear" aria-hidden="true"></i>
+                                {{ t('nav.settings') }}
+                            </h6>
+                        </li>
+                        <li><a class="dropdown-item" href="/admin/users" data-nav-prefix="/admin/users"><i class="fas fa-users" aria-hidden="true"></i>{{ t('nav.users') }}</a></li>
+                        <li><a class="dropdown-item" href="/admin/notifications" data-nav-exact="/admin/notifications"><i class="fas fa-paper-plane" aria-hidden="true"></i>{{ t('nav.notifications') }}</a></li>
+                        <li><a class="dropdown-item" href="/admin/notifications/queue" data-nav-prefix="/admin/notifications/queue"><i class="fas fa-list-check" aria-hidden="true"></i>{{ t('nav.notification_queue') }}</a></li>
+                        <li><a class="dropdown-item" href="/admin/audit" data-nav-prefix="/admin/audit"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i>{{ t('nav.audit') }}</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="/admin/system" data-nav-exact="/admin/system"><i class="fas fa-heart-pulse" aria-hidden="true"></i>{{ t('nav.system') }}</a></li>
+                        <li><a class="dropdown-item" href="/admin/public-status" data-nav-exact="/admin/public-status"><i class="fas fa-bullhorn" aria-hidden="true"></i>{{ t('public_status.settings') }}</a></li>
+                        <li><a class="dropdown-item" href="/admin/system/backup" data-nav-exact="/admin/system/backup"><i class="fas fa-box-archive" aria-hidden="true"></i>{{ t('backup.system.open') }}</a></li>
+                        <li><a class="dropdown-item" href="/admin/defaults" data-nav-prefix="/admin/defaults"><i class="fas fa-sliders" aria-hidden="true"></i>{{ t('nav.defaults') }}</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        {% endif %}
                         <li>
                             <form method="post" action="/logout">
                                 {% include "partials/csrf.twig" %}

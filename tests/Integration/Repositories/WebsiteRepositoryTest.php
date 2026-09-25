@@ -298,7 +298,7 @@ final class WebsiteRepositoryTest extends TestCase
         self::pdo()->queryCount = 0;
         $groups = $this->repository->groupedList(['group_id' => $this->groupId]);
 
-        self::assertSame(1, self::pdo()->queryCount);
+        self::assertSame(2, self::pdo()->queryCount);
         self::assertCount(1, $groups);
         self::assertSame('Web', $groups[0]['name']);
         self::assertCount(50, $groups[0]['websites']);
@@ -307,6 +307,74 @@ final class WebsiteRepositoryTest extends TestCase
         self::assertArrayHasKey('last_sample_at', $groups[0]['websites'][0]);
         self::assertArrayHasKey('tls_not_after', $groups[0]['websites'][0]);
         self::assertArrayHasKey('domain_expires_at', $groups[0]['websites'][0]);
+        self::assertArrayHasKey('probe_points', $groups[0]['websites'][0]);
+        self::assertArrayHasKey('probe_failures', $groups[0]['websites'][0]);
+    }
+
+    public function testGroupedListShowsFreshProbeReachabilityAndQuorumCounts(): void
+    {
+        $agentId = (int) self::pdo()->query(
+            "INSERT INTO servers (name, agent_capabilities)
+             VALUES ('Remote Moscow', jsonb_build_array('website_probe_v1')) RETURNING id"
+        )->fetchColumn();
+        self::pdo()->exec(
+            "INSERT INTO agent_configs (server_id, enabled, website_probe_enabled)
+             VALUES ({$agentId}, TRUE, TRUE)"
+        );
+
+        $siteId = $this->repository->create(
+            ['name' => 'Distributed', 'group_id' => $this->groupId],
+            [$this->endpoint(['interval_seconds' => 60])],
+            ['central_enabled' => true, 'agent_ids' => [$agentId], 'quorum' => 2]
+        );
+        $endpointId = (int) $this->rawEndpoint($siteId)['id'];
+
+        self::pdo()->exec(
+            "INSERT INTO website_check_samples (
+                sample_time, website_id, endpoint_id, sample_id, manual,
+                transport_available, assertions_passed, configured_url,
+                redirect_count, diagnostics
+             ) VALUES (
+                CURRENT_TIMESTAMP, {$siteId}, {$endpointId},
+                '33333333-3333-4333-8333-333333333333', FALSE,
+                TRUE, TRUE, 'https://example.com/', 0, '{}'::jsonb
+             )"
+        );
+        self::pdo()->exec(
+            "INSERT INTO website_probe_samples (
+                sample_time, website_id, endpoint_id, server_id, sample_id,
+                transport_available, total_ms, safe_message
+             ) VALUES (
+                CURRENT_TIMESTAMP, {$siteId}, {$endpointId}, {$agentId},
+                '44444444-4444-4444-8444-444444444444',
+                FALSE, 125.0, 'Connection failed.'
+             )"
+        );
+
+        $groups = $this->repository->groupedList(['group_id' => $this->groupId]);
+        $site = $groups[0]['websites'][0];
+
+        self::assertSame(2, $site['probe_quorum']);
+        self::assertSame(1, $site['probe_failures']);
+        self::assertSame(2, $site['probe_reporting']);
+        self::assertSame(
+            ['available', 'unavailable'],
+            array_column($site['probe_points'], 'status')
+        );
+        self::assertSame(
+            ['Central MirvMon', 'Remote Moscow'],
+            array_column($site['probe_points'], 'name')
+        );
+
+        self::pdo()->exec(
+            "UPDATE website_probe_samples
+             SET sample_time = CURRENT_TIMESTAMP - INTERVAL '10 minutes'
+             WHERE website_id = {$siteId}"
+        );
+        $stale = $this->repository->groupedList(['group_id' => $this->groupId])[0]['websites'][0];
+        self::assertSame('unknown', $stale['probe_points'][1]['status']);
+        self::assertSame(0, $stale['probe_failures']);
+        self::assertSame(1, $stale['probe_reporting']);
     }
 
     public function testSummaryStatusFiltersReturnTheSitesTheyCount(): void

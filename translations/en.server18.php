@@ -98,4 +98,13 @@ return [
     'server18.settings.services_saved' => 'Monitored service list saved.',
     'server18.settings.website_probe' => 'Use agent as a website probe point',
     'server18.settings.website_probe_help' => 'The agent receives assigned HTTP checks through normal remote config and reports results over outbound HTTPS. No inbound port is required.',
+    'server18.probe.quick.column' => 'Website probes',
+    'server18.probe.quick.label' => 'Use agent as a website probe point',
+    'server18.probe.quick.enabled' => 'Enabled',
+    'server18.probe.quick.disabled' => 'Disabled',
+    'server18.probe.quick.unsupported' => 'Unsupported',
+    'server18.probe.quick.unsupported_help' => 'The agent has not reported the website_probe_v1 capability yet. Update it to a version that supports distributed checks.',
+    'server18.probe.quick.used_by' => 'Used by sites: {count}',
+    'server18.probe.quick.disable_confirm' => 'This point is used by {count} site(s). Disabling it will remove the point from those sites and adjust their quorum. Continue?',
+    'server18.probe.quick.error' => 'Could not change agent website-probe availability.',
 ];

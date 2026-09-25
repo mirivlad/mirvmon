@@ -143,6 +143,192 @@ a {
     background: transparent;
 }
 
+
+.nav-accent-dashboard { --nav-accent: #7ea1ff; }
+.nav-accent-servers { --nav-accent: #52c7ea; }
+.nav-accent-websites { --nav-accent: #59d39b; }
+.nav-accent-incidents { --nav-accent: #ff8b74; }
+.nav-accent-analytics { --nav-accent: #c29cff; }
+.nav-accent-settings { --nav-accent: #f2c45e; }
+
+.app-navbar .nav-link > i,
+.app-navbar .app-nav-button > i {
+    color: #c7d0e3;
+    transition: color 0.16s ease;
+}
+
+.app-navbar .nav-link.active,
+.app-navbar .app-nav-button.active {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.app-navbar .nav-link.active > i,
+.app-navbar .app-nav-button.active > i {
+    color: var(--nav-accent, #ffffff);
+}
+
+.app-nav-menu .dropdown-item,
+.app-user-menu .dropdown-item {
+    display: flex;
+    gap: 0.62rem;
+    align-items: center;
+}
+
+.app-nav-menu .dropdown-item > i,
+.app-user-menu .dropdown-item > i,
+.app-user-menu-heading > i {
+    width: 1.1rem;
+    color: #8b97aa;
+    text-align: center;
+}
+
+.app-nav-menu .dropdown-item.active,
+.app-user-menu .dropdown-item.active {
+    color: var(--app-text);
+    font-weight: 700;
+    background: #eef2f8;
+}
+
+.nav-accent-servers .dropdown-item.active > i,
+.nav-accent-websites .dropdown-item.active > i,
+.nav-accent-incidents .dropdown-item.active > i,
+.nav-accent-analytics .dropdown-item.active > i,
+.nav-accent-settings .dropdown-item.active > i {
+    color: var(--nav-accent);
+}
+
+.app-user-menu {
+    min-width: 18rem;
+}
+
+.app-user-menu-heading {
+    display: flex;
+    gap: 0.62rem;
+    align-items: center;
+}
+
+.website-probe-toggle {
+    display: inline-flex;
+    min-width: 9rem;
+    gap: 0.42rem 0.58rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.website-probe-toggle.is-saving {
+    opacity: 0.65;
+}
+
+.website-probe-toggle-state {
+    color: var(--app-muted);
+    font-size: 0.76rem;
+    font-weight: 700;
+}
+
+.website-probe-toggle-state.is-enabled {
+    color: var(--app-online);
+}
+
+.website-probe-toggle-hint,
+.website-probe-toggle-usage {
+    width: 100%;
+    color: var(--app-muted);
+    font-size: 0.7rem;
+    line-height: 1.2;
+}
+
+.website-probe-card-summary {
+    display: flex;
+    gap: 0.55rem 0.9rem;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid var(--app-border);
+    border-radius: 10px;
+    background: var(--app-surface-muted);
+}
+
+.website-probe-card-points,
+.website-probe-quorum {
+    display: inline-flex;
+    gap: 0.42rem;
+    align-items: center;
+}
+
+.website-probe-card-label {
+    color: var(--app-muted);
+    font-size: 0.7rem;
+    font-weight: 750;
+}
+
+.website-probe-dots,
+.website-quorum-slots {
+    display: inline-flex;
+    gap: 0.22rem;
+    align-items: center;
+}
+
+.website-probe-dot {
+    width: 0.66rem;
+    height: 0.66rem;
+    border: 2px solid rgba(255, 255, 255, 0.85);
+    border-radius: 50%;
+    background: var(--app-offline);
+    box-shadow: 0 0 0 1px rgba(23, 32, 51, 0.14);
+}
+
+.website-probe-dot.is-available {
+    background: var(--app-online);
+}
+
+.website-probe-dot.is-unavailable {
+    background: var(--app-critical);
+}
+
+.website-probe-dot.is-unknown {
+    background: #a9b1bf;
+}
+
+.website-probe-dot.is-central {
+    box-shadow: 0 0 0 2px rgba(49, 87, 213, 0.22);
+}
+
+.website-probe-reporting {
+    color: var(--app-muted);
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.website-probe-quorum {
+    padding-left: 0.65rem;
+    border-left: 1px solid var(--app-border);
+}
+
+.website-quorum-slot {
+    width: 0.58rem;
+    height: 0.58rem;
+    border: 1px solid #aab4c4;
+    border-radius: 3px;
+    background: transparent;
+}
+
+.website-quorum-slot.is-filled {
+    border-color: var(--app-critical);
+    background: var(--app-critical);
+}
+
+.website-probe-quorum.is-reached {
+    color: var(--app-critical);
+}
+
+.website-probe-quorum strong {
+    min-width: 2.1rem;
+    font-size: 0.74rem;
+    text-align: right;
+}
+
 .app-user-button {
     display: inline-flex;
     gap: 0.55rem;
