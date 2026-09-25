@@ -162,9 +162,7 @@ final class WebsiteDetailController
                     samples.diagnostics->>'safe_message' AS safe_message
                 FROM website_check_samples AS samples
                 JOIN website_endpoints AS endpoints ON endpoints.id = samples.endpoint_id
-                JOIN websites ON websites.id = samples.website_id
                 WHERE samples.website_id = :website_id
-                  AND websites.central_probe_enabled = TRUE
                 ORDER BY samples.endpoint_id, samples.sample_time DESC, samples.sample_id DESC
             ),
             remote AS (
