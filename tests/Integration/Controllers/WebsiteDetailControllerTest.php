@@ -80,6 +80,42 @@ final class WebsiteDetailControllerTest extends TestCase
         }
     }
 
+    public function testEventsShowProbePointTransitionHistory(): void
+    {
+        $agentId = (int) self::$pdo?->query(
+            "INSERT INTO servers (name) VALUES ('Remote history') RETURNING id"
+        )->fetchColumn();
+        self::$pdo?->exec(
+            "INSERT INTO website_probe_samples(
+                sample_time, website_id, endpoint_id, server_id, sample_id, transport_available, total_ms
+             ) VALUES
+                (CURRENT_TIMESTAMP - INTERVAL '3 minutes', {$this->websiteId}, {$this->endpointId}, {$agentId},
+                 '50000000-0000-4000-8000-000000000001', TRUE, 40.0),
+                (CURRENT_TIMESTAMP - INTERVAL '2 minutes', {$this->websiteId}, {$this->endpointId}, {$agentId},
+                 '50000000-0000-4000-8000-000000000002', FALSE, 0.0);
+             INSERT INTO website_check_samples(
+                sample_time, website_id, endpoint_id, sample_id, manual,
+                transport_available, assertions_passed, configured_url
+             ) VALUES
+                (CURRENT_TIMESTAMP - INTERVAL '2 minutes', {$this->websiteId}, {$this->endpointId},
+                 '60000000-0000-4000-8000-000000000001', FALSE, TRUE, TRUE, 'https://example.com/')"
+        );
+
+        $response = $this->controller->show(
+            (new ServerRequestFactory())->createServerRequest(
+                'GET',
+                '/sites/' . $this->websiteId . '?tab=events'
+            ),
+            (new ResponseFactory())->createResponse(),
+            ['id' => (string) $this->websiteId]
+        );
+        $body = (string) $response->getBody();
+
+        self::assertStringContainsString('probe-history', $body);
+        self::assertStringContainsString('Remote history', $body);
+        self::assertStringContainsString('Central MirvMon', $body);
+    }
+
     public function testMetricsApiValidatesEndpointOwnershipAndReturnsSafeShape(): void
     {
         $response = $this->api->metrics(
