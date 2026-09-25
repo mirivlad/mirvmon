@@ -12,6 +12,6 @@
 {% if active_tab == 'metrics' %}{% include 'sites/partials/detail-metrics.twig' %}{% endif %}
 {% if active_tab == 'events' %}<div data-live-fragment="website-events" data-live-interval-ms="10000">{% include 'sites/partials/detail-events.twig' %}</div>{% endif %}
 {% if active_tab == 'settings' %}{% include 'sites/partials/detail-settings.twig' %}{% endif %}
-{% if active_tab == 'metrics' %}<script src="/vendor/chart.js/chart.umd.js" defer></script>{% endif %}
-<script src="/js/site-detail.js" defer></script>
+{% if active_tab == 'metrics' %}<script src="/vendor/chart.js/chart.umd.js?v={{ app_version|url_encode }}" defer></script>{% endif %}
+<script src="/js/site-detail.js?v={{ app_version|url_encode }}" defer></script>
 {% endblock %}

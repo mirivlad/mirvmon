@@ -8,9 +8,9 @@
     {% set effective_title = page_title|default(title)|default(t('app.name')) %}
     <title>{{ effective_title }} · MirvMon</title>
     <link rel="icon" type="image/svg+xml" href="/brand/mirvmon-mark.svg">
-    <link rel="stylesheet" href="/vendor/bootstrap/bootstrap.min.css">
-    <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css">
-    <link rel="stylesheet" href="/css/app.css">
+    <link rel="stylesheet" href="/vendor/bootstrap/bootstrap.min.css?v={{ app_version|url_encode }}">
+    <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css?v={{ app_version|url_encode }}">
+    <link rel="stylesheet" href="/css/app.css?v={{ app_version|url_encode }}">
 </head>
 <body class="auth-page">
     <main class="auth-shell">
@@ -20,6 +20,6 @@
         {% block content %}{% endblock %}
     </main>
 
-    <script src="/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="/vendor/bootstrap/bootstrap.bundle.min.js?v={{ app_version|url_encode }}"></script>
 </body>
 </html>
