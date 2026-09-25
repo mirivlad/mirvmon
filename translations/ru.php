@@ -9,6 +9,8 @@ return [
     'nav.dashboard' => 'Обзор',
     'nav.groups' => 'Группы',
     'nav.servers' => 'Серверы',
+    'nav.server_list' => 'Список серверов',
+    'nav.server_groups' => 'Группы серверов',
     'nav.agents' => 'Агенты',
     'nav.alerts' => 'Алерты',
     'nav.settings' => 'Настройки',

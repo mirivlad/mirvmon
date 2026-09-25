@@ -497,6 +497,8 @@ final class WebsiteRepository
                 websites.name,
                 websites.description,
                 websites.is_active,
+                websites.central_probe_enabled,
+                websites.probe_quorum,
                 groups.name AS group_name,
                 COALESCE(state.status, 'no_data') AS status,
                 COALESCE(state.active_problem_count, 0) AS active_problem_count,
@@ -540,8 +542,14 @@ final class WebsiteRepository
         );
         $statement->execute($params);
 
+        $rows = $statement->fetchAll();
+        $probeSummaries = $this->probeCardSummaries(array_map(
+            static fn (array $row): int => (int) $row['id'],
+            $rows
+        ));
+
         $groups = [];
-        foreach ($statement->fetchAll() as $row) {
+        foreach ($rows as $row) {
             $groupKey = $row['group_id'] === null ? 'none' : (string) $row['group_id'];
             if (!isset($groups[$groupKey])) {
                 $groups[$groupKey] = [
@@ -568,6 +576,13 @@ final class WebsiteRepository
                 'tls_not_after' => $row['tls_not_after'] === null ? null : (string) $row['tls_not_after'],
                 'domain_expires_at' => $row['domain_expires_at'] === null
                     ? null : (string) $row['domain_expires_at'],
+                'central_probe_enabled' => $this->databaseBool(
+                    $row['central_probe_enabled'] ?? true
+                ),
+                'probe_quorum' => max(1, (int) ($row['probe_quorum'] ?? 1)),
+                'probe_points' => $probeSummaries[(int) $row['id']]['points'] ?? [],
+                'probe_failures' => $probeSummaries[(int) $row['id']]['failures'] ?? 0,
+                'probe_reporting' => $probeSummaries[(int) $row['id']]['reporting'] ?? 0,
             ];
         }
 
@@ -609,6 +624,134 @@ final class WebsiteRepository
         }
 
         return array_map(static fn (mixed $value): int => (int) $value, $row);
+    }
+
+    /**
+     * @param list<int> $websiteIds
+     * @return array<int, array{points:list<array{kind:string,id:?int,name:string,status:string}>,failures:int,reporting:int}>
+     */
+    private function probeCardSummaries(array $websiteIds): array
+    {
+        if ($websiteIds === []) {
+            return [];
+        }
+
+        $parameters = [];
+        $placeholders = [];
+        foreach (array_values(array_unique($websiteIds)) as $index => $websiteId) {
+            $key = 'website_' . $index;
+            $placeholders[] = ':' . $key;
+            $parameters[$key] = $websiteId;
+        }
+        $in = implode(', ', $placeholders);
+
+        $statement = $this->pdo->prepare(
+            <<<SQL
+            WITH base AS (
+                SELECT
+                    websites.id AS website_id,
+                    primary_endpoint.id AS endpoint_id,
+                    websites.central_probe_enabled,
+                    GREATEST(
+                        120,
+                        COALESCE(
+                            primary_endpoint.interval_seconds,
+                            websites.default_interval_seconds
+                        ) * 3
+                    ) AS freshness_seconds
+                FROM websites
+                JOIN website_endpoints AS primary_endpoint
+                  ON primary_endpoint.website_id = websites.id
+                 AND primary_endpoint.is_primary = TRUE
+                WHERE websites.id IN ({$in})
+            ),
+            points AS (
+                SELECT
+                    base.website_id,
+                    'app'::text AS kind,
+                    NULL::bigint AS server_id,
+                    'Central MirvMon'::text AS probe_name,
+                    central.sample_time,
+                    central.transport_available,
+                    base.freshness_seconds
+                FROM base
+                LEFT JOIN LATERAL (
+                    SELECT samples.sample_time, samples.transport_available
+                    FROM website_check_samples AS samples
+                    WHERE samples.endpoint_id = base.endpoint_id
+                    ORDER BY samples.sample_time DESC, samples.sample_id DESC
+                    LIMIT 1
+                ) AS central ON TRUE
+                WHERE base.central_probe_enabled = TRUE
+
+                UNION ALL
+
+                SELECT
+                    base.website_id,
+                    'agent'::text AS kind,
+                    servers.id AS server_id,
+                    servers.name AS probe_name,
+                    remote.sample_time,
+                    remote.transport_available,
+                    base.freshness_seconds
+                FROM base
+                JOIN website_probe_agents AS assignments
+                  ON assignments.website_id = base.website_id
+                JOIN servers ON servers.id = assignments.server_id
+                LEFT JOIN LATERAL (
+                    SELECT samples.sample_time, samples.transport_available
+                    FROM website_probe_samples AS samples
+                    WHERE samples.endpoint_id = base.endpoint_id
+                      AND samples.server_id = assignments.server_id
+                    ORDER BY samples.sample_time DESC, samples.sample_id DESC
+                    LIMIT 1
+                ) AS remote ON TRUE
+            )
+            SELECT
+                website_id,
+                kind,
+                server_id,
+                probe_name,
+                CASE
+                    WHEN sample_time IS NULL THEN 'unknown'
+                    WHEN sample_time < CURRENT_TIMESTAMP
+                        - (freshness_seconds * INTERVAL '1 second') THEN 'unknown'
+                    WHEN transport_available = TRUE THEN 'available'
+                    ELSE 'unavailable'
+                END AS probe_status
+            FROM points
+            ORDER BY website_id, CASE WHEN kind = 'app' THEN 0 ELSE 1 END,
+                     lower(probe_name), server_id NULLS FIRST
+            SQL
+        );
+        $statement->execute($parameters);
+
+        $summaries = [];
+        foreach ($statement->fetchAll() as $row) {
+            $websiteId = (int) $row['website_id'];
+            $status = (string) $row['probe_status'];
+            if (!isset($summaries[$websiteId])) {
+                $summaries[$websiteId] = [
+                    'points' => [],
+                    'failures' => 0,
+                    'reporting' => 0,
+                ];
+            }
+            $summaries[$websiteId]['points'][] = [
+                'kind' => (string) $row['kind'],
+                'id' => $row['server_id'] === null ? null : (int) $row['server_id'],
+                'name' => (string) $row['probe_name'],
+                'status' => $status,
+            ];
+            if ($status === 'unavailable') {
+                $summaries[$websiteId]['failures']++;
+                $summaries[$websiteId]['reporting']++;
+            } elseif ($status === 'available') {
+                $summaries[$websiteId]['reporting']++;
+            }
+        }
+
+        return $summaries;
     }
 
     /** @return list<array{id:int,name:string}> */

@@ -304,6 +304,96 @@ final class ServerControllerTest extends TestCase
         );
     }
 
+    public function testQuickWebsiteProbeToggleEnablesAndDisablesCapableAgent(): void
+    {
+        $serverId = (int) self::$pdo?->query(
+            "INSERT INTO servers (name, agent_capabilities)
+             VALUES ('quick-probe', jsonb_build_array('website_probe_v1'))
+             RETURNING id"
+        )->fetchColumn();
+        self::$pdo?->exec(
+            "INSERT INTO agent_configs (server_id, enabled, website_probe_enabled)
+             VALUES ({$serverId}, TRUE, FALSE)"
+        );
+
+        $enable = $this->controller->toggleWebsiteProbe(
+            (new ServerRequestFactory())
+                ->createServerRequest('POST', 'https://monitor.example/servers/' . $serverId . '/website-probe')
+                ->withParsedBody(['enabled' => '1']),
+            (new ResponseFactory())->createResponse(),
+            ['id' => (string) $serverId]
+        );
+        self::assertSame(200, $enable->getStatusCode());
+        self::assertTrue((bool) json_decode((string) $enable->getBody(), true)['enabled']);
+        self::assertTrue(in_array(
+            self::$pdo?->query(
+                "SELECT website_probe_enabled FROM agent_configs WHERE server_id = {$serverId}"
+            )->fetchColumn(),
+            [true, 1, '1', 't'],
+            true
+        ));
+
+        $websiteId = (int) self::$pdo?->query(
+            "INSERT INTO websites (name, central_probe_enabled, probe_quorum)
+             VALUES ('quick-probe-site', FALSE, 1) RETURNING id"
+        )->fetchColumn();
+        self::$pdo?->exec(
+            "INSERT INTO website_probe_agents (website_id, server_id)
+             VALUES ({$websiteId}, {$serverId})"
+        );
+
+        $disable = $this->controller->toggleWebsiteProbe(
+            (new ServerRequestFactory())
+                ->createServerRequest('POST', 'https://monitor.example/servers/' . $serverId . '/website-probe')
+                ->withParsedBody(['enabled' => '0']),
+            (new ResponseFactory())->createResponse(),
+            ['id' => (string) $serverId]
+        );
+        $payload = json_decode((string) $disable->getBody(), true);
+        self::assertSame(200, $disable->getStatusCode());
+        self::assertFalse($payload['enabled']);
+        self::assertSame(1, $payload['removed_assignments']);
+        self::assertSame(
+            '0',
+            (string) self::$pdo?->query(
+                "SELECT count(*) FROM website_probe_agents WHERE server_id = {$serverId}"
+            )->fetchColumn()
+        );
+        self::assertTrue(in_array(
+            self::$pdo?->query(
+                "SELECT central_probe_enabled FROM websites WHERE id = {$websiteId}"
+            )->fetchColumn(),
+            [true, 1, '1', 't'],
+            true
+        ));
+    }
+
+    public function testQuickWebsiteProbeToggleRejectsAgentWithoutCapability(): void
+    {
+        $serverId = (int) self::$pdo?->query(
+            "INSERT INTO servers (name, agent_capabilities)
+             VALUES ('old-agent', '[]'::jsonb) RETURNING id"
+        )->fetchColumn();
+        self::$pdo?->exec(
+            "INSERT INTO agent_configs (server_id, enabled, website_probe_enabled)
+             VALUES ({$serverId}, TRUE, FALSE)"
+        );
+
+        $response = $this->controller->toggleWebsiteProbe(
+            (new ServerRequestFactory())
+                ->createServerRequest('POST', 'https://monitor.example/servers/' . $serverId . '/website-probe')
+                ->withParsedBody(['enabled' => '1']),
+            (new ResponseFactory())->createResponse(),
+            ['id' => (string) $serverId]
+        );
+
+        self::assertSame(409, $response->getStatusCode());
+        self::assertSame(
+            'probe_not_supported',
+            json_decode((string) $response->getBody(), true)['error']
+        );
+    }
+
     private function createArtifactDirectory(): string
     {
         $directory = sys_get_temp_dir() . '/mirvmon-server-list-' . bin2hex(random_bytes(8));

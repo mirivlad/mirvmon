@@ -23,7 +23,10 @@ final class Ui19ContractTest extends TestCase
             'data-nav-prefix="/groups"',
             'data-nav-prefix="/servers"',
             'data-nav-prefix="/alerts"',
-            'data-nav-section="settings"',
+            'nav.server_list',
+            'nav.server_groups',
+            'app-user-menu-heading',
+            'fa-magnifying-glass-chart',
         ] as $needle) {
             self::assertStringContainsString($needle, $layout);
         }
@@ -32,7 +35,9 @@ final class Ui19ContractTest extends TestCase
             "ui-section-dashboard",
             "ui-section-incidents",
             "ui-section-system",
+            "prepareWebsiteProbeToggles",
             "prepareResponsiveIncidentTables",
+            "ui-section-analytics",
             "ui-responsive-table",
             "cell.dataset.label",
         ] as $needle) {

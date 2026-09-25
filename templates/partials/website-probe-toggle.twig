@@ -1,0 +1,41 @@
+{% set probe_capable = server.website_probe_capable|default(false) %}
+{% set probe_enabled = server.website_probe_enabled|default(false) %}
+{% set probe_sites = server.probe_site_count|default(0) %}
+<form method="post"
+      action="/servers/{{ server.id }}/website-probe"
+      class="website-probe-toggle"
+      data-probe-toggle-form
+      data-probe-capable="{{ probe_capable ? '1' : '0' }}"
+      data-probe-editable="{{ session.role == 'admin' ? '1' : '0' }}"
+      data-probe-sites="{{ probe_sites }}"
+      data-confirm-disable="{{ t('server18.probe.quick.disable_confirm', {count: '__COUNT__'}) }}"
+      data-error-message="{{ t('server18.probe.quick.error') }}">
+    {% include "partials/csrf.twig" %}
+    <div class="form-check form-switch m-0">
+        <input class="form-check-input"
+               type="checkbox"
+               role="switch"
+               aria-label="{{ t('server18.probe.quick.label') }}"
+               data-probe-toggle-input
+               {% if probe_enabled %}checked{% endif %}
+               {% if session.role != 'admin' or not probe_capable %}disabled{% endif %}>
+    </div>
+    <span class="website-probe-toggle-state {{ probe_enabled ? 'is-enabled' : '' }}"
+          data-probe-toggle-state
+          data-enabled-label="{{ t('server18.probe.quick.enabled') }}"
+          data-disabled-label="{{ t('server18.probe.quick.disabled') }}">
+        {{ probe_enabled ? t('server18.probe.quick.enabled') : t('server18.probe.quick.disabled') }}
+    </span>
+    {% if not probe_capable %}
+        <span class="website-probe-toggle-hint" title="{{ t('server18.probe.quick.unsupported_help') }}">
+            <i class="fas fa-circle-info" aria-hidden="true"></i>
+            {{ t('server18.probe.quick.unsupported') }}
+        </span>
+    {% else %}
+        <span class="website-probe-toggle-usage{% if probe_sites == 0 %} d-none{% endif %}"
+              data-probe-toggle-usage
+              data-usage-template="{{ t('server18.probe.quick.used_by', {count: '__COUNT__'}) }}">
+            {{ t('server18.probe.quick.used_by', {count: probe_sites}) }}
+        </span>
+    {% endif %}
+</form>
