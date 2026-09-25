@@ -53,6 +53,13 @@ final class AgentFleetService
             $server['agent_update'] = $update;
             $server['connection_state'] = $this->connectionState($server);
             $server['fleet_state'] = $this->fleetState($update);
+            $server['website_probe_enabled'] = $this->bool(
+                $server['website_probe_enabled'] ?? false
+            );
+            $server['website_probe_capable'] = $this->bool(
+                $server['website_probe_capable'] ?? false
+            );
+            $server['probe_site_count'] = (int) ($server['probe_site_count'] ?? 0);
 
             $installed = is_string($update['installed_version'] ?? null)
                 ? $update['installed_version']
@@ -105,10 +112,19 @@ final class AgentFleetService
                     agent_tokens.last_used_at AS last_contact_at,
                     monitoring_groups.name AS group_name,
                     COALESCE(alert_counts.warning_alerts, 0) AS warning_alerts,
-                    COALESCE(alert_counts.critical_alerts, 0) AS critical_alerts
+                    COALESCE(alert_counts.critical_alerts, 0) AS critical_alerts,
+                    COALESCE(agent_configs.website_probe_enabled, FALSE) AS website_probe_enabled,
+                    jsonb_exists(COALESCE(servers.agent_capabilities, '[]'::jsonb), 'website_probe_v1') AS website_probe_capable,
+                    COALESCE(probe_usage.site_count, 0) AS probe_site_count
              FROM servers
              LEFT JOIN agent_tokens ON agent_tokens.server_id = servers.id
+             LEFT JOIN agent_configs ON agent_configs.server_id = servers.id
              LEFT JOIN monitoring_groups ON monitoring_groups.id = servers.group_id
+             LEFT JOIN LATERAL (
+                SELECT count(*) AS site_count
+                FROM website_probe_agents
+                WHERE website_probe_agents.server_id = servers.id
+             ) AS probe_usage ON TRUE
              LEFT JOIN LATERAL (
                 SELECT count(*) FILTER (WHERE severity = 'warning') AS warning_alerts,
                        count(*) FILTER (WHERE severity = 'critical') AS critical_alerts

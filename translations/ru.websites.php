@@ -150,4 +150,10 @@ return [
     'websites.detail.start_maintenance' => 'Включить обслуживание',
     'websites.flash.maintenance_started' => 'Окно обслуживания включено.',
     'websites.flash.maintenance_cancelled' => 'Окно обслуживания завершено.',
+    'websites.card.probes' => 'Точки',
+    'websites.card.quorum' => 'Кворум',
+    'websites.card.quorum_help' => 'Отказавших точек: {failures}; для кворума нужно: {quorum}.',
+    'websites.probe.available' => 'доступно',
+    'websites.probe.unavailable' => 'недоступно',
+    'websites.probe.unknown' => 'нет свежих данных',
 ];

@@ -114,6 +114,34 @@ final class AgentFleetServiceTest extends TestCase
         self::assertSame($offline, (int) $overview['servers'][array_search('offline', array_column($overview['servers'], 'name'), true)]['id']);
     }
 
+    public function testOverviewExposesWebsiteProbeCapabilityToggleAndUsage(): void
+    {
+        $serverId = $this->server('probe', 'v0.9.1', true, true);
+        self::$pdo?->exec(
+            "UPDATE servers
+             SET agent_capabilities = jsonb_build_array('self_update_v1', 'website_probe_v1')
+             WHERE id = {$serverId}"
+        );
+        self::$pdo?->exec(
+            "INSERT INTO agent_configs (server_id, enabled, website_probe_enabled)
+             VALUES ({$serverId}, TRUE, TRUE)"
+        );
+        $websiteId = (int) self::$pdo?->query(
+            "INSERT INTO websites (name) VALUES ('probe-usage') RETURNING id"
+        )->fetchColumn();
+        self::$pdo?->exec(
+            "INSERT INTO website_probe_agents (website_id, server_id)
+             VALUES ({$websiteId}, {$serverId})"
+        );
+
+        $overview = $this->fleet->overview('all', 'probe');
+        self::assertCount(1, $overview['servers']);
+        $server = $overview['servers'][0];
+        self::assertTrue($server['website_probe_capable']);
+        self::assertTrue($server['website_probe_enabled']);
+        self::assertSame(1, $server['probe_site_count']);
+    }
+
     private function server(string $name, ?string $version, ?bool $recentContact, bool $selfUpdate): int
     {
         $statement = self::$pdo?->prepare(

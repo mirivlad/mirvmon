@@ -73,10 +73,19 @@ final class ServerController
                 monitoring_groups.icon AS group_icon,
                 monitoring_groups.color AS group_color,
                 COALESCE(alert_counts.warning_alerts, 0) AS warning_alerts,
-                COALESCE(alert_counts.critical_alerts, 0) AS critical_alerts
+                COALESCE(alert_counts.critical_alerts, 0) AS critical_alerts,
+                COALESCE(agent_configs.website_probe_enabled, FALSE) AS website_probe_enabled,
+                jsonb_exists(COALESCE(servers.agent_capabilities, \'[]\'::jsonb), \'website_probe_v1\') AS website_probe_capable,
+                COALESCE(probe_usage.site_count, 0) AS probe_site_count
              FROM servers
              LEFT JOIN agent_tokens ON agent_tokens.server_id = servers.id
+             LEFT JOIN agent_configs ON agent_configs.server_id = servers.id
              LEFT JOIN monitoring_groups ON monitoring_groups.id = servers.group_id
+             LEFT JOIN LATERAL (
+                SELECT count(*) AS site_count
+                FROM website_probe_agents
+                WHERE website_probe_agents.server_id = servers.id
+             ) AS probe_usage ON TRUE
              LEFT JOIN LATERAL (
                 SELECT
                     count(*) FILTER (WHERE severity = \'warning\') AS warning_alerts,
@@ -91,6 +100,16 @@ final class ServerController
         );
         $statement->execute($parameters);
         $servers = $this->status->enrich($statement->fetchAll());
+        foreach ($servers as &$server) {
+            $server['website_probe_enabled'] = $this->databaseBool(
+                $server['website_probe_enabled'] ?? false
+            );
+            $server['website_probe_capable'] = $this->databaseBool(
+                $server['website_probe_capable'] ?? false
+            );
+            $server['probe_site_count'] = (int) ($server['probe_site_count'] ?? 0);
+        }
+        unset($server);
         $agentUpdateSummary = null;
         if ($this->agentUpdates !== null) {
             $statuses = $this->agentUpdates->statusesForServers(array_map(
@@ -367,6 +386,74 @@ final class ServerController
         }
     }
 
+    /** @param array<string, string> $args */
+    public function toggleWebsiteProbe(
+        Request $request,
+        Response $response,
+        array $args
+    ): Response {
+        $serverId = $this->serverId($args);
+        $body = $request->getParsedBody();
+        if ($serverId === null || !is_array($body)) {
+            return $this->jsonResponse($response, ['error' => 'invalid_request'], 400);
+        }
+
+        $enabled = filter_var(
+            $body['enabled'] ?? null,
+            FILTER_VALIDATE_BOOL,
+            FILTER_NULL_ON_FAILURE
+        );
+        if ($enabled === null) {
+            return $this->jsonResponse($response, ['error' => 'invalid_enabled'], 422);
+        }
+
+        $statement = $this->pdo->prepare(
+            "SELECT
+                jsonb_exists(COALESCE(servers.agent_capabilities, '[]'::jsonb), 'website_probe_v1') AS capable,
+                COALESCE(agent_configs.website_probe_enabled, FALSE) AS enabled
+             FROM servers
+             LEFT JOIN agent_configs ON agent_configs.server_id = servers.id
+             WHERE servers.id = :server_id"
+        );
+        $statement->execute(['server_id' => $serverId]);
+        $server = $statement->fetch();
+        if (!is_array($server)) {
+            return $this->jsonResponse($response, ['error' => 'not_found'], 404);
+        }
+        if ($enabled && !$this->databaseBool($server['capable'] ?? false)) {
+            return $this->jsonResponse($response, ['error' => 'probe_not_supported'], 409);
+        }
+
+        $update = $this->pdo->prepare(
+            'UPDATE agent_configs
+             SET website_probe_enabled = :enabled,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE server_id = :server_id'
+        );
+        $update->execute([
+            'server_id' => $serverId,
+            'enabled' => $enabled ? 1 : 0,
+        ]);
+        if ($update->rowCount() === 0) {
+            return $this->jsonResponse($response, ['error' => 'agent_not_configured'], 409);
+        }
+
+        $removedAssignments = 0;
+        if (!$enabled) {
+            $count = $this->pdo->prepare(
+                'SELECT count(*) FROM website_probe_agents WHERE server_id = :server_id'
+            );
+            $count->execute(['server_id' => $serverId]);
+            $removedAssignments = (int) $count->fetchColumn();
+            $this->detachWebsiteProbeAssignments($serverId);
+        }
+
+        return $this->jsonResponse($response, [
+            'enabled' => $enabled,
+            'removed_assignments' => $removedAssignments,
+        ]);
+    }
+
     /** @return list<array<string, mixed>> */
     private function groups(): array
     {
@@ -550,6 +637,25 @@ final class ServerController
                 'points' => $points,
             ]);
         }
+    }
+
+    private function databaseBool(mixed $value): bool
+    {
+        return $value === true
+            || $value === 1
+            || in_array($value, ['1', 't', 'true'], true);
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function jsonResponse(Response $response, array $payload, int $status = 200): Response
+    {
+        $response->getBody()->write((string) json_encode(
+            $payload,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+        ));
+        return $response
+            ->withStatus($status)
+            ->withHeader('Content-Type', 'application/json; charset=UTF-8');
     }
 
     private function redirect(Response $response, string $location): Response

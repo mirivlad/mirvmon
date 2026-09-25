@@ -121,6 +121,7 @@ final class AppFactory
             $group->post('/servers/{id}/installers', self::controller($container, ServerController::class, 'installers'))->add($admin);
             $group->post('/servers/agents/update-outdated', self::controller($container, AgentUpdateController::class, 'requestAllOutdated'))->add($admin);
             $group->post('/servers/{id}/agent/update', self::controller($container, AgentUpdateController::class, 'requestUpdate'))->add($admin);
+            $group->post('/servers/{id}/website-probe', self::controller($container, ServerController::class, 'toggleWebsiteProbe'))->add($admin);
             $group->post('/servers/{id}/regenerate-token', self::controller($container, ServerController::class, 'regenerateToken'))->add($admin);
             $group->post('/servers/{id}/maintenance', self::controller($container, ServerDetailController::class, 'startMaintenance'))->add($operator);
             $group->post('/servers/{id}/maintenance/cancel', self::controller($container, ServerDetailController::class, 'cancelMaintenance'))->add($operator);
