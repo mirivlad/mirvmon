@@ -138,8 +138,11 @@ localhost, private/link-local адреса и внутренние DNS-имен�
 proxy, ограничивает redirect/deadline/размер ответа и снимает credentials и
 чувствительные headers при cross-origin redirect, если destination заранее не
 разрешён администратором. Тела ответов и секреты не сохраняются в history,
-диагностике или HTML. Не добавляйте для сайтов третий Compose service и не
-настраивайте website probes на native agent.
+диагностике или HTML. Не добавляйте для сайтов третий Compose service. Начиная
+с v0.9.0 существующий native agent можно включить как распределённую HTTP(S)
+probe point; он получает задания через outbound remote config и не требует
+входящего порта. Ограничения remote probe описаны в
+[docs/distributed-website-checks.md](docs/distributed-website-checks.md).
 
 ## Нативные агенты
 
