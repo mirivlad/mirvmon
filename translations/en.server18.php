@@ -96,4 +96,6 @@ return [
     'server18.settings.service_not_reported' => 'This service is selected for monitoring but is missing from the latest agent list.',
     'server18.settings.save_services' => 'Save service list',
     'server18.settings.services_saved' => 'Monitored service list saved.',
+    'server18.settings.website_probe' => 'Use agent as a website probe point',
+    'server18.settings.website_probe_help' => 'The agent receives assigned HTTP checks through normal remote config and reports results over outbound HTTPS. No inbound port is required.',
 ];

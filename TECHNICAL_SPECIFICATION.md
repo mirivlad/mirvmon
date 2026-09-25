@@ -189,8 +189,25 @@ Operational UI live refresh:
 
 ### Мониторинг сайтов
 
-- website checks выполняются централизованно внутри `app`; native agent не
-  выполняет HTTP(S)-probes;
+- центральный `website-check-worker` остаётся встроенной точкой HTTP(S)-проверки;
+  дополнительно выбранные native agents выполняют назначенные transport probes;
+- agent получает `probe_jobs` и `probe_revision` через существующий outbound
+  `GET /api/v1/agent/config`; входящий agent listener не создаётся;
+- результаты remote probes входят в тот же metrics envelope и bounded durable
+  queue, а сервер принимает их только для всё ещё действующего `website ↔ agent`
+  назначения;
+- raw remote observations хранятся отдельно в Timescale hypertable
+  `website_probe_samples`, чтобы существующие central-only
+  `website_check_samples_hourly/daily`, графики и reliability не меняли
+  статистическую семантику;
+- на сайте выбираются Central MirvMon и probe-enabled agents, а `probe_quorum`
+  задаёт число свежих transport failures, необходимых для aggregate failure;
+- старые probe observations старше `max(120s, 3 × endpoint interval)` не
+  участвуют в следующем quorum evaluation; отсутствие observation само по себе
+  не считается outage сайта;
+- remote v1 не получает auth secrets/custom headers и не поддерживает
+  `allow_self_signed`; если endpoint требует эти параметры, Central MirvMon нельзя
+  исключить. Assertions, TLS expiry и domain expiry остаются central-only;
 - production Compose не получает дополнительный service или входящий порт;
 - один сайт может содержать несколько HTTP(S) endpoints;
 - endpoint поддерживает expected status ranges, redirect policy, text assertion,

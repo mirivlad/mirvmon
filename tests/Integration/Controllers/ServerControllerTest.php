@@ -248,6 +248,62 @@ final class ServerControllerTest extends TestCase
         self::assertStringNotContainsString('>Zulu<', $html);
     }
 
+    public function testDisablingWebsiteProbeDetachesAssignmentsAndKeepsSiteValid(): void
+    {
+        $serverId = (int) self::$pdo?->query(
+            "INSERT INTO servers (name, agent_capabilities)
+             VALUES ('remote-probe', jsonb_build_array('website_probe_v1'))
+             RETURNING id"
+        )->fetchColumn();
+        self::$pdo?->exec(
+            "INSERT INTO agent_configs (server_id, enabled, website_probe_enabled)
+             VALUES ({$serverId}, TRUE, TRUE)"
+        );
+        $websiteId = (int) self::$pdo?->query(
+            "INSERT INTO websites (name, central_probe_enabled, probe_quorum)
+             VALUES ('probe-site', FALSE, 1) RETURNING id"
+        )->fetchColumn();
+        self::$pdo?->exec(
+            "INSERT INTO website_probe_agents (website_id, server_id)
+             VALUES ({$websiteId}, {$serverId})"
+        );
+
+        $request = (new ServerRequestFactory())
+            ->createServerRequest('POST', 'https://monitor.example/servers/' . $serverId)
+            ->withParsedBody([
+                'name' => 'remote-probe',
+                'offline_timeout' => '300',
+                'display_widgets' => [],
+            ]);
+        $response = $this->controller->update(
+            $request,
+            (new ResponseFactory())->createResponse(),
+            ['id' => (string) $serverId]
+        );
+
+        self::assertSame(302, $response->getStatusCode());
+        self::assertSame(
+            '0',
+            (string) self::$pdo?->query(
+                "SELECT count(*) FROM website_probe_agents
+                 WHERE website_id = {$websiteId} AND server_id = {$serverId}"
+            )->fetchColumn()
+        );
+        self::assertTrue(in_array(
+            self::$pdo?->query(
+                "SELECT central_probe_enabled FROM websites WHERE id = {$websiteId}"
+            )->fetchColumn(),
+            [true, 1, '1', 't'],
+            true
+        ));
+        self::assertSame(
+            '1',
+            (string) self::$pdo?->query(
+                "SELECT probe_quorum FROM websites WHERE id = {$websiteId}"
+            )->fetchColumn()
+        );
+    }
+
     private function createArtifactDirectory(): string
     {
         $directory = sys_get_temp_dir() . '/mirvmon-server-list-' . bin2hex(random_bytes(8));

@@ -45,6 +45,12 @@
                 </div>
             </div>
 
+            <div class="form-check form-switch mt-3">
+                <input class="form-check-input" type="checkbox" name="website_probe_enabled" id="website_probe_enabled" value="1" {% if server.website_probe_enabled|default(false) %}checked{% endif %}>
+                <label class="form-check-label fw-semibold" for="website_probe_enabled">{{ t('server18.settings.website_probe') }}</label>
+                <div class="form-text">{{ t('server18.settings.website_probe_help') }}</div>
+            </div>
+
             <hr class="my-4" id="display-metrics">
             <h3 class="h5 mb-2"><i class="fas fa-chart-line me-1" aria-hidden="true"></i>{{ t('servers.form.display_metrics') }}</h3>
             <p class="text-muted small">{{ t('servers.form.display_metrics_help') }}</p>

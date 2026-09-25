@@ -21,7 +21,8 @@ final class MetricsIngestionService
         private readonly ThresholdEvaluator $thresholdEvaluator,
         private readonly NotificationOutboxRepository $outbox,
         private readonly AgentUpdateRepository $agentUpdates,
-        private readonly AgentVersionService $agentVersions
+        private readonly AgentVersionService $agentVersions,
+        private readonly ?WebsiteProbeResultService $websiteProbes = null,
     ) {
     }
 
@@ -36,22 +37,25 @@ final class MetricsIngestionService
                 return new MetricsIngestionResult($server['id'], true);
             }
 
-            $metricIds = $this->ensureMetricIds($envelope->metrics);
-            $this->insertHistory($server['id'], $envelope, $metricIds);
-            $currentMetricIds = $this->upsertCurrentMetrics(
-                $server['id'],
-                $envelope,
-                $metricIds
-            );
+            if ($envelope->metrics !== []) {
+                $metricIds = $this->ensureMetricIds($envelope->metrics);
+                $this->insertHistory($server['id'], $envelope, $metricIds);
+                $currentMetricIds = $this->upsertCurrentMetrics(
+                    $server['id'],
+                    $envelope,
+                    $metricIds
+                );
+                $this->storeProcessSnapshot($server['id'], $envelope);
+                $this->evaluateMetricAlerts(
+                    $server,
+                    $envelope,
+                    $metricIds,
+                    $currentMetricIds
+                );
+                $this->updateServices($server, $envelope);
+            }
             $this->updateServerAndToken($server['id'], $envelope);
-            $this->storeProcessSnapshot($server['id'], $envelope);
-            $this->evaluateMetricAlerts(
-                $server,
-                $envelope,
-                $metricIds,
-                $currentMetricIds
-            );
-            $this->updateServices($server, $envelope);
+            $this->websiteProbes?->ingest($server['id'], $envelope);
             $this->outbox->flushMaintenanceDeferralsForServer($server['id']);
 
             $this->commitTransaction($ownsTransaction);
@@ -246,10 +250,11 @@ final class MetricsIngestionService
         $timestamp = $this->timestamp($envelope->sampleTime);
         $server = $this->pdo->prepare(
             'UPDATE servers
-             SET last_metrics_at = GREATEST(
-                    COALESCE(last_metrics_at, :sample_time),
-                    :sample_time
-                 ),
+             SET last_metrics_at = CASE
+                    WHEN CAST(:has_metrics AS integer) = 1
+                    THEN GREATEST(COALESCE(last_metrics_at, :sample_time), :sample_time)
+                    ELSE last_metrics_at
+                 END,
                  agent_version = COALESCE(:agent_version, agent_version),
                  os_version = COALESCE(:os_version, os_version),
                  agent_artifact = COALESCE(:agent_artifact, agent_artifact),
@@ -263,6 +268,7 @@ final class MetricsIngestionService
         $server->execute([
             'server_id' => $serverId,
             'sample_time' => $timestamp,
+            'has_metrics' => $envelope->metrics !== [] ? 1 : 0,
             'agent_version' => $envelope->agentVersion,
             'os_version' => $envelope->osVersion,
             'agent_artifact' => $envelope->agentArtifact,

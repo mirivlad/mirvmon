@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -32,6 +33,44 @@ func TestOncePersistsBeforeDeliveryAndKeepsRetry(t *testing.T) {
 	if queue.Len() != 1 {
 		t.Fatalf("queue len=%d", queue.Len())
 	}
+}
+
+func TestProbeResultsUseTheSameDurableEnvelopeQueue(t *testing.T) {
+	queue := newRecordingQueue()
+	api := &fakeAPI{outcome: transport.Retry}
+	runner := newTestRunner(t, queue, api)
+	runner.config.ProbeJobs = []config.ProbeJob{{
+		ID: "website-1-endpoint-2", WebsiteID: 1, EndpointID: 2,
+		URL: "https://example.com/", Method: "GET",
+		IntervalSeconds: 30, TimeoutSeconds: 5, FollowRedirects: true, MaxRedirects: 3,
+	}}
+	runner.probes = recordingProbeExecutor{}
+
+	err := runner.Cycle(context.Background())
+	if !errors.Is(err, ErrDeliveryPending) {
+		t.Fatalf("got %v", err)
+	}
+	if queue.Len() != 1 {
+		t.Fatalf("queue len=%d, want 1", queue.Len())
+	}
+	var envelope protocol.Envelope
+	if err := json.Unmarshal(queue.items[0], &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if len(envelope.ProbeResults) != 1 || envelope.ProbeResults[0].WebsiteID != 1 {
+		t.Fatalf("probe result missing from queued envelope: %#v", envelope.ProbeResults)
+	}
+}
+
+type recordingProbeExecutor struct{}
+
+func (recordingProbeExecutor) Execute(context.Context, []config.ProbeJob) []protocol.ProbeResult {
+	status := 200
+	return []protocol.ProbeResult{{
+		WebsiteID: 1, EndpointID: 2, ObservedAt: "2026-08-12T12:00:00Z",
+		Available: true, StatusCode: &status, TotalMS: 42.0,
+		SafeMessage: "HTTP response received.",
+	}}
 }
 
 func TestAuthenticationFailurePausesCollectionWithoutDroppingQueue(t *testing.T) {

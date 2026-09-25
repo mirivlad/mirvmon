@@ -30,7 +30,8 @@ final class AgentController
         /** @var Closure(): AgentArtifactCatalog */
         private readonly Closure $artifactCatalog,
         /** @var Closure(): AgentUpdateService */
-        private readonly Closure $updateService
+        private readonly Closure $updateService,
+        private readonly ?\App\Services\WebsiteProbeAssignmentService $websiteProbes = null,
     ) {
     }
 
@@ -158,7 +159,8 @@ final class AgentController
                 agent_tokens.server_id,
                 agent_configs.interval_seconds,
                 agent_configs.monitor_services,
-                agent_configs.enabled
+                agent_configs.enabled,
+                servers.agent_capabilities
              FROM agent_tokens
              INNER JOIN servers ON servers.id = agent_tokens.server_id
              LEFT JOIN agent_configs
@@ -195,6 +197,19 @@ final class AgentController
         );
         if ($command !== null) {
             $payload['update_command'] = $command;
+        }
+        $capabilities = $this->decodeStringList(
+            $config['agent_capabilities'] ?? '[]'
+        );
+        if (
+            $this->websiteProbes !== null
+            && in_array('website_probe_v1', $capabilities, true)
+        ) {
+            $probeConfig = $this->websiteProbes->agentConfiguration(
+                (int) $config['server_id']
+            );
+            $payload['probe_revision'] = $probeConfig['revision'];
+            $payload['probe_jobs'] = $probeConfig['jobs'];
         }
 
         return $this->json($response, $payload);
@@ -252,7 +267,7 @@ final class AgentController
         );
         $insert->execute(['server_id' => $serverId]);
         $statement = $this->pdo->prepare(
-            'SELECT interval_seconds, monitor_services, enabled
+            'SELECT interval_seconds, monitor_services, enabled, website_probe_enabled
              FROM agent_configs
              WHERE server_id = :server_id'
         );
@@ -266,6 +281,7 @@ final class AgentController
             'interval_seconds' => (int) $config['interval_seconds'],
             'monitor_services' => $this->decodeStringList($config['monitor_services']),
             'enabled' => $this->toBool($config['enabled']),
+            'website_probe_enabled' => $this->toBool($config['website_probe_enabled'] ?? false),
         ]);
     }
 
@@ -308,23 +324,38 @@ final class AgentController
         }
         $enabled = isset($body['enabled'])
             && filter_var($body['enabled'], FILTER_VALIDATE_BOOL);
+        if (array_key_exists('website_probe_enabled', $body)) {
+            $websiteProbeEnabled = filter_var(
+                $body['website_probe_enabled'],
+                FILTER_VALIDATE_BOOL
+            );
+        } else {
+            $currentProbe = $this->pdo->prepare(
+                'SELECT website_probe_enabled FROM agent_configs WHERE server_id = :server_id'
+            );
+            $currentProbe->execute(['server_id' => $serverId]);
+            $websiteProbeEnabled = $this->toBool($currentProbe->fetchColumn());
+        }
 
         $statement = $this->pdo->prepare(
             'INSERT INTO agent_configs (
                 server_id,
                 interval_seconds,
                 monitor_services,
-                enabled
+                enabled,
+                website_probe_enabled
              ) VALUES (
                 :server_id,
                 :interval_seconds,
                 CAST(:monitor_services AS jsonb),
-                :enabled
+                :enabled,
+                :website_probe_enabled
              )
              ON CONFLICT (server_id) DO UPDATE SET
                 interval_seconds = EXCLUDED.interval_seconds,
                 monitor_services = EXCLUDED.monitor_services,
-                enabled = EXCLUDED.enabled'
+                enabled = EXCLUDED.enabled,
+                website_probe_enabled = EXCLUDED.website_probe_enabled'
         );
         $statement->execute([
             'server_id' => $serverId,
@@ -334,6 +365,7 @@ final class AgentController
                 JSON_THROW_ON_ERROR
             ),
             'enabled' => $enabled,
+            'website_probe_enabled' => $websiteProbeEnabled,
         ]);
         $server = $this->pdo->prepare(
             'UPDATE servers

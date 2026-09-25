@@ -52,6 +52,7 @@ final class WebsiteDetailController
             'website' => $website,
             'active_tab' => $tab,
             'latest' => $this->metrics->latest($websiteId),
+            'probe_results' => $this->probeResults($websiteId),
             'active_incidents' => $this->incidents->active(['website_id' => $websiteId]),
             'incident_history' => $this->incidents->history(['website_id' => $websiteId]),
             'state' => $this->state($websiteId),
@@ -139,6 +140,76 @@ final class WebsiteDetailController
         $statement->execute(['id' => $websiteId]);
         $row = $statement->fetch();
         return is_array($row) ? $row : null;
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function probeResults(int $websiteId): array
+    {
+        $statement = $this->pdo->prepare(
+            <<<'SQL'
+            WITH central AS (
+                SELECT DISTINCT ON (samples.endpoint_id)
+                    samples.endpoint_id,
+                    endpoints.name AS endpoint_name,
+                    'app'::text AS probe_kind,
+                    NULL::text AS probe_id,
+                    'Central MirvMon'::text AS probe_name,
+                    samples.sample_time,
+                    samples.transport_available,
+                    samples.status_code,
+                    samples.total_ms,
+                    samples.error_kind,
+                    samples.diagnostics->>'safe_message' AS safe_message
+                FROM website_check_samples AS samples
+                JOIN website_endpoints AS endpoints ON endpoints.id = samples.endpoint_id
+                JOIN websites ON websites.id = samples.website_id
+                WHERE samples.website_id = :website_id
+                  AND websites.central_probe_enabled = TRUE
+                ORDER BY samples.endpoint_id, samples.sample_time DESC, samples.sample_id DESC
+            ),
+            remote AS (
+                SELECT DISTINCT ON (samples.endpoint_id, samples.server_id)
+                    samples.endpoint_id,
+                    endpoints.name AS endpoint_name,
+                    'agent'::text AS probe_kind,
+                    samples.server_id::text AS probe_id,
+                    COALESCE(servers.name, 'Agent #' || samples.server_id::text) AS probe_name,
+                    samples.sample_time,
+                    samples.transport_available,
+                    samples.status_code,
+                    samples.total_ms,
+                    samples.error_kind,
+                    samples.safe_message
+                FROM website_probe_samples AS samples
+                JOIN website_probe_agents AS assignments
+                  ON assignments.website_id = samples.website_id
+                 AND assignments.server_id = samples.server_id
+                JOIN website_endpoints AS endpoints ON endpoints.id = samples.endpoint_id
+                LEFT JOIN servers ON servers.id = samples.server_id
+                WHERE samples.website_id = :website_id
+                ORDER BY samples.endpoint_id, samples.server_id,
+                         samples.sample_time DESC, samples.sample_id DESC
+            )
+            SELECT * FROM central
+            UNION ALL
+            SELECT * FROM remote
+            ORDER BY endpoint_id, probe_kind, probe_id NULLS FIRST
+            SQL
+        );
+        $statement->execute(['website_id' => $websiteId]);
+        $rows = $statement->fetchAll();
+        foreach ($rows as &$row) {
+            $row['endpoint_id'] = (int) $row['endpoint_id'];
+            $row['transport_available'] = $row['transport_available'] === true
+                || $row['transport_available'] === 1
+                || $row['transport_available'] === '1'
+                || $row['transport_available'] === 't';
+            $row['status_code'] = $row['status_code'] === null ? null : (int) $row['status_code'];
+            $row['total_ms'] = $row['total_ms'] === null ? null : (float) $row['total_ms'];
+        }
+        unset($row);
+
+        return $rows;
     }
 
     private function positiveId(mixed $value): ?int

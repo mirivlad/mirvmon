@@ -22,6 +22,7 @@ final class MetricsValidator
         'os_version',
         'agent_artifact',
         'agent_capabilities',
+        'probe_results',
     ];
     private const SERVICE_FIELDS = [
         'name',
@@ -100,7 +101,8 @@ final class MetricsValidator
         );
 
         $osVersion = $this->osVersion($payload['os_version'] ?? null);
-        $metrics = $this->metrics($payload['metrics'] ?? null);
+        $probeResults = $this->probeResults($payload['probe_results'] ?? [], $now);
+        $metrics = $this->metrics($payload['metrics'] ?? null, $probeResults !== []);
         $services = $this->services($payload['services'] ?? []);
         $snapshot = $this->processSnapshot($payload['process_snapshot'] ?? null);
 
@@ -115,7 +117,8 @@ final class MetricsValidator
             $agentVersion,
             $osVersion,
             $agentArtifact,
-            $agentCapabilities
+            $agentCapabilities,
+            $probeResults
         );
     }
 
@@ -199,10 +202,13 @@ final class MetricsValidator
     }
 
     /** @return array<string, float> */
-    private function metrics(mixed $value): array
+    private function metrics(mixed $value, bool $allowEmpty = false): array
     {
-        if (!is_array($value) || $value === []) {
+        if (!is_array($value) || ($value === [] && !$allowEmpty)) {
             throw new MetricsValidationException('invalid_metrics');
+        }
+        if ($value === []) {
+            return [];
         }
         if (count($value) > 100) {
             throw new MetricsValidationException('too_many_metrics');
@@ -378,6 +384,94 @@ final class MetricsValidator
         }
 
         return $processes;
+    }
+
+    /**
+     * @return list<array{
+     *   website_id:int,endpoint_id:int,observed_at:string,available:bool,
+     *   status_code:?int,total_ms:float,error_kind:string,safe_message:string
+     * }>
+     */
+    private function probeResults(mixed $value, DateTimeImmutable $now): array
+    {
+        if (!is_array($value) || !array_is_list($value) || count($value) > 100) {
+            throw new MetricsValidationException('invalid_probe_results');
+        }
+        $allowed = [
+            'website_id', 'endpoint_id', 'observed_at', 'available',
+            'status_code', 'total_ms', 'error_kind', 'safe_message',
+        ];
+        $errorKinds = [
+            '', 'dns', 'connect', 'timeout', 'tls',
+            'redirect_loop', 'redirect_limit', 'redirect_scheme', 'internal_checker',
+        ];
+        $results = [];
+        foreach ($value as $probe) {
+            if (!is_array($probe) || array_is_list($probe)) {
+                throw new MetricsValidationException('invalid_probe_result');
+            }
+            $this->rejectUnknownFields($probe, $allowed, 'invalid_probe_result');
+            $websiteId = filter_var($probe['website_id'] ?? null, FILTER_VALIDATE_INT, [
+                'options' => ['min_range' => 1],
+            ]);
+            $endpointId = filter_var($probe['endpoint_id'] ?? null, FILTER_VALIDATE_INT, [
+                'options' => ['min_range' => 1],
+            ]);
+            $observedRaw = $probe['observed_at'] ?? null;
+            if ($websiteId === false || $endpointId === false || !is_string($observedRaw)
+                || preg_match('/(?:Z|[+-]00:00)$/', $observedRaw) !== 1
+            ) {
+                throw new MetricsValidationException('invalid_probe_result');
+            }
+            try {
+                $observed = new DateTimeImmutable($observedRaw);
+            } catch (Throwable) {
+                throw new MetricsValidationException('invalid_probe_result');
+            }
+            $clockDifference = $observed->getTimestamp() - $now->getTimestamp();
+            if ($observed->getOffset() !== 0
+                || $clockDifference > $this->maxFutureSeconds
+                || $clockDifference < -$this->maxAgeSeconds
+            ) {
+                throw new MetricsValidationException('invalid_probe_result');
+            }
+            $available = $probe['available'] ?? null;
+            if (!is_bool($available)) {
+                throw new MetricsValidationException('invalid_probe_result');
+            }
+            $statusCode = $probe['status_code'] ?? null;
+            if ($statusCode !== null && (!is_int($statusCode) || $statusCode < 100 || $statusCode > 599)) {
+                throw new MetricsValidationException('invalid_probe_result');
+            }
+            $totalMs = $probe['total_ms'] ?? null;
+            if ((!is_int($totalMs) && !is_float($totalMs))) {
+                throw new MetricsValidationException('invalid_probe_result');
+            }
+            $totalMs = (float) $totalMs;
+            if (!is_finite($totalMs) || $totalMs < 0 || $totalMs > 120000) {
+                throw new MetricsValidationException('invalid_probe_result');
+            }
+            $errorKind = $probe['error_kind'] ?? '';
+            $safeMessage = $probe['safe_message'] ?? '';
+            if (!is_string($errorKind) || !in_array($errorKind, $errorKinds, true)
+                || !is_string($safeMessage) || mb_strlen($safeMessage) > 500
+                || preg_match('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/u', $safeMessage) === 1
+            ) {
+                throw new MetricsValidationException('invalid_probe_result');
+            }
+            $results[] = [
+                'website_id' => (int) $websiteId,
+                'endpoint_id' => (int) $endpointId,
+                'observed_at' => $observed->format('Y-m-d\TH:i:s\Z'),
+                'available' => $available,
+                'status_code' => $statusCode,
+                'total_ms' => $totalMs,
+                'error_kind' => $errorKind,
+                'safe_message' => $safeMessage,
+            ];
+        }
+
+        return $results;
     }
 
     /**

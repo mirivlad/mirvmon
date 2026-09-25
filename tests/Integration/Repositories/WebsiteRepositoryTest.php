@@ -209,6 +209,38 @@ final class WebsiteRepositoryTest extends TestCase
         ]);
     }
 
+    public function testProbeSelectionRejectsInvalidQuorumAndRequiresCentralForSecretEndpoints(): void
+    {
+        try {
+            $this->repository->create(
+                ['name' => 'Bad quorum', 'group_id' => $this->groupId],
+                [$this->endpoint()],
+                ['central_enabled' => true, 'agent_ids' => [], 'quorum' => 2]
+            );
+            self::fail('Quorum above selected point count must fail.');
+        } catch (InvalidArgumentException) {
+            self::assertTrue(true);
+        }
+
+        $serverId = (int) self::pdo()->query(
+            "INSERT INTO servers (name) VALUES ('remote-probe') RETURNING id"
+        )->fetchColumn();
+        self::pdo()->exec(
+            "INSERT INTO agent_configs (server_id, website_probe_enabled)
+             VALUES ({$serverId}, TRUE)"
+        );
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->repository->create(
+            ['name' => 'Secret endpoint', 'group_id' => $this->groupId],
+            [$this->endpoint([
+                'auth_type' => 'bearer',
+                'auth_secret' => 'do-not-send',
+            ])],
+            ['central_enabled' => false, 'agent_ids' => [$serverId], 'quorum' => 1]
+        );
+    }
+
     public function testDomainIsRequiredOnlyWhenMonitoringIsEnabled(): void
     {
         $withoutDomain = $this->repository->create(

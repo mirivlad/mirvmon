@@ -24,6 +24,19 @@ const (
 // Raw keeps unrecognised configuration values byte-for-byte between updates.
 type Raw map[string]json.RawMessage
 
+// ProbeJob is one desired-state HTTP check assigned by MirvMon.
+type ProbeJob struct {
+	ID              string `json:"id"`
+	WebsiteID       int64  `json:"website_id"`
+	EndpointID      int64  `json:"endpoint_id"`
+	URL             string `json:"url"`
+	Method          string `json:"method"`
+	IntervalSeconds int    `json:"interval_seconds"`
+	TimeoutSeconds  int    `json:"timeout_seconds"`
+	FollowRedirects bool   `json:"follow_redirects"`
+	MaxRedirects    int    `json:"max_redirects"`
+}
+
 // Config is the validated local configuration used by every agent build.
 type Config struct {
 	APIURL                 string
@@ -36,6 +49,8 @@ type Config struct {
 	Enabled                bool
 	MonitorServices        []string
 	QueueLimit             int
+	ProbeRevision          string
+	ProbeJobs              []ProbeJob
 }
 
 // Remote is the supported response shape from GET /api/v1/agent/config.
@@ -45,6 +60,8 @@ type Remote struct {
 	IntervalSeconds *int            `json:"interval_seconds"`
 	MonitorServices []string        `json:"monitor_services"`
 	UpdateCommand   *update.Command `json:"update_command,omitempty"`
+	ProbeRevision   string          `json:"probe_revision,omitempty"`
+	ProbeJobs       []ProbeJob      `json:"probe_jobs"`
 }
 
 // Load decodes a UTF-8 JSON object and returns both recognised settings and
@@ -149,6 +166,46 @@ func (configuration Config) Validate() error {
 			return errors.New("monitored service cannot be empty")
 		}
 	}
+	if len(configuration.ProbeJobs) > 100 {
+		return errors.New("too many website probe jobs")
+	}
+	seenProbeJobs := make(map[string]struct{}, len(configuration.ProbeJobs))
+	for _, job := range configuration.ProbeJobs {
+		if err := job.Validate(); err != nil {
+			return fmt.Errorf("invalid website probe job: %w", err)
+		}
+		if _, exists := seenProbeJobs[job.ID]; exists {
+			return errors.New("duplicate website probe job")
+		}
+		seenProbeJobs[job.ID] = struct{}{}
+	}
+	return nil
+}
+
+func (job ProbeJob) Validate() error {
+	if !regexp.MustCompile("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$").MatchString(job.ID) {
+		return errors.New("invalid job id")
+	}
+	if job.WebsiteID < 1 || job.EndpointID < 1 {
+		return errors.New("invalid target id")
+	}
+	parsed, err := url.ParseRequestURI(job.URL)
+	if err != nil || parsed.Host == "" || parsed.User != nil ||
+		(parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return errors.New("invalid target URL")
+	}
+	if job.Method != "GET" && job.Method != "HEAD" {
+		return errors.New("invalid method")
+	}
+	if job.IntervalSeconds < 10 || job.IntervalSeconds > 86400 {
+		return errors.New("invalid probe interval")
+	}
+	if job.TimeoutSeconds < 1 || job.TimeoutSeconds > 60 {
+		return errors.New("invalid probe timeout")
+	}
+	if job.MaxRedirects < 0 || job.MaxRedirects > 10 {
+		return errors.New("invalid redirect limit")
+	}
 	return nil
 }
 
@@ -164,6 +221,10 @@ func ApplyRemote(configuration Config, remote Remote) (Config, bool) {
 	}
 	if remote.MonitorServices != nil {
 		updated.MonitorServices = append([]string(nil), remote.MonitorServices...)
+	}
+	if remote.ProbeJobs != nil {
+		updated.ProbeJobs = append([]ProbeJob(nil), remote.ProbeJobs...)
+		updated.ProbeRevision = remote.ProbeRevision
 	}
 	if err := updated.Validate(); err != nil {
 		return configuration, false
