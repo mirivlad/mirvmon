@@ -21,13 +21,13 @@
 </header>
 
 <section class="summary-grid" data-summary-section="servers" aria-label="{{ t('dashboard.servers') }}">
-    <article class="summary-card summary-card-total">
+    <a href="/" class="summary-card summary-card-total text-reset text-decoration-none">
         <span class="summary-icon" aria-hidden="true"><i class="fas fa-server"></i></span>
         <div>
             <span class="summary-label">{{ t('dashboard.summary.total') }}</span>
             <strong class="summary-value" data-summary="total">{{ stats.total_servers }}</strong>
         </div>
-    </article>
+    </a>
     <a href="/?status=online" class="summary-card summary-card-online text-reset text-decoration-none">
         <span class="summary-icon" aria-hidden="true"><i class="fas fa-circle-check"></i></span>
         <div>
@@ -310,6 +310,6 @@
 </section>
 
 <p class="visually-hidden" id="dashboard-live-region" aria-live="polite"></p>
-<script src="/js/dashboard.js" defer></script>
+<script src="/js/dashboard.js?v={{ app_version|url_encode }}" defer></script>
 {% endif %}
 {% endblock %}

@@ -606,35 +606,20 @@ final class ServerController
         )->execute(['server_id' => $serverId]);
 
         $count = $this->pdo->prepare(
-            'SELECT central_probe_enabled,
-                    (SELECT count(*) FROM website_probe_agents WHERE website_id = websites.id) AS agents
-             FROM websites WHERE id = :website_id'
+            'SELECT count(*) FROM website_probe_agents WHERE website_id = :website_id'
         );
         $update = $this->pdo->prepare(
             'UPDATE websites
-             SET central_probe_enabled = :central,
+             SET central_probe_enabled = TRUE,
                  probe_quorum = LEAST(probe_quorum, :points)
              WHERE id = :website_id'
         );
         foreach ($websiteIds as $websiteId) {
             $count->execute(['website_id' => $websiteId]);
-            $row = $count->fetch();
-            if (!is_array($row)) {
-                continue;
-            }
-            $central = $row['central_probe_enabled'] === true
-                || $row['central_probe_enabled'] === 1
-                || $row['central_probe_enabled'] === '1'
-                || $row['central_probe_enabled'] === 't';
-            $agents = (int) $row['agents'];
-            if (!$central && $agents === 0) {
-                $central = true;
-            }
-            $points = max(1, ($central ? 1 : 0) + $agents);
+            $agents = (int) $count->fetchColumn();
             $update->execute([
                 'website_id' => $websiteId,
-                'central' => $central ? 1 : 0,
-                'points' => $points,
+                'points' => 1 + $agents,
             ]);
         }
     }

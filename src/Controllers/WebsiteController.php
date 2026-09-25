@@ -204,7 +204,7 @@ final class WebsiteController
             'name' => '', 'description' => '', 'group_id' => null,
             'registration_domain' => '', 'domain_check_enabled' => false,
             'notification_telegram_chat_id' => '', 'notification_emails' => [],
-            'central_probe_enabled' => true, 'probe_quorum' => 1, 'probe_agent_ids' => [],
+            'probe_quorum' => 1, 'probe_agent_ids' => [],
             'endpoints' => [[
                 'id' => null, 'name' => 'Главная', 'is_primary' => true, 'url' => '', 'method' => 'GET',
                 'interval_seconds' => 60, 'timeout_seconds' => 15, 'follow_redirects' => true,
@@ -242,16 +242,14 @@ final class WebsiteController
 
     /**
      * @param array<string,mixed> $body
-     * @return array{central_enabled:bool,agent_ids:list<mixed>,quorum:mixed}
+     * @return array{agent_ids:list<mixed>,quorum:mixed}
      */
     private function probeInput(array $body): array
     {
-        $hasProbeFields = array_key_exists('central_probe_enabled', $body)
-            || array_key_exists('probe_agent_ids', $body)
+        $hasProbeFields = array_key_exists('probe_agent_ids', $body)
             || array_key_exists('probe_quorum', $body);
         if (!$hasProbeFields) {
             return [
-                'central_enabled' => true,
                 'agent_ids' => [],
                 'quorum' => 1,
             ];
@@ -263,7 +261,6 @@ final class WebsiteController
         }
 
         return [
-            'central_enabled' => isset($body['central_probe_enabled']),
             'agent_ids' => array_values($ids),
             'quorum' => $body['probe_quorum'] ?? 1,
         ];
@@ -318,7 +315,6 @@ final class WebsiteController
     private function safeForm(array $body): array
     {
         $safe = $body;
-        $safe['central_probe_enabled'] = isset($body['central_probe_enabled']);
         $rawProbeIds = $body['probe_agent_ids'] ?? [];
         $safe['probe_agent_ids'] = is_array($rawProbeIds)
             ? array_values(array_filter(

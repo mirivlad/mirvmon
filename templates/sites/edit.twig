@@ -2,5 +2,5 @@
 {% set page_title = t('websites.edit') %}
 {% block content %}
     {% include "sites/form.twig" with {form_action: '/sites/' ~ website.id, submit_label: t('common.save')} %}
-    <script src="/js/sites-form.js" defer></script>
+    <script src="/js/sites-form.js?v={{ app_version|url_encode }}" defer></script>
 {% endblock %}

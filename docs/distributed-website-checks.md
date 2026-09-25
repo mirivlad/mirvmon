@@ -4,12 +4,11 @@ MirvMon может использовать уже установленные с
 
 ## Модель
 
-У каждого сайта выбираются:
-- встроенная точка **Central MirvMon**;
-- ноль или несколько серверов, чьи агенты разрешены как точки проверок;
-- **failure quorum** — число выбранных точек, которые должны видеть transport failure, чтобы агрегированная transport-проверка считалась неуспешной.
+Для каждого сайта **Central MirvMon всегда выполняет центральную проверку**. Дополнительно можно выбрать ноль или несколько серверов, чьи агенты разрешены как удалённые точки transport HTTP(S)-проверки.
 
-Существующие сайты после миграции остаются `Central MirvMon`, quorum `1`, поэтому прежняя семантика сохраняется.
+**Failure quorum** — число точек, включая Central MirvMon и выбранные агенты, которые должны видеть transport failure, чтобы агрегированная transport-проверка считалась неуспешной.
+
+Без выбранных агентов сайт работает как обычная централизованная проверка с quorum `1`.
 ## Поток данных
 
 0. Агент должен быть обновлён до версии с capability `website_probe_v1`; старым агентам сервер не отправляет новые поля remote config.
@@ -26,14 +25,14 @@ MirvMon может использовать уже установленные с
 
 Агент не открывает listener. И получение конфигурации, и отправка результатов инициируются агентом наружу, поэтому probe point может находиться за NAT/CGNAT и не требует DNAT/port-forward.
 
-Удалённому агенту передаются только URL и безопасные параметры transport-проверки. В первой версии MirvMon **не отправляет** удалённым точкам:
+Удалённому агенту передаются только URL и безопасные параметры transport-проверки. MirvMon **не отправляет** удалённым точкам:
 - endpoint authentication secrets;
 - custom headers;
 - разрешение self-signed TLS;
 - response-body assertions.
 
-Endpoint с authentication, custom headers или `allow_self_signed` не включается в remote config. Если такой endpoint есть, Central MirvMon нельзя отключить для сайта.
-TLS certificate expiry, domain registration checks, content/status assertions и performance assertions остаются центральными. Remote HTTP response, включая 4xx/5xx, означает успешный transport response; семантика ожидаемого HTTP status по-прежнему оценивается центральным checker.
+Endpoint с authentication, custom headers или `allow_self_signed` не включается в remote config.
+TLS certificate expiry, domain registration checks, content/status assertions и performance assertions являются централизованными функциями MirvMon и не выполняются агентами. Remote HTTP response, включая 4xx/5xx, означает успешный transport response; семантика ожидаемого HTTP status оценивается центральным checker.
 
 TLS verification на агенте включена всегда. URL credentials запрещены, response bodies и secrets не сохраняются и не отправляются обратно.
 
