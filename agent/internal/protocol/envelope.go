@@ -24,9 +24,11 @@ var (
 	ErrInvalidSampleID      = errors.New("invalid sample ID")
 	ErrInvalidMetricName    = errors.New("invalid metric name")
 	ErrInvalidMetricValue   = errors.New("invalid metric value")
+	ErrInvalidMetrics       = errors.New("invalid metrics")
 	ErrTooManyMetrics       = errors.New("too many metrics")
 	ErrInvalidServices      = errors.New("invalid services")
 	ErrInvalidSnapshot      = errors.New("invalid process snapshot")
+	ErrInvalidProbeResults  = errors.New("invalid website probe results")
 )
 
 var (
@@ -61,12 +63,25 @@ type ProcessSnapshot struct {
 	TopMemory []Process `json:"top_memory"`
 }
 
+// ProbeResult is one outbound-only distributed HTTP observation.
+type ProbeResult struct {
+	WebsiteID   int64   `json:"website_id"`
+	EndpointID  int64   `json:"endpoint_id"`
+	ObservedAt  string  `json:"observed_at"`
+	Available   bool    `json:"available"`
+	StatusCode  *int    `json:"status_code"`
+	TotalMS     float64 `json:"total_ms"`
+	ErrorKind   string  `json:"error_kind"`
+	SafeMessage string  `json:"safe_message"`
+}
+
 // Measurement is platform collector output before envelope identity is added.
 type Measurement struct {
 	OSVersion       string
 	Metrics         map[string]float64
 	Services        []ServiceState
 	ProcessSnapshot *ProcessSnapshot
+	ProbeResults    []ProbeResult
 }
 
 // Envelope is the JSON payload accepted by POST /api/v1/metrics.
@@ -82,6 +97,7 @@ type Envelope struct {
 	Metrics           map[string]float64 `json:"metrics"`
 	Services          []ServiceState     `json:"services,omitempty"`
 	ProcessSnapshot   *ProcessSnapshot   `json:"process_snapshot,omitempty"`
+	ProbeResults      []ProbeResult      `json:"probe_results,omitempty"`
 }
 
 // Metadata is the small stable identity subset used by queue migration.
@@ -121,7 +137,14 @@ func NewEnvelope(token, agentVersion, agentArtifact string, agentCapabilities []
 	if !sampleIDPattern.MatchString(strings.ToLower(sampleID)) {
 		return Envelope{}, ErrInvalidSampleID
 	}
-	if err := validateMetrics(measurement.Metrics); err != nil {
+	if err := validateProbeResults(measurement.ProbeResults); err != nil {
+		return Envelope{}, err
+	}
+	if len(measurement.Metrics) == 0 {
+		if len(measurement.ProbeResults) == 0 {
+			return Envelope{}, ErrInvalidMetrics
+		}
+	} else if err := validateMetrics(measurement.Metrics); err != nil {
 		return Envelope{}, err
 	}
 	if err := validateServices(measurement.Services); err != nil {
@@ -143,6 +166,7 @@ func NewEnvelope(token, agentVersion, agentArtifact string, agentCapabilities []
 		Metrics:           measurement.Metrics,
 		Services:          measurement.Services,
 		ProcessSnapshot:   measurement.ProcessSnapshot,
+		ProbeResults:      append([]ProbeResult(nil), measurement.ProbeResults...),
 	}, nil
 }
 
@@ -270,6 +294,38 @@ func validateProcesses(processes []Process) error {
 		if process.PID < 1 || len(process.Name) > 255 || len(process.Command) > 512 ||
 			math.IsNaN(process.Value) || math.IsInf(process.Value, 0) || process.Value < 0 {
 			return ErrInvalidSnapshot
+		}
+	}
+	return nil
+}
+
+func validateProbeResults(results []ProbeResult) error {
+	if len(results) > 100 {
+		return ErrInvalidProbeResults
+	}
+	errorKindPattern := regexp.MustCompile("^(|dns|connect|timeout|tls|redirect_loop|redirect_limit|redirect_scheme|internal_checker)$")
+	for _, result := range results {
+		if result.WebsiteID < 1 || result.EndpointID < 1 {
+			return ErrInvalidProbeResults
+		}
+		if _, err := time.Parse(time.RFC3339, result.ObservedAt); err != nil {
+			return ErrInvalidProbeResults
+		}
+		if result.StatusCode != nil && (*result.StatusCode < 100 || *result.StatusCode > 599) {
+			return ErrInvalidProbeResults
+		}
+		if math.IsNaN(result.TotalMS) || math.IsInf(result.TotalMS, 0) ||
+			result.TotalMS < 0 || result.TotalMS > 120000 {
+			return ErrInvalidProbeResults
+		}
+		if !errorKindPattern.MatchString(result.ErrorKind) ||
+			len(result.SafeMessage) > 500 || !utf8.ValidString(result.SafeMessage) {
+			return ErrInvalidProbeResults
+		}
+		for _, character := range result.SafeMessage {
+			if (character <= 0x1f && character != '\t') || character == 0x7f {
+				return ErrInvalidProbeResults
+			}
 		}
 	}
 	return nil

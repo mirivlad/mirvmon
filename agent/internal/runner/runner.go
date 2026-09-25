@@ -49,11 +49,16 @@ type HostCollector interface {
 	Collect(context.Context, bool) (protocol.Measurement, error)
 }
 
+type ProbeExecutor interface {
+	Execute(context.Context, []config.ProbeJob) []protocol.ProbeResult
+}
+
 // Dependencies are the explicit runtime boundaries.
 type Dependencies struct {
 	Queue     Queue
 	API       API
 	Collector HostCollector
+	Probes    ProbeExecutor
 	Config    config.Config
 	Version   string
 	Commit    string
@@ -65,21 +70,25 @@ type Dependencies struct {
 
 // Runner owns one native agent instance.
 type Runner struct {
-	queue          Queue
-	api            API
-	collector      HostCollector
-	config         config.Config
-	version        string
-	commit         string
-	artifact       string
-	now            func() time.Time
-	sampleID       func() (string, error)
-	updater        UpdateManager
-	health         health.Store
-	status         health.Status
-	startedAt      time.Time
-	lastConfigPull time.Time
-	authPaused     bool
+	queue              Queue
+	api                API
+	collector          HostCollector
+	probes             ProbeExecutor
+	config             config.Config
+	version            string
+	commit             string
+	artifact           string
+	now                func() time.Time
+	sampleID           func() (string, error)
+	updater            UpdateManager
+	health             health.Store
+	status             health.Status
+	startedAt          time.Time
+	lastConfigPull     time.Time
+	lastHostCollection time.Time
+	lastProbeRuns      map[string]time.Time
+	osVersion          string
+	authPaused         bool
 }
 
 // New validates all dependencies and starts with a fresh health state.
@@ -92,18 +101,20 @@ func New(dependencies Dependencies) (*Runner, error) {
 	}
 	startedAt := dependencies.Now().UTC()
 	runner := &Runner{
-		queue:     dependencies.Queue,
-		api:       dependencies.API,
-		collector: dependencies.Collector,
-		config:    dependencies.Config,
-		version:   dependencies.Version,
-		commit:    dependencies.Commit,
-		artifact:  dependencies.Artifact,
-		now:       dependencies.Now,
-		sampleID:  dependencies.SampleID,
-		updater:   dependencies.Updater,
-		health:    health.New(dependencies.Config.QueuePath),
-		startedAt: startedAt,
+		queue:         dependencies.Queue,
+		api:           dependencies.API,
+		collector:     dependencies.Collector,
+		probes:        dependencies.Probes,
+		config:        dependencies.Config,
+		version:       dependencies.Version,
+		commit:        dependencies.Commit,
+		artifact:      dependencies.Artifact,
+		now:           dependencies.Now,
+		sampleID:      dependencies.SampleID,
+		updater:       dependencies.Updater,
+		health:        health.New(dependencies.Config.QueuePath),
+		startedAt:     startedAt,
+		lastProbeRuns: make(map[string]time.Time),
 		status: health.Status{
 			AgentVersion: dependencies.Version,
 			Commit:       dependencies.Commit,
@@ -166,7 +177,7 @@ func (runner *Runner) Run(context context.Context) error {
 		if errors.Is(err, update.ErrRestartRequired) {
 			return err
 		}
-		delay := time.Duration(runner.config.IntervalSeconds) * time.Second
+		delay := runner.loopDelay()
 		if err != nil && !errors.Is(err, ErrDisabled) {
 			delay = transport.RetryDelay(attempt)
 		} else {
@@ -181,22 +192,49 @@ func (runner *Runner) Run(context context.Context) error {
 }
 
 func (runner *Runner) collectAndFlush(context context.Context) error {
-	measurement, err := runner.collector.Collect(context, runner.config.CollectProcessCommands)
-	if err != nil {
-		runner.writeHealth("collection_error", err, false, false)
-		return err
+	now := runner.now().UTC()
+	hostDue := runner.lastHostCollection.IsZero() ||
+		now.Sub(runner.lastHostCollection) >= time.Duration(runner.config.IntervalSeconds)*time.Second
+	dueJobs := runner.dueProbeJobs(now)
+	if !hostDue && len(dueJobs) == 0 {
+		return nil
 	}
+
+	measurement := protocol.Measurement{
+		OSVersion: runner.osVersion,
+		Metrics:   map[string]float64{},
+	}
+	if hostDue {
+		collected, err := runner.collector.Collect(context, runner.config.CollectProcessCommands)
+		if err != nil {
+			runner.writeHealth("collection_error", err, false, false)
+			return err
+		}
+		measurement = collected
+		runner.osVersion = collected.OSVersion
+	}
+	if runner.probes != nil && len(dueJobs) > 0 {
+		measurement.ProbeResults = runner.probes.Execute(context, dueJobs)
+	}
+	if !hostDue && len(measurement.ProbeResults) == 0 {
+		return nil
+	}
+
 	sampleID, err := runner.sampleID()
 	if err != nil {
 		return err
+	}
+	capabilities := []string{"self_update_v1"}
+	if runner.probes != nil {
+		capabilities = append(capabilities, "website_probe_v1")
 	}
 	envelope, err := protocol.NewEnvelope(
 		runner.config.Token,
 		runner.version,
 		runner.artifact,
-		[]string{"self_update_v1"},
+		capabilities,
 		measurement,
-		runner.now(),
+		now,
 		sampleID,
 	)
 	if err != nil {
@@ -209,8 +247,41 @@ func (runner *Runner) collectAndFlush(context context.Context) error {
 	if err := runner.queue.Enqueue(raw); err != nil {
 		return err
 	}
-	runner.writeHealth("queued", nil, true, false)
+	if hostDue {
+		runner.lastHostCollection = now
+	}
+	for _, job := range dueJobs {
+		runner.lastProbeRuns[job.ID] = now
+	}
+	runner.writeHealth("queued", nil, hostDue, false)
 	return runner.flushOne(context)
+}
+
+func (runner *Runner) dueProbeJobs(now time.Time) []config.ProbeJob {
+	if runner.probes == nil {
+		return nil
+	}
+	jobs := make([]config.ProbeJob, 0, len(runner.config.ProbeJobs))
+	for _, job := range runner.config.ProbeJobs {
+		last, exists := runner.lastProbeRuns[job.ID]
+		if !exists || now.Sub(last) >= time.Duration(job.IntervalSeconds)*time.Second {
+			jobs = append(jobs, job)
+		}
+	}
+	return jobs
+}
+
+func (runner *Runner) loopDelay() time.Duration {
+	seconds := runner.config.IntervalSeconds
+	for _, job := range runner.config.ProbeJobs {
+		if job.IntervalSeconds < seconds {
+			seconds = job.IntervalSeconds
+		}
+	}
+	if seconds < 1 {
+		seconds = 1
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 func (runner *Runner) flushOne(context context.Context) error {

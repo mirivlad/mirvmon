@@ -96,4 +96,6 @@ return [
     'server18.settings.service_not_reported' => 'Сервис выбран для мониторинга, но отсутствует в последнем списке агента.',
     'server18.settings.save_services' => 'Сохранить список сервисов',
     'server18.settings.services_saved' => 'Список отслеживаемых сервисов сохранён.',
+    'server18.settings.website_probe' => 'Использовать агент как точку проверок сайтов',
+    'server18.settings.website_probe_help' => 'Агент будет получать назначенные HTTP-проверки через обычный remote config и отправлять результаты исходящими HTTPS-запросами. Входящие порты не нужны.',
 ];

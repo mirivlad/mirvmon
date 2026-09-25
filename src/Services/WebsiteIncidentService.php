@@ -34,23 +34,50 @@ final class WebsiteIncidentService
 
     public function recordHttp(WebsiteCheckResult $result): void
     {
-        $this->transaction(function () use ($result): void {
+        $this->recordHttpResult($result, true);
+    }
+
+    public function recordRemoteHttp(WebsiteCheckResult $result): void
+    {
+        $this->recordHttpResult($result, false);
+    }
+
+    private function recordHttpResult(
+        WebsiteCheckResult $result,
+        bool $centralSample,
+    ): void {
+        $this->transaction(function () use ($result, $centralSample): void {
             $state = $this->lockEndpointState($result->websiteId, $result->endpointId);
             if ($state === null || !$this->websiteIsActive($result->websiteId)) {
                 return;
             }
-            $decision = $this->evaluator->evaluate($state, $result);
-            $this->updateEndpointState($result, $decision->nextState);
-            $this->metrics->record($result);
+
+            if ($centralSample) {
+                $this->metrics->record($result);
+            } else {
+                $this->recordRemoteSample($result);
+                if (
+                    $state['last_sample_at'] !== null
+                    && $result->checkedAt < new DateTimeImmutable((string) $state['last_sample_at'])
+                ) {
+                    // Backfilled durable-queue observations belong in history,
+                    // but must not rewind the live incident state.
+                    return;
+                }
+            }
+
+            $effective = $this->withQuorumTransport($result);
+            $decision = $this->evaluator->evaluate($state, $effective);
+            $this->updateEndpointState($effective, $decision->nextState);
 
             foreach ($decision->dimensions as $dimension) {
                 $alertId = $dimension['open']
-                    ? $this->openAlert($result, $dimension)
+                    ? $this->openAlert($effective, $dimension)
                     : null;
                 if ($dimension['close']) {
                     $alertId = $this->closeAlert(
-                        $result->websiteId,
-                        $result->endpointId,
+                        $effective->websiteId,
+                        $effective->endpointId,
                         $dimension['kind'],
                         $dimension['effective_at'],
                     );
@@ -60,27 +87,213 @@ final class WebsiteIncidentService
                     && $dimension['diagnostic'] !== null
                 ) {
                     $this->updateAlertDiagnostic(
-                        $result->websiteId,
-                        $result->endpointId,
+                        $effective->websiteId,
+                        $effective->endpointId,
                         $dimension['kind'],
                         $dimension['diagnostic'],
                     );
                 }
                 if ($dimension['dimension'] === 'transport' && ($dimension['open'] || $dimension['close'])) {
                     $this->availability->record(
-                        $result->websiteId,
-                        $result->endpointId,
+                        $effective->websiteId,
+                        $effective->endpointId,
                         $dimension['open'] ? 'unavailable' : 'available',
-                        $dimension['effective_at'] ?? $result->checkedAt,
+                        $dimension['effective_at'] ?? $effective->checkedAt,
                         $alertId,
                     );
                 }
             }
-            $this->refreshWebsiteState($result->websiteId, $result->checkedAt);
+            $this->refreshWebsiteState($effective->websiteId, $effective->checkedAt);
             $this->notifications->flushMaintenanceDeferralsForWebsite(
-                $result->websiteId
+                $effective->websiteId
             );
         });
+    }
+
+    private function recordRemoteSample(WebsiteCheckResult $result): void
+    {
+        if ($result->probeId === null || filter_var(
+            $result->probeId,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1]]
+        ) === false) {
+            throw new InvalidArgumentException('Remote website probe identity is invalid.');
+        }
+
+        $statement = $this->pdo->prepare(
+            <<<'SQL'
+            INSERT INTO website_probe_samples (
+                sample_time,
+                website_id,
+                endpoint_id,
+                server_id,
+                sample_id,
+                transport_available,
+                status_code,
+                total_ms,
+                error_kind,
+                safe_message
+            ) VALUES (
+                :sample_time,
+                :website_id,
+                :endpoint_id,
+                :server_id,
+                :sample_id,
+                :transport_available,
+                :status_code,
+                :total_ms,
+                :error_kind,
+                :safe_message
+            )
+            SQL
+        );
+        $statement->execute([
+            'sample_time' => $result->checkedAt->format(DateTimeInterface::ATOM),
+            'website_id' => $result->websiteId,
+            'endpoint_id' => $result->endpointId,
+            'server_id' => (int) $result->probeId,
+            'sample_id' => $result->sampleId,
+            'transport_available' => $result->transportAvailable ? 1 : 0,
+            'status_code' => $result->statusCode,
+            'total_ms' => $result->timings['total_ms'],
+            'error_kind' => $result->error?->value,
+            'safe_message' => $result->safeMessage === null
+                ? null
+                : mb_substr($result->safeMessage, 0, 500),
+        ]);
+    }
+
+    private function withQuorumTransport(WebsiteCheckResult $result): WebsiteCheckResult
+    {
+        $website = $this->pdo->prepare(
+            'SELECT
+                websites.central_probe_enabled,
+                websites.probe_quorum,
+                COALESCE(endpoints.interval_seconds, websites.default_interval_seconds) AS interval_seconds
+             FROM websites
+             JOIN website_endpoints AS endpoints
+               ON endpoints.website_id = websites.id
+              AND endpoints.id = :endpoint_id
+             WHERE websites.id = :website_id'
+        );
+        $website->execute([
+            'website_id' => $result->websiteId,
+            'endpoint_id' => $result->endpointId,
+        ]);
+        $settings = $website->fetch();
+        if (!is_array($settings)) {
+            return $result;
+        }
+
+        $centralEnabled = $this->boolValue($settings['central_probe_enabled']);
+        $quorum = max(1, (int) $settings['probe_quorum']);
+        $agents = $this->pdo->prepare(
+            'SELECT server_id
+             FROM website_probe_agents
+             WHERE website_id = :website_id
+             ORDER BY server_id'
+        );
+        $agents->execute(['website_id' => $result->websiteId]);
+        $agentIds = array_map(
+            static fn (array $row): string => (string) $row['server_id'],
+            $agents->fetchAll()
+        );
+
+        $selected = ($centralEnabled ? 1 : 0) + count($agentIds);
+        if ($selected === 0) {
+            return $result;
+        }
+
+        $freshnessSeconds = max(120, (int) $settings['interval_seconds'] * 3);
+        $freshSince = $result->checkedAt
+            ->modify('-' . $freshnessSeconds . ' seconds')
+            ->format('Y-m-d H:i:sP');
+        $failures = 0;
+        $observed = 0;
+
+        if ($centralEnabled) {
+            $central = $this->pdo->prepare(
+                'SELECT transport_available
+                 FROM website_check_samples
+                 WHERE endpoint_id = :endpoint_id
+                   AND sample_time >= :fresh_since
+                 ORDER BY sample_time DESC, sample_id DESC
+                 LIMIT 1'
+            );
+            $central->execute([
+                'endpoint_id' => $result->endpointId,
+                'fresh_since' => $freshSince,
+            ]);
+            $row = $central->fetch();
+            if (is_array($row)) {
+                $observed++;
+                if (!$this->boolValue($row['transport_available'])) {
+                    $failures++;
+                }
+            }
+        }
+
+        if ($agentIds !== []) {
+            $placeholders = [];
+            $params = [
+                'endpoint_id' => $result->endpointId,
+                'fresh_since' => $freshSince,
+            ];
+            foreach ($agentIds as $index => $agentId) {
+                $key = 'probe_' . $index;
+                $placeholders[] = ':' . $key;
+                $params[$key] = (int) $agentId;
+            }
+            $remote = $this->pdo->prepare(
+                'SELECT DISTINCT ON (server_id)
+                    server_id, transport_available
+                 FROM website_probe_samples
+                 WHERE endpoint_id = :endpoint_id
+                   AND sample_time >= :fresh_since
+                   AND server_id IN (' . implode(', ', $placeholders) . ')
+                 ORDER BY server_id, sample_time DESC, sample_id DESC'
+            );
+            $remote->execute($params);
+            foreach ($remote->fetchAll() as $row) {
+                $observed++;
+                if (!$this->boolValue($row['transport_available'])) {
+                    $failures++;
+                }
+            }
+        }
+
+        $available = $failures < $quorum;
+        $diagnostic = sprintf(
+            'Probe quorum: %d/%d failed, quorum %d%s.',
+            $failures,
+            $selected,
+            $quorum,
+            $observed < $selected ? sprintf(', %d reporting', $observed) : ''
+        );
+
+        // Assertions and performance remain authoritative only on the central
+        // checker. Agent probes intentionally contribute transport only.
+        $central = $result->probeKind === 'app';
+
+        return new WebsiteCheckResult(
+            websiteId: $result->websiteId,
+            endpointId: $result->endpointId,
+            sampleId: $result->sampleId,
+            checkedAt: $result->checkedAt,
+            transportAvailable: $available,
+            assertionsPassed: $central ? $result->assertionsPassed : true,
+            statusCode: $result->statusCode,
+            configuredUrl: $result->configuredUrl,
+            finalUrl: $result->finalUrl,
+            redirectChain: $result->redirectChain,
+            timings: $result->timings,
+            error: $central ? $result->error : null,
+            assertionResults: $central ? $result->assertionResults : [],
+            manual: $result->manual,
+            probeKind: $result->probeKind,
+            probeId: $result->probeId,
+            safeMessage: $diagnostic,
+        );
     }
 
     public function recordTls(TlsInspectionResult $result): void
@@ -464,7 +677,7 @@ final class WebsiteIncidentService
             }
         }
 
-        return $result->error?->value;
+        return $result->safeMessage ?? $result->error?->value;
     }
 
     private function boolValue(mixed $value): bool

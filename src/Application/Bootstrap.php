@@ -64,6 +64,10 @@ use App\Services\SystemHealthService;
 use App\Services\ThresholdEvaluator;
 use App\Services\WindowsInstallerPackageService;
 use App\Services\WebsiteEndpointValidator;
+use App\Services\WebsiteIncidentService;
+use App\Services\WebsiteProbeAssignmentService;
+use App\Services\WebsiteProbeResultService;
+use App\Services\WebsiteStateEvaluator;
 use DateTimeZone;
 use PDO;
 use RuntimeException;
@@ -175,6 +179,29 @@ final class Bootstrap
         );
         $container->set(WebsiteEndpointValidator::class, static fn (): WebsiteEndpointValidator => new WebsiteEndpointValidator());
         $container->set(
+            WebsiteProbeAssignmentService::class,
+            static fn (Container $container): WebsiteProbeAssignmentService =>
+                new WebsiteProbeAssignmentService($container->get(PDO::class))
+        );
+        $container->set(
+            WebsiteIncidentService::class,
+            static fn (Container $container): WebsiteIncidentService =>
+                new WebsiteIncidentService(
+                    $container->get(PDO::class),
+                    new WebsiteStateEvaluator(),
+                    $container->get(WebsiteMetricsRepository::class),
+                    $container->get(NotificationOutboxRepository::class),
+                )
+        );
+        $container->set(
+            WebsiteProbeResultService::class,
+            static fn (Container $container): WebsiteProbeResultService =>
+                new WebsiteProbeResultService(
+                    $container->get(PDO::class),
+                    $container->get(WebsiteIncidentService::class),
+                )
+        );
+        $container->set(
             WebsiteCheckQueueRepository::class,
             static fn (Container $container): WebsiteCheckQueueRepository => new WebsiteCheckQueueRepository(
                 $container->get(PDO::class)
@@ -251,7 +278,8 @@ final class Bootstrap
                     $container->get(ThresholdEvaluator::class),
                     $container->get(NotificationOutboxRepository::class),
                     $container->get(AgentUpdateRepository::class),
-                    $container->get(AgentVersionService::class)
+                    $container->get(AgentVersionService::class),
+                    $container->get(WebsiteProbeResultService::class),
                 )
         );
         $container->set(
@@ -507,7 +535,8 @@ final class Bootstrap
                 $container->get(AgentInstallerService::class),
                 $container->get(WindowsInstallerPackageService::class),
                 static fn (): AgentArtifactCatalog => $container->get(AgentArtifactCatalog::class),
-                static fn (): AgentUpdateService => $container->get(AgentUpdateService::class)
+                static fn (): AgentUpdateService => $container->get(AgentUpdateService::class),
+                $container->get(WebsiteProbeAssignmentService::class),
             )
         );
         $container->set(

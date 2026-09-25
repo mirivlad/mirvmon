@@ -54,6 +54,9 @@ final class WebsiteMetricsRepository
         if ($result->error !== null) {
             $diagnostics['error_kind'] = $result->error->value;
         }
+        if ($result->safeMessage !== null && $result->safeMessage !== '') {
+            $diagnostics['safe_message'] = mb_substr($result->safeMessage, 0, 500);
+        }
         if ($storeRedirectChain && $redirectChain !== []) {
             $diagnostics['redirect_chain'] = $redirectChain;
         }

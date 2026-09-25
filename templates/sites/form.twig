@@ -177,6 +177,35 @@
     </div></section>
 
     <section class="card mb-4"><div class="card-body">
+        <h2 class="h5 mb-2">{{ t('websites.form.probes') }}</h2>
+        <p class="text-muted small mb-3">{{ t('websites.form.probes_help') }}</p>
+        <div class="row g-3">
+            <div class="col-lg-8">
+                <div class="border rounded-3 p-3">
+                    <label class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" name="central_probe_enabled" value="1" {% if website.central_probe_enabled|default(true) %}checked{% endif %}>
+                        <span class="form-check-label fw-semibold">{{ t('websites.form.probe_central') }}</span>
+                    </label>
+                    {% for agent in probe_agents %}
+                    <label class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" name="probe_agent_ids[]" value="{{ agent.id }}" {% if agent.id in website.probe_agent_ids|default([]) %}checked{% endif %}>
+                        <span class="form-check-label">{{ agent.name }}</span>
+                    </label>
+                    {% else %}
+                    <div class="small text-muted">{{ t('websites.form.probe_agents_empty') }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <label class="form-label" for="probe_quorum">{{ t('websites.form.probe_quorum') }}</label>
+                <input class="form-control" id="probe_quorum" type="number" name="probe_quorum" value="{{ website.probe_quorum|default(1) }}" min="1" max="{{ 1 + probe_agents|length }}" required>
+                <div class="form-text">{{ t('websites.form.probe_quorum_help') }}</div>
+            </div>
+        </div>
+        <div class="alert alert-light border small mt-3 mb-0">{{ t('websites.form.probe_security_help') }}</div>
+    </div></section>
+
+    <section class="card mb-4"><div class="card-body">
         <h2 class="h5 mb-3">{{ t('websites.form.additional_checks') }}</h2>
         <label class="form-check mb-3">
             <input class="form-check-input" type="checkbox" data-domain-toggle name="domain_check_enabled" value="1" {% if website.domain_check_enabled|default(false) %}checked{% endif %}>

@@ -6,6 +6,14 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.9.0
+
+- Added distributed website transport checks through existing outbound-only MirvMon agents, with per-site probe point selection and configurable failure quorum.
+- Added agent capability `website_probe_v1`, desired-state `probe_jobs` in remote config, and `probe_results` in the existing durable metrics envelope without breaking strict older agents.
+- Added separate TimescaleDB storage for remote probe observations so existing central website graphs, continuous aggregates and reliability calculations keep their previous semantics.
+- Added probe-point diagnostics to website details, safe handling of delayed queued observations, and UI controls for enabling agents as website probe points.
+- Added migration 031. No new Compose service or required environment variable is introduced; selected agents must be updated to v0.9.0 before they can be assigned as probe points.
+
 ## 0.8.0
 
 - Added a 7/30-day reliability report for servers and websites, including observation coverage, availability, incident duration and mean recovery time. Availability is withheld when coverage is insufficient.
