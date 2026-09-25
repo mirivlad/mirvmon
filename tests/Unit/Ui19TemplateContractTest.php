@@ -24,6 +24,13 @@ final class Ui19TemplateContractTest extends TestCase
         self::assertStringContainsString('app-user-menu-heading', $layout);
         self::assertStringNotContainsString('data-nav-section="settings"', $layout);
         self::assertStringContainsString('/js/ui19.js', $layout);
+        self::assertStringContainsString('/css/app.css?v={{ app_version|url_encode }}', $layout);
+        self::assertStringContainsString('/js/app.js?v={{ app_version|url_encode }}', $layout);
+        self::assertStringContainsString('/js/ui19.js?v={{ app_version|url_encode }}', $layout);
+
+        $dashboard = $this->contents('templates/dashboard.twig');
+        self::assertStringContainsString('href="/" class="summary-card summary-card-total', $dashboard);
+
     }
 
     public function testServerListUsesOperationalFiltersAndKeepsInlineAgentUpdates(): void
@@ -57,9 +64,42 @@ final class Ui19TemplateContractTest extends TestCase
         self::assertStringContainsString('website-probe-dots', $sites);
         self::assertStringContainsString('website-quorum-slots', $sites);
 
+        $siteForm = $this->contents('templates/sites/form.twig');
+        self::assertStringNotContainsString('name="central_probe_enabled"', $siteForm);
+        self::assertStringNotContainsString('probe_security_help', $siteForm);
+
         $ui = $this->contents('public/js/ui19.js');
         self::assertStringContainsString('prepareWebsiteProbeToggles', $ui);
         self::assertStringContainsString("dropdown.querySelector(':scope > .dropdown-toggle')", $ui);
+    }
+
+    public function testLocalCssAndJavaScriptAssetsUseReleaseCacheBusting(): void
+    {
+        $root = dirname(__DIR__, 2) . '/templates';
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root));
+
+        foreach ($files as $file) {
+            if (!$file->isFile() || $file->getExtension() !== 'twig') {
+                continue;
+            }
+            $contents = file_get_contents($file->getPathname());
+            self::assertIsString($contents);
+            self::assertDoesNotMatchRegularExpression(
+                '/(?:href|src)="\/(?:css|js|vendor)\/[^"?]+\.(?:css|js)"/',
+                $contents,
+                $file->getPathname()
+            );
+        }
+    }
+
+    public function testReliabilityShowsAvailabilityForPartialObservationWindows(): void
+    {
+        $template = $this->contents('templates/reports/reliability.twig');
+
+        self::assertStringContainsString('item.availability is not null', $template);
+        self::assertStringContainsString("type == 'websites'", $template);
+        self::assertStringContainsString('not item.reportable', $template);
+        self::assertStringContainsString("reliability.partial", $template);
     }
 
     public function testTopLevelPageHeadersMatchNavigationIconsAndStayConcise(): void

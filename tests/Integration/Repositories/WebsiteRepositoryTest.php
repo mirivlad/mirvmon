@@ -209,36 +209,41 @@ final class WebsiteRepositoryTest extends TestCase
         ]);
     }
 
-    public function testProbeSelectionRejectsInvalidQuorumAndRequiresCentralForSecretEndpoints(): void
+    public function testProbeSelectionRejectsInvalidQuorumAndAlwaysKeepsCentralEnabled(): void
     {
         try {
             $this->repository->create(
                 ['name' => 'Bad quorum', 'group_id' => $this->groupId],
                 [$this->endpoint()],
-                ['central_enabled' => true, 'agent_ids' => [], 'quorum' => 2]
+                ['agent_ids' => [], 'quorum' => 2]
             );
-            self::fail('Quorum above selected point count must fail.');
+            self::fail('Quorum above Central-only point count must fail.');
         } catch (InvalidArgumentException) {
             self::assertTrue(true);
         }
 
         $serverId = (int) self::pdo()->query(
-            "INSERT INTO servers (name) VALUES ('remote-probe') RETURNING id"
+            "INSERT INTO servers (name, agent_capabilities)
+             VALUES ('remote-probe', jsonb_build_array('website_probe_v1'))
+             RETURNING id"
         )->fetchColumn();
         self::pdo()->exec(
-            "INSERT INTO agent_configs (server_id, website_probe_enabled)
-             VALUES ({$serverId}, TRUE)"
+            "INSERT INTO agent_configs (server_id, enabled, website_probe_enabled)
+             VALUES ({$serverId}, TRUE, TRUE)"
         );
 
-        $this->expectException(InvalidArgumentException::class);
-        $this->repository->create(
+        $siteId = $this->repository->create(
             ['name' => 'Secret endpoint', 'group_id' => $this->groupId],
             [$this->endpoint([
                 'auth_type' => 'bearer',
                 'auth_secret' => 'do-not-send',
             ])],
-            ['central_enabled' => false, 'agent_ids' => [$serverId], 'quorum' => 1]
+            ['agent_ids' => [$serverId], 'quorum' => 1]
         );
+
+        $site = $this->repository->detail($siteId);
+        self::assertTrue($site['central_probe_enabled'] ?? false);
+        self::assertSame([$serverId], $site['probe_agent_ids'] ?? []);
     }
 
     public function testDomainIsRequiredOnlyWhenMonitoringIsEnabled(): void
@@ -325,7 +330,7 @@ final class WebsiteRepositoryTest extends TestCase
         $siteId = $this->repository->create(
             ['name' => 'Distributed', 'group_id' => $this->groupId],
             [$this->endpoint(['interval_seconds' => 60])],
-            ['central_enabled' => true, 'agent_ids' => [$agentId], 'quorum' => 2]
+            ['agent_ids' => [$agentId], 'quorum' => 2]
         );
         $endpointId = (int) $this->rawEndpoint($siteId)['id'];
 

@@ -261,7 +261,7 @@ final class ServerControllerTest extends TestCase
         );
         $websiteId = (int) self::$pdo?->query(
             "INSERT INTO websites (name, central_probe_enabled, probe_quorum)
-             VALUES ('probe-site', FALSE, 1) RETURNING id"
+             VALUES ('probe-site', TRUE, 1) RETURNING id"
         )->fetchColumn();
         self::$pdo?->exec(
             "INSERT INTO website_probe_agents (website_id, server_id)
@@ -335,7 +335,7 @@ final class ServerControllerTest extends TestCase
 
         $websiteId = (int) self::$pdo?->query(
             "INSERT INTO websites (name, central_probe_enabled, probe_quorum)
-             VALUES ('quick-probe-site', FALSE, 1) RETURNING id"
+             VALUES ('quick-probe-site', TRUE, 1) RETURNING id"
         )->fetchColumn();
         self::$pdo?->exec(
             "INSERT INTO website_probe_agents (website_id, server_id)

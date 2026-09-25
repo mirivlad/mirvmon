@@ -232,7 +232,19 @@ final class SchemaTest extends TestCase
         self::assertSame([], $migrator->migrate());
 
         $count = self::$pdo?->query('SELECT count(*) FROM schema_migrations')->fetchColumn();
-        self::assertSame('31', (string) $count);
+        self::assertSame('32', (string) $count);
+    }
+
+    public function testCentralWebsiteProbeCannotBeDisabled(): void
+    {
+        $websiteId = (int) self::$pdo?->query(
+            "INSERT INTO websites (name) VALUES ('central-invariant') RETURNING id"
+        )->fetchColumn();
+
+        $this->expectException(\PDOException::class);
+        self::$pdo?->exec(
+            "UPDATE websites SET central_probe_enabled = FALSE WHERE id = {$websiteId}"
+        );
     }
 
     public function testAvailabilitySchemaExists(): void

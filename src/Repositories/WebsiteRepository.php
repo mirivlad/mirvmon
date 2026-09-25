@@ -32,14 +32,13 @@ final class WebsiteRepository
     /**
      * @param array<string, mixed> $site
      * @param list<WebsiteEndpointDefinition> $endpoints
-     * @param array{central_enabled:mixed,agent_ids:mixed,quorum:mixed}|null $probeConfig
+     * @param array{agent_ids:mixed,quorum:mixed}|null $probeConfig
      */
     public function create(array $site, array $endpoints, ?array $probeConfig = null): int
     {
         $site = $this->normalizeSite($site);
         $endpoints = $this->primaryEndpoints($endpoints, false);
         $probeConfig = $this->normalizeProbeConfig($probeConfig ?? [
-            'central_enabled' => true,
             'agent_ids' => [],
             'quorum' => 1,
         ]);
@@ -85,7 +84,7 @@ final class WebsiteRepository
             );
             $statement->execute([
                 ...$site,
-                'central_probe_enabled' => $probeConfig['central_enabled'] ? 1 : 0,
+                'central_probe_enabled' => 1,
                 'probe_quorum' => $probeConfig['quorum'],
             ]);
             $websiteId = (int) $statement->fetchColumn();
@@ -116,7 +115,6 @@ final class WebsiteRepository
             $this->pdo->prepare(
                 'INSERT INTO website_domain_state (website_id) VALUES (:website_id)'
             )->execute(['website_id' => $websiteId]);
-            $this->assertProbeCompatibility($websiteId, $probeConfig);
             $this->saveProbeConfig($websiteId, $probeConfig);
 
             return $websiteId;
@@ -126,7 +124,7 @@ final class WebsiteRepository
     /**
      * @param array<string, mixed> $site
      * @param list<WebsiteEndpointDefinition> $endpoints
-     * @param array{central_enabled:mixed,agent_ids:mixed,quorum:mixed}|null $probeConfig
+     * @param array{agent_ids:mixed,quorum:mixed}|null $probeConfig
      */
     public function update(int $websiteId, array $site, array $endpoints, ?array $probeConfig = null): void
     {
@@ -231,7 +229,6 @@ final class WebsiteRepository
             }
 
             if ($probeConfig !== null) {
-                $this->assertProbeCompatibility($websiteId, $probeConfig);
                 $this->saveProbeConfig($websiteId, $probeConfig);
             }
         });
@@ -651,7 +648,6 @@ final class WebsiteRepository
                 SELECT
                     websites.id AS website_id,
                     primary_endpoint.id AS endpoint_id,
-                    websites.central_probe_enabled,
                     GREATEST(
                         120,
                         COALESCE(
@@ -682,8 +678,6 @@ final class WebsiteRepository
                     ORDER BY samples.sample_time DESC, samples.sample_id DESC
                     LIMIT 1
                 ) AS central ON TRUE
-                WHERE base.central_probe_enabled = TRUE
-
                 UNION ALL
 
                 SELECT
@@ -796,11 +790,10 @@ final class WebsiteRepository
 
     /**
      * @param array<string,mixed> $config
-     * @return array{central_enabled:bool,agent_ids:list<int>,quorum:int}
+     * @return array{agent_ids:list<int>,quorum:int}
      */
     private function normalizeProbeConfig(array $config): array
     {
-        $central = $this->bool($config['central_enabled'] ?? false);
         $rawIds = $config['agent_ids'] ?? [];
         if (!is_array($rawIds)) {
             throw new InvalidArgumentException('Probe point selection is invalid.');
@@ -844,10 +837,7 @@ final class WebsiteRepository
             }
         }
 
-        $pointCount = ($central ? 1 : 0) + count($ids);
-        if ($pointCount < 1) {
-            throw new InvalidArgumentException('Select at least one website probe point.');
-        }
+        $pointCount = 1 + count($ids);
         $quorum = filter_var($config['quorum'] ?? 1, FILTER_VALIDATE_INT, [
             'options' => ['min_range' => 1, 'max_range' => $pointCount],
         ]);
@@ -856,50 +846,22 @@ final class WebsiteRepository
         }
 
         return [
-            'central_enabled' => $central,
             'agent_ids' => $ids,
             'quorum' => (int) $quorum,
         ];
     }
 
-    /** @param array{central_enabled:bool,agent_ids:list<int>,quorum:int} $config */
-    private function assertProbeCompatibility(int $websiteId, array $config): void
-    {
-        if ($config['central_enabled'] || $config['agent_ids'] === []) {
-            return;
-        }
-
-        $statement = $this->pdo->prepare(
-            "SELECT count(*)
-             FROM website_endpoints
-             WHERE website_id = :website_id
-               AND (
-                    auth_type <> 'none'
-                    OR auth_encrypted IS NOT NULL
-                    OR headers_encrypted IS NOT NULL
-                    OR allow_self_signed = TRUE
-               )"
-        );
-        $statement->execute(['website_id' => $websiteId]);
-        if ((int) $statement->fetchColumn() > 0) {
-            throw new InvalidArgumentException(
-                'Central MirvMon must remain selected for endpoints with authentication, custom headers or self-signed TLS.'
-            );
-        }
-    }
-
-    /** @param array{central_enabled:bool,agent_ids:list<int>,quorum:int} $config */
+    /** @param array{agent_ids:list<int>,quorum:int} $config */
     private function saveProbeConfig(int $websiteId, array $config): void
     {
         $statement = $this->pdo->prepare(
             'UPDATE websites
-             SET central_probe_enabled = :central_enabled,
+             SET central_probe_enabled = TRUE,
                  probe_quorum = :probe_quorum
              WHERE id = :website_id'
         );
         $statement->execute([
             'website_id' => $websiteId,
-            'central_enabled' => $config['central_enabled'] ? 1 : 0,
             'probe_quorum' => $config['quorum'],
         ]);
 
