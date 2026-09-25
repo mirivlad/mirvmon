@@ -36,7 +36,16 @@
                 <tr>
                     <td><a href="/{{ type == 'servers' ? 'servers' : 'sites' }}/{{ item.id }}">{{ item.name }}</a></td>
                     <td>
-                        {% if item.reportable and item.availability is not null %}
+                        {% if type == 'websites' %}
+                            {% if item.availability is not null %}
+                                <strong>{{ item.availability|number_format(2, '.', '') }}%</strong>
+                                {% if not item.reportable %}
+                                    <span class="badge text-bg-light border text-muted ms-1">{{ t('reliability.partial') }}</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">{{ t('reliability.insufficient') }}</span>
+                            {% endif %}
+                        {% elseif item.reportable and item.availability is not null %}
                             <strong>{{ item.availability|number_format(2, '.', '') }}%</strong>
                         {% else %}
                             <span class="text-muted">{{ t('reliability.insufficient') }}</span>
