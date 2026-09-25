@@ -167,7 +167,6 @@ final class WebsiteIncidentService
     {
         $website = $this->pdo->prepare(
             'SELECT
-                websites.central_probe_enabled,
                 websites.probe_quorum,
                 COALESCE(endpoints.interval_seconds, websites.default_interval_seconds) AS interval_seconds
              FROM websites
@@ -185,7 +184,6 @@ final class WebsiteIncidentService
             return $result;
         }
 
-        $centralEnabled = $this->boolValue($settings['central_probe_enabled']);
         $quorum = max(1, (int) $settings['probe_quorum']);
         $agents = $this->pdo->prepare(
             'SELECT server_id
@@ -199,10 +197,7 @@ final class WebsiteIncidentService
             $agents->fetchAll()
         );
 
-        $selected = ($centralEnabled ? 1 : 0) + count($agentIds);
-        if ($selected === 0) {
-            return $result;
-        }
+        $selected = 1 + count($agentIds);
 
         $freshnessSeconds = max(120, (int) $settings['interval_seconds'] * 3);
         $freshSince = $result->checkedAt
@@ -211,25 +206,23 @@ final class WebsiteIncidentService
         $failures = 0;
         $observed = 0;
 
-        if ($centralEnabled) {
-            $central = $this->pdo->prepare(
-                'SELECT transport_available
-                 FROM website_check_samples
-                 WHERE endpoint_id = :endpoint_id
-                   AND sample_time >= :fresh_since
-                 ORDER BY sample_time DESC, sample_id DESC
-                 LIMIT 1'
-            );
-            $central->execute([
-                'endpoint_id' => $result->endpointId,
-                'fresh_since' => $freshSince,
-            ]);
-            $row = $central->fetch();
-            if (is_array($row)) {
-                $observed++;
-                if (!$this->boolValue($row['transport_available'])) {
-                    $failures++;
-                }
+        $centralSample = $this->pdo->prepare(
+            'SELECT transport_available
+             FROM website_check_samples
+             WHERE endpoint_id = :endpoint_id
+               AND sample_time >= :fresh_since
+             ORDER BY sample_time DESC, sample_id DESC
+             LIMIT 1'
+        );
+        $centralSample->execute([
+            'endpoint_id' => $result->endpointId,
+            'fresh_since' => $freshSince,
+        ]);
+        $row = $centralSample->fetch();
+        if (is_array($row)) {
+            $observed++;
+            if (!$this->boolValue($row['transport_available'])) {
+                $failures++;
             }
         }
 

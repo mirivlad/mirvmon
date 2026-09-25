@@ -57,6 +57,10 @@ final class Ui19TemplateContractTest extends TestCase
         self::assertStringContainsString('website-probe-dots', $sites);
         self::assertStringContainsString('website-quorum-slots', $sites);
 
+        $siteForm = $this->contents('templates/sites/form.twig');
+        self::assertStringNotContainsString('name="central_probe_enabled"', $siteForm);
+        self::assertStringNotContainsString('probe_security_help', $siteForm);
+
         $ui = $this->contents('public/js/ui19.js');
         self::assertStringContainsString('prepareWebsiteProbeToggles', $ui);
         self::assertStringContainsString("dropdown.querySelector(':scope > .dropdown-toggle')", $ui);
