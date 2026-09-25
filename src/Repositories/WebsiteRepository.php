@@ -654,7 +654,13 @@ final class WebsiteRepository
                             primary_endpoint.interval_seconds,
                             websites.default_interval_seconds
                         ) * 3
-                    ) AS freshness_seconds
+                    ) AS freshness_seconds,
+                    (
+                        primary_endpoint.auth_type = 'none'
+                        AND primary_endpoint.auth_encrypted IS NULL
+                        AND primary_endpoint.headers_encrypted IS NULL
+                        AND primary_endpoint.allow_self_signed = FALSE
+                    ) AS remote_eligible
                 FROM websites
                 JOIN website_endpoints AS primary_endpoint
                   ON primary_endpoint.website_id = websites.id
@@ -691,6 +697,7 @@ final class WebsiteRepository
                 FROM base
                 JOIN website_probe_agents AS assignments
                   ON assignments.website_id = base.website_id
+                 AND base.remote_eligible = TRUE
                 JOIN servers ON servers.id = assignments.server_id
                 LEFT JOIN LATERAL (
                     SELECT samples.sample_time, samples.transport_available

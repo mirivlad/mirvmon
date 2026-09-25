@@ -34,7 +34,12 @@
             <tbody>
             {% for item in items %}
                 <tr>
-                    <td><a href="/{{ type == 'servers' ? 'servers' : 'sites' }}/{{ item.id }}">{{ item.name }}</a></td>
+                    <td>
+                        <a href="/{{ type == 'servers' ? 'servers' : 'sites' }}/{{ item.id }}">{{ item.name }}</a>
+                        {% if type == 'websites' and item.distributed|default(false) %}
+                            <div class="small text-muted">{{ t('reliability.distributed', {points: item.probe_points, quorum: item.probe_quorum}) }}</div>
+                        {% endif %}
+                    </td>
                     <td>
                         {% if type == 'websites' %}
                             {% if item.availability is not null %}

@@ -173,6 +173,27 @@ final class WebsiteIncidentServiceTest extends TestCase
         )->fetchColumn());
     }
 
+    public function testRemoteIneligibleEndpointUsesCentralOnlyQuorum(): void
+    {
+        $agent = (int) self::$pdo?->query(
+            "INSERT INTO servers (name) VALUES ('ineligible-probe') RETURNING id"
+        )->fetchColumn();
+        self::$pdo?->exec(
+            "INSERT INTO agent_configs (server_id, website_probe_enabled) VALUES ({$agent}, TRUE);
+             INSERT INTO website_probe_agents (website_id, server_id) VALUES ({$this->websiteId}, {$agent});
+             UPDATE websites SET probe_quorum = 2 WHERE id = {$this->websiteId};
+             UPDATE website_endpoints SET allow_self_signed = TRUE WHERE id = {$this->endpointId}"
+        );
+
+        $this->service->recordHttp($this->makeResult(false, '00:00:00'));
+        $this->service->recordHttp($this->makeResult(false, '00:01:00'));
+        $this->service->recordHttp($this->makeResult(false, '00:02:00'));
+
+        $active = (new IncidentRepository(self::$pdo))->active(['website_id' => $this->websiteId]);
+        self::assertCount(1, $active);
+        self::assertSame('website_http', $active[0]['kind']);
+    }
+
     public function testBackfilledRemoteProbeIsStoredWithoutRewindingLiveState(): void
     {
         $agent = (int) self::$pdo?->query(

@@ -27,13 +27,21 @@ final class ReliabilityReportRepository
              WHERE servers.is_active = TRUE ORDER BY servers.name, servers.id'
         )->fetchAll();
         $websiteRows = $this->pdo->query(
-            'SELECT websites.id, websites.name, websites.created_at,
+            "SELECT websites.id, websites.name, websites.created_at, websites.probe_quorum,
                     endpoints.id AS endpoint_id, endpoints.created_at AS endpoint_created_at,
-                    COALESCE(endpoints.interval_seconds, websites.default_interval_seconds) AS interval_seconds
+                    COALESCE(endpoints.interval_seconds, websites.default_interval_seconds) AS interval_seconds,
+                    (
+                        endpoints.auth_type = 'none'
+                        AND endpoints.auth_encrypted IS NULL
+                        AND endpoints.headers_encrypted IS NULL
+                        AND endpoints.allow_self_signed = FALSE
+                    ) AS remote_eligible,
+                    (SELECT count(*) FROM website_probe_agents
+                     WHERE website_id = websites.id) AS probe_agent_count
              FROM websites
              INNER JOIN website_endpoints AS endpoints
                ON endpoints.website_id = websites.id AND endpoints.is_primary = TRUE
-             WHERE websites.is_active = TRUE ORDER BY websites.name, websites.id'
+             WHERE websites.is_active = TRUE ORDER BY websites.name, websites.id"
         )->fetchAll();
 
         $serverSamples = $this->counts(
@@ -42,11 +50,58 @@ final class ReliabilityReportRepository
              GROUP BY server_id', $from, $to
         );
         $websiteSamples = $this->counts(
-            'SELECT endpoint_id AS id, count(*) AS sample_count,
-                    sum((transport_available AND assertions_passed)::integer) AS successful_count
-             FROM website_check_samples
-             WHERE sample_time >= :from AND sample_time < :to AND manual = FALSE
-             GROUP BY endpoint_id', $from, $to
+            <<<'SQL'
+            SELECT
+                central.endpoint_id AS id,
+                count(*) AS sample_count,
+                sum((
+                    central.assertions_passed
+                    AND (
+                        (CASE WHEN central.transport_available THEN 0 ELSE 1 END)
+                        + COALESCE(remote.failures, 0)
+                    ) < CASE
+                        WHEN endpoints.auth_type = 'none'
+                         AND endpoints.auth_encrypted IS NULL
+                         AND endpoints.headers_encrypted IS NULL
+                         AND endpoints.allow_self_signed = FALSE
+                        THEN websites.probe_quorum
+                        ELSE 1
+                    END
+                )::integer) AS successful_count
+            FROM website_check_samples AS central
+            JOIN websites ON websites.id = central.website_id
+            JOIN website_endpoints AS endpoints ON endpoints.id = central.endpoint_id
+            LEFT JOIN LATERAL (
+                SELECT count(*) FILTER (WHERE latest.transport_available = FALSE) AS failures
+                FROM website_probe_agents AS assignments
+                LEFT JOIN LATERAL (
+                    SELECT probe.transport_available
+                    FROM website_probe_samples AS probe
+                    WHERE probe.website_id = central.website_id
+                      AND probe.endpoint_id = central.endpoint_id
+                      AND probe.server_id = assignments.server_id
+                      AND probe.sample_time <= central.sample_time
+                      AND probe.sample_time >= central.sample_time
+                          - (GREATEST(
+                                120,
+                                COALESCE(endpoints.interval_seconds, websites.default_interval_seconds) * 3
+                            ) * INTERVAL '1 second')
+                    ORDER BY probe.sample_time DESC, probe.sample_id DESC
+                    LIMIT 1
+                ) AS latest ON TRUE
+                WHERE assignments.website_id = central.website_id
+                  AND endpoints.auth_type = 'none'
+                  AND endpoints.auth_encrypted IS NULL
+                  AND endpoints.headers_encrypted IS NULL
+                  AND endpoints.allow_self_signed = FALSE
+            ) AS remote ON TRUE
+            WHERE central.sample_time >= :from
+              AND central.sample_time < :to
+              AND central.manual = FALSE
+            GROUP BY central.endpoint_id
+            SQL,
+            $from,
+            $to
         );
         $incidents = $this->incidents($from, $to);
         $availabilityEvents = $this->serverEvents($from, $to);
@@ -98,6 +153,16 @@ final class ReliabilityReportRepository
                     : null,
                 'coverage' => $coverage,
                 'reportable' => $coverage['coverage_percent'] >= 95.0,
+                'distributed' => $this->boolValue($row['remote_eligible'])
+                    && (int) $row['probe_agent_count'] > 0,
+                'probe_quorum' => $this->boolValue($row['remote_eligible'])
+                    ? (int) $row['probe_quorum']
+                    : 1,
+                'probe_points' => 1 + (
+                    $this->boolValue($row['remote_eligible'])
+                        ? (int) $row['probe_agent_count']
+                        : 0
+                ),
                 'incidents' => $incidents['website'][$id] ?? ['count' => 0, 'duration_seconds' => 0, 'recovered_count' => 0, 'mean_recovery_seconds' => null],
             ];
         }
@@ -190,6 +255,11 @@ final class ReliabilityReportRepository
     private function later(DateTimeImmutable $left, DateTimeImmutable $right): DateTimeImmutable
     {
         return $left > $right ? $left : $right;
+    }
+
+    private function boolValue(mixed $value): bool
+    {
+        return $value === true || $value === 1 || $value === '1' || $value === 't';
     }
 
     private function time(DateTimeImmutable $time): string

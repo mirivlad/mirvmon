@@ -89,4 +89,84 @@ final class ReliabilityReportRepositoryTest extends TestCase
         self::assertFalse($website['reportable']);
         self::assertSame(1.67, $website['coverage']['coverage_percent']);
     }
+
+    public function testWebsiteAvailabilityUsesDistributedQuorumAndIgnoresStaleRemotePoints(): void
+    {
+        $pdo = self::$pdo;
+        self::assertNotNull($pdo);
+        $siteId = (int) $pdo->query(
+            "INSERT INTO websites(name, created_at, probe_quorum) VALUES ('Distributed report', '2026-09-24T00:00:00Z', 2) RETURNING id"
+        )->fetchColumn();
+        $endpointId = (int) $pdo->query(
+            "INSERT INTO website_endpoints(website_id, name, url, is_primary, interval_seconds, created_at)
+             VALUES ($siteId, 'Main', 'https://example.test/', TRUE, 60, '2026-09-24T00:00:00Z') RETURNING id"
+        )->fetchColumn();
+        $agentOne = (int) $pdo->query("INSERT INTO servers(name) VALUES ('Probe A') RETURNING id")->fetchColumn();
+        $agentTwo = (int) $pdo->query("INSERT INTO servers(name) VALUES ('Probe B') RETURNING id")->fetchColumn();
+        $pdo->exec(
+            "INSERT INTO website_probe_agents(website_id,server_id) VALUES
+                ($siteId,$agentOne),($siteId,$agentTwo);
+             INSERT INTO website_probe_samples(
+                sample_time,website_id,endpoint_id,server_id,sample_id,transport_available
+             ) VALUES
+                ('2026-09-24T00:00:50Z',$siteId,$endpointId,$agentOne,'10000000-0000-4000-8000-000000000001',FALSE),
+                ('2026-09-24T00:00:50Z',$siteId,$endpointId,$agentTwo,'10000000-0000-4000-8000-000000000002',FALSE);
+             INSERT INTO website_check_samples(
+                sample_time,website_id,endpoint_id,sample_id,manual,transport_available,assertions_passed,configured_url
+             ) VALUES
+                ('2026-09-24T00:01:00Z',$siteId,$endpointId,'20000000-0000-4000-8000-000000000001',FALSE,TRUE,TRUE,'https://example.test/'),
+                ('2026-09-24T00:05:00Z',$siteId,$endpointId,'20000000-0000-4000-8000-000000000002',FALSE,TRUE,TRUE,'https://example.test/')"
+        );
+
+        $report = (new ReliabilityReportRepository($pdo))->report(
+            new DateTimeImmutable('2026-09-24T00:00:00Z'),
+            new DateTimeImmutable('2026-09-24T00:06:00Z')
+        );
+        $website = array_values(array_filter(
+            $report['websites'],
+            static fn (array $row): bool => $row['id'] === $siteId
+        ))[0];
+
+        self::assertSame(50.0, $website['availability']);
+        self::assertTrue($website['distributed']);
+        self::assertSame(2, $website['probe_quorum']);
+        self::assertSame(3, $website['probe_points']);
+    }
+
+    public function testRemoteIneligibleEndpointFallsBackToCentralAvailability(): void
+    {
+        $pdo = self::$pdo;
+        self::assertNotNull($pdo);
+        $siteId = (int) $pdo->query(
+            "INSERT INTO websites(name, created_at, probe_quorum) VALUES ('Private report', '2026-09-24T00:00:00Z', 2) RETURNING id"
+        )->fetchColumn();
+        $endpointId = (int) $pdo->query(
+            "INSERT INTO website_endpoints(website_id, name, url, is_primary, interval_seconds, allow_self_signed, created_at)
+             VALUES ($siteId, 'Main', 'https://private.test/', TRUE, 60, TRUE, '2026-09-24T00:00:00Z') RETURNING id"
+        )->fetchColumn();
+        $agent = (int) $pdo->query("INSERT INTO servers(name) VALUES ('Unused probe') RETURNING id")->fetchColumn();
+        $pdo->exec(
+            "INSERT INTO website_probe_agents(website_id,server_id) VALUES ($siteId,$agent);
+             INSERT INTO website_probe_samples(
+                sample_time,website_id,endpoint_id,server_id,sample_id,transport_available
+             ) VALUES ('2026-09-24T00:00:50Z',$siteId,$endpointId,$agent,'30000000-0000-4000-8000-000000000001',TRUE);
+             INSERT INTO website_check_samples(
+                sample_time,website_id,endpoint_id,sample_id,manual,transport_available,assertions_passed,configured_url
+             ) VALUES ('2026-09-24T00:01:00Z',$siteId,$endpointId,'40000000-0000-4000-8000-000000000001',FALSE,FALSE,TRUE,'https://private.test/')"
+        );
+
+        $report = (new ReliabilityReportRepository($pdo))->report(
+            new DateTimeImmutable('2026-09-24T00:00:00Z'),
+            new DateTimeImmutable('2026-09-24T00:02:00Z')
+        );
+        $website = array_values(array_filter(
+            $report['websites'],
+            static fn (array $row): bool => $row['id'] === $siteId
+        ))[0];
+
+        self::assertSame(0.0, $website['availability']);
+        self::assertFalse($website['distributed']);
+        self::assertSame(1, $website['probe_quorum']);
+        self::assertSame(1, $website['probe_points']);
+    }
 }

@@ -6,6 +6,27 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.9.3
+
+- Made website reliability quorum-aware: each central primary-endpoint observation now evaluates transport against fresh results from selected remote agents while assertions remain Central-only; stale or missing remote data does not count as failure.
+- Added a compact seven-day probe-point transition history to website events so operators can see which point lost or regained reachability.
+- Made endpoints that cannot be safely sent to agents (auth/custom headers/self-signed TLS) automatically fall back to an effective Central-only quorum, preventing remote no-data from masking a central outage.
+- Updated README, roadmap, reliability/distributed-check documentation and technical specification to match the completed 0.9 branch.
+- No agent protocol, database schema, Compose service, or required environment-variable changes.
+
+## 0.9.2
+
+- Made Central MirvMon mandatory for every website and enforced the invariant in migration 032.
+- Fixed website reliability UX so availability remains visible for partial observation windows, marked as a partial period below 95% coverage.
+- Added release-version cache busting to local CSS/JS assets and made the Total servers dashboard card clear status filters.
+- Kept remote agents transport HTTP(S)-only; TLS/domain/assertions remain centralized.
+
+## 0.9.1
+
+- Added quick website-probe enable/disable controls to server and agent-fleet views.
+- Added per-site probe-point reachability dots and a visible quorum indicator.
+- Reworked navigation: Servers dropdown, Settings in the user menu, matching analytics icons and active-section icon accents.
+
 ## 0.9.0
 
 - Added distributed website transport checks through existing outbound-only MirvMon agents, with per-site probe point selection and configurable failure quorum.
