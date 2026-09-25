@@ -1,2 +1,20 @@
-<section class="card mb-4"><div class="card-body"><div class="d-flex justify-content-between"><h2 class="h5">{{ t('websites.detail.overview') }}</h2><span class="badge text-bg-light">{{ t('websites.status.' ~ state.status) }}</span></div><p class="mb-0">{{ t('websites.detail.problem_count', {count: state.active_problem_count}) }}</p></div></section>
-<div class="row g-3"><div class="col-lg-7"><section class="card h-100"><div class="card-body"><h2 class="h5">{{ t('websites.detail.checks') }}</h2><ul class="list-group list-group-flush">{% for endpoint in website.endpoints %}<li class="list-group-item px-0"><strong>{{ endpoint.name }}</strong><br><span class="text-muted">{{ endpoint.method }} · {{ endpoint.url }}</span><br><small>{{ t('websites.detail.auth') }}: {% if endpoint.has_auth %}{{ t('common.yes') }}{% else %}{{ t('common.no') }}{% endif %} · {{ t('websites.detail.headers') }}: {% if endpoint.has_headers %}{{ t('common.yes') }}{% else %}{{ t('common.no') }}{% endif %}</small></li>{% endfor %}</ul></div></section></div><div class="col-lg-5"><section class="card h-100"><div class="card-body"><h2 class="h5">{{ t('websites.detail.latest') }}</h2>{% for sample in latest %}<p class="mb-2"><strong>#{{ sample.endpoint_id }}</strong> · {{ sample.total_ms|default('—') }} ms · {% if sample.transport_available %}{{ t('websites.status.healthy') }}{% else %}{{ t('websites.status.unavailable') }}{% endif %}</p>{% else %}<p class="text-muted mb-0">{{ t('websites.empty') }}</p>{% endfor %}</div></section></div></div>
+<section class="card mb-4"><div class="card-body">
+    <div class="d-flex justify-content-between"><h2 class="h5">{{ t('websites.detail.overview') }}</h2><span class="badge text-bg-light">{{ t('websites.status.' ~ state.status) }}</span></div>
+    <p class="mb-0">{{ t('websites.detail.problem_count', {count: state.active_problem_count}) }}</p>
+    <p class="small text-muted mb-0 mt-1">{{ t('websites.detail.probe_quorum_summary', {quorum: website.probe_quorum|default(1)}) }}</p>
+</div></section>
+<div class="row g-3">
+<div class="col-lg-6"><section class="card h-100"><div class="card-body">
+    <h2 class="h5">{{ t('websites.detail.checks') }}</h2>
+    <ul class="list-group list-group-flush">{% for endpoint in website.endpoints %}
+        <li class="list-group-item px-0"><strong>{{ endpoint.name }}</strong><br><span class="text-muted">{{ endpoint.method }} · {{ endpoint.url }}</span><br><small>{{ t('websites.detail.auth') }}: {{ endpoint.has_auth ? t('common.yes') : t('common.no') }} · {{ t('websites.detail.headers') }}: {{ endpoint.has_headers ? t('common.yes') : t('common.no') }}</small></li>
+    {% endfor %}</ul>
+</div></section></div>
+<div class="col-lg-6"><section class="card h-100"><div class="card-body">
+    <h2 class="h5">{{ t('websites.detail.probe_results') }}</h2>
+    <div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>{{ t('websites.detail.probe_point') }}</th><th>Endpoint</th><th>{{ t('websites.detail.result') }}</th><th>{{ t('websites.detail.response') }}</th></tr></thead><tbody>
+    {% for sample in probe_results %}<tr><td><strong>{{ sample.probe_name }}</strong><div class="small text-muted">{{ sample.sample_time|date('d.m.Y H:i:s') }}</div></td><td>{{ sample.endpoint_name }}</td><td><span class="badge {{ sample.transport_available ? 'text-bg-success' : 'text-bg-danger' }}">{{ sample.transport_available ? t('websites.status.healthy') : t('websites.status.unavailable') }}</span>{% if sample.status_code %} <code>{{ sample.status_code }}</code>{% endif %}</td><td>{{ sample.total_ms is not null ? (sample.total_ms|round(1) ~ ' ms') : '—' }}{% if sample.safe_message %}<div class="small text-muted">{{ sample.safe_message }}</div>{% endif %}</td></tr>
+    {% else %}<tr><td colspan="4" class="text-muted">{{ t('websites.detail.probe_results_empty') }}</td></tr>{% endfor %}
+    </tbody></table></div>
+</div></section></div>
+</div>

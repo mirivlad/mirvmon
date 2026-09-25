@@ -182,6 +182,17 @@ sudo sed -E \
 Remote config может менять `enabled`, `interval_seconds`, `monitor_services` и
 передавать строго типизированную команду self-update.
 
+Начиная с v0.9.0 агент также объявляет capability `website_probe_v1`. Только
+после того, как сервер увидел эту capability в metrics envelope, ответ
+`GET /api/v1/agent/config` может содержать `probe_revision` и `probe_jobs`.
+Это сохраняет совместимость со старыми агентами, чей строгий decoder отвергает
+неизвестные поля remote config. Probe jobs — desired state в памяти агента:
+входящий listener не создаётся, задания выполняются исходящими HTTP(S)
+запросами, а результаты возвращаются в `probe_results` обычного metrics
+envelope и используют ту же durable delivery queue. Первая версия remote probe
+проверяет только transport/HTTP reachability и не получает auth secrets,
+custom headers или разрешение self-signed TLS.
+
 ## `health.json`
 
 Агент сохраняет рядом с очередью короткий operator-visible статус. Пример:

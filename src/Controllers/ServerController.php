@@ -196,6 +196,13 @@ final class ServerController
         $agentToken = $this->pdo->prepare('SELECT token_generation FROM agent_tokens WHERE server_id = :server_id');
         $agentToken->execute(['server_id' => $serverId]);
         $tokenGeneration = $agentToken->fetchColumn();
+        $probeConfig = $this->pdo->prepare(
+            'SELECT website_probe_enabled FROM agent_configs WHERE server_id = :server_id'
+        );
+        $probeConfig->execute(['server_id' => $serverId]);
+        $probeEnabled = $probeConfig->fetchColumn();
+        $server['website_probe_enabled'] = $probeEnabled === true
+            || $probeEnabled === 1 || $probeEnabled === '1' || $probeEnabled === 't';
         $serverRepository = new ServerRepository($this->pdo);
         $metricRepository = new MetricRepository($this->pdo);
 
@@ -268,11 +275,24 @@ final class ServerController
             'group_id' => $this->optionalId($body['group_id'] ?? null),
             'description' => $this->optionalString($body['description'] ?? null),
             'offline_timeout_seconds' => $timeout,
-            'notify_on_offline' => isset($body['notify_on_offline']),
+            'notify_on_offline' => isset($body['notify_on_offline']) ? 1 : 0,
             'notification_telegram_chat_id' => $this->optionalString($body['notification_telegram_chat_id'] ?? null, 100),
             'notification_emails' => json_encode($recipientEmails, JSON_THROW_ON_ERROR),
             'display_metrics' => json_encode($displayMetrics, JSON_THROW_ON_ERROR),
         ]);
+        $probe = $this->pdo->prepare(
+            'UPDATE agent_configs
+             SET website_probe_enabled = :enabled
+             WHERE server_id = :server_id'
+        );
+        $probeEnabled = isset($body['website_probe_enabled']);
+        $probe->execute([
+            'server_id' => $serverId,
+            'enabled' => $probeEnabled ? 1 : 0,
+        ]);
+        if (!$probeEnabled) {
+            $this->detachWebsiteProbeAssignments($serverId);
+        }
         $_SESSION['flash_message'] = $this->translator->trans('server18.settings.saved');
         $_SESSION['flash_type'] = 'success';
 
@@ -284,6 +304,7 @@ final class ServerController
     {
         $serverId = $this->serverId($args);
         if ($serverId !== null) {
+            $this->detachWebsiteProbeAssignments($serverId);
             $statement = $this->pdo->prepare('DELETE FROM servers WHERE id = :server_id');
             $statement->execute(['server_id' => $serverId]);
         }
@@ -480,6 +501,55 @@ final class ServerController
     {
         $serverId = filter_var($args['id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
         return $serverId === false ? null : $serverId;
+    }
+
+    private function detachWebsiteProbeAssignments(int $serverId): void
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT website_id FROM website_probe_agents WHERE server_id = :server_id'
+        );
+        $statement->execute(['server_id' => $serverId]);
+        $websiteIds = array_map('intval', array_column($statement->fetchAll(), 'website_id'));
+        if ($websiteIds === []) {
+            return;
+        }
+
+        $this->pdo->prepare(
+            'DELETE FROM website_probe_agents WHERE server_id = :server_id'
+        )->execute(['server_id' => $serverId]);
+
+        $count = $this->pdo->prepare(
+            'SELECT central_probe_enabled,
+                    (SELECT count(*) FROM website_probe_agents WHERE website_id = websites.id) AS agents
+             FROM websites WHERE id = :website_id'
+        );
+        $update = $this->pdo->prepare(
+            'UPDATE websites
+             SET central_probe_enabled = :central,
+                 probe_quorum = LEAST(probe_quorum, :points)
+             WHERE id = :website_id'
+        );
+        foreach ($websiteIds as $websiteId) {
+            $count->execute(['website_id' => $websiteId]);
+            $row = $count->fetch();
+            if (!is_array($row)) {
+                continue;
+            }
+            $central = $row['central_probe_enabled'] === true
+                || $row['central_probe_enabled'] === 1
+                || $row['central_probe_enabled'] === '1'
+                || $row['central_probe_enabled'] === 't';
+            $agents = (int) $row['agents'];
+            if (!$central && $agents === 0) {
+                $central = true;
+            }
+            $points = max(1, ($central ? 1 : 0) + $agents);
+            $update->execute([
+                'website_id' => $websiteId,
+                'central' => $central ? 1 : 0,
+                'points' => $points,
+            ]);
+        }
     }
 
     private function redirect(Response $response, string $location): Response

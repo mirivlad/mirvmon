@@ -36,6 +36,7 @@ final readonly class WebsiteCheckResult
         public bool $manual,
         public string $probeKind = 'app',
         public ?string $probeId = null,
+        public ?string $safeMessage = null,
     ) {
     }
 }

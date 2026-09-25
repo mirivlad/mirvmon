@@ -109,6 +109,110 @@ final class WebsiteIncidentServiceTest extends TestCase
         )->fetchColumn());
     }
 
+    public function testDistributedQuorumUsesOneAggregateFailureSeries(): void
+    {
+        $agentOne = (int) self::$pdo?->query(
+            "INSERT INTO servers (name) VALUES ('probe-one') RETURNING id"
+        )->fetchColumn();
+        $agentTwo = (int) self::$pdo?->query(
+            "INSERT INTO servers (name) VALUES ('probe-two') RETURNING id"
+        )->fetchColumn();
+        self::$pdo?->exec(
+            "INSERT INTO agent_configs (server_id, website_probe_enabled)
+             VALUES ({$agentOne}, TRUE), ({$agentTwo}, TRUE)"
+        );
+        self::$pdo?->exec(
+            "INSERT INTO website_probe_agents (website_id, server_id)
+             VALUES ({$this->websiteId}, {$agentOne}), ({$this->websiteId}, {$agentTwo})"
+        );
+        self::$pdo?->exec(
+            "UPDATE websites
+             SET central_probe_enabled = TRUE, probe_quorum = 2
+             WHERE id = {$this->websiteId}"
+        );
+
+        $this->service->recordHttp($this->makeResult(false, '00:00:00'));
+        self::assertSame(0, (int) self::$pdo?->query(
+            "SELECT transport_failures FROM website_endpoint_state WHERE endpoint_id = {$this->endpointId}"
+        )->fetchColumn());
+
+        $this->service->recordRemoteHttp(
+            $this->makeResult(false, '00:00:10', probeKind: 'agent', probeId: (string) $agentOne)
+        );
+        self::assertSame(1, (int) self::$pdo?->query(
+            "SELECT transport_failures FROM website_endpoint_state WHERE endpoint_id = {$this->endpointId}"
+        )->fetchColumn());
+        $this->service->recordRemoteHttp(
+            $this->makeResult(false, '00:00:20', probeKind: 'agent', probeId: (string) $agentOne)
+        );
+        $this->service->recordRemoteHttp(
+            $this->makeResult(false, '00:00:30', probeKind: 'agent', probeId: (string) $agentOne)
+        );
+        self::assertCount(
+            1,
+            (new IncidentRepository(self::$pdo))->active(['website_id' => $this->websiteId])
+        );
+
+        $this->service->recordHttp($this->makeResult(true, '00:00:40'));
+        self::assertCount(
+            1,
+            (new IncidentRepository(self::$pdo))->active(['website_id' => $this->websiteId])
+        );
+        $this->service->recordRemoteHttp(
+            $this->makeResult(true, '00:00:50', probeKind: 'agent', probeId: (string) $agentTwo)
+        );
+        self::assertCount(
+            0,
+            (new IncidentRepository(self::$pdo))->active(['website_id' => $this->websiteId])
+        );
+        self::assertSame(2, (int) self::$pdo?->query(
+            "SELECT count(*) FROM website_check_samples WHERE website_id = {$this->websiteId}"
+        )->fetchColumn());
+        self::assertSame(4, (int) self::$pdo?->query(
+            "SELECT count(*) FROM website_probe_samples WHERE website_id = {$this->websiteId}"
+        )->fetchColumn());
+    }
+
+    public function testBackfilledRemoteProbeIsStoredWithoutRewindingLiveState(): void
+    {
+        $agent = (int) self::$pdo?->query(
+            "INSERT INTO servers (name) VALUES ('queue-probe') RETURNING id"
+        )->fetchColumn();
+        self::$pdo?->exec(
+            "INSERT INTO agent_configs (server_id, website_probe_enabled)
+             VALUES ({$agent}, TRUE)"
+        );
+        self::$pdo?->exec(
+            "INSERT INTO website_probe_agents (website_id, server_id)
+             VALUES ({$this->websiteId}, {$agent})"
+        );
+        self::$pdo?->exec(
+            "UPDATE websites
+             SET central_probe_enabled = TRUE, probe_quorum = 2
+             WHERE id = {$this->websiteId}"
+        );
+
+        $this->service->recordHttp($this->makeResult(true, '00:05:00'));
+        $before = self::$pdo?->query(
+            "SELECT last_sample_at, transport_failures
+             FROM website_endpoint_state WHERE endpoint_id = {$this->endpointId}"
+        )->fetch();
+
+        $this->service->recordRemoteHttp(
+            $this->makeResult(false, '00:00:00', probeKind: 'agent', probeId: (string) $agent)
+        );
+
+        $after = self::$pdo?->query(
+            "SELECT last_sample_at, transport_failures
+             FROM website_endpoint_state WHERE endpoint_id = {$this->endpointId}"
+        )->fetch();
+        self::assertSame((string) $before['last_sample_at'], (string) $after['last_sample_at']);
+        self::assertSame((int) $before['transport_failures'], (int) $after['transport_failures']);
+        self::assertSame(1, (int) self::$pdo?->query(
+            "SELECT count(*) FROM website_probe_samples WHERE website_id = {$this->websiteId}"
+        )->fetchColumn());
+    }
+
     public function testRecoveryPersistsWhenAssertionSuccessCounterReachedSmallintLimit(): void
     {
         $this->service->recordHttp($this->makeResult(false, '00:00:00'));
@@ -205,12 +309,21 @@ final class WebsiteIncidentServiceTest extends TestCase
         self::assertSame(['website_domain', 'website_tls'], $kinds);
     }
 
-    private function makeResult(bool $available, string $time, bool $passedStatusAssertion = false): WebsiteCheckResult
-    {
+    private function makeResult(
+        bool $available,
+        string $time,
+        bool $passedStatusAssertion = false,
+        string $probeKind = 'app',
+        ?string $probeId = null,
+    ): WebsiteCheckResult {
         return new WebsiteCheckResult(
             websiteId: $this->websiteId,
             endpointId: $this->endpointId,
-            sampleId: '10000000-0000-4000-8000-' . substr(md5($time . (string) $available), 0, 12),
+            sampleId: '10000000-0000-4000-8000-' . substr(
+                md5($time . (string) $available . $probeKind . ($probeId ?? '')),
+                0,
+                12
+            ),
             checkedAt: new DateTimeImmutable('2026-08-27T' . $time . '+00:00'),
             transportAvailable: $available,
             assertionsPassed: $available,
@@ -224,6 +337,8 @@ final class WebsiteIncidentServiceTest extends TestCase
                 ? [['kind' => 'status', 'passed' => true, 'safe_message' => 'Expected status received.']]
                 : [],
             manual: false,
+            probeKind: $probeKind,
+            probeId: $probeId,
         );
     }
 }

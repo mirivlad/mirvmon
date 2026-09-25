@@ -22,6 +22,10 @@ final readonly class MetricsEnvelope
      *     top_memory: list<array{pid: int, name: string, command: string, value: float}>
      * }|null $processSnapshot
      * @param list<string> $agentCapabilities
+     * @param list<array{
+     *   website_id:int,endpoint_id:int,observed_at:string,available:bool,
+     *   status_code:?int,total_ms:float,error_kind:string,safe_message:string
+     * }> $probeResults
      */
     public function __construct(
         public int $version,
@@ -34,7 +38,8 @@ final readonly class MetricsEnvelope
         public ?string $agentVersion = null,
         public ?string $osVersion = null,
         public ?string $agentArtifact = null,
-        public array $agentCapabilities = []
+        public array $agentCapabilities = [],
+        public array $probeResults = []
     ) {
     }
 }

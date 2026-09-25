@@ -232,7 +232,7 @@ final class SchemaTest extends TestCase
         self::assertSame([], $migrator->migrate());
 
         $count = self::$pdo?->query('SELECT count(*) FROM schema_migrations')->fetchColumn();
-        self::assertSame('30', (string) $count);
+        self::assertSame('31', (string) $count);
     }
 
     public function testAvailabilitySchemaExists(): void
