@@ -24,6 +24,10 @@ final class Ui19TemplateContractTest extends TestCase
         self::assertStringContainsString('app-user-menu-heading', $layout);
         self::assertStringNotContainsString('data-nav-section="settings"', $layout);
         self::assertStringContainsString('/js/ui19.js', $layout);
+
+        $dashboard = $this->contents('templates/dashboard.twig');
+        self::assertStringContainsString('href="/" class="summary-card summary-card-total', $dashboard);
+
     }
 
     public function testServerListUsesOperationalFiltersAndKeepsInlineAgentUpdates(): void
