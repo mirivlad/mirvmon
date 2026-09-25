@@ -156,3 +156,30 @@ func TestApplyRemoteRejectsInvalidUpdateWithoutChangingConfig(t *testing.T) {
 		t.Fatalf("invalid remote update changed config: %#v", updated)
 	}
 }
+
+func TestApplyRemoteValidatesWebsiteProbeJobsAtomically(t *testing.T) {
+	configuration := Config{
+		APIURL:    "https://monitor.example/api/v1/metrics",
+		ConfigURL: "https://monitor.example/api/v1/agent/config",
+		Token:     validToken, QueuePath: "/var/lib/mirvmon-agent/queue.json",
+		IntervalSeconds: 60, VerifyTLS: true, Enabled: true, QueueLimit: 1000,
+	}
+	valid := ProbeJob{
+		ID: "website-1-endpoint-2", WebsiteID: 1, EndpointID: 2,
+		URL: "https://example.com/", Method: "GET",
+		IntervalSeconds: 30, TimeoutSeconds: 5, FollowRedirects: true, MaxRedirects: 3,
+	}
+	updated, ok := ApplyRemote(configuration, Remote{
+		ProbeRevision: "revision-1", ProbeJobs: []ProbeJob{valid},
+	})
+	if !ok || len(updated.ProbeJobs) != 1 || updated.ProbeRevision != "revision-1" {
+		t.Fatalf("valid probe jobs rejected: %#v", updated)
+	}
+
+	invalid := valid
+	invalid.URL = "https://user:secret@example.com/"
+	rejected, ok := ApplyRemote(configuration, Remote{ProbeJobs: []ProbeJob{invalid}})
+	if ok || !reflect.DeepEqual(rejected, configuration) {
+		t.Fatalf("invalid probe job partially changed config: %#v", rejected)
+	}
+}

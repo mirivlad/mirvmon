@@ -75,7 +75,7 @@ PostgreSQL 17 + TimescaleDB 2.28:
   `service_status`, `alerts`, `observations`, `notification_settings`, `app_settings`;
 - idempotency: `ingested_samples`;
 - current read model: `current_metric_values`;
-- hypertables: `metric_samples`, `process_snapshots`;
+- hypertables: `metric_samples`, `process_snapshots`, `website_probe_samples`;
 - delivery: `notification_outbox`;
 - security/audit support: `login_attempts`, `schema_migrations`.
 
@@ -152,6 +152,13 @@ SHA-256 hash и никогда не попадает в query string или Wind
 
 Агент использует outbound HTTPS, стандартные proxy environment variables и
 локальную bounded persistent retry queue; входящий сетевой доступ ему не нужен.
+Та же модель используется для распределённых website probes: сервер возвращает
+назначенные `probe_jobs` в обычном config poll, агент планирует их независимо от
+частоты host metrics и кладёт результаты в тот же version-2 envelope/queue.
+Центральный `website-check-worker` остаётся встроенной probe point; raw result
+каждой выбранной точки хранится отдельно, а transport state вычисляется по
+site-level failure quorum перед существующим `3 failures / 2 successes` state
+machine. Отдельного listener, daemon или Compose service для probes нет.
 Рядом с queue сохраняется `health.json` с последним безопасным состоянием;
 transport errors разделяются на auth, DNS, timeout/network, TLS, server и local
 configuration/runtime categories, чтобы работающий service не маскировал

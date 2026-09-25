@@ -23,7 +23,7 @@ final class WebsiteStateEvaluator
             'website_http',
             !$result->transportAvailable,
             $result->checkedAt,
-            $result->error?->value,
+            $result->safeMessage ?? $result->error?->value,
         );
 
         $assertionObserved = $result->transportAvailable && $this->hasAssertion($result, false);

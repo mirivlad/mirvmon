@@ -17,6 +17,7 @@ import (
 	"github.com/mirivlad/mirvmon/agent/internal/diagnostic"
 	"github.com/mirivlad/mirvmon/agent/internal/enroll"
 	"github.com/mirivlad/mirvmon/agent/internal/migrate"
+	"github.com/mirivlad/mirvmon/agent/internal/probe"
 	"github.com/mirivlad/mirvmon/agent/internal/protocol"
 	"github.com/mirivlad/mirvmon/agent/internal/queue"
 	"github.com/mirivlad/mirvmon/agent/internal/runner"
@@ -247,6 +248,7 @@ func executeConfigured(arguments []string, _ io.Writer, stderr io.Writer) int {
 		Queue:     persistentQueue,
 		API:       api,
 		Collector: collector.New(),
+		Probes:    probe.NewHTTPExecutor(),
 		Config:    configuration,
 		Version:   buildinfo.Version,
 		Commit:    buildinfo.Commit,

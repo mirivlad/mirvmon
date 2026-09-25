@@ -67,6 +67,7 @@ final class WebsiteController
             $websiteId = $this->websites->create(
                 $this->siteInput($body),
                 $this->endpointInputs($body, false),
+                $this->probeInput($body),
             );
             $this->flashKey('websites.flash.created', 'success');
             return $this->redirect($response, '/sites/' . $websiteId);
@@ -104,6 +105,7 @@ final class WebsiteController
                 $websiteId,
                 $this->siteInput($body),
                 $this->endpointInputs($body, true),
+                $this->probeInput($body),
             );
             $this->flashKey('websites.flash.updated', 'success');
             return $this->redirect($response, '/sites/' . $websiteId);
@@ -190,6 +192,7 @@ final class WebsiteController
             'title' => $this->translator->trans('websites.form.title'),
             'website' => $site,
             'groups' => $this->websites->groups(),
+            'probe_agents' => $this->websites->probeAgents(),
             'form_error' => $error,
         ])->withStatus($status);
     }
@@ -201,6 +204,7 @@ final class WebsiteController
             'name' => '', 'description' => '', 'group_id' => null,
             'registration_domain' => '', 'domain_check_enabled' => false,
             'notification_telegram_chat_id' => '', 'notification_emails' => [],
+            'central_probe_enabled' => true, 'probe_quorum' => 1, 'probe_agent_ids' => [],
             'endpoints' => [[
                 'id' => null, 'name' => 'Главная', 'is_primary' => true, 'url' => '', 'method' => 'GET',
                 'interval_seconds' => 60, 'timeout_seconds' => 15, 'follow_redirects' => true,
@@ -233,6 +237,35 @@ final class WebsiteController
             'domain_critical_days' => $body['domain_critical_days'] ?? null,
             'notification_telegram_chat_id' => $body['notification_telegram_chat_id'] ?? null,
             'notification_emails' => $body['notification_emails'] ?? [],
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $body
+     * @return array{central_enabled:bool,agent_ids:list<mixed>,quorum:mixed}
+     */
+    private function probeInput(array $body): array
+    {
+        $hasProbeFields = array_key_exists('central_probe_enabled', $body)
+            || array_key_exists('probe_agent_ids', $body)
+            || array_key_exists('probe_quorum', $body);
+        if (!$hasProbeFields) {
+            return [
+                'central_enabled' => true,
+                'agent_ids' => [],
+                'quorum' => 1,
+            ];
+        }
+
+        $ids = $body['probe_agent_ids'] ?? [];
+        if (!is_array($ids)) {
+            $ids = [];
+        }
+
+        return [
+            'central_enabled' => isset($body['central_probe_enabled']),
+            'agent_ids' => array_values($ids),
+            'quorum' => $body['probe_quorum'] ?? 1,
         ];
     }
 
@@ -285,6 +318,22 @@ final class WebsiteController
     private function safeForm(array $body): array
     {
         $safe = $body;
+        $safe['central_probe_enabled'] = isset($body['central_probe_enabled']);
+        $rawProbeIds = $body['probe_agent_ids'] ?? [];
+        $safe['probe_agent_ids'] = is_array($rawProbeIds)
+            ? array_values(array_filter(
+                array_map(
+                    static fn (mixed $value): int|false => filter_var(
+                        $value,
+                        FILTER_VALIDATE_INT,
+                        ['options' => ['min_range' => 1]]
+                    ),
+                    $rawProbeIds
+                ),
+                static fn (int|false $value): bool => $value !== false
+            ))
+            : [];
+        $safe['probe_quorum'] = $body['probe_quorum'] ?? 1;
         if (isset($safe['endpoints']) && is_array($safe['endpoints'])) {
             foreach ($safe['endpoints'] as &$endpoint) {
                 if (!is_array($endpoint)) {

@@ -184,6 +184,50 @@ final class MetricsValidatorTest extends TestCase
         ];
     }
 
+    public function testProbeOnlyEnvelopeIsAcceptedAndNormalized(): void
+    {
+        $payload = $this->validPayload();
+        $payload['metrics'] = [];
+        $payload['services'] = [];
+        $payload['process_snapshot'] = null;
+        $payload['probe_results'] = [[
+            'website_id' => 12,
+            'endpoint_id' => 34,
+            'observed_at' => '2026-07-30T11:59:30Z',
+            'available' => false,
+            'status_code' => null,
+            'total_ms' => 123.5,
+            'error_kind' => 'timeout',
+            'safe_message' => 'Request timed out.',
+        ]];
+
+        $envelope = $this->validator->validate($payload, $this->now);
+        self::assertSame([], $envelope->metrics);
+        self::assertCount(1, $envelope->probeResults);
+        self::assertSame(12, $envelope->probeResults[0]['website_id']);
+        self::assertFalse($envelope->probeResults[0]['available']);
+        self::assertSame('timeout', $envelope->probeResults[0]['error_kind']);
+    }
+
+    public function testProbeResultRejectsUnknownFields(): void
+    {
+        $payload = $this->validPayload();
+        $payload['probe_results'] = [[
+            'website_id' => 12,
+            'endpoint_id' => 34,
+            'observed_at' => '2026-07-30T11:59:30Z',
+            'available' => true,
+            'status_code' => 200,
+            'total_ms' => 50.0,
+            'error_kind' => '',
+            'safe_message' => 'OK',
+            'response_body' => 'secret',
+        ]];
+
+        $this->expectException(MetricsValidationException::class);
+        $this->validator->validate($payload, $this->now);
+    }
+
     public function testAgentVersionIsOptionalAndBounded(): void
     {
         $validator = new MetricsValidator();

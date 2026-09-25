@@ -13,6 +13,7 @@ use App\Services\AgentInstallerService;
 use App\Services\WindowsInstallerPackageService;
 use App\Services\AgentUpdateService;
 use App\Services\AgentVersionService;
+use App\Services\WebsiteProbeAssignmentService;
 use App\Repositories\AgentUpdateRepository;
 use App\Services\PublicUrlResolver;
 use PDO;
@@ -84,7 +85,8 @@ SH
                 $this->artifactDirectory . '/work'
             ),
             static fn (): AgentArtifactCatalog => $artifacts,
-            static fn (): AgentUpdateService => $updates
+            static fn (): AgentUpdateService => $updates,
+            new WebsiteProbeAssignmentService(self::$pdo)
         );
     }
 
@@ -357,6 +359,82 @@ SH
         self::assertSame('linux-amd64', $body['update_command']['artifact'] ?? null);
         self::assertArrayNotHasKey('token', $body['update_command'] ?? []);
         self::assertArrayNotHasKey('url', $body['update_command'] ?? []);
+    }
+
+    public function testRemoteProbeConfigContainsOnlyJobsAssignedToAuthenticatedEnabledAgent(): void
+    {
+        $credential = $this->issuer->exchange(
+            $this->issuer->issueInstaller($this->serverId)
+        );
+        self::$pdo?->prepare(
+            'UPDATE agent_configs SET website_probe_enabled = TRUE WHERE server_id = :server_id'
+        )->execute(['server_id' => $this->serverId]);
+        self::$pdo?->prepare(
+            "UPDATE servers
+             SET agent_capabilities = '[\"self_update_v1\",\"website_probe_v1\"]'::jsonb
+             WHERE id = :server_id"
+        )->execute(['server_id' => $this->serverId]);
+
+        $websiteId = (int) self::$pdo?->query(
+            "INSERT INTO websites (name) VALUES ('assigned-site') RETURNING id"
+        )->fetchColumn();
+        $endpointId = (int) self::$pdo?->query(
+            "INSERT INTO website_endpoints
+                (website_id, name, url, is_primary, method, interval_seconds, timeout_seconds)
+             VALUES ({$websiteId}, 'Home', 'https://assigned.example/', TRUE, 'GET', 30, 5)
+             RETURNING id"
+        )->fetchColumn();
+        self::$pdo?->exec(
+            "INSERT INTO website_probe_agents (website_id, server_id)
+             VALUES ({$websiteId}, {$this->serverId})"
+        );
+
+        $otherServer = (int) self::$pdo?->query(
+            "INSERT INTO servers (name) VALUES ('other-probe') RETURNING id"
+        )->fetchColumn();
+        self::$pdo?->exec(
+            "INSERT INTO agent_configs (server_id, website_probe_enabled)
+             VALUES ({$otherServer}, TRUE)"
+        );
+        $otherWebsite = (int) self::$pdo?->query(
+            "INSERT INTO websites (name) VALUES ('other-site') RETURNING id"
+        )->fetchColumn();
+        self::$pdo?->query(
+            "INSERT INTO website_endpoints
+                (website_id, name, url, is_primary, method, interval_seconds, timeout_seconds)
+             VALUES ({$otherWebsite}, 'Other', 'https://other.example/', TRUE, 'GET', 60, 5)"
+        );
+        self::$pdo?->exec(
+            "INSERT INTO website_probe_agents (website_id, server_id)
+             VALUES ({$otherWebsite}, {$otherServer})"
+        );
+
+        $request = (new ServerRequestFactory())
+            ->createServerRequest('GET', 'https://download.example/api/v1/agent/config')
+            ->withHeader('Authorization', 'Bearer ' . $credential->token);
+        $response = $this->controller->getAgentConfig(
+            $request,
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+        $body = json_decode((string) $response->getBody(), true, 512, JSON_THROW_ON_ERROR);
+
+        self::assertCount(1, $body['probe_jobs']);
+        self::assertSame($websiteId, $body['probe_jobs'][0]['website_id']);
+        self::assertSame($endpointId, $body['probe_jobs'][0]['endpoint_id']);
+        self::assertSame('https://assigned.example/', $body['probe_jobs'][0]['url']);
+        self::assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $body['probe_revision']);
+
+        self::$pdo?->prepare(
+            'UPDATE agent_configs SET website_probe_enabled = FALSE WHERE server_id = :server_id'
+        )->execute(['server_id' => $this->serverId]);
+        $disabled = $this->controller->getAgentConfig(
+            $request,
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+        $disabledBody = json_decode((string) $disabled->getBody(), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame([], $disabledBody['probe_jobs']);
     }
 
     private function createArtifactDirectory(): string

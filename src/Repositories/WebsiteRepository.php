@@ -32,13 +32,19 @@ final class WebsiteRepository
     /**
      * @param array<string, mixed> $site
      * @param list<WebsiteEndpointDefinition> $endpoints
+     * @param array{central_enabled:mixed,agent_ids:mixed,quorum:mixed}|null $probeConfig
      */
-    public function create(array $site, array $endpoints): int
+    public function create(array $site, array $endpoints, ?array $probeConfig = null): int
     {
         $site = $this->normalizeSite($site);
         $endpoints = $this->primaryEndpoints($endpoints, false);
+        $probeConfig = $this->normalizeProbeConfig($probeConfig ?? [
+            'central_enabled' => true,
+            'agent_ids' => [],
+            'quorum' => 1,
+        ]);
 
-        return $this->transaction(function () use ($site, $endpoints): int {
+        return $this->transaction(function () use ($site, $endpoints, $probeConfig): int {
             $statement = $this->pdo->prepare(
                 <<<'SQL'
                 INSERT INTO websites (
@@ -54,6 +60,8 @@ final class WebsiteRepository
                     domain_critical_days,
                     notification_telegram_chat_id,
                     notification_emails,
+                    central_probe_enabled,
+                    probe_quorum,
                     domain_next_check_at
                 ) VALUES (
                     :group_id,
@@ -68,12 +76,18 @@ final class WebsiteRepository
                     :domain_critical_days,
                     :notification_telegram_chat_id,
                     CAST(:notification_emails AS jsonb),
+                    :central_probe_enabled,
+                    :probe_quorum,
                     CASE WHEN :domain_check_enabled THEN CURRENT_TIMESTAMP ELSE NULL END
                 )
                 RETURNING id
                 SQL
             );
-            $statement->execute($site);
+            $statement->execute([
+                ...$site,
+                'central_probe_enabled' => $probeConfig['central_enabled'] ? 1 : 0,
+                'probe_quorum' => $probeConfig['quorum'],
+            ]);
             $websiteId = (int) $statement->fetchColumn();
 
             $primaryEndpointId = null;
@@ -102,6 +116,8 @@ final class WebsiteRepository
             $this->pdo->prepare(
                 'INSERT INTO website_domain_state (website_id) VALUES (:website_id)'
             )->execute(['website_id' => $websiteId]);
+            $this->assertProbeCompatibility($websiteId, $probeConfig);
+            $this->saveProbeConfig($websiteId, $probeConfig);
 
             return $websiteId;
         });
@@ -110,15 +126,17 @@ final class WebsiteRepository
     /**
      * @param array<string, mixed> $site
      * @param list<WebsiteEndpointDefinition> $endpoints
+     * @param array{central_enabled:mixed,agent_ids:mixed,quorum:mixed}|null $probeConfig
      */
-    public function update(int $websiteId, array $site, array $endpoints): void
+    public function update(int $websiteId, array $site, array $endpoints, ?array $probeConfig = null): void
     {
         if ($websiteId <= 0) {
             throw new InvalidArgumentException('Website does not exist.');
         }
         $endpoints = $this->primaryEndpoints($endpoints, true);
+        $probeConfig = $probeConfig === null ? null : $this->normalizeProbeConfig($probeConfig);
 
-        $this->transaction(function () use ($websiteId, $site, $endpoints): void {
+        $this->transaction(function () use ($websiteId, $site, $endpoints, $probeConfig): void {
             $lock = $this->pdo->prepare('SELECT * FROM websites WHERE id = :id FOR UPDATE');
             $lock->execute(['id' => $websiteId]);
             $currentSite = $lock->fetch();
@@ -210,6 +228,11 @@ final class WebsiteRepository
                        AND id IN (' . implode(', ', $placeholders) . ')'
                 );
                 $delete->execute($params);
+            }
+
+            if ($probeConfig !== null) {
+                $this->assertProbeCompatibility($websiteId, $probeConfig);
+                $this->saveProbeConfig($websiteId, $probeConfig);
             }
         });
     }
@@ -330,6 +353,7 @@ final class WebsiteRepository
                 tls_warning_days, tls_critical_days,
                 domain_warning_days, domain_critical_days,
                 notification_telegram_chat_id, notification_emails,
+                central_probe_enabled, probe_quorum,
                 is_active, paused_at, domain_next_check_at, created_at, updated_at
             FROM websites
             WHERE id = :id
@@ -419,6 +443,7 @@ final class WebsiteRepository
             }
         }
         $site['endpoints'] = array_values($endpoints);
+        $site['probe_agent_ids'] = $this->selectedProbeAgentIds($websiteId);
 
         return $site;
     }
@@ -584,6 +609,167 @@ final class WebsiteRepository
         }
 
         return array_map(static fn (mixed $value): int => (int) $value, $row);
+    }
+
+    /** @return list<array{id:int,name:string}> */
+    public function probeAgents(): array
+    {
+        $statement = $this->pdo->query(
+            "SELECT servers.id, servers.name
+             FROM servers
+             JOIN agent_configs ON agent_configs.server_id = servers.id
+             WHERE servers.is_active = TRUE
+               AND agent_configs.enabled = TRUE
+               AND agent_configs.website_probe_enabled = TRUE
+               AND jsonb_exists(servers.agent_capabilities, 'website_probe_v1')
+             ORDER BY lower(servers.name), servers.id"
+        );
+
+        return array_map(
+            static fn (array $row): array => [
+                'id' => (int) $row['id'],
+                'name' => (string) $row['name'],
+            ],
+            $statement?->fetchAll() ?? []
+        );
+    }
+
+    /** @return list<int> */
+    private function selectedProbeAgentIds(int $websiteId): array
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT server_id
+             FROM website_probe_agents
+             WHERE website_id = :website_id
+             ORDER BY server_id'
+        );
+        $statement->execute(['website_id' => $websiteId]);
+
+        return array_map(
+            static fn (array $row): int => (int) $row['server_id'],
+            $statement->fetchAll()
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     * @return array{central_enabled:bool,agent_ids:list<int>,quorum:int}
+     */
+    private function normalizeProbeConfig(array $config): array
+    {
+        $central = $this->bool($config['central_enabled'] ?? false);
+        $rawIds = $config['agent_ids'] ?? [];
+        if (!is_array($rawIds)) {
+            throw new InvalidArgumentException('Probe point selection is invalid.');
+        }
+        $ids = [];
+        foreach ($rawIds as $rawId) {
+            $id = filter_var($rawId, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if ($id === false) {
+                throw new InvalidArgumentException('Probe point selection is invalid.');
+            }
+            $ids[(int) $id] = (int) $id;
+        }
+        $ids = array_values($ids);
+
+        if ($ids !== []) {
+            $placeholders = [];
+            $parameters = [];
+            foreach ($ids as $index => $id) {
+                $key = 'agent_' . $index;
+                $placeholders[] = ':' . $key;
+                $parameters[$key] = $id;
+            }
+            $parameters['capability'] = 'website_probe_v1';
+            $statement = $this->pdo->prepare(
+                'SELECT servers.id
+                 FROM servers
+                 JOIN agent_configs ON agent_configs.server_id = servers.id
+                 WHERE servers.id IN (' . implode(', ', $placeholders) . ')
+                   AND servers.is_active = TRUE
+                   AND agent_configs.enabled = TRUE
+                   AND agent_configs.website_probe_enabled = TRUE
+                   AND jsonb_exists(servers.agent_capabilities, :capability)'
+            );
+            $statement->execute($parameters);
+            $valid = array_map('intval', array_column($statement->fetchAll(), 'id'));
+            sort($valid);
+            $expected = $ids;
+            sort($expected);
+            if ($valid !== $expected) {
+                throw new InvalidArgumentException('Selected agent is not enabled as a website probe point.');
+            }
+        }
+
+        $pointCount = ($central ? 1 : 0) + count($ids);
+        if ($pointCount < 1) {
+            throw new InvalidArgumentException('Select at least one website probe point.');
+        }
+        $quorum = filter_var($config['quorum'] ?? 1, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1, 'max_range' => $pointCount],
+        ]);
+        if ($quorum === false) {
+            throw new InvalidArgumentException('Probe quorum must be between 1 and the number of selected probe points.');
+        }
+
+        return [
+            'central_enabled' => $central,
+            'agent_ids' => $ids,
+            'quorum' => (int) $quorum,
+        ];
+    }
+
+    /** @param array{central_enabled:bool,agent_ids:list<int>,quorum:int} $config */
+    private function assertProbeCompatibility(int $websiteId, array $config): void
+    {
+        if ($config['central_enabled'] || $config['agent_ids'] === []) {
+            return;
+        }
+
+        $statement = $this->pdo->prepare(
+            "SELECT count(*)
+             FROM website_endpoints
+             WHERE website_id = :website_id
+               AND (
+                    auth_type <> 'none'
+                    OR auth_encrypted IS NOT NULL
+                    OR headers_encrypted IS NOT NULL
+                    OR allow_self_signed = TRUE
+               )"
+        );
+        $statement->execute(['website_id' => $websiteId]);
+        if ((int) $statement->fetchColumn() > 0) {
+            throw new InvalidArgumentException(
+                'Central MirvMon must remain selected for endpoints with authentication, custom headers or self-signed TLS.'
+            );
+        }
+    }
+
+    /** @param array{central_enabled:bool,agent_ids:list<int>,quorum:int} $config */
+    private function saveProbeConfig(int $websiteId, array $config): void
+    {
+        $statement = $this->pdo->prepare(
+            'UPDATE websites
+             SET central_probe_enabled = :central_enabled,
+                 probe_quorum = :probe_quorum
+             WHERE id = :website_id'
+        );
+        $statement->execute([
+            'website_id' => $websiteId,
+            'central_enabled' => $config['central_enabled'] ? 1 : 0,
+            'probe_quorum' => $config['quorum'],
+        ]);
+
+        $this->pdo->prepare(
+            'DELETE FROM website_probe_agents WHERE website_id = :website_id'
+        )->execute(['website_id' => $websiteId]);
+        $insert = $this->pdo->prepare(
+            'INSERT INTO website_probe_agents (website_id, server_id)
+             VALUES (:website_id, :server_id)'
+        );
+        foreach ($config['agent_ids'] as $serverId) {
+            $insert->execute(['website_id' => $websiteId, 'server_id' => $serverId]);
+        }
     }
 
     /** @return list<array{id: int, name: string}> */
@@ -986,6 +1172,8 @@ final class WebsiteRepository
         $row['id'] = (int) $row['id'];
         $row['group_id'] = $row['group_id'] === null ? null : (int) $row['group_id'];
         $row['domain_check_enabled'] = $this->databaseBool($row['domain_check_enabled']);
+        $row['central_probe_enabled'] = $this->databaseBool($row['central_probe_enabled'] ?? true);
+        $row['probe_quorum'] = (int) ($row['probe_quorum'] ?? 1);
         $row['is_active'] = $this->databaseBool($row['is_active']);
         $emails = json_decode((string) $row['notification_emails'], true);
         $row['notification_emails'] = is_array($emails) ? $emails : [];
