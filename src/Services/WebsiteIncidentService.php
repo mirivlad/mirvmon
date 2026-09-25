@@ -168,7 +168,11 @@ final class WebsiteIncidentService
         $website = $this->pdo->prepare(
             'SELECT
                 websites.probe_quorum,
-                COALESCE(endpoints.interval_seconds, websites.default_interval_seconds) AS interval_seconds
+                COALESCE(endpoints.interval_seconds, websites.default_interval_seconds) AS interval_seconds,
+                endpoints.auth_type,
+                endpoints.auth_encrypted,
+                endpoints.headers_encrypted,
+                endpoints.allow_self_signed
              FROM websites
              JOIN website_endpoints AS endpoints
                ON endpoints.website_id = websites.id
@@ -184,18 +188,25 @@ final class WebsiteIncidentService
             return $result;
         }
 
-        $quorum = max(1, (int) $settings['probe_quorum']);
-        $agents = $this->pdo->prepare(
-            'SELECT server_id
-             FROM website_probe_agents
-             WHERE website_id = :website_id
-             ORDER BY server_id'
-        );
-        $agents->execute(['website_id' => $result->websiteId]);
-        $agentIds = array_map(
-            static fn (array $row): string => (string) $row['server_id'],
-            $agents->fetchAll()
-        );
+        $remoteEligible = (string) $settings['auth_type'] === 'none'
+            && $settings['auth_encrypted'] === null
+            && $settings['headers_encrypted'] === null
+            && !$this->boolValue($settings['allow_self_signed']);
+        $quorum = $remoteEligible ? max(1, (int) $settings['probe_quorum']) : 1;
+        $agentIds = [];
+        if ($remoteEligible) {
+            $agents = $this->pdo->prepare(
+                'SELECT server_id
+                 FROM website_probe_agents
+                 WHERE website_id = :website_id
+                 ORDER BY server_id'
+            );
+            $agents->execute(['website_id' => $result->websiteId]);
+            $agentIds = array_map(
+                static fn (array $row): string => (string) $row['server_id'],
+                $agents->fetchAll()
+            );
+        }
 
         $selected = 1 + count($agentIds);
 

@@ -1,1 +1,34 @@
 <section class="card" id="incident-timeline"><div class="card-body"><h2 class="h5">{{ t('websites.detail.events') }}</h2>{% for event in active_incidents|merge(incident_history) %}<article class="border-bottom py-2" id="incident-{{ event.id|default(event.source_id|default('')) }}"><strong>{{ event.kind }}</strong> · {{ event.severity }}<br><small class="text-muted">{{ event.created_at }}{% if event.resolved_at %} → {{ event.resolved_at }}{% endif %}</small></article>{% else %}<p class="text-muted mb-0">{{ t('websites.detail.no_events') }}</p>{% endfor %}</div></section>
+<section class="card mt-4" id="probe-history"><div class="card-body">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h2 class="h5 mb-0">{{ t('websites.detail.probe_history') }}</h2>
+        <span class="small text-muted">{{ t('websites.detail.probe_history_help') }}</span>
+    </div>
+    <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+        <thead><tr>
+            <th>{{ t('websites.detail.time') }}</th>
+            <th>{{ t('websites.detail.probe_point') }}</th>
+            <th>Endpoint</th>
+            <th>{{ t('websites.detail.result') }}</th>
+            <th>{{ t('websites.detail.response') }}</th>
+        </tr></thead>
+        <tbody>
+        {% for sample in probe_history %}
+            <tr>
+                <td class="text-nowrap">{{ sample.sample_time|date('d.m.Y H:i:s') }}</td>
+                <td><strong>{{ sample.probe_name }}</strong></td>
+                <td>{{ sample.endpoint_name }}</td>
+                <td>
+                    <span class="badge {{ sample.transport_available ? 'text-bg-success' : 'text-bg-danger' }}">
+                        {{ sample.transport_available ? t('websites.probe.available') : t('websites.probe.unavailable') }}
+                    </span>
+                    {% if sample.status_code %} <code>{{ sample.status_code }}</code>{% endif %}
+                </td>
+                <td>{{ sample.total_ms is not null ? (sample.total_ms|round(1) ~ ' ms') : '—' }}</td>
+            </tr>
+        {% else %}
+            <tr><td colspan="5" class="text-muted">{{ t('websites.detail.probe_history_empty') }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+</div></section>

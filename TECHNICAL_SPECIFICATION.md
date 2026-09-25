@@ -197,17 +197,12 @@ Operational UI live refresh:
   queue, а сервер принимает их только для всё ещё действующего `website ↔ agent`
   назначения;
 - raw remote observations хранятся отдельно в Timescale hypertable
-  `website_probe_samples`, чтобы существующие central-only
-  `website_check_samples_hourly/daily`, графики и reliability не меняли
-  статистическую семантику;
-- на сайте выбираются Central MirvMon и probe-enabled agents, а `probe_quorum`
-  задаёт число свежих transport failures, необходимых для aggregate failure;
+  `website_probe_samples`; central `website_check_samples_hourly/daily` и графики остаются central-only, а reliability динамически применяет distributed transport quorum к каждой центральной автоматической проверке;
+- Central MirvMon всегда участвует в проверке; на сайте выбираются только дополнительные probe-enabled agents, а `probe_quorum` задаёт число свежих transport failures, необходимых для aggregate failure;
 - старые probe observations старше `max(120s, 3 × endpoint interval)` не
   участвуют в следующем quorum evaluation; отсутствие observation само по себе
   не считается outage сайта;
-- remote v1 не получает auth secrets/custom headers и не поддерживает
-  `allow_self_signed`; если endpoint требует эти параметры, Central MirvMon нельзя
-  исключить. Assertions, TLS expiry и domain expiry остаются central-only;
+- remote probe не получает auth secrets/custom headers и не поддерживает `allow_self_signed`; такой endpoint не выдаётся агентам и автоматически использует effective quorum `1`. Assertions, TLS expiry и domain expiry остаются central-only;
 - production Compose не получает дополнительный service или входящий порт;
 - один сайт может содержать несколько HTTP(S) endpoints;
 - endpoint поддерживает expected status ranges, redirect policy, text assertion,
@@ -277,8 +272,8 @@ Operational UI live refresh:
 
 - `/reports/reliability` требует пользовательскую сессию и показывает 7/30 дней для активных серверов и сайтов;
 - server availability вычисляется по `server_availability_events` с переносом последнего состояния до начала окна; неизвестное время до первой записи не считается доступным;
-- website availability вычисляется по немануальным пробам основного endpoint как доля `transport_available AND assertions_passed`;
-- для каждого объекта показывается полнота наблюдений: полученные пакеты агента либо проверки сайта относительно ожидаемых при текущем интервале; при полноте ниже 95% или недостаточной истории переходов серверная доступность скрывается;
+- website availability вычисляется по немануальным центральным проверкам основного endpoint: transport пересчитывается по свежим Central + remote observations и failure quorum, а assertions остаются central-only;
+- для каждого объекта показывается полнота наблюдений: полученные пакеты агента либо центральные проверки сайта относительно ожидаемых при текущем интервале; website availability показывается и при неполном периоде с явной пометкой, а server availability требует не менее 95% полноты и известной истории состояния;
 - число и длительность инцидентов считаются по `alerts`, пересечения считаются отдельно; среднее время восстановления включает только закрытые инциденты;
 - `/status` — stateless публичный GET без пользовательских сессий; по умолчанию список пуст, публикация возможна только после административного POST `/admin/public-status` с CSRF и журналированием;
 - `public_status_items` содержит явно выбранные server/website ID и публичные названия; публичная страница не выдаёт адреса, URL, метрики, endpoint details или тексты инцидентов, а при устаревших данных показывает неизвестное состояние.
