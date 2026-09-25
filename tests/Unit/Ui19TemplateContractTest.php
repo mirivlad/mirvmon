@@ -18,7 +18,11 @@ final class Ui19TemplateContractTest extends TestCase
         self::assertStringContainsString('data-nav-prefix="/agents"', $layout);
         self::assertStringContainsString('data-nav-prefix="/alerts"', $layout);
         self::assertStringContainsString('data-nav-prefix="/observations"', $layout);
-        self::assertStringContainsString('data-nav-section="settings"', $layout);
+        self::assertStringContainsString('nav.server_list', $layout);
+        self::assertStringContainsString('nav.server_groups', $layout);
+        self::assertStringContainsString('fa-magnifying-glass-chart', $layout);
+        self::assertStringContainsString('app-user-menu-heading', $layout);
+        self::assertStringNotContainsString('data-nav-section="settings"', $layout);
         self::assertStringContainsString('/js/ui19.js', $layout);
     }
 
@@ -37,6 +41,7 @@ final class Ui19TemplateContractTest extends TestCase
         self::assertStringContainsString('bulkOperationServerIds', $template);
         self::assertStringContainsString('agent.update_all_progress', $template);
         self::assertStringContainsString('/api/agent-updates/status', $template);
+        self::assertStringContainsString('website-probe-toggle.twig', $template);
 
         $fleet = $this->contents('templates/agents/index.twig');
         self::assertStringContainsString('fleet-summary-grid', $fleet);
@@ -46,6 +51,15 @@ final class Ui19TemplateContractTest extends TestCase
         self::assertStringContainsString('/api/agents/fleet-status', $fleet);
         self::assertStringContainsString('data-fleet-agent-row', $fleet);
         self::assertStringContainsString('window.setTimeout(poll, 5000)', $fleet);
+        self::assertStringContainsString('website-probe-toggle.twig', $fleet);
+
+        $sites = $this->contents('templates/sites/index.twig');
+        self::assertStringContainsString('website-probe-dots', $sites);
+        self::assertStringContainsString('website-quorum-slots', $sites);
+
+        $ui = $this->contents('public/js/ui19.js');
+        self::assertStringContainsString('prepareWebsiteProbeToggles', $ui);
+        self::assertStringContainsString("dropdown.querySelector(':scope > .dropdown-toggle')", $ui);
     }
 
     public function testTopLevelPageHeadersMatchNavigationIconsAndStayConcise(): void

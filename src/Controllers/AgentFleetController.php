@@ -51,6 +51,9 @@ final class AgentFleetController
                     ? (int) $server['seconds_since_update']
                     : null,
                 'status' => (string) ($server['status'] ?? 'offline'),
+                'website_probe_enabled' => ($server['website_probe_enabled'] ?? false) === true,
+                'website_probe_capable' => ($server['website_probe_capable'] ?? false) === true,
+                'probe_site_count' => (int) ($server['probe_site_count'] ?? 0),
                 'platform' => [
                     'icon_class' => (string) ($platform['icon_class'] ?? 'fas fa-server'),
                     'tooltip' => (string) ($platform['tooltip'] ?? ''),
