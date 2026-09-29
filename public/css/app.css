@@ -329,18 +329,41 @@ a {
     text-align: right;
 }
 
-.app-user-button {
+.app-navbar .app-user-button {
+    --bs-btn-color: #ffffff;
+    --bs-btn-border-color: rgba(255, 255, 255, 0.42);
+    --bs-btn-hover-color: #ffffff;
+    --bs-btn-hover-bg: rgba(255, 255, 255, 0.08);
+    --bs-btn-hover-border-color: rgba(255, 255, 255, 0.62);
+    --bs-btn-active-color: #ffffff;
+    --bs-btn-active-bg: rgba(255, 255, 255, 0.14);
+    --bs-btn-active-border-color: rgba(255, 255, 255, 0.72);
+    --bs-btn-focus-shadow-rgb: 127, 156, 255;
+
     display: inline-flex;
     gap: 0.55rem;
     align-items: center;
-    color: #ffffff;
-    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: var(--bs-btn-color);
+    border-color: var(--bs-btn-border-color);
+    background: transparent;
 }
 
-.app-user-button:hover,
-.app-user-button:focus {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.08);
+.app-navbar .app-user-button:hover,
+.app-navbar .app-user-button:focus-visible,
+.app-navbar .app-user-button.show {
+    color: var(--bs-btn-hover-color);
+    border-color: var(--bs-btn-hover-border-color);
+    background: var(--bs-btn-hover-bg);
+}
+
+.app-navbar .app-user-button:active {
+    color: var(--bs-btn-active-color);
+    border-color: var(--bs-btn-active-border-color);
+    background: var(--bs-btn-active-bg);
+}
+
+.app-user-name {
+    color: inherit;
 }
 
 .app-user-avatar {
