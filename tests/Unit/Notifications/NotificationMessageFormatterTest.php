@@ -115,6 +115,29 @@ final class NotificationMessageFormatterTest extends TestCase
         self::assertStringContainsString('Тестовое уведомление', $test['subject']);
     }
 
+    public function testConnectivityRecoverySummarizesOutage(): void
+    {
+        $message = (new NotificationMessageFormatter('', 'Asia/Irkutsk'))->format([
+            'event_type' => 'connectivity_recovered',
+            'payload' => [
+                'type' => 'connectivity',
+                'event' => 'recovered',
+                'outage_started_at' => '2026-09-29T15:14:32+00:00',
+                'outage_ended_at' => '2026-09-29T16:07:18+00:00',
+                'duration_seconds' => 3166,
+                'event_time' => '2026-09-29T16:07:18+00:00',
+            ],
+        ]);
+
+        self::assertStringContainsString('Интернет MirvMon восстановлен', $message['subject']);
+        self::assertStringContainsString(
+            '29.09.2026 23:14:32 +08 — 30.09.2026 00:07:18 +08',
+            $message['body']
+        );
+        self::assertStringContainsString('52 мин 46 сек', $message['body']);
+        self::assertStringContainsString('offline-состояния серверов', $message['body']);
+    }
+
     public function testManualResolutionNamesTheOperator(): void
     {
         $message = (new NotificationMessageFormatter())->format([
