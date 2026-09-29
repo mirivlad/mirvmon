@@ -89,7 +89,7 @@ do {
             if ($connectivityState !== 'unknown') {
                 $runtime['last_connectivity_state'] = $connectivityState;
             }
-            if ($connectivityState !== 'offline') {
+            if ($connectivityState === 'online') {
                 $runtime['worker']->runOnce();
             }
             $runtime['heartbeat']->record(WorkerHeartbeatRepository::WEBSITE_CHECK_WORKER);
