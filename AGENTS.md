@@ -56,8 +56,8 @@ tests/          unit, integration, functional и contract tests
 - `notification_outbox` отделяет приём метрик от Telegram/SMTP;
 - `maintenance_windows` подавляет доставку, но не создание алертов;
 - `bin/connectivity-worker` независимо проверяет внешнюю сетевую связность MirvMon;
-- `bin/offline-worker` вычисляет offline transitions и подавляет новые offline-состояния, когда потеря внешней связности совпадает с массовой потерей ранее наблюдаемых агентов;
-- `bin/website-check-worker` приостанавливает внешние проверки при подтверждённой потере связности MirvMon;
+- `bin/offline-worker` вычисляет offline transitions; новые offline-состояния разрешены только при свежем подтверждённом `online` от независимого connectivity probe, а `offline` и `unknown` считаются недостоверным окном наблюдения;
+- `bin/website-check-worker` выполняет централизованные внешние проверки только при свежем подтверждённом `online` connectivity state;
 - `bin/notification-worker` доставляет outbox jobs и раз в час чистит очередь;
 - фоновые worker отмечаются в `worker_heartbeats` на каждой итерации;
 - SQL применяет `bin/migrate` под PostgreSQL advisory lock.
