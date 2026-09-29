@@ -35,8 +35,6 @@ final class OfflineStatusWorker
 
         try {
             $servers = $this->serversForCheck();
-            $massContactLoss = !$offlineAssertionsTrusted
-                && $this->hasMassContactLoss($servers, $now);
             $availability = new AvailabilityRepository($this->pdo);
             $transitions = 0;
             foreach ($servers as $server) {
@@ -44,7 +42,7 @@ final class OfflineStatusWorker
                 $lastContactAt = new DateTimeImmutable((string) $server['last_contact_at']);
                 $offline = $timeout > 0
                     && $lastContactAt <= $now->modify('-' . $timeout . ' seconds');
-                if ($offline && $massContactLoss) {
+                if ($offline && !$offlineAssertionsTrusted) {
                     continue;
                 }
                 if ($offline && $this->shouldDeferOfflineDecision(
@@ -223,30 +221,6 @@ final class OfflineStatusWorker
             'severity' => 'critical',
             'event_time' => $now->format(DATE_ATOM),
         ];
-    }
-
-    /** @param list<array<string, mixed>> $servers */
-    private function hasMassContactLoss(array $servers, DateTimeImmutable $now): bool
-    {
-        $total = count($servers);
-        if ($total < 2) {
-            return false;
-        }
-
-        $newlyStale = 0;
-        foreach ($servers as $server) {
-            $timeout = (int) $server['offline_timeout_seconds'];
-            if ($timeout <= 0 || ($server['availability_state'] ?? null) === 'offline') {
-                continue;
-            }
-            $lastContactAt = new DateTimeImmutable((string) $server['last_contact_at']);
-            if ($lastContactAt <= $now->modify('-' . $timeout . ' seconds')) {
-                $newlyStale++;
-            }
-        }
-
-        $threshold = max(2, (int) ceil($total * 0.30));
-        return $newlyStale >= $threshold;
     }
 
     private function shouldDeferOfflineDecision(
