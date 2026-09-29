@@ -69,6 +69,28 @@ final class NotificationMessageFormatter
             $payload['event_time'] ?? $payload['sample_time'] ?? gmdate(DATE_ATOM)
         );
 
+        if ($eventType === 'connectivity_recovered') {
+            $duration = filter_var(
+                $payload['duration_seconds'] ?? 0,
+                FILTER_VALIDATE_INT,
+                ['options' => ['min_range' => 0]]
+            );
+            $duration = $duration === false ? 0 : $duration;
+
+            return [
+                'subject' => '✅ Интернет MirvMon восстановлен',
+                'body' => implode("\n", [
+                    'MirvMon снова имеет подтверждённый доступ в Интернет.',
+                    'Связь отсутствовала: '
+                        . $this->timestamp($payload['outage_started_at'] ?? 'unknown')
+                        . ' — '
+                        . $this->timestamp($payload['outage_ended_at'] ?? 'unknown'),
+                    'Продолжительность: ' . $this->duration($duration),
+                    'В этот период новые offline-состояния серверов и централизованные сетевые проверки не считались достоверными.',
+                ]),
+            ];
+        }
+
         if ($eventType === 'test') {
             return [
                 'subject' => '✅ Тестовое уведомление MirvMon',
@@ -364,6 +386,32 @@ final class NotificationMessageFormatter
             'hour_of_day' => 'это время суток',
             default => 'исторический профиль',
         };
+    }
+
+    private function duration(int $seconds): string
+    {
+        $days = intdiv($seconds, 86400);
+        $seconds %= 86400;
+        $hours = intdiv($seconds, 3600);
+        $seconds %= 3600;
+        $minutes = intdiv($seconds, 60);
+        $seconds %= 60;
+
+        $parts = [];
+        if ($days > 0) {
+            $parts[] = $days . ' д';
+        }
+        if ($hours > 0) {
+            $parts[] = $hours . ' ч';
+        }
+        if ($minutes > 0) {
+            $parts[] = $minutes . ' мин';
+        }
+        if ($seconds > 0 || $parts === []) {
+            $parts[] = $seconds . ' сек';
+        }
+
+        return implode(' ', $parts);
     }
 
     private function timestamp(mixed $value): string
