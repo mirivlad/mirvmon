@@ -32,4 +32,28 @@ final class WorkerRuntimeContractTest extends TestCase
             );
         }
     }
+
+    public function testConnectivityDependentWorkersRequireExplicitOnlineState(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $offlineWorker = (string) file_get_contents($root . '/bin/offline-worker');
+        $websiteWorker = (string) file_get_contents($root . '/bin/website-check-worker');
+
+        self::assertStringContainsString(
+            "\$connectivityState === 'online'",
+            $offlineWorker
+        );
+        self::assertStringContainsString(
+            "if (\$connectivityState === 'online')",
+            $websiteWorker
+        );
+        self::assertStringNotContainsString(
+            "\$connectivityState !== 'offline'",
+            $offlineWorker
+        );
+        self::assertStringNotContainsString(
+            "\$connectivityState !== 'offline'",
+            $websiteWorker
+        );
+    }
 }
