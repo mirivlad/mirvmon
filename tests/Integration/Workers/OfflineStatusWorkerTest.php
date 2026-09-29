@@ -147,14 +147,14 @@ final class OfflineStatusWorkerTest extends TestCase
         self::assertSame('offline', $this->availabilityState());
     }
 
-    public function testExternalConnectivityLossAloneDoesNotHideSingleServerFailure(): void
+    public function testExternalConnectivityLossSuppressesSingleServerOfflineAssertion(): void
     {
         $now = new DateTimeImmutable('2026-07-30T12:00:00Z');
 
-        self::assertSame(1, $this->worker->runOnce($now, false));
-        self::assertSame(1, $this->tableCount('alerts'));
-        self::assertSame(1, $this->tableCount('notification_outbox'));
-        self::assertSame('offline', $this->availabilityState());
+        self::assertSame(0, $this->worker->runOnce($now, false));
+        self::assertSame(0, $this->tableCount('alerts'));
+        self::assertSame(0, $this->tableCount('notification_outbox'));
+        self::assertSame(0, $this->availabilityEventCount());
     }
 
     public function testExternalConnectivityLossWithMassAgentLossSuppressesOfflineAssertions(): void
