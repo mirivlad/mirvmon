@@ -50,6 +50,24 @@ final class Ui19ContractTest extends TestCase
         self::assertStringContainsString('.ui-section-dashboard', $reviewCss);
     }
 
+    public function testNavbarProfileButtonHasVisibleRestingState(): void
+    {
+        $css = (string) file_get_contents(
+            dirname(__DIR__, 2) . '/public/css/app.css'
+        );
+
+        foreach ([
+            '.app-navbar .app-user-button {',
+            '--bs-btn-color: #ffffff;',
+            '--bs-btn-border-color: rgba(255, 255, 255, 0.42);',
+            '.app-navbar .app-user-button.show {',
+            '.app-user-name {',
+            'color: inherit;',
+        ] as $needle) {
+            self::assertStringContainsString($needle, $css);
+        }
+    }
+
     public function testServerListUsesPrimaryAndAdvancedOperationalFilters(): void
     {
         $template = (string) file_get_contents(

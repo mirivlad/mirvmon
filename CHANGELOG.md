@@ -6,6 +6,12 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.9.5
+
+- Fixed the navbar profile dropdown button so its username and outline are visible in the resting state, not only on hover.
+- The profile button now explicitly defines Bootstrap button color, border, hover, focus, open and active state variables to avoid theme/state regressions.
+- Added a UI contract regression test for the visible resting state.
+
 ## 0.9.4
 
 - Fixed false server offline/recovery notifications during an outage of MirvMon's own Internet connection: new offline assertions now require a fresh explicit external-connectivity `online` state instead of a mass-agent-loss heuristic.
