@@ -40,6 +40,72 @@ final class NotificationOutboxRepository
     }
 
     /** @param array<string, mixed> $payload */
+    public function enqueueSystemConfigured(
+        string $eventType,
+        array $payload,
+        string $deduplicationKey
+    ): int {
+        $settings = $this->pdo->query(
+            'SELECT
+                email_enabled,
+                telegram_enabled,
+                telegram_chat_id,
+                smtp_recipients
+             FROM notification_settings
+             WHERE id = 1'
+        )?->fetch();
+        if (!is_array($settings)) {
+            return 0;
+        }
+
+        $deliveries = $this->deliveries($settings, null, null);
+        if ($deliveries === []) {
+            return 0;
+        }
+
+        try {
+            $encodedPayload = json_encode($payload, JSON_THROW_ON_ERROR);
+        } catch (JsonException $exception) {
+            throw new RuntimeException('Cannot encode system notification payload.', 0, $exception);
+        }
+
+        $statement = $this->pdo->prepare(
+            'INSERT INTO notification_outbox (
+                channel,
+                recipient,
+                event_type,
+                payload,
+                deduplication_key
+             ) VALUES (
+                :channel,
+                :recipient,
+                :event_type,
+                CAST(:payload AS jsonb),
+                :deduplication_key
+             )
+             ON CONFLICT (deduplication_key) DO NOTHING'
+        );
+
+        $inserted = 0;
+        foreach ($deliveries as [$channel, $recipient]) {
+            $statement->execute([
+                'channel' => $channel,
+                'recipient' => $recipient,
+                'event_type' => $eventType,
+                'payload' => $encodedPayload,
+                'deduplication_key' => $this->recipientKey(
+                    $deduplicationKey,
+                    $channel,
+                    $recipient
+                ),
+            ]);
+            $inserted += $statement->rowCount();
+        }
+
+        return $inserted;
+    }
+
+    /** @param array<string, mixed> $payload */
     public function enqueueWebsiteConfigured(
         int $websiteId,
         int $alertId,
