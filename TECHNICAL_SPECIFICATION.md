@@ -288,7 +288,17 @@ Operational UI live refresh:
 - probe всегда сохраняет полный список успешных и неуспешных целей, после чего
   вычисляет configured quorum; ambient HTTP proxy для этих TCP probes отключён;
 - настройки targets/quorum/timeout/interval остаются управляемыми из Settings и
-  не требуют redeploy.
+  не требуют redeploy;
+- только свежий connectivity state `online` разрешает MirvMon создавать новые
+  server-offline transitions и выполнять централизованные сетевые проверки
+  сайтов; `offline` и `unknown` fail closed и не используются как доказательство
+  недоступности наблюдаемого объекта;
+- после восстановления внешней связности server agents получают свой обычный
+  `offline_timeout_seconds` для повторного контакта, а затем уже могут быть
+  признаны реально недоступными;
+- переход `offline -> online` ставит в общий notification outbox одно системное
+  recovery-сообщение с началом, концом и длительностью outage; отдельные
+  server offline/recovery события за недостоверное окно не создаются.
 
 ### Dashboard
 

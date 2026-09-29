@@ -89,7 +89,7 @@ do {
                 $runtime['last_connectivity_state'] = $connectivityState;
             }
 
-            $runtime['worker']->runOnce($now, $connectivityState !== 'offline');
+            $runtime['worker']->runOnce($now, $connectivityState === 'online');
             $runtime['heartbeat']->record(WorkerHeartbeatRepository::OFFLINE_WORKER);
         } catch (PDOException) {
             fwrite(STDERR, "offline_worker_database_unavailable\n");
