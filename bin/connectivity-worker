@@ -7,6 +7,7 @@ use App\Backup\DrMaintenanceLock;
 use App\Database\ConnectionFactory;
 use App\Repositories\AppSettingsRepository;
 use App\Repositories\ConnectivityStateRepository;
+use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\WorkerHeartbeatRepository;
 use App\Services\ConnectivitySettingsService;
 use App\Services\ExternalConnectivityProbe;
@@ -43,9 +44,34 @@ do {
                     $config['quorum'],
                     $config['timeout_seconds'],
                 );
+                $previousState = $runtime['state']->current();
                 $result = $probe->probe();
-                $runtime['state']->record($result, $now);
                 $state = $result['available'] ? 'online' : 'offline';
+                if (
+                    $state === 'online'
+                    && $previousState !== null
+                    && $previousState['state'] === 'offline'
+                ) {
+                    $outageStartedAt = new DateTimeImmutable($previousState['changed_at']);
+                    $durationSeconds = max(
+                        0,
+                        $now->getTimestamp() - $outageStartedAt->getTimestamp()
+                    );
+                    $runtime['outbox']->enqueueSystemConfigured(
+                        'connectivity_recovered',
+                        [
+                            'type' => 'connectivity',
+                            'event' => 'recovered',
+                            'outage_started_at' => $outageStartedAt->format(DATE_ATOM),
+                            'outage_ended_at' => $now->format(DATE_ATOM),
+                            'duration_seconds' => $durationSeconds,
+                            'event_time' => $now->format(DATE_ATOM),
+                        ],
+                        'connectivity_recovered:'
+                            . hash('sha256', $outageStartedAt->format(DATE_ATOM))
+                    );
+                }
+                $runtime['state']->record($result, $now);
                 if ($state !== $lastState) {
                     fwrite(STDERR, 'connectivity_' . $state . PHP_EOL);
                     $lastState = $state;
@@ -81,13 +107,14 @@ do {
     }
 } while ($running);
 
-/** @return array{state: ConnectivityStateRepository, heartbeat: WorkerHeartbeatRepository, config: ConnectivitySettingsService} */
+/** @return array{state: ConnectivityStateRepository, outbox: NotificationOutboxRepository, heartbeat: WorkerHeartbeatRepository, config: ConnectivitySettingsService} */
 function createConnectivityRuntime(): array
 {
     $pdo = ConnectionFactory::fromEnvironment();
     $settings = new AppSettingsRepository($pdo);
     return [
         'state' => new ConnectivityStateRepository($settings),
+        'outbox' => new NotificationOutboxRepository($pdo),
         'heartbeat' => new WorkerHeartbeatRepository($pdo),
         'config' => new ConnectivitySettingsService($settings),
     ];
