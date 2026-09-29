@@ -6,6 +6,14 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.9.4
+
+- Fixed false server offline/recovery notifications during an outage of MirvMon's own Internet connection: new offline assertions now require a fresh explicit external-connectivity `online` state instead of a mass-agent-loss heuristic.
+- Treat stale/unknown connectivity as untrusted for both server offline decisions and centralized website network checks.
+- After external connectivity returns, preserve the existing per-server recovery grace and enqueue one system notification with the outage start, end and duration instead of emitting synthetic server flaps.
+- Added regression coverage for single-agent staleness during a MirvMon connectivity outage, source-free system notifications and fail-closed worker semantics.
+- No database migration or agent protocol change is introduced.
+
 ## 0.9.3
 
 - Made website reliability quorum-aware: each central primary-endpoint observation now evaluates transport against fresh results from selected remote agents while assertions remain Central-only; stale or missing remote data does not count as failure.
