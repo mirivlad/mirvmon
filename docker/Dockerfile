@@ -103,7 +103,7 @@ RUN composer dump-autoload \
     --classmap-authoritative \
     --no-interaction
 
-FROM dunglas/frankenphp:1.12.7-php8.5-trixie@sha256:ee14233b7866ae5e9838ec3afe07721837c0a74b534fb30d0a7f7b373dd2fd12
+FROM dunglas/frankenphp:1.13.0-php8.5-trixie@sha256:2a9c6663f73ad1e401909634206bd25e13bed5b94d86eefa3b5ec64c985b4595
 
 ARG APP_VERSION
 
