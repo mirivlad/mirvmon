@@ -103,9 +103,12 @@ RUN composer dump-autoload \
     --classmap-authoritative \
     --no-interaction
 
-FROM dunglas/frankenphp:1.12.7-php8.5-trixie@sha256:ee14233b7866ae5e9838ec3afe07721837c0a74b534fb30d0a7f7b373dd2fd12
+FROM dunglas/frankenphp:1.13.2-php8.5-trixie
 
 ARG APP_VERSION
+
+# PHP2Shell and FrankenPHP security update; reject stale base images.
+RUN php -r 'exit(version_compare(PHP_VERSION, "8.5.12", ">=") ? 0 : 1);'
 
 USER root
 
