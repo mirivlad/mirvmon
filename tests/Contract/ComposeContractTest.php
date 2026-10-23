@@ -81,10 +81,14 @@ final class ComposeContractTest extends TestCase
         );
     }
 
-    public function testRuntimeImagesAreCurrentAndReproducible(): void
+    public function testRuntimeImagesAreCurrentAndSecured(): void
     {
         self::assertStringContainsString(
-            'dunglas/frankenphp:1.12.7-php8.5-trixie@sha256:ee14233b7866ae5e9838ec3afe07721837c0a74b534fb30d0a7f7b373dd2fd12',
+            'dunglas/frankenphp:1.13.2-php8.5-trixie',
+            $this->dockerfile
+        );
+        self::assertStringContainsString(
+            'version_compare(PHP_VERSION, "8.5.12", ">=")',
             $this->dockerfile
         );
         self::assertStringContainsString(

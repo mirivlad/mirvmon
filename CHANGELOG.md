@@ -6,6 +6,12 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.9.7
+
+- Security: rebuild the web application on FrankenPHP 1.13.2 with PHP 8.5.12, fixing PHP2Shell (CVE-2026-109618 and CVE-2026-109619).
+- Reject Docker builds using vulnerable PHP runtimes; update versioned production examples and runtime contract tests.
+- No database, agent protocol or configuration changes; no agent reinstallation required.
+
 ## 0.9.5
 
 - Fixed the navbar profile dropdown button so its username and outline are visible in the resting state, not only on hover.
