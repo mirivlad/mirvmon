@@ -104,11 +104,10 @@
                     </button>
                 </div>
             </template>
-            <div class="row g-3 align-items-end">
+            <div class="row g-3">
                 <div class="col-md-4">
                     <label class="form-label" for="connectivity-quorum">{{ t('system.connectivity.quorum') }}</label>
-                    <input class="form-control" id="connectivity-quorum" type="number" name="quorum" min="1" max="{{ connectivity_settings.targets|length }}" value="{{ connectivity_settings.quorum }}" required>
-                    <div class="form-text">{{ t('system.connectivity.quorum_help') }}</div>
+                    <input class="form-control" id="connectivity-quorum" type="number" name="quorum" min="1" max="{{ connectivity_settings.targets|length }}" value="{{ connectivity_settings.quorum }}" aria-describedby="connectivity-quorum-help" required>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label" for="connectivity-interval">{{ t('system.connectivity.interval') }}</label>
@@ -119,6 +118,7 @@
                     <input class="form-control" id="connectivity-timeout" type="number" name="timeout_seconds" min="0.1" max="10" step="0.1" value="{{ connectivity_settings.timeout_seconds }}" required>
                 </div>
             </div>
+            <div class="form-text mt-2" id="connectivity-quorum-help">{{ t('system.connectivity.quorum_help') }}</div>
             <div class="form-text mt-3">{{ t('system.connectivity.target_help') }}</div>
             <div class="d-flex justify-content-end mt-3">
                 <button class="btn btn-primary" type="submit"><i class="fas fa-floppy-disk me-1" aria-hidden="true"></i>{{ t('common.save') }}</button>
