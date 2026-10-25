@@ -14,12 +14,12 @@ final class ExternalConnectivityProbe
 {
     /** @var list<string> */
     private array $targets;
-    /** @var Closure(list<string>, float): array<string, bool> */
+    /** @var Closure(list<string>, float): array<string, bool|array{connected:bool,error:string}> */
     private Closure $connector;
 
     /**
      * @param list<string> $targets host:port targets
-     * @param null|Closure(list<string>, float): array<string, bool> $connector
+     * @param null|Closure(list<string>, float): array<string, bool|array{connected:bool,error:string}> $connector
      */
     public function __construct(
         array $targets,
@@ -42,18 +42,24 @@ final class ExternalConnectivityProbe
     }
 
     /**
-     * @return array{available:bool,successes:int,failures:int,successful_targets:list<string>,failed_targets:list<string>}
+     * @return array{available:bool,successes:int,failures:int,successful_targets:list<string>,failed_targets:list<string>,failure_reasons:array<string,string>}
      */
     public function probe(): array
     {
         $outcomes = ($this->connector)($this->targets, $this->timeoutSeconds);
         $successful = [];
         $failed = [];
+        $reasons = [];
         foreach ($this->targets as $target) {
-            if (($outcomes[$target] ?? false) === true) {
+            $outcome = $outcomes[$target] ?? false;
+            $connected = is_array($outcome)
+                ? $outcome['connected']
+                : $outcome === true;
+            if ($connected) {
                 $successful[] = $target;
             } else {
                 $failed[] = $target;
+                $reasons[$target] = is_array($outcome) ? $outcome['error'] : 'unknown';
             }
         }
 
@@ -63,12 +69,13 @@ final class ExternalConnectivityProbe
             'failures' => count($failed),
             'successful_targets' => $successful,
             'failed_targets' => $failed,
+            'failure_reasons' => $reasons,
         ];
     }
 
     /**
      * @param list<string> $targets
-     * @return array<string, bool>
+     * @return array<string, bool|array{connected:bool,error:string}>
      */
     private function connectParallel(array $targets, float $timeoutSeconds): array
     {
@@ -127,7 +134,10 @@ final class ExternalConnectivityProbe
 
             $this->collectCompleted($multi, $pending, $outcomes);
             foreach ($pending as $entry) {
-                $outcomes[$entry['target']] = false;
+                $outcomes[$entry['target']] = [
+                    'connected' => false,
+                    'error' => 'timeout',
+                ];
             }
 
             return $outcomes;
@@ -141,7 +151,7 @@ final class ExternalConnectivityProbe
 
     /**
      * @param array<int, array{target:string,handle:CurlHandle}> $pending
-     * @param array<string, bool> $outcomes
+     * @param array<string, bool|array{connected:bool,error:string}> $outcomes
      */
     private function collectCompleted(
         CurlMultiHandle $multi,
@@ -155,7 +165,18 @@ final class ExternalConnectivityProbe
                 continue;
             }
             $target = $pending[$id]['target'];
-            $outcomes[$target] = ($info['result'] ?? CURLE_FAILED_INIT) === CURLE_OK;
+            $errorCode = (int) ($info['result'] ?? CURLE_FAILED_INIT);
+            $outcomes[$target] = $errorCode === CURLE_OK
+                ? true
+                : [
+                    'connected' => false,
+                    'error' => match ($errorCode) {
+                        CURLE_COULDNT_RESOLVE_HOST => 'dns_error',
+                        CURLE_OPERATION_TIMEDOUT => 'timeout',
+                        CURLE_COULDNT_CONNECT => 'tcp_connect_error',
+                        default => 'curl_' . $errorCode,
+                    },
+                ];
             curl_multi_remove_handle($multi, $handle);
             unset($pending[$id]);
         }
