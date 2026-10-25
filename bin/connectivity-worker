@@ -10,6 +10,7 @@ use App\Repositories\ConnectivityStateRepository;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\WorkerHeartbeatRepository;
 use App\Services\ConnectivitySettingsService;
+use App\Services\ConnectivityTransitionGuard;
 use App\Services\ExternalConnectivityProbe;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
@@ -25,6 +26,7 @@ if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
 $runtime = null;
 $lastState = null;
 $lastConfig = null;
+$transitionGuard = null;
 $nextProbeAt = 0;
 $maintenance = new DrMaintenanceLock(dirname(__DIR__) . '/var/dr');
 do {
@@ -37,6 +39,10 @@ do {
             $now = new DateTimeImmutable();
             $nowTimestamp = $now->getTimestamp();
             $configChanged = $lastConfig !== null && $config !== $lastConfig;
+            if ($transitionGuard === null || $configChanged) {
+                $persistedState = $runtime['state']->current();
+                $transitionGuard = new ConnectivityTransitionGuard($persistedState['state'] ?? null);
+            }
 
             if ($nextProbeAt <= $nowTimestamp || $configChanged) {
                 $probe = new ExternalConnectivityProbe(
@@ -45,8 +51,19 @@ do {
                     $config['timeout_seconds'],
                 );
                 $previousState = $runtime['state']->current();
+                $startedAt = microtime(true);
                 $result = $probe->probe();
-                $state = $result['available'] ? 'online' : 'offline';
+                $elapsedMs = (int) round((microtime(true) - $startedAt) * 1000);
+                $state = $transitionGuard->observe($result['available']);
+                if ($result['failures'] > 0) {
+                    fwrite(STDERR, 'connectivity_probe_failed_targets ' . json_encode([
+                        'elapsed_ms' => $elapsedMs,
+                        'available' => $result['available'],
+                        'failed_targets' => $result['failed_targets'],
+                        'failure_reasons' => $result['failure_reasons'],
+                        'confirmed_state' => $transitionGuard->confirmedState(),
+                    ], JSON_UNESCAPED_SLASHES) . PHP_EOL);
+                }
                 if (
                     $state === 'online'
                     && $previousState !== null
@@ -71,10 +88,13 @@ do {
                             . hash('sha256', $outageStartedAt->format(DATE_ATOM))
                     );
                 }
-                $runtime['state']->record($result, $now);
-                if ($state !== $lastState) {
-                    fwrite(STDERR, 'connectivity_' . $state . PHP_EOL);
-                    $lastState = $state;
+                if ($state !== null) {
+                    // Only confirmed results may refresh the persisted connectivity state.
+                    $runtime['state']->record($result, $now);
+                    if ($state !== $lastState) {
+                        fwrite(STDERR, 'connectivity_' . $state . PHP_EOL);
+                        $lastState = $state;
+                    }
                 }
                 $nextProbeAt = $nowTimestamp + $config['interval_seconds'];
                 $lastConfig = $config;
@@ -85,6 +105,7 @@ do {
         } catch (PDOException) {
             fwrite(STDERR, "connectivity_worker_database_unavailable\n");
             $runtime = null;
+            $transitionGuard = null;
             $lastConfig = null;
             $nextProbeAt = 0;
             if ($once) {
