@@ -72,6 +72,28 @@ final class ExternalConnectivityProbeTest extends TestCase
         self::assertSame(['two:443'], $result['failed_targets']);
     }
 
+    public function testDiagnosticErrorsRemainAvailableWithoutChangingQuorum(): void
+    {
+        $probe = new ExternalConnectivityProbe(
+            ['cloudflare:443', 'google:443', 'quad9:443'],
+            2,
+            1.0,
+            static fn (array $targets, float $timeout): array => [
+                'cloudflare:443' => ['connected' => false, 'error' => 'dns_error'],
+                'google:443' => ['connected' => false, 'error' => 'timeout'],
+                'quad9:443' => true,
+            ],
+        );
+
+        $result = $probe->probe();
+        self::assertFalse($result['available']);
+        self::assertSame([
+            'cloudflare:443' => 'dns_error',
+            'google:443' => 'timeout',
+        ], $result['failure_reasons']);
+        self::assertSame(['cloudflare:443', 'google:443'], $result['failed_targets']);
+    }
+
     public function testDefaultConnectorCanProbeMultipleListeningTcpTargets(): void
     {
         if (!extension_loaded('curl')) {
