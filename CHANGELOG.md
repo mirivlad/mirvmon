@@ -6,6 +6,14 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.9.8
+
+- Confirm MirvMon connectivity loss only after three consecutive failed quorum probes, and recovery after two consecutive successful probes, reducing false recovery notifications during transient DNS/TCP issues.
+- Keep the previous confirmed state from being refreshed while a connectivity transition is pending, so stale results become unknown rather than silently trusted.
+- Log failed probe targets, error reasons, elapsed milliseconds, and confirmed connectivity state for troubleshooting.
+- Align quorum, check interval and target timeout controls on a single row, with the quorum description underneath.
+- Add regression tests and troubleshooting documentation. No database migrations or agent protocol changes.
+
 ## 0.9.7
 
 - Security: rebuild the web application on FrankenPHP 1.13.2 with PHP 8.5.12, fixing PHP2Shell (CVE-2026-109618 and CVE-2026-109619).
