@@ -13,6 +13,7 @@ use App\Notifications\SmtpTransport;
 use App\Notifications\TelegramTransport;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\NotificationSettingsRepository;
+use App\Repositories\ChimePortSettingsRepository;
 use App\Repositories\WorkerHeartbeatRepository;
 use App\Security\SecretCipher;
 use App\Workers\NotificationWorker;
@@ -154,7 +155,8 @@ function createNotificationRuntime(string $applicationKey): array
                 (string) getenv('CHIMEPORT_BASE_URL'),
                 (string) getenv('CHIMEPORT_TOKEN_FILE')
             )
-            : null
+            : null,
+        new ChimePortSettingsRepository($pdo, new SecretCipher($applicationKey))
     );
     $outbox = new NotificationOutboxRepository($pdo);
 
