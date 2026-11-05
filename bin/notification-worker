@@ -6,6 +6,7 @@ declare(strict_types=1);
 use App\Backup\DrMaintenanceLock;
 use App\Database\ConnectionFactory;
 use App\Notifications\NotificationDeliveryService;
+use App\Notifications\ChimePortTransport;
 use App\Notifications\MetricChartRenderer;
 use App\Notifications\NotificationMessageFormatter;
 use App\Notifications\SmtpTransport;
@@ -147,7 +148,13 @@ function createNotificationRuntime(string $applicationKey): array
         ),
         new TelegramTransport(),
         new SmtpTransport(),
-        new MetricChartRenderer($pdo)
+        new MetricChartRenderer($pdo),
+        ChimePortTransport::enabledFromEnvironment()
+            ? new ChimePortTransport(
+                (string) getenv('CHIMEPORT_BASE_URL'),
+                (string) getenv('CHIMEPORT_TOKEN_FILE')
+            )
+            : null
     );
     $outbox = new NotificationOutboxRepository($pdo);
 

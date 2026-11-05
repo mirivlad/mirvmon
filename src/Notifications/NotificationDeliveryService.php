@@ -14,7 +14,8 @@ final class NotificationDeliveryService
         private readonly NotificationMessageFormatter $formatter,
         private readonly TelegramTransport $telegram,
         private readonly SmtpTransport $smtp,
-        private readonly ?MetricChartRenderer $charts = null
+        private readonly ?MetricChartRenderer $charts = null,
+        private readonly ?ChimePortTransport $chimeport = null
     ) {
     }
 
@@ -31,6 +32,13 @@ final class NotificationDeliveryService
         // The recipient was resolved when the job was queued, so a later
         // change of the global address does not redirect a pending alert.
         $recipient = $this->recipient($job);
+        if ($channel === 'chimeport') {
+            if ($this->chimeport === null || !ChimePortTransport::enabledFromEnvironment()) {
+                return false;
+            }
+            $this->chimeport->send($job, $message['subject'], $message['body']);
+            return true;
+        }
         $chart = $this->chart($job);
 
         if ($channel === 'telegram') {
