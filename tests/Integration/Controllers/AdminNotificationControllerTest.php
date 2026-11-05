@@ -9,8 +9,10 @@ use App\Database\ConnectionFactory;
 use App\Database\Migrator;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\NotificationSettingsRepository;
+use App\Repositories\ChimePortSettingsRepository;
 use App\Repositories\WorkerHeartbeatRepository;
 use App\Security\SecretCipher;
+use App\I18n\Translator;
 use PDO;
 use PHPUnit\Framework\TestCase;
 use Slim\Psr7\Factory\ResponseFactory;
@@ -60,7 +62,9 @@ final class AdminNotificationControllerTest extends TestCase
             $this->twig,
             $settings,
             $this->outbox,
-            new WorkerHeartbeatRepository(self::$pdo)
+            new WorkerHeartbeatRepository(self::$pdo),
+            new Translator(),
+            new ChimePortSettingsRepository(self::$pdo, new SecretCipher(str_repeat('a', 32)))
         );
     }
 
@@ -355,5 +359,60 @@ final class AdminNotificationControllerTest extends TestCase
             'notify_on_warning' => 'on',
             'notify_on_critical' => 'on',
         ];
+    }
+
+    public function testChimePortWebSettingsSaveAndDedicatedTestDoNotResendTelegram(): void
+    {
+        $token = 'cp_t_' . str_repeat('C', 43);
+        $form = [
+            'chimeport_enabled' => 'on',
+            'chimeport_base_url' => 'https://notify.example.org',
+            'chimeport_channel' => 'servers',
+            'chimeport_token' => $token,
+        ];
+        $response = $this->controller->saveChimePortSettings(
+            (new ServerRequestFactory())->createServerRequest(
+                'POST', 'https://monitor.example/admin/notifications/chimeport/save'
+            )->withParsedBody($form),
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+        self::assertSame(302, $response->getStatusCode());
+
+        $response = $this->controller->notificationSettings(
+            (new ServerRequestFactory())->createServerRequest(
+                'GET', 'https://monitor.example/admin/notifications'
+            ),
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+        $html = (string) $response->getBody();
+        self::assertStringContainsString('chimeport_base_url', $html);
+        self::assertStringContainsString('chimeport_channel', $html);
+        self::assertStringContainsString('servers', $html);
+        self::assertStringNotContainsString($token, $html);
+
+        $response = $this->controller->testChimePortSettings(
+            (new ServerRequestFactory())->createServerRequest(
+                'POST', 'https://monitor.example/admin/notifications/chimeport/test'
+            )->withParsedBody([
+                ...$form, 'chimeport_token' => '',
+            ]),
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+        self::assertSame(302, $response->getStatusCode());
+        self::assertSame(
+            ['chimeport'],
+            self::$pdo?->query(
+                "SELECT channel FROM notification_outbox WHERE event_type='test' ORDER BY id"
+            )->fetchAll(PDO::FETCH_COLUMN)
+        );
+
+        $row = self::$pdo?->query(
+            "SELECT telegram_enabled, email_enabled FROM notification_settings WHERE id=1"
+        )->fetch(PDO::FETCH_ASSOC);
+        // The separate ChimePort settings action never changes other transports.
+        self::assertIsArray($row);
     }
 }

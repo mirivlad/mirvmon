@@ -50,6 +50,7 @@ final class NotificationOutboxRepository
             'SELECT
                 email_enabled,
                 telegram_enabled,
+                chimeport_enabled,
                 telegram_chat_id,
                 smtp_recipients
              FROM notification_settings
@@ -142,6 +143,7 @@ final class NotificationOutboxRepository
             'SELECT
                 email_enabled,
                 telegram_enabled,
+                chimeport_enabled,
                 notify_on_warning,
                 notify_on_critical,
                 telegram_chat_id,
@@ -606,7 +608,7 @@ final class NotificationOutboxRepository
             }
         }
 
-        if (ChimePortTransport::enabledFromEnvironment()) {
+        if (ChimePortSettingsRepository::enabled($settings['chimeport_enabled'] ?? null)) {
             // Separate outbox job: failures never resend Telegram or Email.
             $deliveries[] = ['chimeport', null];
         }
@@ -658,12 +660,13 @@ final class NotificationOutboxRepository
     }
 
     /** @param array<string, mixed> $payload */
-    public function enqueueTest(array $payload): int
+    public function enqueueTest(array $payload, ?string $onlyChannel = null): int
     {
         $settings = $this->pdo->query(
             'SELECT
                 email_enabled,
                 telegram_enabled,
+                chimeport_enabled,
                 telegram_chat_id,
                 smtp_recipients
              FROM notification_settings
@@ -674,6 +677,14 @@ final class NotificationOutboxRepository
         }
 
         $deliveries = $this->deliveries($settings, null);
+        if ($onlyChannel !== null) {
+            if (!in_array($onlyChannel, ['email', 'telegram', 'chimeport'], true)) {
+                throw new InvalidArgumentException('Invalid test notification channel.');
+            }
+            $deliveries = array_values(array_filter(
+                $deliveries, static fn (array $delivery): bool => $delivery[0] === $onlyChannel
+            ));
+        }
         if ($deliveries === []) {
             return 0;
         }

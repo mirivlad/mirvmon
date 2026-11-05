@@ -16,7 +16,9 @@ final class ChimePortTransport
     public function __construct(
         private readonly string $baseUrl,
         private readonly string $tokenFile,
-        ?callable $execute = null
+        ?callable $execute = null,
+        private readonly ?string $tokenOverride = null,
+        private readonly ?string $channelOverride = null
     ) {
         $this->execute = $execute === null
             ? self::defaultExecutor(...)
@@ -34,7 +36,7 @@ final class ChimePortTransport
     public function send(array $job, string $subject, string $message): void
     {
         $url = $this->endpoint();
-        $token = @file_get_contents($this->tokenFile);
+        $token = $this->tokenOverride ?? @file_get_contents($this->tokenFile);
         if (!is_string($token) || !preg_match('/^cp_t_[A-Za-z0-9_-]{35,}$/', trim($token))) {
             throw new NotificationTransportException('chimeport_token_unavailable');
         }
@@ -61,7 +63,7 @@ final class ChimePortTransport
             default => 'monitor/hosts',
         };
         // Optional single-channel routing configured in ChimePort by slug.
-        $override = trim((string) getenv('CHIMEPORT_CHANNEL'));
+        $override = trim($this->channelOverride ?? (string) getenv('CHIMEPORT_CHANNEL'));
         if ($override !== '') {
             if (strlen($override) > 80
                 || !preg_match('~^[a-z0-9][a-z0-9_/-]{0,79}$~D', $override)
