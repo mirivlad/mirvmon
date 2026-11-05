@@ -194,6 +194,85 @@ final class AdminController
     }
 
     /** @param array<string, string> $args */
+    public function saveAllNotificationSettings(Request $request, Response $response, array $args): Response
+    {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
+            return $this->redirect($response, '/');
+        }
+        $body = $request->getParsedBody();
+        $form = is_array($body) ? $body : [];
+        $ownsTransaction = $this->beginTransaction('notification_save_all');
+        try {
+            $this->saveAllTransports($form);
+            $this->commitTransaction($ownsTransaction, 'notification_save_all');
+            $this->flashKey('admin.notifications.saved', 'success');
+        } catch (InvalidArgumentException $exception) {
+            $this->rollbackTransaction($ownsTransaction, 'notification_save_all');
+            $this->flash(
+                $this->translator->trans('admin.notifications.invalid', ['error' => $exception->getMessage()]),
+                'error'
+            );
+        } catch (Throwable) {
+            $this->rollbackTransaction($ownsTransaction, 'notification_save_all');
+            $this->flashKey('admin.notifications.save_failed', 'error');
+        }
+        return $this->redirect($response, '/admin/notifications');
+    }
+
+    /** @param array<string, string> $args */
+    public function testNotificationTransport(Request $request, Response $response, array $args): Response
+    {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
+            return $this->redirect($response, '/');
+        }
+        $channel = $args['channel'] ?? '';
+        if (!in_array($channel, ['email', 'telegram', 'chimeport'], true)) {
+            return $this->redirect($response, '/admin/notifications');
+        }
+        $body = $request->getParsedBody();
+        $form = is_array($body) ? $body : [];
+        $ownsTransaction = $this->beginTransaction('notification_test_single');
+        try {
+            $this->saveAllTransports($form);
+            $queued = $this->notificationOutbox->enqueueTest([
+                'type' => 'test',
+                'event' => 'test',
+                'event_time' => (new DateTimeImmutable())->format(DATE_ATOM),
+            ], $channel);
+            if ($queued === 0) {
+                throw new InvalidArgumentException(
+                    $this->translator->trans('admin.notifications.test_channel_required')
+                );
+            }
+            $this->commitTransaction($ownsTransaction, 'notification_test_single');
+            $this->flash(
+                $this->translator->trans('admin.notifications.test_queued', ['count' => $queued]),
+                'success'
+            );
+        } catch (InvalidArgumentException $exception) {
+            $this->rollbackTransaction($ownsTransaction, 'notification_test_single');
+            $this->flash(
+                $this->translator->trans('admin.notifications.test_failed', ['error' => $exception->getMessage()]),
+                'error'
+            );
+        } catch (Throwable) {
+            $this->rollbackTransaction($ownsTransaction, 'notification_test_single');
+            $this->flashKey('admin.notifications.test_queue_failed', 'error');
+        }
+        return $this->redirect($response, '/admin/notifications');
+    }
+
+    /** @param array<string, mixed> $form */
+    private function saveAllTransports(array $form): void
+    {
+        if ($this->chimeportSettings === null) {
+            throw new \RuntimeException('ChimePort settings repository is unavailable.');
+        }
+        $this->notificationSettings->save($form);
+        $this->chimeportSettings->save($form);
+    }
+
+    /** @param array<string, string> $args */
     public function saveChimePortSettings(Request $request, Response $response, array $args): Response
     {
         if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
