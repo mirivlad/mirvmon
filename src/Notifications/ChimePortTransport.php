@@ -60,6 +60,16 @@ final class ChimePortTransport
             $eventType === 'test', str_starts_with($eventType, 'connectivity_') => 'monitor/system',
             default => 'monitor/hosts',
         };
+        // Optional single-channel routing configured in ChimePort by slug.
+        $override = trim((string) getenv('CHIMEPORT_CHANNEL'));
+        if ($override !== '') {
+            if (strlen($override) > 80
+                || !preg_match('~^[a-z0-9][a-z0-9_/-]{0,79}$~D', $override)
+                || str_contains($override, '//')) {
+                throw new NotificationTransportException('chimeport_channel_invalid');
+            }
+            $channel = $override;
+        }
         try {
             $json = json_encode([
                 'channel' => $channel,
