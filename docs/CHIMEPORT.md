@@ -23,9 +23,10 @@
 CHIMEPORT_ENABLED=1
 CHIMEPORT_BASE_URL=https://notify.example.org
 CHIMEPORT_TOKEN_FILE=/app/var/chimeport-source-token
+CHIMEPORT_CHANNEL=servers
 ```
 
-Адрес замените на собственный HTTPS-адрес. **Реальное значение токена нельзя помещать в Compose, .env, репозиторий или логи.**
+Адрес замените на собственный HTTPS-адрес. Для канала «Серверы» создайте в ChimePort канал с **slug** `servers` и **именем** `Серверы`, дайте токену MirvMon право публикации в нём. Когда `CHIMEPORT_CHANNEL=servers`, все события идут в один канал; если переменную оставить пустой, будут использоваться отдельные `monitor/hosts`, `monitor/services`, `monitor/websites`, `monitor/system`. **Реальное значение токена нельзя помещать в Compose, .env, репозиторий или логи.**
 
 Токен хранится в отдельном файле на постоянном Docker volume `app_data`. В контейнере он должен быть доступен процессу MirvMon (UID 10001), с правами `0600`. Создайте этот файл на машине администратора и перенесите защищённым способом в volume, затем удалите временную копию. Не включайте токен в архивы, доступные посторонним. Можно использовать Docker secret, назначив соответствующий путь `CHIMEPORT_TOKEN_FILE`.
 
