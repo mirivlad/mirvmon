@@ -154,6 +154,7 @@ final class ChimePortSettingsRepository
         return is_string($text) ? trim($text) : '';
     }
 
+    /** @return array<string,mixed> */
     private function row(): array
     {
         $row = $this->pdo->query(
