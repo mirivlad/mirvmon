@@ -137,8 +137,11 @@ final class Ui19TemplateContractTest extends TestCase
 
         $notifications = $this->contents('templates/admin/notifications.twig');
         self::assertStringNotContainsString('notifications.queue_hint', $notifications);
-        self::assertLessThan(
-            strpos($notifications, '<form method="post" action="/admin/notifications/save">'),
+        self::assertStringContainsString(
+            '<form method="post" action="/admin/notifications/save-all">', $notifications
+        );
+        self::assertGreaterThan(
+            strpos($notifications, '<form method="post" action="/admin/notifications/save-all">'),
             strpos($notifications, 'notifications.open_queue')
         );
     }
