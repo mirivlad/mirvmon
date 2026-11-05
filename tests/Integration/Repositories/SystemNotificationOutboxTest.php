@@ -104,4 +104,39 @@ final class SystemNotificationOutboxTest extends TestCase
             )
         );
     }
+
+    public function testChimePortAddsIndependentJobAndKeepsTelegramAndEmail(): void
+    {
+        $keys = ['CHIMEPORT_ENABLED', 'CHIMEPORT_BASE_URL', 'CHIMEPORT_TOKEN_FILE'];
+        $old = [];
+        foreach ($keys as $key) {
+            $old[$key] = getenv($key);
+        }
+        putenv('CHIMEPORT_ENABLED=1');
+        putenv('CHIMEPORT_BASE_URL=https://notify.example.org');
+        putenv('CHIMEPORT_TOKEN_FILE=/app/var/chimeport-source-token');
+        try {
+            self::assertSame(3, $this->outbox->enqueueSystemConfigured(
+                'connectivity_recovered',
+                ['event_time' => '2026-11-05T01:00:00Z'],
+                'connectivity:unique-chimeport-test'
+            ));
+            self::assertSame([
+                ['chimeport', null],
+                ['email', 'ops@example.net'],
+                ['telegram', '-100'],
+            ], self::$pdo?->query(
+                'SELECT channel, recipient FROM notification_outbox ORDER BY channel, recipient'
+            )->fetchAll(PDO::FETCH_NUM));
+            self::assertSame(0, $this->outbox->enqueueSystemConfigured(
+                'connectivity_recovered',
+                ['event_time' => '2026-11-05T01:00:00Z'],
+                'connectivity:unique-chimeport-test'
+            ));
+        } finally {
+            foreach ($old as $key => $value) {
+                putenv($value === false ? $key : $key . '=' . $value);
+            }
+        }
+    }
 }

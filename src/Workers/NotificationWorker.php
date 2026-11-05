@@ -39,7 +39,8 @@ final class NotificationWorker
                 $this->outbox->markFailed(
                     (int) $job['id'],
                     (int) $job['attempts'],
-                    self::safeError($exception->getMessage())
+                    self::safeError($exception->getMessage()),
+                    $exception->retryAfterSeconds
                 );
             } catch (Throwable) {
                 $this->outbox->markFailed(
