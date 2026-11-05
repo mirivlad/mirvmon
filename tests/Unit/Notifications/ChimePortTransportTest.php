@@ -133,4 +133,29 @@ final class ChimePortTransportTest extends TestCase
         $this->expectExceptionMessage('chimeport_token_unavailable');
         $transport->send(['id' => 46, 'event_type' => 'test'], 'Test', 'Message');
     }
+
+    public function testDbTokenAndChannelOverrideIgnoreLegacyEnvironment(): void
+    {
+        $oldChannel = getenv('CHIMEPORT_CHANNEL');
+        putenv('CHIMEPORT_CHANNEL=monitor/services');
+        try {
+            $capture = [];
+            $transport = new ChimePortTransport(
+                'https://notify.example.org',
+                '/path/does/not/exist',
+                static function (string $url, array $options) use (&$capture): array {
+                    $capture = ['url' => $url, 'headers' => $options[CURLOPT_HTTPHEADER],
+                        'json' => json_decode((string) $options[CURLOPT_POSTFIELDS], true)];
+                    return ['status' => 201, 'body' => '{"stored":true}', 'retry_after' => null];
+                },
+                'cp_t_' . str_repeat('C',43),
+                'servers'
+            );
+            $transport->send(['id'=>91,'event_type'=>'service_down'], 'Down', 'Service stopped');
+            self::assertSame('servers', $capture['json']['channel']);
+            self::assertContains('Authorization: Bearer cp_t_' . str_repeat('C',43), $capture['headers']);
+        } finally {
+            putenv($oldChannel === false ? 'CHIMEPORT_CHANNEL' : 'CHIMEPORT_CHANNEL=' . $oldChannel);
+        }
+    }
 }

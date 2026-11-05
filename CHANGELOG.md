@@ -6,6 +6,15 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.9.10
+
+- Add web-managed ChimePort settings in Settings → Notifications, beside SMTP and Telegram.
+- Encrypt source token in PostgreSQL and keep it out of the UI.
+- Preserve Docker legacy configuration until an administrator saves the form, then use DB settings (including explicit disable).
+- Add a ChimePort-only test button and queue link. No changes to Telegram/Email configuration or agent protocol.
+- Add migration 034 and regression tests.
+
+
 ## 0.9.9
 
 - Add optional independent ChimePort notification transport to the durable outbox, keeping Telegram and email deliveries unchanged.

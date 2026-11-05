@@ -39,6 +39,7 @@ use App\Repositories\MaintenanceWindowRepository;
 use App\Repositories\MetricRepository;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\NotificationSettingsRepository;
+use App\Repositories\ChimePortSettingsRepository;
 use App\Repositories\ObservationRepository;
 use App\Repositories\PublicStatusRepository;
 use App\Repositories\ReliabilityReportRepository;
@@ -347,6 +348,15 @@ final class Bootstrap
         );
 
         $container->set(
+            ChimePortSettingsRepository::class,
+            static fn (Container $container): ChimePortSettingsRepository =>
+                new ChimePortSettingsRepository(
+                    $container->get(PDO::class),
+                    $container->get(SecretCipher::class)
+                )
+        );
+
+        $container->set(
             AuthController::class,
             static fn (Container $container): AuthController => new AuthController(
                 $container->get(PDO::class),
@@ -504,7 +514,8 @@ final class Bootstrap
                 $container->get(NotificationSettingsRepository::class),
                 $container->get(NotificationOutboxRepository::class),
                 $container->get(WorkerHeartbeatRepository::class),
-                $container->get(Translator::class)
+                $container->get(Translator::class),
+                $container->get(ChimePortSettingsRepository::class)
             )
         );
         $container->set(
