@@ -66,6 +66,41 @@ final class ChimePortTransportTest extends TestCase
         self::assertSame('normal', $payload['priority']);
     }
 
+    public function testChannelOverrideSendsAllEventsToServers(): void
+    {
+        $previous = getenv('CHIMEPORT_CHANNEL');
+        putenv('CHIMEPORT_CHANNEL=servers');
+        try {
+            $observed = [];
+            $transport = new ChimePortTransport(
+                'https://notify.example.org',
+                $this->tokenFile,
+                static function (string $url, array $options) use (&$observed): array {
+                    $observed = json_decode((string) $options[CURLOPT_POSTFIELDS], true);
+                    return ['status' => 201, 'body' => '{"stored":true}', 'retry_after' => null];
+                }
+            );
+            $transport->send(['id' => 67, 'event_type' => 'website_down'], 'Website down', 'No response');
+            self::assertSame('servers', $observed['channel']);
+        } finally {
+            putenv($previous === false ? 'CHIMEPORT_CHANNEL' : 'CHIMEPORT_CHANNEL=' . $previous);
+        }
+    }
+
+    public function testInvalidChannelOverrideIsRejected(): void
+    {
+        $previous = getenv('CHIMEPORT_CHANNEL');
+        putenv('CHIMEPORT_CHANNEL=../sensitive');
+        try {
+            $transport = new ChimePortTransport('https://notify.example.org', $this->tokenFile);
+            $this->expectException(NotificationTransportException::class);
+            $this->expectExceptionMessage('chimeport_channel_invalid');
+            $transport->send(['id' => 68, 'event_type' => 'test'], 'Test', 'Invalid');
+        } finally {
+            putenv($previous === false ? 'CHIMEPORT_CHANNEL' : 'CHIMEPORT_CHANNEL=' . $previous);
+        }
+    }
+
     public function testRateLimitCarriesRetryAfterWithoutLeakingResponseBody(): void
     {
         $transport = new ChimePortTransport(
