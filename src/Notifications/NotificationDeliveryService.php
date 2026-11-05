@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Notifications;
 
 use App\Repositories\NotificationSettingsRepository;
+use App\Repositories\ChimePortSettingsRepository;
 use Throwable;
 
 final class NotificationDeliveryService
@@ -15,7 +16,8 @@ final class NotificationDeliveryService
         private readonly TelegramTransport $telegram,
         private readonly SmtpTransport $smtp,
         private readonly ?MetricChartRenderer $charts = null,
-        private readonly ?ChimePortTransport $chimeport = null
+        private readonly ?ChimePortTransport $chimeport = null,
+        private readonly ?ChimePortSettingsRepository $chimeportSettings = null
     ) {
     }
 
@@ -33,6 +35,20 @@ final class NotificationDeliveryService
         // change of the global address does not redirect a pending alert.
         $recipient = $this->recipient($job);
         if ($channel === 'chimeport') {
+            if ($this->chimeportSettings !== null) {
+                $config = $this->chimeportSettings->getForDelivery();
+                if (!$config['enabled']) {
+                    return false;
+                }
+                (new ChimePortTransport(
+                    $config['base_url'],
+                    '',
+                    null,
+                    $config['token'],
+                    $config['channel']
+                ))->send($job, $message['subject'], $message['body']);
+                return true;
+            }
             if ($this->chimeport === null || !ChimePortTransport::enabledFromEnvironment()) {
                 return false;
             }

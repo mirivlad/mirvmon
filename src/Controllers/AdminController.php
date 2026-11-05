@@ -9,6 +9,7 @@ use App\I18n\TwigTranslation;
 use App\Repositories\AppSettingsRepository;
 use App\Repositories\NotificationOutboxRepository;
 use App\Repositories\NotificationSettingsRepository;
+use App\Repositories\ChimePortSettingsRepository;
 use App\Repositories\WorkerHeartbeatRepository;
 use App\Security\RolePolicy;
 use App\Services\ConnectivitySettingsService;
@@ -31,7 +32,8 @@ final class AdminController
         private readonly NotificationSettingsRepository $notificationSettings,
         private readonly NotificationOutboxRepository $notificationOutbox,
         private readonly WorkerHeartbeatRepository $heartbeats,
-        private readonly Translator $translator = new Translator()
+        private readonly Translator $translator = new Translator(),
+        private readonly ?ChimePortSettingsRepository $chimeportSettings = null
     ) {
         TwigTranslation::register($this->twig->getEnvironment(), $this->translator);
     }
@@ -163,6 +165,10 @@ final class AdminController
         return $this->twig->render($response, 'admin/notifications.twig', [
             'title' => $this->translator->trans('notifications.title'),
             'settings' => $this->notificationSettings->getPublic(),
+            'chimeport' => $this->chimeportSettings?->getPublic() ?? [
+                'enabled' => false, 'base_url' => '', 'channel' => 'servers',
+                'has_token' => false, 'legacy' => false
+            ],
         ]);
     }
 
@@ -183,6 +189,47 @@ final class AdminController
             );
         } catch (Throwable) {
             $this->flashKey('admin.notifications.save_failed', 'error');
+        }
+        return $this->redirect($response, '/admin/notifications');
+    }
+
+    /** @param array<string, string> $args */
+    public function saveChimePortSettings(Request $request, Response $response, array $args): Response
+    {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
+            return $this->redirect($response, '/');
+        }
+        try {
+            $this->chimeportSettings?->save((array) ($request->getParsedBody() ?? []));
+            $this->flash('Настройки ChimePort сохранены.', 'success');
+        } catch (InvalidArgumentException $exception) {
+            $this->flash('ChimePort: ' . $exception->getMessage(), 'error');
+        } catch (Throwable) {
+            $this->flash('Не удалось сохранить настройки ChimePort.', 'error');
+        }
+        return $this->redirect($response, '/admin/notifications');
+    }
+
+    /** @param array<string, string> $args */
+    public function testChimePortSettings(Request $request, Response $response, array $args): Response
+    {
+        if (!RolePolicy::isAdmin($_SESSION['role'] ?? null)) {
+            return $this->redirect($response, '/');
+        }
+        try {
+            $this->chimeportSettings?->save((array) ($request->getParsedBody() ?? []));
+            $queued = $this->notificationOutbox->enqueueTest([
+                'type' => 'test', 'event' => 'test',
+                'event_time' => (new DateTimeImmutable())->format(DATE_ATOM),
+            ], 'chimeport');
+            if ($queued !== 1) {
+                throw new InvalidArgumentException('Включите ChimePort и заполните параметры подключения.');
+            }
+            $this->flash('Тест ChimePort поставлен в очередь. Проверьте статус в очереди уведомлений.', 'success');
+        } catch (InvalidArgumentException $exception) {
+            $this->flash('ChimePort: ' . $exception->getMessage(), 'error');
+        } catch (Throwable) {
+            $this->flash('Не удалось отправить тест ChimePort.', 'error');
         }
         return $this->redirect($response, '/admin/notifications');
     }

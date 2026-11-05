@@ -165,6 +165,8 @@ final class AppFactory
             $group->get('/notifications', self::controller($container, AdminController::class, 'notificationSettings'));
             $group->post('/notifications/save', self::controller($container, AdminController::class, 'saveNotificationSettings'));
             $group->post('/notifications/test', self::controller($container, AdminController::class, 'testNotification'));
+            $group->post('/notifications/chimeport/save', self::controller($container, AdminController::class, 'saveChimePortSettings'));
+            $group->post('/notifications/chimeport/test', self::controller($container, AdminController::class, 'testChimePortSettings'));
             $group->post('/notifications/queue/retry', self::controller($container, AdminController::class, 'retryNotificationQueue'));
             $group->get('/notifications/queue', self::controller($container, AdminController::class, 'notificationQueue'));
             $group->post('/notifications/queue/{id}/retry', self::controller($container, AdminController::class, 'retryNotificationJob'));
