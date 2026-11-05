@@ -6,6 +6,15 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.9.9
+
+- Add optional independent ChimePort notification transport to the durable outbox, keeping Telegram and email deliveries unchanged.
+- Route all monitoring alerts to one selected ChimePort channel via `CHIMEPORT_CHANNEL=servers`, or use per-category channels by default.
+- Preserve event deduplication and retry semantics; honor HTTP 429 `Retry-After`, validate TLS and avoid leaking credentials.
+- Add SQL migration 033 for the third notification channel, integration tests, operator guide, and versioned Docker instructions.
+- Agent protocol unchanged; existing agents require no update.
+
+
 ## 0.9.8
 
 - Confirm MirvMon connectivity loss only after three consecutive failed quorum probes, and recovery after two consecutive successful probes, reducing false recovery notifications during transient DNS/TCP issues.
