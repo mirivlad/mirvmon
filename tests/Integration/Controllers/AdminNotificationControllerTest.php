@@ -337,6 +337,152 @@ final class AdminNotificationControllerTest extends TestCase
     }
 
     /** @return array<string, mixed> */
+    public function testUnifiedNotificationPageUsesOneFormAndThreeEqualTransports(): void
+    {
+        $response = $this->controller->notificationSettings(
+            (new ServerRequestFactory())->createServerRequest(
+                'GET', 'https://monitor.example/admin/notifications'
+            ),
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+        $html = (string) $response->getBody();
+
+        self::assertSame(1, substr_count($html, 'action="/admin/notifications/save-all"'));
+        self::assertStringNotContainsString(
+            'action="/admin/notifications/chimeport/save"', $html
+        );
+        self::assertStringContainsString('id="chimeport-settings"', $html);
+        self::assertStringContainsString('id="email_enabled"', $html);
+        self::assertStringContainsString('id="telegram_enabled"', $html);
+        self::assertStringContainsString('id="chimeport_enabled"', $html);
+        foreach (['email', 'telegram', 'chimeport'] as $channel) {
+            self::assertStringContainsString(
+                'formaction="/admin/notifications/test/' . $channel . '"',
+                $html
+            );
+        }
+        self::assertSame(1, substr_count($html, 'href="/admin/notifications/queue"'));
+        self::assertStringNotContainsString('Дополнительный канал уведомлений.', $html);
+
+        $email = strpos($html, 'id="email_enabled"');
+        $telegram = strpos($html, 'id="telegram_enabled"');
+        $chimeport = strpos($html, 'id="chimeport_enabled"');
+        $rules = strpos($html, 'id="notify_on_warning"');
+        self::assertNotFalse($email);
+        self::assertNotFalse($telegram);
+        self::assertNotFalse($chimeport);
+        self::assertNotFalse($rules);
+        self::assertTrue($email < $telegram && $telegram < $chimeport && $chimeport < $rules);
+    }
+
+    public function testUnifiedSavePersistsAllTransportsWithoutLosingSecrets(): void
+    {
+        $form = [
+            ...$this->settings(),
+            'chimeport_enabled' => 'on',
+            'chimeport_base_url' => 'https://notify.example.org',
+            'chimeport_channel' => 'servers',
+            'chimeport_token' => 'cp_t_' . str_repeat('C', 43),
+        ];
+        $request = (new ServerRequestFactory())->createServerRequest(
+            'POST', 'https://monitor.example/admin/notifications/save-all'
+        )->withParsedBody($form);
+
+        $response = $this->controller->saveAllNotificationSettings(
+            $request, (new ResponseFactory())->createResponse(), []
+        );
+        self::assertSame(302, $response->getStatusCode());
+        self::assertSame('success', $_SESSION['flash_type']);
+
+        $settings = (new NotificationSettingsRepository(
+            self::$pdo, new SecretCipher(str_repeat('a', 32))
+        ))->getForDelivery();
+        self::assertTrue($settings['telegram_enabled']);
+        self::assertTrue($settings['email_enabled']);
+        self::assertSame('123:bot-secret', $settings['telegram_bot_token']);
+
+        $chimeport = (new ChimePortSettingsRepository(
+            self::$pdo, new SecretCipher(str_repeat('a', 32))
+        ))->getForDelivery();
+        self::assertTrue($chimeport['enabled']);
+        self::assertSame('servers', $chimeport['channel']);
+        self::assertSame('cp_t_' . str_repeat('C',43), $chimeport['token']);
+
+        $form['smtp_password'] = '';
+        $form['telegram_bot_token'] = '';
+        $form['telegram_proxy_password'] = '';
+        $form['chimeport_token'] = '';
+        $this->controller->saveAllNotificationSettings(
+            $request->withParsedBody($form), (new ResponseFactory())->createResponse(), []
+        );
+        $after = (new NotificationSettingsRepository(
+            self::$pdo, new SecretCipher(str_repeat('a', 32))
+        ))->getForDelivery();
+        self::assertSame($settings['telegram_bot_token'], $after['telegram_bot_token']);
+        self::assertSame($settings['smtp_password'], $after['smtp_password']);
+        self::assertSame($chimeport, (new ChimePortSettingsRepository(
+            self::$pdo, new SecretCipher(str_repeat('a', 32))
+        ))->getForDelivery());
+    }
+
+    public function testUnifiedSaveIsAtomicWhenChimePortSettingsAreInvalid(): void
+    {
+        $before = self::$pdo?->query(
+            'SELECT telegram_enabled, email_enabled, smtp_host, chimeport_enabled '
+            . 'FROM notification_settings WHERE id=1'
+        )->fetch(PDO::FETCH_ASSOC);
+        $form = [
+            ...$this->settings(),
+            'chimeport_enabled' => 'on',
+            'chimeport_base_url' => 'http://unsafe.example.org',
+            'chimeport_channel' => 'servers',
+            'chimeport_token' => 'cp_t_' . str_repeat('C', 43),
+        ];
+        $response = $this->controller->saveAllNotificationSettings(
+            (new ServerRequestFactory())->createServerRequest(
+                'POST', 'https://monitor.example/admin/notifications/save-all'
+            )->withParsedBody($form),
+            (new ResponseFactory())->createResponse(),
+            []
+        );
+        self::assertSame(302, $response->getStatusCode());
+        self::assertSame('error', $_SESSION['flash_type']);
+        self::assertSame($before, self::$pdo?->query(
+            'SELECT telegram_enabled, email_enabled, smtp_host, chimeport_enabled '
+            . 'FROM notification_settings WHERE id=1'
+        )->fetch(PDO::FETCH_ASSOC));
+    }
+
+    public function testEachUnifiedTestButtonQueuesOnlyItsChosenTransport(): void
+    {
+        $form = [
+            ...$this->settings(),
+            'chimeport_enabled' => 'on',
+            'chimeport_base_url' => 'https://notify.example.org',
+            'chimeport_channel' => 'servers',
+            'chimeport_token' => 'cp_t_' . str_repeat('C', 43),
+        ];
+        $expected = ['email' => 2, 'telegram' => 1, 'chimeport' => 1];
+        foreach ($expected as $channel => $number) {
+            $response = $this->controller->testNotificationTransport(
+                (new ServerRequestFactory())->createServerRequest(
+                    'POST', 'https://monitor.example/admin/notifications/test/' . $channel
+                )->withParsedBody($form),
+                (new ResponseFactory())->createResponse(),
+                ['channel' => $channel]
+            );
+            self::assertSame(302, $response->getStatusCode());
+            self::assertSame('success', $_SESSION['flash_type']);
+            self::assertSame($number, (int) self::$pdo?->query(
+                "SELECT count(*) FROM notification_outbox WHERE channel='" . $channel . "'"
+            )->fetchColumn());
+        }
+        self::assertSame(4, (int) self::$pdo?->query(
+            "SELECT count(*) FROM notification_outbox WHERE event_type='test'"
+        )->fetchColumn());
+    }
+
     private function settings(): array
     {
         return [

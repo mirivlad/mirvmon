@@ -164,6 +164,8 @@ final class AppFactory
             $group->post('/users/{id}/delete', self::controller($container, AdminController::class, 'deleteUser'));
             $group->get('/notifications', self::controller($container, AdminController::class, 'notificationSettings'));
             $group->post('/notifications/save', self::controller($container, AdminController::class, 'saveNotificationSettings'));
+            $group->post('/notifications/save-all', self::controller($container, AdminController::class, 'saveAllNotificationSettings'));
+            $group->post('/notifications/test/{channel}', self::controller($container, AdminController::class, 'testNotificationTransport'));
             $group->post('/notifications/test', self::controller($container, AdminController::class, 'testNotification'));
             $group->post('/notifications/chimeport/save', self::controller($container, AdminController::class, 'saveChimePortSettings'));
             $group->post('/notifications/chimeport/test', self::controller($container, AdminController::class, 'testChimePortSettings'));

@@ -6,6 +6,15 @@ Git history. Until a release tag is created, current work stays under
 
 ## Unreleased
 
+## 0.9.11
+
+- Redesign Notifications settings with three equal delivery methods (Email, Telegram and ChimePort) in one responsive form; remove text calling ChimePort an extra channel.
+- Place shared severity/cooldown rules below all methods, with one Save action and one link to the delivery queue.
+- Add independent Test Email / Test Telegram / Test ChimePort buttons; each queues jobs only for the selected method.
+- Save all notification settings in one PostgreSQL transaction. Invalid settings from any method roll back the entire form; masked stored credentials remain unchanged when left blank.
+- Retain legacy notification endpoints for compatibility, keep Telegram delivery enabled and agent protocol unchanged.
+
+
 ## 0.9.10
 
 - Add web-managed ChimePort settings in Settings → Notifications, beside SMTP and Telegram.
