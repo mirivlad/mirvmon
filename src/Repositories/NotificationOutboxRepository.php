@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Repositories;
 
+use App\Notifications\ChimePortTransport;
 use DateTimeImmutable;
 use InvalidArgumentException;
 use JsonException;
@@ -605,6 +606,11 @@ final class NotificationOutboxRepository
             }
         }
 
+        if (ChimePortTransport::enabledFromEnvironment()) {
+            // Separate outbox job: failures never resend Telegram or Email.
+            $deliveries[] = ['chimeport', null];
+        }
+
         return $deliveries;
     }
 
@@ -906,7 +912,7 @@ final class NotificationOutboxRepository
         return [
             'statuses' => $statuses,
             'channel' => is_string($channel)
-                && in_array($channel, ['email', 'telegram'], true)
+                && in_array($channel, ['email', 'telegram', 'chimeport'], true)
                 ? $channel
                 : null,
             'server_id' => $serverId === false ? null : $serverId,
@@ -1255,9 +1261,9 @@ final class NotificationOutboxRepository
         return $statement->rowCount();
     }
 
-    public function markFailed(int $jobId, int $attempts, string $safeError): void
+    public function markFailed(int $jobId, int $attempts, string $safeError, ?int $retryAfterSeconds = null): void
     {
-        $delaySeconds = min(3600, 5 * (2 ** max(0, min(10, $attempts - 1))));
+        $delaySeconds = min(3600, max(5 * (2 ** max(0, min(10, $attempts - 1))), $retryAfterSeconds ?? 0));
         $statement = $this->pdo->prepare(
             "UPDATE notification_outbox
              SET

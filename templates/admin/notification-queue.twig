@@ -26,6 +26,7 @@
             <select class="form-select" id="channel" name="channel">
                 <option value="">{{ t('queue.all_channels') }}</option>
                 <option value="email" {% if filters.channel == 'email' %}selected{% endif %}>Email</option>
+                <option value="chimeport" {% if filters.channel == 'chimeport' %}selected{% endif %}>ChimePort</option>
                 <option value="telegram" {% if filters.channel == 'telegram' %}selected{% endif %}>Telegram</option>
             </select>
         </div>
