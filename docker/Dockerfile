@@ -81,7 +81,7 @@ FROM scratch AS agent-dist
 
 COPY --from=agent-manifest /out /out
 
-FROM --platform=$BUILDPLATFORM composer:2.10.2@sha256:d020706319701a44468968321dccd0fce6620190159a7a9ec195d78e6e971c71 AS vendor
+FROM --platform=$BUILDPLATFORM composer:2.11.0@sha256:278dfc7bd35169965d03f87194816f43bf4e6b6ea61707c2114e52ad12fe24ce AS vendor
 
 WORKDIR /app
 
