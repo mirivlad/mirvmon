@@ -6,7 +6,7 @@
   },
   "devDependencies": {
     "@fortawesome/fontawesome-free": "7.3.1",
-    "bootstrap": "5.3.8",
+    "bootstrap": "5.3.9",
     "chart.js": "4.5.1",
     "chartjs-plugin-zoom": "2.2.0",
     "hammerjs": "2.0.8"
