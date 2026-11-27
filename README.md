@@ -121,3 +121,9 @@ MIT
 ## ChimePort (необязательный транспорт)
 
 MirvMon может отправлять события инцидентов в ChimePort через отдельные задания штатной очереди — **параллельно**, без отключения Telegram или SMTP. Интеграция по умолчанию отключена. Пошаговая инструкция: [docs/CHIMEPORT.md](docs/CHIMEPORT.md). В примере указан только вымышленный домен и фейковый токен.
+
+## Поддержать разработчика / Support development
+
+Если проект оказался полезен, вы можете добровольно поддержать его развитие. / If this project is useful to you, you can voluntarily support its development.
+
+[![Угостить разработчика кофе / Buy me a coffee](https://img.shields.io/badge/Support-Buy%20me%20a%20coffee-7055a5?style=flat-square&logo=buymeacoffee&logoColor=white)](https://mirv.top/support/)
